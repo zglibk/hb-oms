@@ -81,7 +81,7 @@ const BASE_CSS = `
   html { scroll-behavior: smooth; scroll-padding-top: 68px; }
   body { font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; }
   .nav { position: sticky; top: 0; z-index: 50; background: var(--brand); color: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-  .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .nav-inner { max-width: 1580px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .brand { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .brand-mark { display: inline-block; background: #fff; color: var(--brand); font-weight: 800; border-radius: 6px; padding: 1px 7px; margin-right: 8px; font-size: 14px; }
   .brand-sub { opacity: .72; font-size: 13px; margin-left: 6px; font-weight: 400; }
@@ -109,7 +109,6 @@ ${BASE_CSS}
   .hero p { margin-top: 12px; opacity: .88; font-size: 16px; }
   .hero .cta { display: inline-block; margin-top: 26px; background: #fff; color: var(--brand); font-weight: 600; text-decoration: none; padding: 10px 26px; border-radius: 8px; }
   .hero .cta:hover { opacity: .92; }
-  .nav-inner { max-width: 1580px; }
   main { max-width: 1580px; margin: -34px auto 0; padding: 0 20px; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; box-shadow: 0 2px 10px rgba(31,90,168,.06); }
@@ -167,10 +166,10 @@ const docHtml = `<!DOCTYPE html>
 <title>${docTitle}</title>
 <style>
 ${BASE_CSS}
-  .layout { max-width: 1280px; margin: 0 auto; display: flex; align-items: flex-start; gap: 0; }
-  aside { position: sticky; top: 56px; width: 280px; flex: none; max-height: calc(100vh - 56px); overflow-y: auto; padding: 20px 8px 40px 20px; font-size: 13.5px; }
+  .layout { max-width: 1580px; margin: 0 auto; display: flex; align-items: flex-start; gap: 0; }
+  aside { position: sticky; top: 56px; width: 300px; flex: none; max-height: calc(100vh - 56px); overflow-y: auto; padding: 20px 8px 40px 20px; font-size: 13.5px; }
   aside .toc-title { font-weight: 700; color: var(--muted); font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; }
-  aside a { display: block; color: var(--text); text-decoration: none; padding: 4px 10px; border-left: 2px solid transparent; border-radius: 0 6px 6px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  aside a { display: block; color: var(--text); text-decoration: none; padding: 4px 10px; border-left: 2px solid transparent; border-radius: 0 6px 6px 0; line-height: 1.5; margin: 2px 0; }
   aside a:hover { background: #e9eef6; }
   aside a.toc-l3 { padding-left: 26px; color: var(--muted); }
   article { flex: 1; min-width: 0; background: var(--card); border-left: 1px solid var(--line); border-right: 1px solid var(--line); padding: 36px 44px 64px; }
