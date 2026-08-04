@@ -38,7 +38,8 @@ app.component('AppActions', AppActions);
 
 app.use(createPinia());
 app.use(router);
-app.use(ElementPlus, { locale: zhCn });
+// 全局默认组件尺寸 small（表单/表格/按钮等一致紧凑，个别场景可在组件上显式覆盖）
+app.use(ElementPlus, { locale: zhCn, size: 'small' });
 setupDirectives(app);
 
 // 应用启动时还原持久化的主题色
