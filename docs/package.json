@@ -1,0 +1,13 @@
+{
+  "name": "@hb-oms/docs",
+  "private": true,
+  "version": "1.0.0",
+  "description": "hb-oms 设计文档 HTML 构建（md → 自包含 index.html，供站点挂载评审）",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  }
+}
