@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d7377"/>
+      <stop offset="100%" stop-color="#14a085"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#waveGrad)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="2">
+    <path d="M 0 600 Q 240 550 480 600 T 960 600 T 1440 600 T 1920 600" opacity="0.15">
+      <animate attributeName="d" values="M 0 600 Q 240 550 480 600 T 960 600 T 1440 600 T 1920 600;M 0 600 Q 240 650 480 600 T 960 600 T 1440 600 T 1920 600;M 0 600 Q 240 550 480 600 T 960 600 T 1440 600 T 1920 600" dur="8s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 650 Q 240 600 480 650 T 960 650 T 1440 650 T 1920 650" opacity="0.2">
+      <animate attributeName="d" values="M 0 650 Q 240 600 480 650 T 960 650 T 1440 650 T 1920 650;M 0 650 Q 240 700 480 650 T 960 650 T 1440 650 T 1920 650;M 0 650 Q 240 600 480 650 T 960 650 T 1440 650 T 1920 650" dur="9s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 700 Q 240 650 480 700 T 960 700 T 1440 700 T 1920 700" opacity="0.25">
+      <animate attributeName="d" values="M 0 700 Q 240 650 480 700 T 960 700 T 1440 700 T 1920 700;M 0 700 Q 240 750 480 700 T 960 700 T 1440 700 T 1920 700;M 0 700 Q 240 650 480 700 T 960 700 T 1440 700 T 1920 700" dur="10s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 750 Q 240 700 480 750 T 960 750 T 1440 750 T 1920 750" opacity="0.3">
+      <animate attributeName="d" values="M 0 750 Q 240 700 480 750 T 960 750 T 1440 750 T 1920 750;M 0 750 Q 240 800 480 750 T 960 750 T 1440 750 T 1920 750;M 0 750 Q 240 700 480 750 T 960 750 T 1440 750 T 1920 750" dur="11s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 800 Q 240 750 480 800 T 960 800 T 1440 800 T 1920 800" opacity="0.35">
+      <animate attributeName="d" values="M 0 800 Q 240 750 480 800 T 960 800 T 1440 800 T 1920 800;M 0 800 Q 240 850 480 800 T 960 800 T 1440 800 T 1920 800;M 0 800 Q 240 750 480 800 T 960 800 T 1440 800 T 1920 800" dur="12s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 850 Q 240 800 480 850 T 960 850 T 1440 850 T 1920 850" opacity="0.4">
+      <animate attributeName="d" values="M 0 850 Q 240 800 480 850 T 960 850 T 1440 850 T 1920 850;M 0 850 Q 240 900 480 850 T 960 850 T 1440 850 T 1920 850;M 0 850 Q 240 800 480 850 T 960 850 T 1440 850 T 1920 850" dur="13s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 900 Q 240 850 480 900 T 960 900 T 1440 900 T 1920 900" opacity="0.45">
+      <animate attributeName="d" values="M 0 900 Q 240 850 480 900 T 960 900 T 1440 900 T 1920 900;M 0 900 Q 240 950 480 900 T 960 900 T 1440 900 T 1920 900;M 0 900 Q 240 850 480 900 T 960 900 T 1440 900 T 1920 900" dur="14s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 950 Q 240 900 480 950 T 960 950 T 1440 950 T 1920 950" opacity="0.5">
+      <animate attributeName="d" values="M 0 950 Q 240 900 480 950 T 960 950 T 1440 950 T 1920 950;M 0 950 Q 240 1000 480 950 T 960 950 T 1440 950 T 1920 950;M 0 950 Q 240 900 480 950 T 960 950 T 1440 950 T 1920 950" dur="15s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  <g fill="none" stroke="#ffffff" stroke-width="1.5">
+    <path d="M 0 200 Q 320 150 640 200 T 1280 200 T 1920 200" opacity="0.1">
+      <animate attributeName="d" values="M 0 200 Q 320 150 640 200 T 1280 200 T 1920 200;M 0 200 Q 320 250 640 200 T 1280 200 T 1920 200;M 0 200 Q 320 150 640 200 T 1280 200 T 1920 200" dur="10s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 250 Q 320 200 640 250 T 1280 250 T 1920 250" opacity="0.15">
+      <animate attributeName="d" values="M 0 250 Q 320 200 640 250 T 1280 250 T 1920 250;M 0 250 Q 320 300 640 250 T 1280 250 T 1920 250;M 0 250 Q 320 200 640 250 T 1280 250 T 1920 250" dur="11s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 300 Q 320 250 640 300 T 1280 300 T 1920 300" opacity="0.2">
+      <animate attributeName="d" values="M 0 300 Q 320 250 640 300 T 1280 300 T 1920 300;M 0 300 Q 320 350 640 300 T 1280 300 T 1920 300;M 0 300 Q 320 250 640 300 T 1280 300 T 1920 300" dur="12s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 0 350 Q 320 300 640 350 T 1280 350 T 1920 350" opacity="0.25">
+      <animate attributeName="d" values="M 0 350 Q 320 300 640 350 T 1280 350 T 1920 350;M 0 350 Q 320 400 640 350 T 1280 350 T 1920 350;M 0 350 Q 320 300 640 350 T 1280 350 T 1920 350" dur="13s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>

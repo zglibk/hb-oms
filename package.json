@@ -1,0 +1,24 @@
+{
+  "name": "hb-oms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "海宝五金订单跟踪系统（接单 → 外发 → 回货 → 成品出入库 → 台账）",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@8.15.9",
+  "scripts": {
+    "dev": "pnpm --filter @hb-oms/shared build && turbo run dev --parallel",
+    "dev:server": "pnpm --filter @hb-oms/shared build && pnpm --filter @hb-oms/server dev",
+    "dev:web": "pnpm --filter @hb-oms/shared build && pnpm --filter @hb-oms/web dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:init": "pnpm --filter @hb-oms/server db:init",
+    "db:migrate": "pnpm --filter @hb-oms/server db:migrate",
+    "docs:build": "cd docs && npm run build"
+  },
+  "devDependencies": {
+    "turbo": "^1.13.4",
+    "typescript": "^5.4.5"
+  }
+}

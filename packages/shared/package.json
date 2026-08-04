@@ -1,0 +1,16 @@
+{
+  "name": "@hb-oms/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "前后端共享常量与纯函数（业务状态、单位换算、产品类型组合）——双端口径唯一事实源",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "scripts": {
+    "build": "tsc -b tsconfig.json tsconfig.esm.json",
+    "dev": "tsc -b tsconfig.json tsconfig.esm.json --watch --preserveWatchOutput"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,88 @@
+/**
+ * 前端枚举常量统一引用入口。
+ *
+ * 业务状态/单位换算/产品类型组合定义在共享包 `@hb-oms/shared`
+ * （packages/shared/src/），前后端共用同一份数值与中文文案，不双套手工同步。
+ *
+ * 本文件命名约定：
+ *   - `XXX_STATUS`（数组）：展示映射 { label, value, type }，配合 labelOf/tagTypeOf；
+ *   - `XXX_STATUS_VALUE`（对象）：逻辑判断用数值常量。
+ * 页面中禁止硬编码状态数字（如 row.status === 1），一律引用命名常量。
+ */
+export {
+  // 订单
+  ORDER_STATUS_OPTIONS as ORDER_STATUS,
+  ORDER_STATUS as ORDER_STATUS_VALUE,
+  ORDER_TYPE_OPTIONS as ORDER_TYPE,
+  ORDER_TYPE as ORDER_TYPE_VALUE,
+  ORDER_SOURCE_OPTIONS as ORDER_SOURCE,
+  // 表面处理
+  SURFACE_TYPE_OPTIONS as SURFACE_TYPE,
+  SURFACE_TYPE as SURFACE_TYPE_VALUE,
+  OUTSOURCE_SURFACE_OPTIONS,
+  // 外发
+  OUTSOURCE_STATUS_OPTIONS as OUTSOURCE_STATUS,
+  OUTSOURCE_STATUS as OUTSOURCE_STATUS_VALUE,
+  // 成品出入库
+  FINISHED_DOC_STATUS_OPTIONS as FINISHED_DOC_STATUS,
+  FINISHED_DOC_STATUS as FINISHED_DOC_STATUS_VALUE,
+  STOCK_DIRECTION as STOCK_DIRECTION_VALUE,
+  FINISHED_BIZ_TYPE,
+  FINISHED_BIZ_TYPE_OPTIONS,
+  // 启停
+  ENABLE_STATUS_OPTIONS as ENABLE_STATUS,
+  ENABLE_STATUS as ENABLE_STATUS_VALUE,
+  // 单位换算（1套=2支、1英寸=25mm）
+  PIECES_PER_SET,
+  UNIT,
+  UNIT_OPTIONS,
+  unitFactor,
+  toPieces,
+  piecesToUnitQty,
+  INCH_TO_MM,
+  DIMENSION_UNIT,
+  DIMENSION_UNIT_OPTIONS,
+  toMm,
+  formatDimension,
+  // 产品类型多选组合
+  PRODUCT_TYPE_OPTIONS,
+  parseProductTypes,
+  normalizeProductTypes,
+  formatProductTypes,
+  hasSocket,
+  formatProductModel,
+  // 部件/边别/节数
+  PART_TYPE_OPTIONS,
+  SIDE_OPTIONS,
+  RAIL_SECTION_OPTIONS,
+  partTypeLabel,
+  sideLabel,
+  railSectionLabel,
+} from '@hb-oms/shared';
+
+/** 角色编码 → 中文名映射（与后端种子角色一致） */
+export const ROLE_MAP: Record<string, string> = {
+  admin: '系统管理员',
+  salesman: '业务员',
+  merchandiser: '跟单员',
+  warehouse: '仓管员',
+};
+
+/** 取角色中文名，未知角色回退为原编码 */
+export function roleLabel(code: string): string {
+  return ROLE_MAP[code] || code;
+}
+
+/** 通用：按 value 取 label / tag 类型 */
+export function labelOf(
+  list: Array<{ label: string; value: any }>,
+  value: any,
+): string {
+  return list.find((i) => i.value === value)?.label ?? String(value ?? '');
+}
+export function tagTypeOf(
+  list: Array<{ value: any; type?: string }>,
+  value: any,
+): string {
+  return list.find((i) => i.value === value)?.type ?? 'info';
+}

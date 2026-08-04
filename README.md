@@ -2,22 +2,38 @@
 
 接单 → 部件外发（可选）→ 回货 → 成品入库 → 成品出库；核心呈现订单数 / 完成数 / 库存数 / 欠数（双口径）。
 
-**当前阶段：设计评审。** 权威设计底稿见 [订单跟踪系统(hb-oms)设计文档-V1.0.md](./订单跟踪系统(hb-oms)设计文档-V1.0.md)，评审通过后按文档 §9 里程碑（M1~M5）启动开发。
+**当前阶段：M1 骨架已完成（基础数据 + 系统管理），设计文档评审并行。** 权威设计底稿见 [订单跟踪系统(hb-oms)设计文档-V1.0.md](./订单跟踪系统(hb-oms)设计文档-V1.0.md)，实施按文档 §9 里程碑推进：✅ M1 骨架 → M2 订单 → M3 外发 → M4 出入库+台账 → M5 期初+看板。
 
-## 目录结构（当前）
+## 目录结构
 
 ```
-hb-oms/
+hb-oms/                                    # pnpm + turbo monorepo（架构模式沿用 hb-mes）
 ├── 订单跟踪系统(hb-oms)设计文档-V1.0.md   # 设计文档源文件（唯一事实源）
-├── docs/                                  # 文档站构建工具
-│   ├── package.json                       # 依赖：marked
-│   └── build.mjs                          # md → site/ 静态页构建脚本
-└── site/                                  # 构建产物 = 前台静态站（Nginx 部署根）
-    ├── index.html                         # 前台首页（导航栏：首页 / 技术文档 / 后台管理占位）
-    └── design-doc.html                    # 设计文档 HTML 版（暂挂前台导航栏供评审）
+├── apps/
+│   ├── server/                            # NestJS + TypeORM + MySQL（端口 8100，库 haibao_oms）
+│   └── web/                               # Vue3 + Element Plus + Vite（后台管理，端口 5174）
+├── packages/shared/                       # 前后端共享常量/纯函数（状态枚举、1套=2支、1英寸=25mm、产品类型组合）
+├── docs/                                  # 文档站构建工具（marked，md → site/）
+├── site/                                  # 前台静态站（Nginx /oms/ 部署根：首页 + 设计文档评审页）
+└── deploy/                                # 服务器部署脚本
 ```
 
-> 前后台规划：前台用于**无需权限**的数据表/图表展示，数据管理在**后台**（登录 + 权限）。当前 `site/` 是前台的静态先行版，业务前台后续由 Vue 应用替换，设计文档届时仍保留为导航栏入口（或迁至后台）。
+> 前后台规划：前台用于**无需权限**的数据表/图表展示（当前为 site/ 静态版，后续 Vue 化），数据管理在**后台**（apps/web，登录 + 权限）。
+
+## 开发
+
+```bash
+pnpm install
+cp apps/server/.env.example apps/server/.env   # 填本地 MySQL 密码
+pnpm db:init        # 全新建库 haibao_oms + 建表 + 种子（勿对已有数据库执行）
+pnpm dev            # 前后端并行（server:8100, web:5174）；亦可 dev:server / dev:web 单独起
+pnpm lint           # eslint（错误阻断）
+pnpm db:migrate     # 存量库增量迁移（幂等）
+```
+
+默认账号：`admin / Admin@123`；演示账号 `sales01`/`follow01`（`Sale@123`）、`wh01`（`Wh@12345`）。
+已实现模块：登录（滑块验证码/JWT 刷新）、用户/角色/菜单/字典/操作日志、客户资料（Excel 批量导入）、工艺信息（图号唯一 + 外中内三列组 + 多图）、物料管理。
+表结构变更规范沿用 hb-mes：`synchronize=false`，改表一律写幂等 `scripts/sql/migration-*.sql` 并登记 `db-migrate.ts` 的 MIGRATIONS 数组末尾，同步更新 `01-schema.sql`；权限点唯一事实源 `src/modules/system/permission-manifest.ts`（启动自动同步）。
 
 ## 文档站构建
 

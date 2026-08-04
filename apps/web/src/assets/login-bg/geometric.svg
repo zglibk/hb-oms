@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#2d5a87"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bgGrad)"/>
+  <g stroke="#d4af37" stroke-width="1.5" fill="none" opacity="0.6">
+    <polygon points="960,200 1200,400 1100,700 820,700 720,400">
+      <animateTransform attributeName="transform" type="rotate" from="0 960 450" to="360 960 450" dur="60s" repeatCount="indefinite"/>
+    </polygon>
+    <polygon points="960,300 1120,450 1050,650 870,650 800,450">
+      <animateTransform attributeName="transform" type="rotate" from="360 960 475" to="0 960 475" dur="45s" repeatCount="indefinite"/>
+    </polygon>
+    <polygon points="960,400 1040,500 1000,600 920,600 880,500">
+      <animateTransform attributeName="transform" type="rotate" from="0 960 500" to="360 960 500" dur="30s" repeatCount="indefinite"/>
+    </polygon>
+    <line x1="100" y1="100" x2="500" y2="500">
+      <animate attributeName="x1" values="100;200;100" dur="12s" repeatCount="indefinite"/>
+      <animate attributeName="y1" values="100;180;100" dur="12s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="500;600;500" dur="12s" repeatCount="indefinite"/>
+      <animate attributeName="y2" values="500;420;500" dur="12s" repeatCount="indefinite"/>
+    </line>
+    <line x1="1820" y1="100" x2="1420" y2="500">
+      <animate attributeName="x1" values="1820;1720;1820" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="y1" values="100;180;100" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="1420;1320;1420" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="y2" values="500;420;500" dur="14s" repeatCount="indefinite"/>
+    </line>
+    <line x1="100" y1="980" x2="500" y2="580">
+      <animate attributeName="x1" values="100;200;100" dur="13s" repeatCount="indefinite"/>
+      <animate attributeName="y1" values="980;900;980" dur="13s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="500;600;500" dur="13s" repeatCount="indefinite"/>
+      <animate attributeName="y2" values="580;660;580" dur="13s" repeatCount="indefinite"/>
+    </line>
+    <line x1="1820" y1="980" x2="1420" y2="580">
+      <animate attributeName="x1" values="1820;1720;1820" dur="15s" repeatCount="indefinite"/>
+      <animate attributeName="y1" values="980;900;980" dur="15s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="1420;1320;1420" dur="15s" repeatCount="indefinite"/>
+      <animate attributeName="y2" values="580;660;580" dur="15s" repeatCount="indefinite"/>
+    </line>
+    <circle cx="300" cy="300" r="120">
+      <animate attributeName="cx" values="300;400;300" dur="20s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="300;250;300" dur="20s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="120;140;120" dur="8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1620" cy="300" r="120">
+      <animate attributeName="cx" values="1620;1520;1620" dur="22s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="300;350;300" dur="22s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="120;100;120" dur="9s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="300" cy="780" r="120">
+      <animate attributeName="cx" values="300;200;300" dur="24s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="780;830;780" dur="24s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="120;140;120" dur="10s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1620" cy="780" r="120">
+      <animate attributeName="cx" values="1620;1720;1620" dur="18s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="780;730;780" dur="18s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="120;100;120" dur="7s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g stroke="#d4af37" stroke-width="2" fill="none" opacity="0.4">
+    <path d="M 0 540 L 960 540 L 960 0">
+      <animate attributeName="stroke-dasharray" values="0 2000;2000 0;0 2000" dur="8s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 1920 540 L 960 540 L 960 1080">
+      <animate attributeName="stroke-dasharray" values="0 2000;2000 0;0 2000" dur="8s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>

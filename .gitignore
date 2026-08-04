@@ -2,5 +2,8 @@ node_modules/
 dist/
 .env
 *.log
+*.tsbuildinfo
+.turbo/
+uploads/
 .DS_Store
 Thumbs.db

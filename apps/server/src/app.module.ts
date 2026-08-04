@@ -1,0 +1,59 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { ScheduleModule } from '@nestjs/schedule';
+import { join, resolve } from 'path';
+import { CommonModule } from './common/common.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { FileModule } from './modules/file/file.module';
+import { SystemModule } from './modules/system/system.module';
+import { CustomerModule } from './modules/customer/customer.module';
+import { ProcessInfoModule } from './modules/process-info/process-info.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      // 使用绝对路径加载 .env，避免 PM2 启动时 cwd 不一致导致配置加载失败
+      envFilePath: resolve(process.cwd(), '.env'),
+    }),
+
+    // TypeORM（synchronize=false，表结构变更一律走手写 SQL 迁移）
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'mysql',
+        host: config.get<string>('DB_HOST'),
+        port: Number(config.get('DB_PORT')) || 3306,
+        username: config.get<string>('DB_USER'),
+        password: config.get<string>('DB_PASSWORD'),
+        database: config.get<string>('DB_NAME'),
+        charset: 'utf8mb4',
+        timezone: '+08:00',
+        synchronize: false,
+        autoLoadEntities: true,
+        extra: {
+          connectionLimit: Number(config.get('DB_POOL_MAX')) || 10,
+        },
+      }),
+    }),
+
+    // 开发环境静态托管 uploads（生产由 Nginx 接管）
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+      serveStaticOptions: { index: false },
+    }),
+
+    ScheduleModule.forRoot(),
+
+    CommonModule,
+    AuthModule,
+    FileModule,
+    SystemModule,
+    CustomerModule,
+    ProcessInfoModule,
+  ],
+})
+export class AppModule {}

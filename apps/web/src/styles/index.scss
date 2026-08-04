@@ -1,0 +1,596 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+ * PC 端流式尺寸基础
+ *
+ * - 手机端继续以 16px 为根字号，保持现有触控布局稳定；
+ * - 768px 起在 14~18px 之间连续缩放，约在 1920px 视口恢复为 16px；
+ * - 业务样式优先引用下列令牌，避免把视口宽度直接等比放大造成失真。
+ * ============================================================ */
+html {
+  font-size: 16px;
+}
+
+@media screen and (min-width: 768px) {
+  html {
+    font-size: clamp(14px, calc(10px + 0.32vw), 18px);
+  }
+}
+
+:root {
+  --hb-font-size-xs: clamp(11px, 0.75rem, 13px);
+  --hb-font-size-small: clamp(12px, 0.8125rem, 14px);
+  --hb-font-size-base: clamp(13px, 0.875rem, 15px);
+  --hb-font-size-medium: clamp(14px, 1rem, 18px);
+  --hb-font-size-large: clamp(16px, 1.125rem, 20px);
+
+  --hb-control-size-small: clamp(24px, 1.75rem, 30px);
+  --hb-control-size-base: clamp(30px, 2rem, 36px);
+  --hb-control-size-large: clamp(36px, 2.5rem, 44px);
+  --hb-header-control-size: clamp(32px, 2.25rem, 40px);
+
+  --hb-space-xs: 0.25rem;
+  --hb-space-sm: 0.5rem;
+  --hb-space-md: 0.75rem;
+  --hb-space-lg: 1rem;
+  --hb-space-xl: 1.25rem;
+  --hb-page-gap: clamp(12px, 1rem, 20px);
+  --hb-page-padding: clamp(12px, 1rem, 20px);
+  --hb-card-padding: clamp(12px, 1.25rem, 22px);
+  --hb-dialog-edge: clamp(16px, 1.25rem, 24px);
+
+  /* 统一接管 Element Plus 的基础字号与三档控件高度。 */
+  --el-font-size-extra-small: var(--hb-font-size-xs);
+  --el-font-size-small: var(--hb-font-size-small);
+  --el-font-size-base: var(--hb-font-size-base);
+  --el-font-size-medium: var(--hb-font-size-medium);
+  --el-font-size-large: var(--hb-font-size-large);
+  --el-component-size-small: var(--hb-control-size-small);
+  --el-component-size: var(--hb-control-size-base);
+  --el-component-size-large: var(--hb-control-size-large);
+}
+
+/*
+ * Element Plus 的 el-input 高度读 --el-component-size*，
+ * 但 el-select__wrapper 的 min-height 写死为 24 / 32 / 40px。
+ * 本项目把控件高度改成流式 clamp 后，输入框会跟着变高，下拉仍固定，
+ * 表现为「同档 size 下输入框高于下拉」。此处对齐到同一套高度令牌。
+ */
+.el-select__wrapper {
+  min-height: var(--el-component-size);
+}
+.el-select--small .el-select__wrapper {
+  min-height: var(--el-component-size-small);
+}
+.el-select--large .el-select__wrapper {
+  min-height: var(--el-component-size-large);
+}
+
+/* 打印模板使用 mm/pt 精确排版，不跟随屏幕根字号缩放。 */
+@media print {
+  html {
+    font-size: 16px;
+  }
+}
+
+/* 保留键盘聚焦轮廓，仅鼠标点击时不显示（配合各组件 :focus-visible） */
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+/* 可筛选 el-select 的实际焦点落在内部 input；外层 wrapper 已由
+ * Element Plus 用主题色 box-shadow 表示聚焦，内部不再重复绘制轮廓。 */
+.el-select__input:focus-visible {
+  outline: none;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
+    sans-serif;
+  font-size: var(--hb-font-size-base);
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+  color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ============================================================
+ * 全局表格样式
+ * - 字体统一 14px
+ * - 标题行水平垂直居中
+ * - 记录行水平垂直居中（描述性字段通过 class-name="col-left" 靠左）
+ * - 操作列按钮水平垂直居中
+ * - 宽度自适应父容器
+ * ============================================================ */
+.el-table {
+  width: 100%;
+  font-size: var(--hb-font-size-base);
+
+  /* ----------------------------------------------------------
+   * 表头与 hover 跟随主题色（覆盖 Element Plus 自带变量）
+   * - 表头底色：主色浅色调  --table-header-bg
+   * - 表头文字：主色深色调  --table-header-color
+   * - 行 hover：主色 light-8
+   * ---------------------------------------------------------- */
+  --el-table-header-bg-color: var(--table-header-bg);
+  --el-table-header-text-color: var(--table-header-color);
+  /* 行 hover：主色 light-8（比隔行色更深，保证悬停始终清晰） */
+  --el-table-row-hover-bg-color: var(--el-color-primary-light-8);
+  /* 表格边框颜色：Element Plus 默认 #ebeef5 过浅，适度加深保证可见 */
+  --el-table-border-color: var(--el-border-color);
+  --el-table-border: 1px solid var(--el-border-color);
+
+  /* 表头高度随 PC 视口小幅调整，避免大屏过密、小屏过松。 */
+  th.el-table__cell {
+    padding: clamp(5px, 0.3125rem, 6px) 0 !important;
+  }
+
+  /* 表头文字加粗，强调标题行 */
+  th.el-table__cell {
+    font-weight: 600;
+  }
+
+  /* ----------------------------------------------------------
+   * 列宽自适应父容器：通过 width: 100% 让内部 <table> 撑满容器，
+   * 消除右侧留白。不使用 min-width: 100%，因为 min-width 会干扰
+   * Element Plus 列宽拖拽时的 header/body 宽度同步，导致错位。
+   * ---------------------------------------------------------- */
+  .el-table__header,
+  .el-table__body,
+  .el-table__footer {
+    width: 100% !important;
+  }
+
+  /* 数据行使用小一档字号，列多时仍保持足够信息密度。 */
+  td.el-table__cell {
+    font-size: var(--hb-font-size-small);
+  }
+
+  /* 单元格垂直居中 */
+  .el-table__cell {
+    vertical-align: middle;
+  }
+
+  /* 标题行：水平居中 */
+  th.el-table__cell .cell {
+    text-align: center;
+  }
+
+  /* 记录行：默认水平居中（规则性内容） */
+  td.el-table__cell .cell {
+    text-align: center;
+    /* 全局收紧单元格左右内边距（EP 默认 0 12px） */
+    padding-left: clamp(5px, 0.375rem, 7px);
+    padding-right: clamp(5px, 0.375rem, 7px);
+  }
+
+  /* 描述性 / 内容较多字段：靠左对齐（el-table-column 上设置 class-name="col-left"） */
+  td.el-table__cell.col-left .cell {
+    text-align: left;
+  }
+
+  /* 操作列按钮使用表格小字号 */
+  .el-table__cell .el-button {
+    font-size: var(--hb-font-size-small);
+  }
+
+  /* ----------------------------------------------------------
+   * 操作列链接按钮：基于语义类名的色调区分
+   * 在按钮上添加语义类名来指定颜色变体：
+   * - .btn-view: 查看类操作 - 主题色原色
+   * - .btn-edit: 编辑类操作 - 主题色偏暖
+   * - .btn-delete: 删除类操作 - 主题色偏红
+   * - .btn-submit: 提交类操作 - 主题色偏绿
+   * - .btn-warning: 警告类操作 - 主题色偏橙
+   *
+   * 用法示例：
+   * <el-button link type="primary" class="btn-view">详情</el-button>
+   * <el-button link type="primary" class="btn-edit">编辑</el-button>
+   * <el-button link type="primary" class="btn-delete">删除</el-button>
+   * ---------------------------------------------------------- */
+
+  /* 查看类按钮 - 主题色原色（蓝） */
+  .el-button.btn-view {
+    color: var(--el-color-primary) !important;
+  }
+  .el-button.btn-view:not(.is-disabled):hover,
+  .el-button.btn-view:not(.is-disabled):focus-visible {
+    color: var(--el-color-primary-light-3) !important;
+  }
+
+  /* 编辑类按钮 - 偏紫（区别于查看的纯蓝） */
+  .el-button.btn-edit {
+    color: color-mix(in srgb, var(--el-color-primary) 30%, #b37feb 70%) !important;
+  }
+  .el-button.btn-edit:not(.is-disabled):hover,
+  .el-button.btn-edit:not(.is-disabled):focus-visible {
+    color: color-mix(in srgb, var(--el-color-primary-light-3) 30%, #c8a8f5 70%) !important;
+  }
+
+  /* 删除/作废/停用/驳回类按钮 - 偏红 */
+  .el-button.btn-delete {
+    color: color-mix(in srgb, var(--el-color-primary) 22%, #f56c6c 78%) !important;
+  }
+  .el-button.btn-delete:not(.is-disabled):hover,
+  .el-button.btn-delete:not(.is-disabled):focus-visible {
+    color: color-mix(in srgb, var(--el-color-primary-light-3) 22%, #f89898 78%) !important;
+  }
+
+  /* 提交/通过/启用类按钮 - 偏绿 */
+  .el-button.btn-submit {
+    color: color-mix(in srgb, var(--el-color-primary) 32%, #67c23a 68%) !important;
+  }
+  .el-button.btn-submit:not(.is-disabled):hover,
+  .el-button.btn-submit:not(.is-disabled):focus-visible {
+    color: color-mix(in srgb, var(--el-color-primary-light-3) 32%, #85ce61 68%) !important;
+  }
+
+  /* 警告类按钮（重置、角色等） - 偏橙 */
+  .el-button.btn-warning {
+    color: color-mix(in srgb, var(--el-color-primary) 28%, #e6a23c 72%) !important;
+  }
+  .el-button.btn-warning:not(.is-disabled):hover,
+  .el-button.btn-warning:not(.is-disabled):focus-visible {
+    color: color-mix(in srgb, var(--el-color-primary-light-3) 28%, #ebb563 72%) !important;
+  }
+
+  /* 禁用状态统一为灰色 */
+  .el-button.is-disabled {
+    color: var(--el-disabled-text-color) !important;
+  }
+
+  .el-button + .el-button {
+    margin-left: clamp(5px, 0.375rem, 7px);
+  }
+
+  /* ----------------------------------------------------------
+   * 操作列「更多」折叠下拉（AppActions 组件）触发器
+   * - el-dropdown 不是 .el-button，命中不了上面的相邻间距规则，
+   *   需单独补 6px 左间距，与平铺按钮的节奏一致
+   * - vertical-align:middle 与 el-button 基线对齐（el-button 自带 middle）
+   * ---------------------------------------------------------- */
+  .el-table__cell .el-dropdown {
+    margin-left: clamp(5px, 0.375rem, 7px);
+    vertical-align: middle;
+  }
+
+  /* 「更多」触发按钮：字号继承操作列 12px，与其它按钮完全一致；
+     inline-flex + align-items:center 保证文字与下拉箭头垂直居中 */
+  .el-table__cell .app-actions__more {
+    font-size: var(--hb-font-size-small);
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+  }
+  .el-table__cell .app-actions__more .app-actions__arrow {
+    margin-left: 2px;
+  }
+
+  /* 单元格内容强制单行显示：不换行，超出部分省略号截断
+   * （需完整查看的列可在该 el-table-column 上加 show-overflow-tooltip） */
+  .cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ----------------------------------------------------------
+   * 隔行变色（斑马纹）
+   * 未使用 stripe 属性也全局生效：偶数行加主题浅色底。
+   * nth-child 选择器权重高于 EP hover 规则，故 hover / 当前行
+   * 需以 !important 覆盖，保证悬停与选中态始终优先。
+   * ---------------------------------------------------------- */
+  .el-table__body tr.el-table__row:nth-child(even) > td.el-table__cell {
+    background-color: var(--table-stripe-bg);
+  }
+  .el-table__body tr.hover-row > td.el-table__cell {
+    background-color: var(--el-table-row-hover-bg-color) !important;
+  }
+  .el-table__body tr.current-row > td.el-table__cell {
+    background-color: var(--el-table-current-row-bg-color) !important;
+  }
+}
+
+/* 数据行上下内边距随视口小幅变化，兼顾密度与可读性。 */
+.el-table .el-table__body td.el-table__cell {
+  padding: clamp(4px, 0.25rem, 5px) 0 !important;
+}
+
+/* ============================================================
+ * 操作列「更多」下拉面板（AppActions 组件）
+ * 面板经 teleport 挂到 body，处于 .el-table 作用域外，需全局定义。
+ * - 折叠的按钮纵向排列，每项占满一行
+ * - link 按钮默认无边距，逐项加纵向内边距形成可点区
+ * - 清除相邻按钮的 6px 左间距（纵向排列不需要）
+ * ============================================================ */
+.app-actions-dropdown {
+  .app-actions-menu {
+    display: flex;
+    flex-direction: column;
+    min-width: 6rem;
+  }
+  .app-actions-menu .el-button {
+    justify-content: flex-start;
+    margin: 0;
+    padding: 0.375rem 0.75rem;
+    font-size: var(--hb-font-size-small);
+    width: 100%;
+  }
+  /* 纵向排列，取消 Element Plus 相邻按钮的左间距 */
+  .app-actions-menu .el-button + .el-button {
+    margin-left: 0;
+  }
+}
+
+/* ============================================================
+ * 全局分页器样式
+ * - 默认 10 条/页（数据层面在各页面 query.pageSize 中设置）
+ * - 居右排列，移动端居中
+ * ============================================================ */
+.el-pagination {
+  font-size: var(--hb-font-size-base);
+  margin-top: var(--hb-space-lg);
+  justify-content: flex-end;
+  touch-action: manipulation;
+}
+
+/* ============================================================
+ * 全局对话框样式
+ * - 在视口中水平、垂直居中
+ * - 对话框通过 teleport 挂载到 body，需用全局样式覆盖
+ * ============================================================ */
+/* ============================================================
+ * 全局对话框样式
+ * - 在视口中水平、垂直居中
+ * - 对话框通过 teleport 挂载到 body，需用全局样式覆盖
+ * ============================================================ */
+.el-overlay {
+  /* 覆盖层作为 flex 容器，让内部对话框水平垂直居中 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 滚动时仍保持居中可见，避免超高对话框被裁切 */
+  overflow: auto;
+  padding: var(--hb-dialog-edge) 0;
+  /* 遮罩层内滚动链隔离，避免背景页面跟随滚动 */
+  overscroll-behavior: contain;
+}
+
+/* ----------------------------------------------------------
+ * 验证码对话框遮罩层：:teleported="false" 渲染在 .form-side 内
+ * 覆盖 EP 默认 position:fixed（含 el-modal-dialog 类），
+ * 改为 absolute 相对 .form-side 定位，让弹窗在卡片右侧表单区居中
+ * ---------------------------------------------------------- */
+.captcha-overlay,
+.captcha-overlay.el-modal-dialog {
+  position: absolute !important;
+  inset: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.captcha-overlay .el-overlay-dialog {
+  position: absolute !important;
+  inset: 0;
+  overflow: hidden;
+}
+
+.el-overlay-dialog {
+  /* Element Plus 默认在此层用 margin-top: 15vh 顶部对齐，清掉 */
+  margin: 0 !important;
+  /* 内部用 flex 再次保证居中 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 左右边距：避免宽对话框贴近视口边缘（drawer 用 .el-overlay-drawer，不受影响） */
+  padding: var(--hb-dialog-edge);
+}
+
+.el-dialog {
+  /* 去掉默认顶部边距，由父级 flex 控制居中 */
+  margin: 0 auto !important;
+  max-width: calc(100vw - var(--hb-dialog-edge) - var(--hb-dialog-edge));
+  --el-dialog-padding-primary: var(--hb-dialog-edge);
+}
+
+/* 超高对话框：当内容超过视口高度时，让 body 区域滚动而不是整屏滚动 */
+.el-dialog__body {
+  max-height: calc(100vh - clamp(160px, 12.5rem, 220px));
+  max-height: calc(100dvh - clamp(160px, 12.5rem, 220px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+/* ============================================================
+ * 列表页通用骨架
+ * 各列表页统一结构：<div class="page"> → 筛选卡片 / 工具条 / 表格 / 分页
+ * 通用类集中在此，页面 <style scoped> 内不再重复定义
+ * ============================================================ */
+
+/* 页面纵向弹性布局，卡片间距跟随视口平滑变化。 */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hb-page-gap);
+  min-width: 0; /* 允许 flex 子项收缩，防止表格溢出 */
+}
+
+/* 筛选卡片内表单项：使用 Layout 后恢复行间距，保证换行时垂直对齐 */
+.filter-card .el-form-item {
+  margin-bottom: var(--hb-space-md);
+  display: flex;
+  align-items: center;
+}
+/* label 左对齐时紧贴控件，label-width:auto 按内容自适应 */
+.filter-card .el-form-item__label {
+  padding-right: var(--hb-space-sm);
+  font-size: var(--hb-font-size-small);
+  color: var(--el-text-color-regular);
+  flex-shrink: 0;
+}
+/* 控件填充剩余宽度 */
+.filter-card .el-form-item__content {
+  flex: 1;
+  min-width: 0;
+}
+/* 操作按钮区靠右对齐 */
+.filter-card .filter-actions .el-form-item__content {
+  justify-content: flex-end;
+}
+/* 筛选区内 select / input 宽度撑满列宽，无需逐个写 style="width" */
+.filter-card .el-select,
+.filter-card .el-input,
+.filter-card .el-date-editor {
+  width: 100%;
+}
+/* 最后一行表单项去掉底部间距，避免卡片底部多余空白 */
+.filter-card .el-row > .el-col:last-child .el-form-item,
+.filter-card .el-row > .el-col:nth-last-child(2) .el-form-item {
+  margin-bottom: 0;
+}
+
+/* 表格上方工具条（新增按钮等） */
+.toolbar {
+  margin-bottom: clamp(12px, 0.875rem, 16px);
+}
+
+/* 卡片内容弹性填充 */
+.el-card {
+  width: 100%;
+  --el-card-padding: var(--hb-card-padding);
+}
+
+/* 卡片标题行：与正文共用流式水平间距。 */
+.el-card__header {
+  padding: var(--hb-space-md) var(--hb-card-padding);
+  font-size: var(--hb-font-size-base);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  body {
+    font-size: 13px;
+  }
+
+  /* 主内容区域减小内边距，并留出刘海屏/手势条安全区 */
+  .el-main {
+    padding: 8px !important;
+    padding-left: calc(8px + env(safe-area-inset-left)) !important;
+    padding-right: calc(8px + env(safe-area-inset-right)) !important;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* 表格横向滚动（小屏列宽超出时） */
+  .el-table {
+    .el-table__inner-wrapper {
+      overflow-x: auto;
+    }
+  }
+
+  /* 分页器居中 */
+  .el-pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* 弹窗宽度自适应（居中由全局 .el-overlay flex 布局保证） */
+  .el-dialog {
+    width: 92% !important;
+  }
+
+  /* 移动端对话框宽度已含 4% 边距，清除 overlay padding 避免叠加 */
+  .el-overlay-dialog {
+    padding: 0;
+  }
+
+  /* 表单标签上置，节省横向空间 */
+  .el-form--inline .el-form-item {
+    margin-right: 0;
+    margin-bottom: 8px;
+    width: 100%;
+  }
+
+  /* 筛选栏表单输入框撑满 */
+  .el-form--inline .el-form-item__content {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+ * 出口国家下拉面板（OrderForm.vue）
+ * 面板经 teleport 挂到 body，需全局定义样式。
+ * - 面板宽度：确保中文国名 + 英文全称能完整显示
+ * - 行高、圆角、阴影、滚动条适度美化
+ * ============================================================ */
+.country-popper.el-select-dropdown {
+  min-width: 340px !important;
+  max-width: 420px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.14) !important;
+  border: 1px solid #e4e7ed;
+}
+
+/* 选项行：加大纵向内边距，让国旗与文字呼吸感更强 */
+.country-popper .el-select-dropdown__item {
+  padding: 0 14px;
+  height: 36px;
+  line-height: 36px;
+  border-radius: 4px;
+  margin: 2px 6px;
+  transition: background-color 0.18s ease;
+}
+
+/* 悬停态：主题色浅底 */
+.country-popper .el-select-dropdown__item.hover,
+.country-popper .el-select-dropdown__item:hover {
+  background-color: var(--el-color-primary-light-9);
+}
+
+/* 选中态：主题色浅底 + 左侧主题色竖条 */
+.country-popper .el-select-dropdown__item.selected {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+  position: relative;
+}
+.country-popper .el-select-dropdown__item.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background-color: var(--el-color-primary);
+}
+
+/* 滚动条美化 */
+.country-popper .el-select-dropdown__wrap {
+  max-height: 320px;
+}
+.country-popper .el-scrollbar__bar {
+  opacity: 0.5;
+}

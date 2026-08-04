@@ -1,0 +1,307 @@
+import request from '@/utils/request';
+
+// ===== 用户 =====
+export const getUserList = (params: any) =>
+  request.get('/api/system/user', { params });
+export const getUserDetail = (id: number) =>
+  request.get(`/api/system/user/${id}`);
+export const createUser = (data: any) => request.post('/api/system/user', data);
+export const updateUser = (id: number, data: any) =>
+  request.put(`/api/system/user/${id}`, data);
+export const assignUserRoles = (id: number, roleIds: number[]) =>
+  request.post(`/api/system/user/${id}/roles`, { roleIds });
+export const resetUserPassword = (id: number, password: string) =>
+  request.post(`/api/system/user/${id}/reset-password`, { password });
+export const toggleUserStatus = (id: number, status: number) =>
+  request.post(`/api/system/user/${id}/status/${status}`);
+export const deleteUsers = (ids: number[]) =>
+  request.delete('/api/system/user', { data: { ids } });
+
+// ===== 角色 =====
+export const getRoleList = () => request.get<any, any[]>('/api/system/role');
+export const createRole = (data: any) => request.post('/api/system/role', data);
+export const updateRole = (id: number, data: any) =>
+  request.put(`/api/system/role/${id}`, data);
+export const deleteRole = (id: number) =>
+  request.delete(`/api/system/role/${id}`);
+export const getRolePermissions = (id: number) =>
+  request.get<any, number[]>(`/api/system/role/${id}/permissions`);
+export const assignRolePermissions = (id: number, permissionIds: number[]) =>
+  request.post(`/api/system/role/${id}/permissions`, { permissionIds });
+
+// ===== 菜单/权限 =====
+export const getMenuTree = () =>
+  request.get<any, any[]>('/api/system/menu/tree');
+export const createMenu = (data: any) => request.post('/api/system/menu', data);
+export const updateMenu = (id: number, data: any) =>
+  request.put(`/api/system/menu/${id}`, data);
+export const deleteMenu = (id: number) =>
+  request.delete(`/api/system/menu/${id}`);
+
+// ===== 字典 =====
+export const getDictList = (dictType?: string) =>
+  request.get<any, any[]>('/api/system/dict', { params: { dictType } });
+export const getDictTypes = () =>
+  request.get<any, string[]>('/api/system/dict/types');
+export const getDictByType = (type: string) =>
+  request.get<any, any[]>(`/api/system/dict/type/${type}`);
+export const createDict = (data: any) => request.post('/api/system/dict', data);
+export const updateDict = (id: number, data: any) =>
+  request.put(`/api/system/dict/${id}`, data);
+export const deleteDict = (id: number) =>
+  request.delete(`/api/system/dict/${id}`);
+
+// 字典批量导入/导出
+export interface DictImportResult {
+  total: number;
+  success: number;
+  failed: number;
+  aborted: boolean;
+  errors: { row: number; message: string }[];
+}
+
+/** 下载字典导入模板，触发浏览器下载 */
+export async function downloadDictTemplate(): Promise<void> {
+  const resp: any = await request.get('/api/system/dict/template', {
+    responseType: 'blob',
+    __raw: true,
+  } as any);
+  const blob: Blob = resp.data ?? resp;
+  const disposition: string | undefined = resp.headers?.['content-disposition'];
+  let filename = '字典导入模板.xlsx';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      /* ignore */
+    }
+  }
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+/** 上传 xlsx 批量导入字典 */
+export const importDict = (file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return request.post<any, DictImportResult>('/api/system/dict/import', fd);
+};
+
+/** 导出字典为 Excel（可按类型筛选，或按 ids 导出勾选记录），触发浏览器下载 */
+export async function exportDictList(
+  dictType?: string,
+  ids?: number[],
+): Promise<void> {
+  const params: any = { dictType };
+  if (ids && ids.length) params.ids = ids.join(',');
+  const resp: any = await request.get('/api/system/dict/export', {
+    params,
+    responseType: 'blob',
+    __raw: true,
+  } as any);
+  const blob: Blob = resp.data ?? resp;
+  const disposition: string | undefined = resp.headers?.['content-disposition'];
+  let filename = '数据字典.xlsx';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      /* ignore */
+    }
+  }
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+// ===== 部门 =====
+export const getDeptList = () => request.get<any, any[]>('/api/system/dept');
+
+// ===== 日志 =====
+export const getLogList = (params: any) =>
+  request.get('/api/system/log', { params });
+export const getLogModules = () =>
+  request.get<any, string[]>('/api/system/log/modules');
+export const getLogActions = (module?: string) =>
+  request.get<any, string[]>('/api/system/log/actions', {
+    params: module ? { module } : {},
+  });
+export const deleteLogs = (ids: number[]) =>
+  request.delete('/api/system/log', { data: { ids } });
+
+// ===== 物料主数据 =====
+export const getMaterialByCode = (code: string) =>
+  request.get<any, any>('/api/system/material/by-code', { params: { code } });
+export const getMaterialItemNumbers = () =>
+  request.get<any, string[]>('/api/system/material/item-nos');
+export const getMaterialList = (params: any) =>
+  request.get<any, { list: any[]; total: number; page: number; pageSize: number }>(
+    '/api/system/material',
+    { params },
+  );
+export const createMaterial = (data: any) =>
+  request.post('/api/system/material', data);
+export const updateMaterial = (id: number, data: any) =>
+  request.put(`/api/system/material/${id}`, data);
+export const deleteMaterial = (id: number) =>
+  request.delete(`/api/system/material/${id}`);
+
+// ===== 物料批量导入 =====
+export interface MaterialImportResult {
+  total: number;
+  success: number;
+  failed: number;
+  errors: { row: number; materialCode: string; message: string }[];
+}
+
+/** 下载物料批量导入模板（带样式的 xlsx），触发浏览器下载 */
+export async function downloadMaterialTemplate(): Promise<void> {
+  const resp: any = await request.get('/api/system/material/template', {
+    responseType: 'blob',
+    __raw: true,
+  } as any);
+  const blob: Blob = resp.data ?? resp;
+  const disposition: string | undefined = resp.headers?.['content-disposition'];
+  let filename = '物料导入模板.xlsx';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      /* ignore */
+    }
+  }
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+/** 上传 xlsx 批量导入物料 */
+export const importMaterial = (file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return request.post<any, MaterialImportResult>(
+    '/api/system/material/import',
+    fd,
+  );
+};
+
+/** 导出物料清单为 Excel（遵循当前筛选条件；params.ids 存在时仅导出勾选记录），触发浏览器下载 */
+export async function exportMaterialList(params: any): Promise<void> {
+  const reqParams: any = { ...params };
+  if (Array.isArray(reqParams.ids) && reqParams.ids.length) {
+    reqParams.ids = reqParams.ids.join(',');
+  } else {
+    delete reqParams.ids;
+  }
+  const resp: any = await request.get('/api/system/material/export', {
+    params: reqParams,
+    responseType: 'blob',
+    __raw: true,
+  } as any);
+  const blob: Blob = resp.data ?? resp;
+  const disposition: string | undefined = resp.headers?.['content-disposition'];
+  let filename = '物料清单.xlsx';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      /* ignore */
+    }
+  }
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+// ===== 系统配置 =====
+export interface SystemConfig {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  companyName: string | null;
+  systemName: string | null;
+  contactPhone: string | null;
+  companyAddress: string | null;
+  bankAccount: string | null;
+  taxNo: string | null;
+  copyrightInfo: string | null;
+  loginBgUrl: string | null;
+  loginBgSetAsDefault: number;
+}
+
+/** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */
+export interface PublicSystemConfig {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  companyName: string | null;
+  systemName: string | null;
+  copyrightInfo: string | null;
+  loginBgUrl: string | null;
+  loginBgSetAsDefault: number;
+}
+
+/** 管理员读取完整配置 */
+export const getSystemConfig = () =>
+  request.get<any, SystemConfig>('/api/system/config');
+/** 管理员更新配置 */
+export const updateSystemConfig = (data: Partial<SystemConfig>) =>
+  request.put('/api/system/config', data);
+/** 公开接口（登录页免登读取） */
+export const getPublicSystemConfig = () =>
+  request.get<any, PublicSystemConfig>('/api/system/config/public');
+
+/* ===== 审批管理（系统配置·审批开关） ===== */
+export interface ApprovalConfigItem {
+  id: number;
+  bizKey: string;
+  bizName: string;
+  /** 1开启（提交进入审核工作台）0关闭（提交直通，排产=直接下发生产） */
+  enabled: number;
+  remark: string | null;
+  updaterName: string | null;
+  updatedAt: string | null;
+}
+
+/** 审批开关列表 */
+export const getApprovalConfigs = () =>
+  request.get<any, ApprovalConfigItem[]>('/api/system/config/approval');
+
+/** 切换审批开关（权限 config:approval） */
+export const updateApprovalConfig = (bizKey: string, enabled: number) =>
+  request.put<any, { bizKey: string; enabled: number }>(
+    `/api/system/config/approval/${bizKey}`,
+    { enabled },
+  );
+
+/** 危险操作：清理业务测试数据（仅 admin） */
+export interface CleanupResult {
+  truncated: string[];
+  orderCount: number;
+  message: string;
+}
+export const cleanupBusinessData = (confirm: string) =>
+  request.post<any, CleanupResult>('/api/system/config/cleanup', { confirm });

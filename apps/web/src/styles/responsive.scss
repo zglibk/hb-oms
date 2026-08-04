@@ -1,0 +1,360 @@
+/* ============================================================
+ * 响应式设计基础
+ * 
+ * 断点约定（与 Element Plus 一致，向下兼容 iPhone SE 375px）：
+ *   xs: <768px   手机端（竖屏为主）
+ *   sm: 768~991  平板端（横屏手机 / 竖屏平板）
+ *   md: 992~1199 小屏笔记本
+ *   lg: 1200~1919 桌面显示器
+ *   xl: ≥1920    大屏
+ *
+ * 当前策略：结构变化使用断点，字号、控件高度和间距使用
+ * index.scss 中的 rem + clamp() 令牌连续缩放。
+ * ============================================================ */
+
+/* ---- 断点变量：可在 SCSS 中通过 @use 引入 -------------------- */
+$breakpoint-xs: 767.98px;   /* max-width，手机端上限 */
+$breakpoint-sm: 991.98px;
+$breakpoint-md: 1199.98px;
+$breakpoint-lg: 1919.98px;
+
+/* ---- 常用 mixin -------------------------------------------- */
+/* 用法示例：@include respond-to(xs) { ... } */
+@mixin respond-to($size) {
+  @if $size == xs {
+    @media (max-width: $breakpoint-xs) { @content; }
+  } @else if $size == sm {
+    @media (max-width: $breakpoint-sm) { @content; }
+  } @else if $size == md {
+    @media (max-width: $breakpoint-md) { @content; }
+  } @else if $size == lg {
+    @media (max-width: $breakpoint-lg) { @content; }
+  }
+}
+
+/* ============================================================
+ * 平板及 PC 端通用流式布局
+ * ============================================================ */
+@media (min-width: 768px) {
+  /* 可复用的自适应表单/卡片网格：列数由可用宽度自动决定。 */
+  .responsive-grid,
+  .responsive-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+    gap: var(--hb-page-gap);
+    min-width: 0;
+  }
+
+  .responsive-form-grid {
+    align-items: start;
+
+    > .el-form-item {
+      min-width: 0;
+      margin-bottom: 0;
+    }
+  }
+
+  /* 通用工具条允许在小屏 PC 上自然换行，避免按钮挤压表单。 */
+  .toolbar,
+  .form-actions,
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--hb-space-sm);
+  }
+
+  /* 给需要流式宽度的业务弹窗使用；保留各页面原有宽度语义。 */
+  .el-dialog.responsive-dialog {
+    width: min(60rem, calc(100vw - var(--hb-dialog-edge) - var(--hb-dialog-edge))) !important;
+  }
+}
+
+/* 小屏笔记本/横屏平板采用紧凑密度，内容区不被卡片内边距过度占用。 */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .el-card {
+    --el-card-padding: clamp(12px, 1rem, 16px);
+  }
+
+  .filter-card .el-form-item {
+    margin-bottom: var(--hb-space-sm);
+  }
+}
+
+/* ============================================================
+ * 手机端通用调整（不影响 ≥768px 桌面表现）
+ * 采用 @media 而非 mixin，直接生效于全局
+ * ============================================================ */
+@media (max-width: 767.98px) {
+  /* ---- 主容器内边距压缩 ---------------------------------- */
+  .app-page,
+  .page-container {
+    padding: 8px !important;
+  }
+
+  /* ---- Element Plus 常规组件密度压缩 --------------------- */
+
+  /* 卡片：默认 20px 内边距 → 12px */
+  .el-card {
+    .el-card__header {
+      padding: 12px !important;
+    }
+    .el-card__body {
+      padding: 12px !important;
+    }
+  }
+
+  /* 页面标题（h2/h3）自动缩小 */
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 18px !important; }
+  h3 { font-size: 16px !important; }
+
+  /* ---- 表单：单列布局 ------------------------------------ */
+  .el-form:not(.form-inline-mobile) {
+    .el-form-item {
+      /* label 上、input 下（默认 label 左浮动会挤压手机屏） */
+      display: block;
+      margin-bottom: 16px;
+
+      .el-form-item__label {
+        float: none !important;
+        display: block;
+        width: auto !important;
+        padding: 0 0 4px !important;
+        text-align: left !important;
+        line-height: 1.4;
+      }
+      .el-form-item__content {
+        margin-left: 0 !important;
+      }
+    }
+  }
+
+  /* ---- 按钮组：自动换行 + 增加触控区域 ------------------- */
+  .toolbar,
+  .form-actions,
+  .footer-actions {
+    flex-wrap: wrap;
+    gap: 8px !important;
+
+    .el-button {
+      /* 保证触控目标 ≥ 40px 高（WCAG AAA 建议） */
+      min-height: 36px;
+    }
+  }
+
+  /* 底部固定操作栏：确保能全屏点到 */
+  .footer-actions {
+    padding: 8px 12px !important;
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid #ebeef5;
+    z-index: 5;
+    margin: 0 -8px -8px;
+  }
+
+  /* ---- 对话框：接近全屏 ---------------------------------- */
+  .el-dialog:not(.is-fullscreen) {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    margin: 5vh auto !important;
+
+    .el-dialog__header {
+      padding: 12px 16px !important;
+    }
+    .el-dialog__body {
+      padding: 12px 16px !important;
+    }
+    .el-dialog__footer {
+      padding: 8px 16px 12px !important;
+    }
+  }
+
+  /* ---- 分页器：只显总数和上/下页，隐藏跳转 --------------- */
+  .el-pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+
+    .el-pagination__jump,
+    .el-pagination__sizes {
+      display: none !important;
+    }
+  }
+
+  /* ---- 表格：横向可滚动 + 字号缩小 ------------------------ */
+  .el-table {
+    font-size: 12px !important;
+
+    td.el-table__cell {
+      font-size: 12px !important;
+      padding: 6px 4px !important;
+    }
+    th.el-table__cell {
+      padding: 8px 4px !important;
+    }
+    .cell {
+      padding-left: 6px !important;
+      padding-right: 6px !important;
+    }
+  }
+
+  /* ---- 描述列表（详情页）：单列展示 --------------------- */
+  .el-descriptions {
+    :deep(.el-descriptions__body) {
+      overflow-x: auto;
+    }
+  }
+
+  /* ---- 搜索栏（filter-bar）：紧凑排列 ------------------- */
+  .filter-bar,
+  .search-bar {
+    flex-wrap: wrap;
+    gap: 8px !important;
+
+    .el-input,
+    .el-select,
+    .el-date-picker {
+      width: 100% !important;
+    }
+  }
+}
+
+/* ============================================================
+ * 通用响应式工具类（无媒体查询前缀 = 桌面显示）
+ * ============================================================ */
+
+/* 仅手机端显示 */
+.mobile-only {
+  display: none !important;
+}
+@media (max-width: 767.98px) {
+  .mobile-only {
+    display: initial !important;
+  }
+}
+
+/* 手机端隐藏：用顶层 @media 确保编译后选择器权重不降低 */
+@media (max-width: 767.98px) {
+  .mobile-hidden {
+    display: none !important;
+  }
+}
+
+/* 手机端切换为块级 */
+.mobile-block {
+  @media (max-width: 767.98px) {
+    display: block !important;
+    width: 100% !important;
+  }
+}
+
+/* ============================================================
+ * 手机端卡片列表视图（.mobile-list + .m-card）
+ * 
+ * 用途：列表页 v-if="!isMobile" 用 el-table，v-else 用卡片。
+ * 结构：
+ *   .mobile-list                    列表容器
+ *     .m-card                       每条记录
+ *       .m-card__head               头部：主标识 + 状态
+ *         .m-card__title            主标识区（单号 + 标签）
+ *       .m-card__body               内容：字段两列网格
+ *         .m-card__field            单个字段（label + value）
+ *           .m-card__field--wide    跨两列
+ *       .m-card__foot               操作按钮组
+ * ============================================================ */
+.mobile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+
+  .m-card {
+    background: #fff;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+
+    &:active {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    &__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #f8faff 0%, #ffffff 100%);
+      border-bottom: 1px solid #f0f2f5;
+    }
+
+    &__title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+      flex: 1;
+    }
+
+    &__no {
+      font-weight: 600;
+      font-size: 14px;
+      color: #303133;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 55vw;
+    }
+
+    &__body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      padding: 10px 12px;
+    }
+
+    &__field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+
+      &--wide {
+        grid-column: 1 / -1;
+      }
+    }
+
+    &__label {
+      font-size: 11px;
+      color: #909399;
+      line-height: 1.4;
+    }
+
+    &__value {
+      font-size: 13px;
+      color: #303133;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
+    &__foot {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 4px 8px 8px;
+      border-top: 1px dashed #f0f2f5;
+      flex-wrap: wrap;
+
+      /* 手机端按钮加大点击区 */
+      .el-button {
+        padding: 6px 8px;
+        min-height: 32px;
+      }
+    }
+  }
+}
