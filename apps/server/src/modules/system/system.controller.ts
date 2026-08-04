@@ -41,6 +41,7 @@ import {
 } from './dto/permission.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import {
   CurrentUser,
   CurrentUserPayload,
@@ -68,6 +69,27 @@ export class SystemController {
     private readonly logService: LogService,
     private readonly materialService: MaterialService,
   ) {}
+
+  // ===== 系统配置 =====
+
+  /**
+   * 公开系统配置（登录页/侧栏品牌展示，未登录可访问）。
+   * M1 返回静态默认值；后续需要管理员可配置（logo/登录背景等）时再建 t_system_config 表，
+   * 本接口字段结构与前端 PublicSystemConfig 对齐，届时只改实现不改契约。
+   */
+  @Public()
+  @Get('config/public')
+  publicConfig() {
+    return {
+      logoUrl: null,
+      faviconUrl: null,
+      companyName: '海宝五金',
+      systemName: '海宝五金订单跟踪系统',
+      copyrightInfo: `© ${new Date().getFullYear()} 海宝五金`,
+      loginBgUrl: null,
+      loginBgSetAsDefault: 0,
+    };
+  }
 
   // ===== 用户 =====
   @Get('user')
