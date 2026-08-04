@@ -107,6 +107,12 @@ add_location "location /oms/uploads/" "    # hb-oms 上传文件
         alias $SERVER_DIR/uploads/;
     }"
 
+# 无斜杠访问补斜杠：/oms、/oms/admin 不带斜杠时不匹配 location /oms/，
+# 会落到主站 SPA（location /）导致白屏，故加精确匹配 301 重定向
+add_location "location = /oms " "    # hb-oms 无斜杠访问补斜杠（避免落到主站 SPA 白屏）
+    location = /oms { return 301 /oms/; }
+    location = /oms/admin { return 301 /oms/admin/; }"
+
 [ "$NEED_RELOAD" = "1" ] && { systemctl reload nginx; echo "    Nginx 已重载"; }
 
 echo ""
