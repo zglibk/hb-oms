@@ -67,7 +67,7 @@ const NAV = (active) => `
       <nav>
         <a href="index.html" class="${active === 'home' ? 'active' : ''}">首页</a>
         <a href="design-doc.html" class="${active === 'doc' ? 'active' : ''}">技术文档</a>
-        <a class="disabled" title="建设中，敬请期待">后台管理</a>
+        <a href="admin/" title="登录后台管理系统">后台管理</a>
       </nav>
     </div>
   </header>`;

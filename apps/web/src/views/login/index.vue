@@ -53,10 +53,6 @@
       <span class="shape shape-ring-1"></span>
     </div>
 
-    <!-- 文字粒子聚合动效（页面级浮层，文字限制在登录卡片左侧空白区域） -->
-    <div v-if="themeStore.loginBgScheme === 'particles'" class="text-particle-layer">
-      <TextParticleAggregation />
-    </div>
 
     <!-- 方案介绍浮层（页面级，独立于登录卡片，浮在任意背景之上） -->
     <div class="brand-intro" aria-label="系统方案介绍">
@@ -315,7 +311,6 @@ import { useUserStore } from '@/stores/user';
 import { useThemeStore } from '@/stores/theme';
 import { registerDynamicRoutes } from '@/router/dynamic';
 import LoginBgPicker from '@/components/LoginBgPicker.vue';
-import TextParticleAggregation from '@/components/TextParticleAggregation.vue';
 import SliderCaptcha from '@/components/SliderCaptcha.vue';
 import CompanyLogo from '@/components/CompanyLogo.vue';
 

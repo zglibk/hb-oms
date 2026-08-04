@@ -45,32 +45,54 @@ npm run build   # 读取根目录设计文档 md，生成 site/index.html 与 si
 
 **修改文档只改根目录 md 源文件**，改完重新 `npm run build`；不要直接编辑 site/ 下的 HTML（会被覆盖）。
 
-## 部署（阿里云 ECS，与 hb-mes / QMS 同机）
+## 部署（阿里云 ECS 120.79.138.198，与 hb-mes / QMS 同机）
 
-服务器已运行 hb-mes（80 端口主站）、QMS（`/QMS/` 前缀）等服务，**hb-oms 前台以独立路径前缀 `/oms/` 挂载**，严禁影响既有 location（尤其 QMS 相关，见 hb-mes README）。
+同机已运行 hb-mes（80 主站 + PM2 `hb-mes-server`:8000）、QMS（`/QMS/` 前缀 :3000）、OnlyOffice(:8080)、MySQL。**hb-oms 全部挂 `/oms/` 路径前缀**，修改 Nginx 只增不改，严禁影响既有 location（尤其 QMS）。
 
-1. 本地构建后上传产物：
+### 生产环境布局
 
-```bash
-scp -r site/* <user>@<server>:/var/www/hb-oms/site/
-```
+| 项 | 值 |
+|---|---|
+| 代码目录 | `/var/www/hb-oms/app`（monorepo，服务器上安装依赖并构建后端） |
+| 前台静态站 | `/var/www/hb-oms/site` → `location /oms/` |
+| 后台前端产物 | `/var/www/hb-oms/web-dist` → `location /oms/admin/`（**本地构建上传**，服务器内存有限禁跑 vite build） |
+| 后端进程 | PM2 `hb-oms-server`，`127.0.0.1:8100` → `location /oms/api/`（proxy_pass 到 `:8100/api/`） |
+| 上传文件 | `/var/www/hb-oms/app/apps/server/uploads` → `location /oms/uploads/` |
+| 数据库 | 本机 MySQL `haibao_oms`（root 密码沿用 hb-mes .env） |
+| 服务端 .env | `/var/www/hb-oms/app/apps/server/.env`（deploy 脚本首次自动生成：PORT=8100、DB_NAME=haibao_oms、随机 JWT_SECRET） |
+| Nginx 配置 | `/etc/nginx/conf.d/hb-mes.conf`（共用 server 块，脚本幂等插入 /oms/* location，自动备份+`nginx -t` 回滚） |
 
-2. 在 `/etc/nginx/conf.d/hb-mes.conf` 的 server 块内**新增**（不要改动任何既有 location）：
-
-```nginx
-# hb-oms 订单跟踪系统前台（静态站，设计评审期）
-location /oms/ {
-    alias /var/www/hb-oms/site/;
-    index index.html;
-}
-```
-
-3. 验证并重载：
+### 发版流程（本地 Windows 开发机执行）
 
 ```bash
-nginx -t && systemctl reload nginx
+# 1. 本地构建后台前端（产物含 base=/oms/admin/、API 前缀 /oms 均由 .env.production 注入）
+pnpm --filter @hb-oms/web build
+
+# 2.（如改了设计文档/前台）重建前台静态站
+cd docs && npm run build && cd ..
+
+# 3. 同步代码与产物到服务器（免密 SSH）
+git archive main | ssh root@120.79.138.198 "mkdir -p /var/www/hb-oms/app && tar -x -C /var/www/hb-oms/app"
+scp -r apps/web/dist/* root@120.79.138.198:/var/www/hb-oms/web-dist/
+scp site/*.html root@120.79.138.198:/var/www/hb-oms/site/
+
+# 4. 服务器端安装/构建/迁移/重启（幂等）
+ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 ```
 
-4. 访问 `http://<server>/oms/` 即前台首页，导航栏「技术文档」进入设计文档评审页。
+脚本职责见 [deploy/deploy-oms-app.sh](./deploy/deploy-oms-app.sh)：生成 .env（仅首次）→ `pnpm install` + 构建 shared/server → 无库跑 `db:init`、有库跑 `db:migrate` → PM2 start/restart + 探活 → Nginx location 幂等插入并重载。
 
-> 后续 M1 起本仓库将初始化为 pnpm + turbo monorepo（apps/server + apps/web + packages/shared，架构模式沿用 hb-mes），后端建议端口 8100、PM2 进程名 `hb-oms-server`，`/oms/api/` 反代过去；届时更新本 README。
+### 访问入口
+
+- 前台：http://120.79.138.198/oms/ （导航栏：技术文档 / 后台管理）
+- 后台管理：http://120.79.138.198/oms/admin/
+- 后端 API：http://120.79.138.198/oms/api/
+
+### 常用运维命令（服务器上）
+
+```bash
+pm2 status && pm2 logs hb-oms-server --lines 50   # 进程与日志
+nginx -t && systemctl reload nginx                # 配置校验/重载
+mysql -uroot -p haibao_oms                        # 进库
+cd /var/www/hb-oms/app && pnpm db:migrate         # 手动增量迁移
+```
