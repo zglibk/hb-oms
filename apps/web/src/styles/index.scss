@@ -472,6 +472,24 @@ a {
   margin-bottom: 0;
 }
 
+/* 内联筛选表单（el-form :inline + .filter-bar）：PC 端表单项一行横向排列。
+ * 上面的 .filter-card .el-form-item{display:flex} 是给 el-row/el-col 网格布局设计的，
+ * 会把内联表单项也撑成块级占满整行导致竖排；此处针对 .filter-bar 恢复横向流式，
+ * 保留各控件自身的行内宽度（style="width:*"），降低查询区高度占用。 */
+.filter-card .filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--hb-space-sm);
+}
+.filter-card .filter-bar .el-form-item {
+  display: inline-flex;
+  margin-bottom: 0;
+}
+.filter-card .filter-bar .el-form-item__content {
+  flex: 0 0 auto;
+}
+
 /* 表格上方工具条（新增按钮等） */
 .toolbar {
   margin-bottom: clamp(12px, 0.875rem, 16px);
