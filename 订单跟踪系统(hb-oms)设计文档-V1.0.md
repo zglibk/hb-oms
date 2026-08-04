@@ -34,11 +34,14 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
    → 创建订单（订单 → 产品行 → 部件行 三层；按生产图号自动带入工艺信息）
    → 部件外发表面处理【可选：镀锌板产品不外发】（发出登记）
    → 外发回货【可选】（分批回货登记）
-   → 成品入库
+   → 装配（计划员手工录计划完成时间 / 实际完成时间 + 装配数量，多批次）
+   → 成品入库（受装配闸门约束：装配未完成禁止入库）
    → 成品出库（销售发货）
 ```
 
-**不进入系统的环节**：排产、工序管理（拉槽/冲压/装配）、车间报工、多级审核、外购零配件（钢珠/拨叉等，见 §10 后续扩展）。
+**不进入系统的环节**：排产、工序管理（拉槽/冲压）、车间报工、多级审核、外购零配件（钢珠/拨叉等，见 §10 后续扩展）。
+
+> **装配是唯一纳入系统的工序环节**，但仅作**轻量跟踪**：计划员按产品行手工录入装配批次（计划完成时间 / 实际完成时间 / 装配数量），实际完成时间已填即视为该批完成；不做工序报工、机台工时、产线调度。装配作为成品入库的前置闸门（§4.5 / §7）。
 
 ---
 
@@ -55,6 +58,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 7 | 期初成品与订单 | **先补录历史订单再挂期初**：未完结历史订单补录为正式订单（标记「期初补录」），期初成品挂产品行、参与欠数计算；已完结订单的剩余库存用**纯属性期初行**（不挂订单，只计库存数） |
 | 8 | 产品类型 | **多选组合**（如「普通自锁」「卡口自锁」）；组合中**含「卡口」即触发全部卡口规则**（左右分列、2 支 = 1 套、部件/库存分边别） |
 | 9 | 工艺信息 | 独立基础数据模块，创建订单时**按生产图号匹配**自动带入（可修改） |
+| 10 | 装配环节 | 外发回货与成品入库之间新增装配；**一产品可多批装配**（锚定产品行），计划员手工录计划/实际完成时间 + 装配数量；作为入库**硬闸门**：`可入库量 = Σ已完成装配量 − 已入库量`，**按量卡**、支持部分装配部分入库；期初入库豁免 |
 
 ### 2.1 统一口径
 
@@ -113,6 +117,19 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 ```
 
 - 沿用 hb-mes 模式：**已确认单据禁止 UPDATE/DELETE**，更正一律开红字单（`biz_type='reversal'`，明细 `origin_item_id` 追溯原明细行）。
+
+### 3.4 装配批次状态机
+
+```
+        1 计划中（仅填计划完成时间）
+             │ 填写实际完成时间
+             ▼
+        2 已完成（该批装配数量计入可入库量）
+```
+
+- 状态为**派生值**：`actual_date IS NULL → 计划中`，`actual_date 非空 → 已完成`，无独立状态列（`t_assembly_batch.status` 由服务端按 actual_date 计算返回，或前端按字段派生）。
+- 已完成批次的数量参与入库闸门（§4.5）；批次**被入库消耗后禁止删除或下调数量致可入库量为负**（§7）。
+- 从已完成退回计划中（清空实际完成时间）：仅当该产品行「可入库量」在退回后仍 ≥ 已入库量，否则拒绝。
 
 ---
 
@@ -283,7 +300,29 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 回齐判定（行级）：`Σreturn_qty ≥ send_qty`；全部明细行回齐 → 单头自动置 4 已回齐。回货数量允许超发出数量（重量折算误差），超出时界面黄色提示不拦截。
 
-### 4.4 成品出入库：`t_finished_doc` + `t_finished_item` + `t_finished_balance`
+### 4.4 装配批次：`t_assembly_batch`
+
+计划员按订单产品行手工录入装配批次，一产品可多批。**轻量跟踪、不采番**（批次行类比部件调整流水，不走 NumberGeneratorService）。已完成批次（实际完成时间已填）的数量参与成品入库闸门（§4.5）。
+
+#### t_assembly_batch（装配批次）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | int PK | |
+| order_id / order_product_id | int idx | 锚点：订单 / 产品行 |
+| side | varchar(16) | 边别：含卡口组合 left/right，其余 `''`（闸门按 side 分别卡量） |
+| plan_date | date | 计划完成时间（计划员录入） |
+| actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
+| qty | int | 装配数量（支） |
+| status | tinyint | 状态派生值：1计划中 2已完成（按 actual_date 是否为空计算，不落库或落库均可，落库时须与 actual_date 保持一致） |
+| remark | varchar(255) | 备注 |
+| （审计字段） | | creator/updater/create_time/update_time |
+
+- **索引**：`idx(order_product_id, side)`，供闸门与台账按产品行聚合。
+- **闸门口径（唯一实现，入库侧复用）**：`可入库量(产品行, side) = Σqty(actual_date 非空) − Σ已入库量(该产品行该 side，按 direction 抵扣红字)`。
+- 批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 < 已入库量（§7）。
+
+### 4.5 成品出入库：`t_finished_doc` + `t_finished_item` + `t_finished_balance`
 
 沿用 hb-mes 三表 + 红字冲销模式，简化状态：
 
@@ -325,8 +364,9 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 - **唯一键**：`(order_product_id, side, batch_no)`，其中 order_product_id 为 NULL 的纯属性期初行以 `(item_no, product_type, rail_section, dimension_mm, surface_type, color, side, batch_no)` 逻辑唯一（应用层保证，维度空串兜底规避 MySQL 唯一键多 NULL 问题——参照 hb-mes 部件台账做法，锚点列用 0 代替 NULL 参与唯一键）。
 - 出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，**禁止直接改 balance**。
+- **装配入库闸门**：`biz_type='inbound'` 入库单**确认时**，按每条明细的 order_product_id + side 校验 `本次入库量 ≤ 可入库量(§4.4)`；超额则拒绝（`BadRequestException` 中文提示，含产品行、可入库量、本次量）。`biz_type='opening_balance'`（期初）与 `reversal`（红字）**豁免**该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，`Σ已入库量` 按 direction 自然回落，可入库量随之回补。
 
-### 4.5 部件台账：`t_part_balance`（属性锚定，独立参考台账）
+### 4.6 部件台账：`t_part_balance`（属性锚定，独立参考台账）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -344,7 +384,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 - 进出方式：期初录入累加（`INSERT ... ON DUPLICATE KEY UPDATE quantity = quantity + n`）+ 手工调整；调整走 `t_part_adjust` 流水表（字段：7 维快照 + delta 调整量 + reason 原因 + 审计），**不直接改数无痕**。
 - 不与外发/成品单据联动（§2.1），V2 扩展见 §10。
 
-### 4.6 单号登记表（NumberGeneratorService 采番，禁止自行拼接）
+### 4.7 单号登记表（NumberGeneratorService 采番，禁止自行拼接）
 
 | 前缀 | 单据 | 格式 |
 |---|---|---|
@@ -357,7 +397,9 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 事务内采番必须把事务 manager 传入 `generate()`；业务表单号列唯一索引兜底。
 
-### 4.7 期初录入（系统上线初始化，菜单常驻可复录）
+> **不采番的业务行**：装配批次 `t_assembly_batch`、部件调整流水 `t_part_adjust` 为轻量记账行，无单据号（主键 id 即可），不占用上表前缀。
+
+### 4.8 期初录入（系统上线初始化，菜单常驻可复录）
 
 1. **补录历史订单**：未完结历史订单按正常订单录入，`is_opening=1`（免附件/来源等非关键校验；豁免逻辑集中在 DTO 校验层）。
 2. **成品期初（挂订单）**：选补录订单的产品行 → 生成 `biz_type='opening_balance'` 入库单（FGO 序列、direction=1）→ 确认后累加 balance。字段自动带出：订单号、生产单号、客户、产品编号（物料代码）、货号、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。
@@ -379,17 +421,21 @@ SELECT
   IFNULL(fout.out_qty, 0)                                     AS 出库数,     -- Σ已确认出库(FGO) − Σ对应红字
   IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该产品行）
   p.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 生产欠数,   -- 可为负 = 超产
-  p.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数    -- 可为负 = 超发
+  p.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数,   -- 可为负 = 超发
+  IFNULL(asm.done_qty, 0)                                     AS 装配完成量, -- Σ已完成装配批次 qty（actual_date 非空）
+  p.qty_pcs - IFNULL(asm.done_qty, 0)                         AS 装配未完成量
 FROM t_order_product p
 LEFT JOIN (按 order_product_id 聚合已确认入向明细，红字按 direction 自然抵扣) fin ...
 LEFT JOIN (同上，出向) fout ...
 LEFT JOIN (按 order_product_id 聚合 balance) bal ...
+LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空) asm ...
 ```
 
 - 红字单 direction 与原单相反，聚合时按 `direction × quantity` 求和即自然抵扣，无需特判。
 - 欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
 - 外发进度列（可选展开）：Σsend_qty / Σreturn_qty / 未回数 = Σsend_qty − Σreturn_qty（按 order_product_id 聚合 outsource 明细与回货）。
-- 台账行内可展开：该产品行的出入库流水、外发流水明细。
+- 装配进度列：装配完成量 / 装配未完成量（如上聚合）；最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
+- 台账行内可展开：该产品行的出入库流水、外发流水、装配批次明细。
 - 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、表面处理、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）。
 - 支持 Excel 导出（沿用 hb-mes export 模块模式）。
 
@@ -414,14 +460,16 @@ LEFT JOIN (按 order_product_id 聚合 balance) bal ...
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
 | outsource | `GET /outsource/print/:id` | 发坯单打印数据（后续可加 Excel 导出） |
-| finished-stock | `POST /finished-stock`（建单含明细）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/balance` | reverse=生成红字单并自动确认；balance=库存查询 |
+| assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id`、`GET /assembly?orderProductId=` | 装配批次增删改查（按产品行，一产品多批）；删/改受 §7 闸门约束 |
+| assembly | `GET /assembly/inbound-quota?orderProductId=&side=` | 供成品入库表单查该产品行可入库量（§4.4 口径） |
+| finished-stock | `POST /finished-stock`（建单含明细）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/balance` | confirm 入库时校验装配闸门（§4.5）；reverse=生成红字单并自动确认；balance=库存查询 |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
 | system | 用户/角色/菜单/字典/物料 CRUD | 照搬 hb-mes system 模块裁剪 |
 | dashboard | `GET /dashboard/summary` | 首页看板汇总 |
 | file / export | 上传 / Excel 导出 | 照搬 hb-mes 模式 |
 
-**前端页面清单**：订单管理（列表/表单/详情/附件）、**订单跟踪台账**、外发管理（单据/发出/回货登记/打印发坯单）、成品入库/出库、库存查询、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。
+**前端页面清单**：订单管理（列表/表单/详情/附件）、**订单跟踪台账**、外发管理（单据/发出/回货登记/打印发坯单）、**装配管理**（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、库存查询、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。
 
 ---
 
@@ -439,6 +487,9 @@ LEFT JOIN (按 order_product_id 聚合 balance) bal ...
 10. **产品类型组合串**一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。
 11. **客户资料**被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。
 12. **工艺信息**被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。
+13. **装配入库闸门**：成品入库（inbound）确认时按 order_product_id + side 校验 `本次入库量 ≤ 可入库量 = Σ已完成装配量 − 已入库量`；期初、红字豁免。闸门计算与入库确认在同一事务、对相关行加锁，防并发绕过。
+14. **装配批次不可回退致负**：已完成批次被入库消耗后，禁止删除、下调 qty、或退回计划中致 `可入库量 < 已入库量`；违反则拒绝并提示先冲销对应入库。红字冲销入库后可入库量自然回补。
+15. **装配卡口分边**：含卡口组合产品的装配批次、入库明细均带 side，闸门按 side 分别核算，左右不串量。
 
 ---
 
@@ -460,7 +511,8 @@ LEFT JOIN (按 order_product_id 聚合 balance) bal ...
 | M1 骨架 | monorepo 初始化、登录/权限/菜单、基础数据（客户资料含批量导入、工艺信息、物料、字典）、共享包 | 登录进系统，基础数据 CRUD 可用；客户 Excel 导入整批校验生效；工艺信息多图上传可用 |
 | M2 订单 | 订单三层 CRUD、附件上传、部件行自动展开、图号匹配自动带入工艺、状态机 | 建单→图号带入→展开部件→作废/完结全流程；含卡口组合左右展开正确 |
 | M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、打印 | 分批回货、回齐自动判定、超回提示 |
-| M4 出入库+台账 | 出入库单、确认/红字冲销、balance、**订单跟踪台账** | 四数与手工核算一致；红字后台账自然回退 |
+| M3.5 装配 | 装配批次 CRUD（一产品多批、计划/实际完成时间+数量）、装配管理页、可入库量接口 | 多批装配、状态派生正确、可入库量口径准 |
+| M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**、balance、**订单跟踪台账**（含装配进度列） | 四数与手工核算一致；装配未完成入库被拒、部分装配部分入库、超量入库被拒、红字后可入库量+台账自然回退 |
 | M5 期初+看板 | 补录订单、成品/部件期初、首页看板、Excel 导出 | 期初后台账首日即可用；导出口径与页面一致 |
 
 每个里程碑完成后跑对应 verify 脚本（参照 hb-mes `verify:*` 模式，M4 必须有台账口径核算脚本）。

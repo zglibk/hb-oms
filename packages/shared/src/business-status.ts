@@ -92,6 +92,22 @@ export const OUTSOURCE_STATUS_OPTIONS: StatusOption[] = [
   { label: '已作废', value: OUTSOURCE_STATUS.CANCELLED, type: 'danger' },
 ];
 
+/* ===================== 装配 ===================== */
+
+/**
+ * 装配批次状态：1计划中 2已完成（设计文档 §3.4）。
+ * 派生自实际完成时间（actual_date）是否已填：NULL=计划中，非空=已完成。
+ */
+export const ASSEMBLY_STATUS = {
+  PLANNING: 1,
+  COMPLETED: 2,
+} as const;
+
+export const ASSEMBLY_STATUS_OPTIONS: StatusOption[] = [
+  { label: '计划中', value: ASSEMBLY_STATUS.PLANNING, type: 'warning' },
+  { label: '已完成', value: ASSEMBLY_STATUS.COMPLETED, type: 'success' },
+];
+
 /* ===================== 成品出入库 ===================== */
 
 /** 成品单据状态：1草稿 2已确认 9已作废（仅草稿可作废；已确认只可红字冲销）（设计文档 §3.3） */
