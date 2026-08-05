@@ -544,7 +544,7 @@ function openManual() {
   :deep(.el-menu-item.is-active) {
     color: var(--el-color-white) !important;
     background: var(--sidebar-active-bg) !important;
-    box-shadow: inset 3px 0 0 var(--sidebar-active-accent);
+    box-shadow: inset 4.5px 0 0 var(--sidebar-active-accent);
 
     .el-icon {
       color: var(--el-color-white) !important;
