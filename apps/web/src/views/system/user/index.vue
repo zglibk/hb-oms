@@ -13,9 +13,17 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="部门">
-              <el-select v-model="query.deptId" clearable placeholder="全部" @change="reload">
-                <el-option v-for="d in depts" :key="d.id" :label="d.deptName" :value="d.id" />
-              </el-select>
+              <el-tree-select
+                v-model="query.deptId"
+                :data="deptTree"
+                :props="{ label: 'deptName', children: 'children' }"
+                node-key="id"
+                check-strictly
+                default-expand-all
+                clearable
+                placeholder="全部"
+                @change="reload"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
@@ -143,9 +151,17 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="部门">
-          <el-select v-model="form.deptId" clearable placeholder="选择部门…" style="width:100%">
-            <el-option v-for="d in depts" :key="d.id" :label="d.deptName" :value="d.id" />
-          </el-select>
+          <el-tree-select
+            v-model="form.deptId"
+            :data="deptTree"
+            :props="{ label: 'deptName', children: 'children' }"
+            node-key="id"
+            check-strictly
+            default-expand-all
+            clearable
+            placeholder="选择部门…"
+            style="width:100%"
+          />
         </el-form-item>
         <el-form-item label="电话">
           <el-input v-model="form.phone" name="phone" autocomplete="off" inputmode="tel" />
@@ -187,7 +203,7 @@ import ColorTag from '@/components/ColorTag.vue';
 import {
   getUserList, getUserDetail, createUser, updateUser,
   assignUserRoles, resetUserPassword, toggleUserStatus, deleteUsers,
-  getRoleList, getDeptList,
+  getRoleList, getDeptTree,
 } from '@/api/system';
 
 const loading = ref(false);
@@ -196,7 +212,7 @@ const total = ref(0);
 const selection = ref<any[]>([]);
 const query = reactive<any>({ page: 1, pageSize: 10 });
 const roles = ref<any[]>([]);
-const depts = ref<any[]>([]);
+const deptTree = ref<any[]>([]);
 
 const formVisible = ref(false);
 const editId = ref<number | null>(null);
@@ -234,7 +250,7 @@ function resetQuery() { query.keyword = undefined; query.status = undefined; que
 
 async function loadMeta() {
   roles.value = await getRoleList();
-  depts.value = await getDeptList();
+  deptTree.value = await getDeptTree();
 }
 
 function openCreate() {
