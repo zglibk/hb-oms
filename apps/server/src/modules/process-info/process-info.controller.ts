@@ -42,6 +42,23 @@ export class ProcessInfoController {
     return this.service.findByDrawingNo(drawingNo);
   }
 
+  /** 导出（手工工艺表格式：一图号三行+合并单元格；按当前筛选全量导出） */
+  @Get('export')
+  @RequirePermissions('process-info:export')
+  @SkipTransform()
+  async exportExcel(@Query() query: QueryProcessInfoDto, @Res() res: Response) {
+    const buf = await this.service.exportExcel(query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent('工艺信息.xlsx')}"`,
+    );
+    res.send(buf);
+  }
+
   /** 下载导入模板（注意：必须注册在 @Get(':id') 之前，否则被参数路由拦截） */
   @Get('import-template')
   @SkipTransform()

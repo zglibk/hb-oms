@@ -16,29 +16,63 @@ import {
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 
-/** 导入列定义（与导入模板表头一一对应；工艺附图不支持 Excel 导入） */
-const IMPORT_COLUMNS: Array<{
-  header: string;
-  field: keyof CreateProcessInfoDto;
-  required: boolean;
-  width: number;
-}> = [
-  { header: '生产图号', field: 'drawingNo', required: true, width: 18 },
-  { header: '版本号', field: 'drawingVersion', required: false, width: 10 },
-  { header: '客户名称', field: 'customerName', required: false, width: 20 },
-  { header: '产品名称', field: 'productName', required: false, width: 20 },
-  { header: '生产机台', field: 'machines', required: false, width: 14 },
-  { header: '长度要求-外轨', field: 'lengthReqOuter', required: false, width: 16 },
-  { header: '长度要求-中轨', field: 'lengthReqMiddle', required: false, width: 16 },
-  { header: '长度要求-内轨', field: 'lengthReqInner', required: false, width: 16 },
-  { header: '特殊要求-外轨', field: 'specialReqOuter', required: false, width: 20 },
-  { header: '特殊要求-中轨', field: 'specialReqMiddle', required: false, width: 20 },
-  { header: '特殊要求-内轨', field: 'specialReqInner', required: false, width: 20 },
-  { header: '模具编号-外轨', field: 'moldNoOuter', required: false, width: 14 },
-  { header: '模具编号-中轨', field: 'moldNoMiddle', required: false, width: 14 },
-  { header: '模具编号-内轨', field: 'moldNoInner', required: false, width: 14 },
-  { header: '工艺更新说明', field: 'processUpdateNote', required: false, width: 24 },
-  { header: '备注', field: 'remark', required: false, width: 20 },
+/**
+ * 导入/导出表格采用**手工工艺表格式**：一个图号一组、外/中/内轨各一行，
+ * 图号/版本/客户/产品名称/生产机台/工艺更新说明/备注为组级列（Excel 中合并单元格或留空下沿），
+ * 部件/长度要求/特殊要求/模具编号为行级列。工艺附图不支持 Excel 导入导出。
+ */
+const SHEET_HEADERS = [
+  '图号',
+  '版本',
+  '客户',
+  '产品名称',
+  '生产机台',
+  '部件',
+  '长度要求',
+  '特殊要求',
+  '模具编号',
+  '工艺更新说明',
+  '备注',
+] as const;
+
+const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 14, 20, 16];
+
+/** 组级列 → 实体字段（组内取首个非空值） */
+const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }> = [
+  { header: '图号', field: 'drawingNo' },
+  { header: '版本', field: 'drawingVersion' },
+  { header: '客户', field: 'customerName' },
+  { header: '产品名称', field: 'productName' },
+  { header: '生产机台', field: 'machines' },
+  { header: '工艺更新说明', field: 'processUpdateNote' },
+  { header: '备注', field: 'remark' },
+];
+
+/** 部件行 → 三列字段映射（含常见简写别名） */
+const PART_ROW_FIELDS: Record<
+  string,
+  { length: keyof CreateProcessInfoDto; special: keyof CreateProcessInfoDto; mold: keyof CreateProcessInfoDto }
+> = {
+  外轨: { length: 'lengthReqOuter', special: 'specialReqOuter', mold: 'moldNoOuter' },
+  中轨: { length: 'lengthReqMiddle', special: 'specialReqMiddle', mold: 'moldNoMiddle' },
+  内轨: { length: 'lengthReqInner', special: 'specialReqInner', mold: 'moldNoInner' },
+  外: { length: 'lengthReqOuter', special: 'specialReqOuter', mold: 'moldNoOuter' },
+  中: { length: 'lengthReqMiddle', special: 'specialReqMiddle', mold: 'moldNoMiddle' },
+  内: { length: 'lengthReqInner', special: 'specialReqInner', mold: 'moldNoInner' },
+};
+
+const PART_ORDER: Array<{ label: string; key: '外轨' | '中轨' | '内轨' }> = [
+  { label: '外轨', key: '外轨' },
+  { label: '中轨', key: '中轨' },
+  { label: '内轨', key: '内轨' },
+];
+
+/** Excel 可导入的全部实体字段（组级 + 部件行级；覆盖更新按此清单取非空列） */
+const IMPORTABLE_FIELDS: Array<keyof CreateProcessInfoDto> = [
+  ...GROUP_FIELDS.map((g) => g.field),
+  'lengthReqOuter', 'lengthReqMiddle', 'lengthReqInner',
+  'specialReqOuter', 'specialReqMiddle', 'specialReqInner',
+  'moldNoOuter', 'moldNoMiddle', 'moldNoInner',
 ];
 
 /** ExcelJS 单元格值转纯文本（兼容富文本/公式/超链接对象） */
@@ -61,11 +95,14 @@ function normalizeHeader(s: string): string {
   return s.replace(/[*＊]/g, '').replace(/\s/g, '').trim();
 }
 
-/** 机台多值归一化：分隔符（/ 、 ； ; 空格）统一为英文逗号存储（如 89/90/91 → 89,90,91） */
+/**
+ * 机台多值归一化：分隔符（/ 、 ； ; 空格 . ）统一为英文逗号存储
+ * （如 89/90/91 → 89,90,91；手工表点分写法 16.15.5 → 16,15,5——机台号为整数编号，点号仅作分隔符）
+ */
 function normalizeMachines(s?: string): string | undefined {
   if (!s) return undefined;
   const parts = s
-    .split(/[/、;；,，\s]+/)
+    .split(/[/、;；,，.\s]+/)
     .map((x) => x.trim())
     .filter(Boolean);
   return parts.length ? parts.join(',') : undefined;
@@ -185,33 +222,87 @@ export class ProcessInfoService {
     return map;
   }
 
-  /** 生成导入模板（表头 + 示例行） */
+  /** 工作表通用装饰：表头加粗 + 列宽 + 全边框 */
+  private decorateSheet(ws: ExcelJS.Worksheet) {
+    ws.columns = SHEET_HEADERS.map((h, i) => ({
+      header: h === '图号' ? `*${h}` : h,
+      width: SHEET_WIDTHS[i],
+    }));
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+  }
+
+  /** 追加一条工艺记录 = 外/中/内轨三行，组级列纵向合并 */
+  private appendRecordRows(ws: ExcelJS.Worksheet, p: Partial<ProcessInfo>) {
+    const start = ws.rowCount + 1;
+    for (const part of PART_ORDER) {
+      const f = PART_ROW_FIELDS[part.key];
+      ws.addRow([
+        p.drawingNo ?? '',
+        p.drawingVersion ?? '',
+        p.customerName ?? '',
+        p.productName ?? '',
+        (p.machines ?? '').replace(/,/g, '/'),
+        part.label,
+        (p as any)[f.length] ?? '',
+        (p as any)[f.special] ?? '',
+        (p as any)[f.mold] ?? '',
+        p.processUpdateNote ?? '',
+        p.remark ?? '',
+      ]);
+    }
+    const end = ws.rowCount;
+    // 组级列合并（图号/版本/客户/产品名称/生产机台/工艺更新说明/备注）
+    for (const col of [1, 2, 3, 4, 5, 10, 11]) {
+      ws.mergeCells(start, col, end, col);
+      ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    }
+    for (let r = start; r <= end; r++) {
+      ws.getCell(r, 6).alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getCell(r, 7).alignment = { vertical: 'middle', wrapText: true };
+      ws.getCell(r, 8).alignment = { vertical: 'middle', wrapText: true };
+    }
+  }
+
+  /** 生成导入模板（手工工艺表格式：一图号三行 + 合并单元格示例） */
   async buildImportTemplate(): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('工艺信息导入模板');
-    ws.columns = IMPORT_COLUMNS.map((c) => ({
-      header: c.required ? `*${c.header}` : c.header,
-      width: c.width,
-    }));
-    ws.getRow(1).font = { bold: true };
-    ws.addRow([
-      'HH-X5305A-ZT',
-      'A/1',
-      '示例客户',
-      '53#普通滑轨',
-      '89/90/91',
-      '650±0.5',
-      '640±0.5',
-      '630±0.5',
-      '外轨冲孔后去毛刺',
-      '',
-      '内轨压追溯码',
-      'M-53-W',
-      'M-53-Z',
-      'M-53-N',
-      '示例行，导入前请删除',
-      '',
-    ]);
+    this.decorateSheet(ws);
+    this.appendRecordRows(ws, {
+      drawingNo: 'HH-4502B-2',
+      drawingVersion: '1.1',
+      customerName: '示例客户',
+      productName: '45#普通滑轨',
+      machines: '16,15,5',
+      lengthReqOuter: '正常长度（不变）',
+      lengthReqMiddle: '外轨正常长度-17MM',
+      lengthReqInner: '外轨正常长度-2MM',
+      specialReqOuter: '中轨从20寸以上不能排在69号机……（示例）',
+      specialReqInner: '光板不弯尾在外轨正常长度+5',
+      moldNoOuter: 'M-45-W',
+      processUpdateNote: '',
+      remark: '示例组（三行一组），导入前请删除',
+    } as Partial<ProcessInfo>);
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  /** 导出（手工工艺表格式，与导入模板同构；按查询条件全量导出，不分页） */
+  async exportExcel(query: QueryProcessInfoDto): Promise<Buffer> {
+    const qb = this.repo.createQueryBuilder('p');
+    if (query.keyword) {
+      qb.andWhere(
+        '(p.drawingNo LIKE :kw OR p.customerName LIKE :kw OR p.productName LIKE :kw)',
+        { kw: `%${query.keyword}%` },
+      );
+    }
+    qb.orderBy('p.updatedAt', 'DESC');
+    const items = await qb.getMany();
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('工艺信息');
+    this.decorateSheet(ws);
+    for (const p of items) this.appendRecordRows(ws, p);
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
@@ -227,35 +318,87 @@ export class ProcessInfoService {
     const ws = wb.worksheets[0];
     if (!ws) throw new BadRequestException('Excel 文件中没有工作表');
 
-    // 表头 → 列号映射
+    // 表头 → 列号映射（兼容旧列名别名：生产图号=图号、版本号=版本、客户名称=客户）
+    const HEADER_ALIASES: Record<string, string> = { 生产图号: '图号', 版本号: '版本', 客户名称: '客户' };
     const headerRow = ws.getRow(1);
     const colOf = new Map<string, number>();
     headerRow.eachCell((cell, colNumber) => {
-      colOf.set(normalizeHeader(cellText(cell.value)), colNumber);
+      let h = normalizeHeader(cellText(cell.value));
+      h = HEADER_ALIASES[h] ?? h;
+      colOf.set(h, colNumber);
     });
-    for (const c of IMPORT_COLUMNS.filter((c) => c.required)) {
-      if (!colOf.has(c.header)) {
-        throw new BadRequestException(`模板缺少必填列「${c.header}」，请下载最新模板`);
+    for (const required of ['图号', '部件']) {
+      if (!colOf.has(required)) {
+        throw new BadRequestException(`模板缺少必填列「${required}」，请下载最新模板（一图号三行格式）`);
       }
     }
 
-    // 逐行解析
-    const rows: Array<Partial<CreateProcessInfoDto> & { _row: number }> = [];
+    /**
+     * 分组解析：一图号一组、外/中/内轨各一行。
+     * 合并单元格在 ExcelJS 中仅首行有值（或手工表未合并时逐行重复同图号），
+     * 故图号列「空值或与当前组相同」均归入当前组，出现新图号则开新组。
+     */
+    interface ParsedGroup extends Partial<CreateProcessInfoDto> {
+      _row: number; // 组起始行
+      _parts: Set<string>;
+    }
+    const rows: ParsedGroup[] = [];
     const errors: string[] = [];
+    let current: ParsedGroup | null = null;
+
     ws.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return;
       const get = (header: string) => {
         const col = colOf.get(header);
         return col ? cellText(row.getCell(col).value).trim() : '';
       };
-      const record: any = { _row: rowNumber };
-      for (const c of IMPORT_COLUMNS) record[c.field] = get(c.header) || undefined;
+      const drawingNo = get('图号');
+      const partRaw = get('部件');
+      const lengthReq = get('长度要求');
+      const specialReq = get('特殊要求');
+      const moldNo = get('模具编号');
+      const groupCells = GROUP_FIELDS.map((g) => ({ g, v: get(g.header) }));
       // 全空行跳过
-      if (!IMPORT_COLUMNS.some((c) => record[c.field])) return;
-      record.machines = normalizeMachines(record.machines);
-      if (!record.drawingNo) errors.push(`第 ${rowNumber} 行：生产图号不能为空`);
-      rows.push(record);
+      if (!drawingNo && !partRaw && !lengthReq && !specialReq && !moldNo && groupCells.every((x) => !x.v)) return;
+
+      if (drawingNo && (!current || drawingNo !== current.drawingNo)) {
+        current = { _row: rowNumber, _parts: new Set(), drawingNo };
+        rows.push(current);
+      }
+      if (!current) {
+        errors.push(`第 ${rowNumber} 行：图号为空且上方没有所属图号组`);
+        return;
+      }
+      // 组级列取组内首个非空值
+      for (const { g, v } of groupCells) {
+        if (v && !(current as any)[g.field]) (current as any)[g.field] = v;
+      }
+      // 部件行
+      if (partRaw) {
+        const key = partRaw.replace(/轨$/, '') + '轨';
+        const f = PART_ROW_FIELDS[partRaw] ?? PART_ROW_FIELDS[key];
+        if (!f) {
+          errors.push(`第 ${rowNumber} 行：无法识别的部件「${partRaw}」（应为 外轨/中轨/内轨）`);
+          return;
+        }
+        const partKey = key in PART_ROW_FIELDS ? key : partRaw;
+        if (current._parts.has(partKey)) {
+          errors.push(`第 ${rowNumber} 行：图号「${current.drawingNo}」的部件「${partKey}」重复`);
+          return;
+        }
+        current._parts.add(partKey);
+        if (lengthReq) (current as any)[f.length] = lengthReq;
+        if (specialReq) (current as any)[f.special] = specialReq;
+        if (moldNo) (current as any)[f.mold] = moldNo;
+      } else if (lengthReq || specialReq || moldNo) {
+        errors.push(`第 ${rowNumber} 行：填写了长度/特殊要求/模具编号但「部件」列为空`);
+      }
     });
+
+    for (const r of rows) {
+      r.machines = normalizeMachines(r.machines as string | undefined);
+      delete (r as any)._parts;
+    }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');
 
     // 批内判重（图号唯一）
@@ -290,9 +433,9 @@ export class ProcessInfoService {
         if (hit) {
           // 覆盖更新：仅更新非空列
           const patch: Partial<ProcessInfo> = { ...auditOnUpdate(user) };
-          for (const c of IMPORT_COLUMNS) {
-            const v = (dto as any)[c.field];
-            if (v !== undefined) (patch as any)[c.field] = v;
+          for (const field of IMPORTABLE_FIELDS) {
+            const v = (dto as any)[field];
+            if (v !== undefined) (patch as any)[field] = v;
           }
           await mgr.getRepository(ProcessInfo).update(hit.id, patch);
           updated += 1;

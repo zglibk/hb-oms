@@ -22,6 +22,7 @@
       <div class="toolbar">
         <el-button size="small" v-permission="'process-info:create'" type="primary" :icon="Plus" @click="openCreate">新增工艺</el-button>
         <el-button size="small" v-permission="'process-info:import'" type="primary" plain :icon="Upload" @click="openImport">批量导入</el-button>
+        <el-button size="small" v-permission="'process-info:export'" plain :icon="Download" :loading="exporting" @click="onExport">导出</el-button>
         <el-button
           size="small"
           v-permission="'process-info:delete'"
@@ -127,18 +128,37 @@
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">分部件要求（外轨 / 中轨 / 内轨）</el-divider>
-        <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="长度-外轨" label-width="90px"><el-input v-model="form.lengthReqOuter" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="长度-中轨" label-width="90px"><el-input v-model="form.lengthReqMiddle" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="长度-内轨" label-width="90px"><el-input v-model="form.lengthReqInner" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="特殊-外轨" label-width="90px"><el-input v-model="form.specialReqOuter" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="特殊-中轨" label-width="90px"><el-input v-model="form.specialReqMiddle" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="特殊-内轨" label-width="90px"><el-input v-model="form.specialReqInner" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="模具-外轨" label-width="90px"><el-input v-model="form.moldNoOuter" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="模具-中轨" label-width="90px"><el-input v-model="form.moldNoMiddle" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="模具-内轨" label-width="90px"><el-input v-model="form.moldNoInner" /></el-form-item></el-col>
-        </el-row>
+        <el-divider content-position="left">分部件要求（对照手工工艺表格式）</el-divider>
+        <table class="part-grid">
+          <thead>
+            <tr>
+              <th class="pg-part">部件</th>
+              <th>长度要求</th>
+              <th>特殊要求</th>
+              <th class="pg-mold">模具编号</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="pg-part">外轨</td>
+              <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
+              <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
+              <td><el-input v-model="form.moldNoOuter" /></td>
+            </tr>
+            <tr>
+              <td class="pg-part">中轨</td>
+              <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM" /></td>
+              <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
+              <td><el-input v-model="form.moldNoMiddle" /></td>
+            </tr>
+            <tr>
+              <td class="pg-part">内轨</td>
+              <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
+              <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
+              <td><el-input v-model="form.moldNoInner" /></td>
+            </tr>
+          </tbody>
+        </table>
 
         <el-divider content-position="left">工艺更新</el-divider>
         <el-form-item label="更新说明">
@@ -175,10 +195,10 @@
     <!-- 批量导入 -->
     <el-dialog v-model="importVisible" title="批量导入工艺信息" width="480px" @closed="resetImport">
       <div class="import-tip">
-        <p>1. 下载模板，按模板填写（<b>生产图号必填且唯一</b>）；</p>
-        <p>2. 生产机台多个用 / 或逗号分隔（如 89/90/91）；工艺附图请在编辑页单独上传；</p>
+        <p>1. 模板为<b>手工工艺表格式</b>：一个图号一组、外/中/内轨各一行；图号/版本/客户等组级列可合并单元格，或仅在首行填写（下方留空自动归组）；</p>
+        <p>2. <b>图号、部件</b>为必填列；生产机台多个用 / 或逗号分隔（如 16/15/5）；工艺附图请在编辑页单独上传；</p>
         <p>3. 整批校验：任一行出错则本次全部不导入，并逐行提示错误；</p>
-        <p>4. 开启「覆盖更新」后，已存在的生产图号将按导入内容更新非空列。</p>
+        <p>4. 开启「覆盖更新」后，已存在的图号将按导入内容更新非空列；导出的表格可修改后直接回导。</p>
         <el-button size="small" link type="primary" :icon="Download" @click="onDownloadTemplate">下载导入模板</el-button>
       </div>
       <el-upload
@@ -219,6 +239,7 @@ import {
   batchDeleteProcessInfos,
   importProcessInfos,
   downloadProcessInfoTemplate,
+  exportProcessInfos,
   type ProcessInfoItem,
 } from '@/api/process-info';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
@@ -404,6 +425,23 @@ async function onBatchDelete() {
   }
 }
 
+/* ===== 导出 ===== */
+const exporting = ref(false);
+async function onExport() {
+  exporting.value = true;
+  try {
+    const blob = await exportProcessInfos({ keyword: query.keyword || undefined });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `工艺信息_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    exporting.value = false;
+  }
+}
+
 /* ===== 批量导入 ===== */
 const importVisible = ref(false);
 const importing = ref(false);
@@ -471,6 +509,16 @@ async function onImport() {
     color: var(--el-text-color-secondary); cursor: pointer;
     &:hover { border-color: var(--el-color-primary); color: var(--el-color-primary); }
   }
+}
+.part-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+  th, td { border: 1px solid var(--el-border-color); padding: 6px 8px; }
+  th { background: var(--el-fill-color-light); font-weight: 600; font-size: 13px; text-align: center; }
+  .pg-part { width: 64px; text-align: center; font-size: 13px; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
+  .pg-mold { width: 140px; }
+  :deep(.el-input__wrapper), :deep(.el-textarea__inner) { box-shadow: none; background: transparent; }
 }
 .import-tip {
   margin-bottom: 12px;

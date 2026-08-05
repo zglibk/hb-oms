@@ -69,3 +69,7 @@ export const importProcessInfos = (file: File, overwrite: boolean) => {
 /** 导入模板下载（axios blob） */
 export const downloadProcessInfoTemplate = () =>
   request.get<any, Blob>('/api/process-info/import-template', { responseType: 'blob' });
+
+/** 导出（手工工艺表格式：一图号三行+合并单元格；按当前筛选全量导出） */
+export const exportProcessInfos = (params: { keyword?: string }) =>
+  request.get<any, Blob>('/api/process-info/export', { params, responseType: 'blob' });
