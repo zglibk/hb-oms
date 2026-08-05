@@ -349,22 +349,22 @@ export class SystemController {
   }
 
   @Post('dept')
-  @RequirePermissions('system:user')
-  @OperationLog('系统管理', '新增部门')
+  @RequirePermissions('dept:create')
+  @OperationLog('部门信息', '新增部门')
   createDept(@Body() body: any) {
     return this.deptService.create(body);
   }
 
   @Put('dept/:id')
-  @RequirePermissions('system:user')
-  @OperationLog('系统管理', '修改部门')
+  @RequirePermissions('dept:update')
+  @OperationLog('部门信息', '修改部门')
   updateDept(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.deptService.update(id, body);
   }
 
   @Delete('dept/:id')
-  @RequirePermissions('system:user')
-  @OperationLog('系统管理', '删除部门')
+  @RequirePermissions('dept:delete')
+  @OperationLog('部门信息', '删除部门')
   removeDept(@Param('id', ParseIntPipe) id: number) {
     return this.deptService.remove(id);
   }

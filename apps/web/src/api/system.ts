@@ -130,6 +130,24 @@ export async function exportDictList(
 // ===== 部门 =====
 export const getDeptList = () => request.get<any, any[]>('/api/system/dept');
 
+/* ===== 部门信息（基础数据）===== */
+export interface DeptNode {
+  id: number;
+  deptCode: string;
+  deptName: string;
+  parentId: number;
+  sort: number;
+  leader: string | null;
+  phone: string | null;
+  status: number;
+  children: DeptNode[];
+}
+export const getDeptTree = () => request.get<any, DeptNode[]>('/api/system/dept/tree');
+export const createDept = (data: Partial<DeptNode>) => request.post('/api/system/dept', data);
+export const updateDept = (id: number, data: Partial<DeptNode>) =>
+  request.put(`/api/system/dept/${id}`, data);
+export const deleteDept = (id: number) => request.delete(`/api/system/dept/${id}`);
+
 // ===== 日志 =====
 export const getLogList = (params: any) =>
   request.get('/api/system/log', { params });

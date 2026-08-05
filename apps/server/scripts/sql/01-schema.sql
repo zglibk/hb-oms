@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS t_department (
   dept_name   VARCHAR(64)  NOT NULL COMMENT '部门名称',
   parent_id   INT          NOT NULL DEFAULT 0 COMMENT '上级部门ID，0=顶级',
   sort        INT          NOT NULL DEFAULT 0 COMMENT '排序号',
+  leader      VARCHAR(64)  NULL COMMENT '负责人',
+  phone       VARCHAR(32)  NULL COMMENT '联系电话',
   status      TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1启用 0停用',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_dept_code (dept_code),

@@ -35,6 +35,7 @@ const MIGRATIONS: string[] = [
   'migration-process-billing-part-level.sql',
   'migration-order-tables.sql',
   'migration-equipment-info.sql',
+  'migration-dept-leader-phone.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -60,6 +61,7 @@ const expectedColumns = [
   't_order_part_group.drawing_no',
   't_order_part.part_group_id',
   't_equipment_info.machine_no',
+  't_department.leader',
 ];
 
 async function main() {

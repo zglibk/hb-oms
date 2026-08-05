@@ -480,7 +480,8 @@ function openManual() {
     background: var(--sidebar-bg);
     font-family: var(--sidebar-menu-font);
     --el-menu-bg-color: var(--sidebar-bg);
-    --el-menu-text-color: rgba(255, 255, 255, 0.9);
+    /* 深色侧栏上未选中项用柔和灰白，选中/悬停恢复纯白 */
+    --el-menu-text-color: rgba(255, 255, 255, 0.78);
     --el-menu-hover-bg-color: var(--sidebar-hover-bg);
     --el-menu-active-color: var(--el-color-white);
   }

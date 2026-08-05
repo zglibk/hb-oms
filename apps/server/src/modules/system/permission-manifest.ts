@@ -72,6 +72,11 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'customer:delete', perm_name: '删除客户', perm_type: 2, parent_code: 'basic:customer', sort: 3 },
   { perm_code: 'customer:import', perm_name: '批量导入客户', perm_type: 2, parent_code: 'basic:customer', sort: 4 },
 
+  { perm_code: 'basic:dept', perm_name: '部门信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/dept', component: 'basic/dept/index', icon: 'School', sort: 2 },
+  { perm_code: 'dept:create', perm_name: '新增部门', perm_type: 2, parent_code: 'basic:dept', sort: 1 },
+  { perm_code: 'dept:update', perm_name: '编辑部门', perm_type: 2, parent_code: 'basic:dept', sort: 2 },
+  { perm_code: 'dept:delete', perm_name: '删除部门', perm_type: 2, parent_code: 'basic:dept', sort: 3 },
+
   // ===== 系统管理 =====
   // SetUp：不用 Setting——后者在 el-sub-menu 展开重绘时偶发不渲染（沿袭 hb-mes 经验）
   { perm_code: 'system', perm_name: '系统管理', perm_type: 1, menu_path: '/system', icon: 'SetUp', sort: 90 },
