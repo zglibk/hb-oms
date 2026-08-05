@@ -153,18 +153,19 @@ export function applyThemeColor(color: string): void {
   // 深色 dark-2（与黑色混合）
   root.style.setProperty('--el-color-primary-dark-2', mix(primary, BLACK, 0.2));
 
-  // ---- 侧边栏配色：固定深色系（经典后台风格，不随主题主色整体变色）----
-  // 深色侧栏长时间使用更耐看；切换主题色只影响选中高亮与 Element 主色，
-  // 侧栏底色保持稳定的深蓝灰。
-  root.style.setProperty('--sidebar-bg', '#1F2A3A');
+  // ---- 侧边栏配色：固定深色系（业务指定色值，不随主题主色变化）----
+  // 底色 #1E293B；选中项 = 深蓝底 #1C3462 + 最左 #165DFF 亮蓝竖条（非实心亮蓝铺满）。
+  // 「更换主题」只影响 Element 主色调，不再改动侧栏任何颜色。
+  root.style.setProperty('--sidebar-bg', '#1E293B');
   // Logo 区更深一档，与菜单区形成视觉分隔
-  root.style.setProperty('--sidebar-logo-bg', '#151D2A');
+  root.style.setProperty('--sidebar-logo-bg', '#16202E');
   // 二三级子菜单容器：略深，体现层级关系
-  root.style.setProperty('--sidebar-submenu-bg', '#19222F');
+  root.style.setProperty('--sidebar-submenu-bg', '#192433');
   // 悬停：比底色略亮，提供反馈
-  root.style.setProperty('--sidebar-hover-bg', '#2A3547');
-  // 选中项：主题主色实心块 + 白字（唯一跟随主题色的侧栏元素）
-  root.style.setProperty('--sidebar-active-bg', primary);
+  root.style.setProperty('--sidebar-hover-bg', '#263349');
+  // 选中项底色与左侧强调竖条
+  root.style.setProperty('--sidebar-active-bg', '#1C3462');
+  root.style.setProperty('--sidebar-active-accent', '#165DFF');
 
   // 列表表头 / 隔行灰在 styles/index.scss :root 硬编码，不随主题色变化
 }

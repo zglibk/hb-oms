@@ -540,10 +540,11 @@ function openManual() {
     background: var(--sidebar-hover-bg) !important;
     color: var(--el-color-white) !important;
   }
-  /* 选中项：主色实心背景 + 白字 */
+  /* 选中项：深蓝底 + 最左亮蓝竖条 + 白字（竖条用 inset 阴影绘制，不产生布局偏移） */
   :deep(.el-menu-item.is-active) {
     color: var(--el-color-white) !important;
     background: var(--sidebar-active-bg) !important;
+    box-shadow: inset 3px 0 0 var(--sidebar-active-accent);
 
     .el-icon {
       color: var(--el-color-white) !important;
