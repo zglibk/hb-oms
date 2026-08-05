@@ -112,7 +112,8 @@ service.interceptors.response.use(
       }
       tokenStore.clear();
       ElMessage.error('登录已失效，请重新登录');
-      window.location.href = '/login';
+      // 必须带 BASE_URL：生产部署在 /oms/admin/ 子路径，裸 '/login' 会跳到主站 hb-mes 登录页
+      window.location.href = `${import.meta.env.BASE_URL}login`;
       return Promise.reject(error);
     }
     // blob 请求出错时，错误响应体也是 Blob，需解析为文本再读 message
@@ -184,7 +185,8 @@ async function handleRefresh(config: AxiosRequestConfig & { __isRetry?: boolean 
     // settle，排队请求的 await 会永久挂起、loading 卡死。
     flushPendingFailure(e);
     tokenStore.clear();
-    window.location.href = '/login';
+    // 必须带 BASE_URL：生产部署在 /oms/admin/ 子路径，裸 '/login' 会跳到主站 hb-mes 登录页
+    window.location.href = `${import.meta.env.BASE_URL}login`;
     return Promise.reject(e);
   } finally {
     isRefreshing = false;
