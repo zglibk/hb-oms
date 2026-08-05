@@ -43,6 +43,9 @@ export const getProcessInfoList = (params: ProcessInfoQuery) =>
   request.get<any, PageResult<ProcessInfoItem>>('/api/process-info', { params });
 
 /** 按生产图号匹配（订单表单自动带入；未命中返回 null） */
+export const getProcessInfoDetail = (id: number) =>
+  request.get<any, ProcessInfoItem>(`/api/process-info/${id}`);
+
 export const getProcessInfoByDrawing = (drawingNo: string) =>
   request.get<any, ProcessInfoItem | null>('/api/process-info/by-drawing', {
     params: { drawingNo },

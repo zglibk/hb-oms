@@ -40,6 +40,13 @@ const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/redirect/index.vue'),
         meta: { title: '重定向' },
       },
+      /* 非菜单子页面（菜单页内跳转进入，不出现在侧栏；权限由入口按钮控制） */
+      {
+        path: 'basic/process-info/form',
+        name: 'ProcessInfoForm',
+        component: () => import('@/views/basic/process-info/form.vue'),
+        meta: { title: '工艺录入' },
+      },
     ],
   },
 ];

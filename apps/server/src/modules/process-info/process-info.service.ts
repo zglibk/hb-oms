@@ -490,6 +490,9 @@ export class ProcessInfoService {
     }
     qb.orderBy('p.updatedAt', 'DESC');
     const items = await qb.getMany();
+    if (!items.length) {
+      throw new BadRequestException('当前筛选条件下没有工艺记录，未生成导出文件');
+    }
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('工艺信息');

@@ -85,171 +85,6 @@
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
 
-    <!-- 新增/编辑 -->
-    <el-dialog v-model="formVisible" :title="editId ? '编辑工艺' : '新增工艺'" width="760px" top="4vh">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="生产图号" prop="drawingNo">
-              <el-input v-model="form.drawingNo" placeholder="唯一；订单录入按此图号自动带入" :spellcheck="false" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="版本号">
-              <el-input v-model="form.drawingVersion" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="客户名称">
-              <el-select
-                v-model="form.customerName"
-                filterable
-                clearable
-                allow-create
-                default-first-option
-                placeholder="选择或输入客户"
-                style="width: 100%"
-                @change="onCustomerChange"
-              >
-                <el-option v-for="c in customers" :key="c.id" :label="c.customerName" :value="c.customerName" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="产品名称">
-              <el-input v-model="form.productName" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="机台(薄料)">
-              <el-select
-                v-model="machineTags"
-                multiple
-                filterable
-                allow-create
-                default-first-option
-                placeholder="输入机台号回车；无厚薄之分时填此栏（如 362、363、364）"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="机台(厚料)">
-              <el-select
-                v-model="machineThickTags"
-                multiple
-                filterable
-                allow-create
-                default-first-option
-                placeholder="厚料生产机台（如 82、80、81），无则留空"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-divider content-position="left">分部件要求（对照手工工艺表格式）</el-divider>
-        <table class="part-grid">
-          <thead>
-            <tr>
-              <th class="pg-part">部件</th>
-              <th>长度要求</th>
-              <th>特殊要求</th>
-              <th class="pg-mold">模具编号</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="pg-part">外轨</td>
-              <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
-              <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
-              <td><el-input v-model="form.moldNoOuter" /></td>
-            </tr>
-            <tr>
-              <td class="pg-part">中轨</td>
-              <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
-              <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
-              <td><el-input v-model="form.moldNoMiddle" /></td>
-            </tr>
-            <tr>
-              <td class="pg-part">内轨</td>
-              <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
-              <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
-              <td><el-input v-model="form.moldNoInner" /></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <el-divider content-position="left">工艺更新</el-divider>
-        <el-form-item label="更新说明">
-          <el-input v-model="form.processUpdateNote" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="附图（多图）">
-          <div class="img-list">
-            <div v-for="(url, i) in images" :key="url" class="img-item">
-              <el-image :src="url" :preview-src-list="images" :preview-teleported="true" fit="cover" />
-              <el-icon class="img-remove" @click="images.splice(i, 1)"><CircleCloseFilled /></el-icon>
-            </div>
-            <el-upload
-              :show-file-list="false"
-              :auto-upload="false"
-              accept="image/jpeg,image/png,image/webp"
-              :on-change="onImagePick"
-            >
-              <div class="img-add" v-loading="uploading">
-                <el-icon><Plus /></el-icon>
-              </div>
-            </el-upload>
-          </div>
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" />
-        </el-form-item>
-
-        <el-divider content-position="left">开单与审核（产品级）</el-divider>
-        <el-form-item label="开单注明">
-          <el-input v-model="form.billingNote" type="textarea" :rows="2" placeholder="开单时需注明的事项" />
-        </el-form-item>
-        <el-form-item label="审核意见">
-          <el-input v-model="form.reviewOpinion" type="textarea" :rows="2" placeholder="领导/技术审核意见（文字）" />
-        </el-form-item>
-        <el-form-item label="意见截图">
-          <div class="img-list">
-            <div v-for="(url, i) in reviewImgs" :key="url" class="img-item">
-              <el-image :src="url" :preview-src-list="reviewImgs" :preview-teleported="true" fit="cover" />
-              <el-icon class="img-remove" @click="reviewImgs.splice(i, 1)"><CircleCloseFilled /></el-icon>
-            </div>
-            <el-upload
-              :show-file-list="false"
-              :auto-upload="false"
-              accept="image/jpeg,image/png,image/webp"
-              :on-change="onReviewImagePick"
-            >
-              <div class="img-add" v-loading="uploading">
-                <el-icon><Plus /></el-icon>
-              </div>
-            </el-upload>
-          </div>
-        </el-form-item>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="审核人">
-              <el-input v-model="form.reviewer" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="审核日期">
-              <el-date-picker v-model="form.reviewDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button size="small" @click="formVisible = false">取消</el-button>
-        <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 批量导入 -->
     <el-dialog v-model="importVisible" title="批量导入工艺信息" width="480px" @closed="resetImport">
       <div class="import-tip">
@@ -311,13 +146,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCloseFilled, Upload, Download, UploadFilled, Clock } from '@element-plus/icons-vue';
+import { onActivated, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus';
+import { Plus, Edit, Delete, Search, Upload, Download, UploadFilled, Clock } from '@element-plus/icons-vue';
 import {
   getProcessInfoList,
-  createProcessInfo,
-  updateProcessInfo,
   deleteProcessInfo,
   batchDeleteProcessInfos,
   importProcessInfos,
@@ -327,12 +161,11 @@ import {
   type ProcessInfoItem,
   type ProcessInfoHistoryItem,
 } from '@/api/process-info';
-import { getAllCustomers, type CustomerItem } from '@/api/customer';
-import { uploadFile } from '@/api/file';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 
+const router = useRouter();
 const loading = ref(false);
 const list = ref<ProcessInfoItem[]>([]);
 const total = ref(0);
@@ -349,10 +182,16 @@ async function load() {
   }
 }
 load();
+// 从表单子页面返回时（keep-alive 缓存场景）刷新列表
+onActivated(load);
 
-/** 客户下拉（选择后带 customerId；也允许手输） */
-const customers = ref<CustomerItem[]>([]);
-getAllCustomers().then((res) => (customers.value = res));
+/* ===== 新增/编辑：跳转子页面式录入 ===== */
+function openCreate() {
+  router.push({ name: 'ProcessInfoForm' });
+}
+function openEdit(row: ProcessInfoItem) {
+  router.push({ name: 'ProcessInfoForm', query: { id: row.id } });
+}
 
 /* ===== 展示辅助 ===== */
 function machinesDisplay(row: ProcessInfoItem): string {
@@ -375,130 +214,6 @@ function parseImages(json: string | null): string[] {
 }
 function imageList(row: ProcessInfoItem): string[] {
   return parseImages(row.processUpdateImages);
-}
-
-/* ===== 新增/编辑 ===== */
-const formVisible = ref(false);
-const saving = ref(false);
-const editId = ref<number | null>(null);
-const formRef = ref<FormInstance>();
-const machineTags = ref<string[]>([]);
-const machineThickTags = ref<string[]>([]);
-const images = ref<string[]>([]);
-const reviewImgs = ref<string[]>([]);
-const uploading = ref(false);
-
-const emptyForm = () => ({
-  drawingNo: '',
-  drawingVersion: '',
-  customerId: undefined as number | undefined,
-  customerName: '',
-  productName: '',
-  lengthReqOuter: '', lengthReqMiddle: '', lengthReqInner: '',
-  specialReqOuter: '', specialReqMiddle: '', specialReqInner: '',
-  moldNoOuter: '', moldNoMiddle: '', moldNoInner: '',
-  processUpdateNote: '',
-  billingNote: '',
-  reviewOpinion: '',
-  reviewer: '',
-  reviewDate: '' as string | null,
-  remark: '',
-});
-const form = reactive(emptyForm());
-const rules = {
-  drawingNo: [{ required: true, message: '请输入生产图号', trigger: 'blur' }],
-};
-
-function onCustomerChange(name: string) {
-  form.customerId = customers.value.find((c) => c.customerName === name)?.id;
-}
-
-function openCreate() {
-  editId.value = null;
-  Object.assign(form, emptyForm());
-  machineTags.value = [];
-  machineThickTags.value = [];
-  images.value = [];
-  reviewImgs.value = [];
-  formVisible.value = true;
-}
-function openEdit(row: ProcessInfoItem) {
-  editId.value = row.id;
-  Object.assign(form, emptyForm(), {
-    drawingNo: row.drawingNo,
-    drawingVersion: row.drawingVersion ?? '',
-    customerId: row.customerId ?? undefined,
-    customerName: row.customerName ?? '',
-    productName: row.productName ?? '',
-    lengthReqOuter: row.lengthReqOuter ?? '', lengthReqMiddle: row.lengthReqMiddle ?? '', lengthReqInner: row.lengthReqInner ?? '',
-    specialReqOuter: row.specialReqOuter ?? '', specialReqMiddle: row.specialReqMiddle ?? '', specialReqInner: row.specialReqInner ?? '',
-    moldNoOuter: row.moldNoOuter ?? '', moldNoMiddle: row.moldNoMiddle ?? '', moldNoInner: row.moldNoInner ?? '',
-    processUpdateNote: row.processUpdateNote ?? '',
-    billingNote: row.billingNote ?? '',
-    reviewOpinion: row.reviewOpinion ?? '',
-    reviewer: row.reviewer ?? '',
-    reviewDate: row.reviewDate ? String(row.reviewDate).slice(0, 10) : '',
-    remark: row.remark ?? '',
-  });
-  machineTags.value = (row.machines || '').split(',').filter(Boolean);
-  machineThickTags.value = (row.machinesThick || '').split(',').filter(Boolean);
-  images.value = imageList(row);
-  reviewImgs.value = parseImages(row.reviewImages);
-  formVisible.value = true;
-}
-
-async function onImagePick(file: UploadFile) {
-  const raw = file.raw as File | undefined;
-  if (!raw) return;
-  if (raw.size > 10 * 1024 * 1024) {
-    ElMessage.warning('图片不能超过 10MB');
-    return;
-  }
-  uploading.value = true;
-  try {
-    const url = await uploadFile(raw, 'process_update_image');
-    images.value.push(url);
-  } finally {
-    uploading.value = false;
-  }
-}
-
-async function onReviewImagePick(file: UploadFile) {
-  const raw = file.raw as File | undefined;
-  if (!raw) return;
-  if (raw.size > 10 * 1024 * 1024) {
-    ElMessage.warning('图片不能超过 10MB');
-    return;
-  }
-  uploading.value = true;
-  try {
-    const url = await uploadFile(raw, 'process_review_image');
-    reviewImgs.value.push(url);
-  } finally {
-    uploading.value = false;
-  }
-}
-
-async function onSave() {
-  await formRef.value?.validate();
-  saving.value = true;
-  try {
-    const payload = {
-      ...form,
-      reviewDate: form.reviewDate || undefined,
-      machines: machineTags.value.map((s) => s.trim()).filter(Boolean).join(','),
-      machinesThick: machineThickTags.value.map((s) => s.trim()).filter(Boolean).join(','),
-      processUpdateImages: JSON.stringify(images.value),
-      reviewImages: JSON.stringify(reviewImgs.value),
-    };
-    if (editId.value) await updateProcessInfo(editId.value, payload);
-    else await createProcessInfo(payload);
-    ElMessage.success('保存成功');
-    formVisible.value = false;
-    load();
-  } finally {
-    saving.value = false;
-  }
 }
 
 /* ===== 删除 ===== */
@@ -581,6 +296,10 @@ function groupChanges(changes: ProcessInfoHistoryItem['changes']) {
 /* ===== 导出 ===== */
 const exporting = ref(false);
 async function onExport() {
+  if (!total.value) {
+    ElMessage.warning('当前筛选无记录，无需导出');
+    return;
+  }
   exporting.value = true;
   try {
     const blob = await exportProcessInfos({ keyword: query.keyword || undefined });
@@ -646,33 +365,6 @@ async function onImport() {
 .toolbar { margin-bottom: 12px; }
 .pager { margin-top: 12px; }
 .text-muted { color: var(--el-text-color-placeholder); }
-.img-list {
-  display: flex; flex-wrap: wrap; gap: 10px;
-  .img-item {
-    position: relative; width: 72px; height: 72px;
-    .el-image { width: 100%; height: 100%; border-radius: 6px; }
-    .img-remove {
-      position: absolute; top: -6px; right: -6px; cursor: pointer;
-      color: var(--el-color-danger); background: #fff; border-radius: 50%;
-    }
-  }
-  .img-add {
-    width: 72px; height: 72px; border: 1px dashed var(--el-border-color);
-    border-radius: 6px; display: flex; align-items: center; justify-content: center;
-    color: var(--el-text-color-secondary); cursor: pointer;
-    &:hover { border-color: var(--el-color-primary); color: var(--el-color-primary); }
-  }
-}
-.part-grid {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 6px;
-  th, td { border: 1px solid var(--el-border-color); padding: 6px 8px; }
-  th { background: var(--el-fill-color-light); font-weight: 600; font-size: 13px; text-align: center; }
-  .pg-part { width: 64px; text-align: center; font-size: 13px; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
-  .pg-mold { width: 140px; }
-  :deep(.el-input__wrapper), :deep(.el-textarea__inner) { box-shadow: none; background: transparent; }
-}
 .import-tip {
   margin-bottom: 12px;
   p { margin: 2px 0; color: var(--el-text-color-secondary); font-size: 13px; }

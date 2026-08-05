@@ -517,6 +517,15 @@ onActivated(() => {
 <style scoped lang="scss">
 .pager { margin-top: 12px; }
 
+/* PC 端筛选区为单行网格布局：清除全部表单项底部间距，
+ * 避免前两个 col 残留的 margin-bottom 把 el-row 撑高，
+ * 造成卡片底部留白大于顶部（平板/手机端换行时仍由全局媒体查询保留行间距） */
+@media (min-width: 992px) {
+  .filter-card :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+}
+
 /* 工具栏按钮同排对齐 */
 .toolbar {
   display: flex;
