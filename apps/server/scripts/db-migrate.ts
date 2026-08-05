@@ -31,6 +31,7 @@ const MIGRATIONS: string[] = [
   'migration-surface-assembly-dicts.sql',
   'migration-customer-name-drop-unique.sql',
   'migration-process-machines-thick.sql',
+  'migration-process-review-history.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */

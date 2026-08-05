@@ -75,6 +75,12 @@ export class ProcessInfoController {
     res.send(buf);
   }
 
+  /** 修改履历（新增/修改/导入更新，产品级+部件级明细，时间倒序；只读不设按钮权限） */
+  @Get(':id/history')
+  async history(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findHistory(id);
+  }
+
   @Get(':id')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);

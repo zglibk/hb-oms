@@ -62,13 +62,20 @@
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="审核人" prop="reviewer" width="80">
+          <template #default="{ row }">{{ row.reviewer || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="审核日期" width="100">
+          <template #default="{ row }">{{ row.reviewDate ? String(row.reviewDate).slice(0, 10) : '—' }}</template>
+        </el-table-column>
         <el-table-column label="更新人" prop="updaterName" width="90" />
         <el-table-column label="更新日期" width="110">
           <template #default="{ row }">{{ (row.updatedAt || '').slice(0, 10) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <app-actions>
+              <el-button size="small" link type="primary" :icon="Clock" @click="openHistory(row)">履历</el-button>
               <el-button size="small" v-permission.disable="'process-info:update'" link type="primary" class="btn-edit" :icon="Edit" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" v-permission.disable="'process-info:delete'" link type="primary" class="btn-delete" :icon="Delete" :loading="deletingId === row.id" @click="onDelete(row)">删除</el-button>
             </app-actions>
@@ -198,6 +205,44 @@
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" />
         </el-form-item>
+
+        <el-divider content-position="left">开单与审核（产品级）</el-divider>
+        <el-form-item label="开单注明">
+          <el-input v-model="form.billingNote" type="textarea" :rows="2" placeholder="开单时需注明的事项" />
+        </el-form-item>
+        <el-form-item label="审核意见">
+          <el-input v-model="form.reviewOpinion" type="textarea" :rows="2" placeholder="领导/技术审核意见（文字）" />
+        </el-form-item>
+        <el-form-item label="意见截图">
+          <div class="img-list">
+            <div v-for="(url, i) in reviewImgs" :key="url" class="img-item">
+              <el-image :src="url" :preview-src-list="reviewImgs" :preview-teleported="true" fit="cover" />
+              <el-icon class="img-remove" @click="reviewImgs.splice(i, 1)"><CircleCloseFilled /></el-icon>
+            </div>
+            <el-upload
+              :show-file-list="false"
+              :auto-upload="false"
+              accept="image/jpeg,image/png,image/webp"
+              :on-change="onReviewImagePick"
+            >
+              <div class="img-add" v-loading="uploading">
+                <el-icon><Plus /></el-icon>
+              </div>
+            </el-upload>
+          </div>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="审核人">
+              <el-input v-model="form.reviewer" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="审核日期">
+              <el-date-picker v-model="form.reviewDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
       <template #footer>
         <el-button size="small" @click="formVisible = false">取消</el-button>
@@ -237,13 +282,38 @@
         <el-button size="small" type="primary" :loading="importing" :disabled="!importFile" @click="onImport">开始导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 修改履历 -->
+    <el-dialog v-model="historyVisible" :title="`修改履历 — ${historyRow?.drawingNo ?? ''}`" width="680px" top="4vh">
+      <el-skeleton v-if="historyLoading" :rows="5" animated />
+      <el-empty v-else-if="!historyList.length" description="暂无履历" />
+      <el-timeline v-else class="history-timeline">
+        <el-timeline-item
+          v-for="h in historyList"
+          :key="h.id"
+          :timestamp="`${(h.createdAt || '').replace('T', ' ').slice(0, 19)} · ${h.operatorName || '—'}`"
+          :type="h.action === 'create' ? 'success' : h.action === 'import' ? 'warning' : 'primary'"
+          placement="top"
+        >
+          <div class="hist-action">{{ actionLabel(h.action) }}<span class="hist-count">（{{ h.changes.length }} 项变更）</span></div>
+          <div v-for="grp in groupChanges(h.changes)" :key="grp.scope" class="hist-group">
+            <span class="hist-scope" :class="`scope-${grp.scope}`">{{ scopeLabel(grp.scope) }}</span>
+            <div v-for="c in grp.items" :key="c.field" class="hist-line">
+              <span class="hist-field">{{ c.label }}</span>
+              <template v-if="c.old"><span class="hist-old">{{ c.old }}</span><span class="hist-arrow">→</span></template>
+              <span class="hist-new">{{ c.new || '（清空）' }}</span>
+            </div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCloseFilled, Upload, Download, UploadFilled } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCloseFilled, Upload, Download, UploadFilled, Clock } from '@element-plus/icons-vue';
 import {
   getProcessInfoList,
   createProcessInfo,
@@ -253,7 +323,9 @@ import {
   importProcessInfos,
   downloadProcessInfoTemplate,
   exportProcessInfos,
+  getProcessInfoHistory,
   type ProcessInfoItem,
+  type ProcessInfoHistoryItem,
 } from '@/api/process-info';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { uploadFile } from '@/api/file';
@@ -293,13 +365,16 @@ function triple(a: string | null, b: string | null, c: string | null): string {
   if (!a && !b && !c) return '—';
   return `${a || '—'} / ${b || '—'} / ${c || '—'}`;
 }
-function imageList(row: ProcessInfoItem): string[] {
+function parseImages(json: string | null): string[] {
   try {
-    const arr = JSON.parse(row.processUpdateImages || '[]');
+    const arr = JSON.parse(json || '[]');
     return Array.isArray(arr) ? arr : [];
   } catch {
     return [];
   }
+}
+function imageList(row: ProcessInfoItem): string[] {
+  return parseImages(row.processUpdateImages);
 }
 
 /* ===== 新增/编辑 ===== */
@@ -310,6 +385,7 @@ const formRef = ref<FormInstance>();
 const machineTags = ref<string[]>([]);
 const machineThickTags = ref<string[]>([]);
 const images = ref<string[]>([]);
+const reviewImgs = ref<string[]>([]);
 const uploading = ref(false);
 
 const emptyForm = () => ({
@@ -322,6 +398,10 @@ const emptyForm = () => ({
   specialReqOuter: '', specialReqMiddle: '', specialReqInner: '',
   moldNoOuter: '', moldNoMiddle: '', moldNoInner: '',
   processUpdateNote: '',
+  billingNote: '',
+  reviewOpinion: '',
+  reviewer: '',
+  reviewDate: '' as string | null,
   remark: '',
 });
 const form = reactive(emptyForm());
@@ -339,6 +419,7 @@ function openCreate() {
   machineTags.value = [];
   machineThickTags.value = [];
   images.value = [];
+  reviewImgs.value = [];
   formVisible.value = true;
 }
 function openEdit(row: ProcessInfoItem) {
@@ -353,11 +434,16 @@ function openEdit(row: ProcessInfoItem) {
     specialReqOuter: row.specialReqOuter ?? '', specialReqMiddle: row.specialReqMiddle ?? '', specialReqInner: row.specialReqInner ?? '',
     moldNoOuter: row.moldNoOuter ?? '', moldNoMiddle: row.moldNoMiddle ?? '', moldNoInner: row.moldNoInner ?? '',
     processUpdateNote: row.processUpdateNote ?? '',
+    billingNote: row.billingNote ?? '',
+    reviewOpinion: row.reviewOpinion ?? '',
+    reviewer: row.reviewer ?? '',
+    reviewDate: row.reviewDate ? String(row.reviewDate).slice(0, 10) : '',
     remark: row.remark ?? '',
   });
   machineTags.value = (row.machines || '').split(',').filter(Boolean);
   machineThickTags.value = (row.machinesThick || '').split(',').filter(Boolean);
   images.value = imageList(row);
+  reviewImgs.value = parseImages(row.reviewImages);
   formVisible.value = true;
 }
 
@@ -377,15 +463,33 @@ async function onImagePick(file: UploadFile) {
   }
 }
 
+async function onReviewImagePick(file: UploadFile) {
+  const raw = file.raw as File | undefined;
+  if (!raw) return;
+  if (raw.size > 10 * 1024 * 1024) {
+    ElMessage.warning('图片不能超过 10MB');
+    return;
+  }
+  uploading.value = true;
+  try {
+    const url = await uploadFile(raw, 'process_review_image');
+    reviewImgs.value.push(url);
+  } finally {
+    uploading.value = false;
+  }
+}
+
 async function onSave() {
   await formRef.value?.validate();
   saving.value = true;
   try {
     const payload = {
       ...form,
+      reviewDate: form.reviewDate || undefined,
       machines: machineTags.value.map((s) => s.trim()).filter(Boolean).join(','),
       machinesThick: machineThickTags.value.map((s) => s.trim()).filter(Boolean).join(','),
       processUpdateImages: JSON.stringify(images.value),
+      reviewImages: JSON.stringify(reviewImgs.value),
     };
     if (editId.value) await updateProcessInfo(editId.value, payload);
     else await createProcessInfo(payload);
@@ -443,6 +547,35 @@ async function onBatchDelete() {
   } finally {
     batchDeleting.value = false;
   }
+}
+
+/* ===== 修改履历 ===== */
+const historyVisible = ref(false);
+const historyLoading = ref(false);
+const historyRow = ref<ProcessInfoItem | null>(null);
+const historyList = ref<ProcessInfoHistoryItem[]>([]);
+async function openHistory(row: ProcessInfoItem) {
+  historyRow.value = row;
+  historyVisible.value = true;
+  historyLoading.value = true;
+  try {
+    historyList.value = await getProcessInfoHistory(row.id);
+  } finally {
+    historyLoading.value = false;
+  }
+}
+function actionLabel(action: string): string {
+  return action === 'create' ? '新增' : action === 'import' ? '导入更新' : '修改';
+}
+const SCOPE_LABELS: Record<string, string> = { product: '产品级', outer: '外轨', middle: '中轨', inner: '内轨' };
+function scopeLabel(scope: string): string {
+  return SCOPE_LABELS[scope] ?? scope;
+}
+function groupChanges(changes: ProcessInfoHistoryItem['changes']) {
+  const order = ['product', 'outer', 'middle', 'inner'];
+  return order
+    .map((scope) => ({ scope, items: changes.filter((c) => c.scope === scope) }))
+    .filter((g) => g.items.length);
 }
 
 /* ===== 导出 ===== */
@@ -551,5 +684,21 @@ async function onImport() {
 .import-errors {
   margin-top: 10px; max-height: 180px; overflow-y: auto;
   p { margin: 2px 0; }
+}
+.history-timeline {
+  padding-left: 4px; max-height: 60vh; overflow-y: auto;
+  .hist-action { font-weight: 600; margin-bottom: 6px; }
+  .hist-count { font-weight: 400; color: var(--el-text-color-secondary); font-size: 12px; }
+  .hist-group { margin: 6px 0; }
+  .hist-scope {
+    display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 4px; margin-bottom: 4px;
+    background: var(--el-fill-color-light); color: var(--el-text-color-regular);
+    &.scope-product { background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
+  }
+  .hist-line { font-size: 13px; margin: 2px 0 2px 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+  .hist-field { color: var(--el-text-color-secondary); flex: none; }
+  .hist-old { color: var(--el-text-color-placeholder); text-decoration: line-through; word-break: break-all; }
+  .hist-arrow { color: var(--el-color-warning); flex: none; }
+  .hist-new { color: var(--el-text-color-primary); word-break: break-all; }
 }
 </style>

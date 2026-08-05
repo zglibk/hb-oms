@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { ProcessInfo } from './entities/process-info.entity';
+import { ProcessInfoHistory } from './entities/process-info-history.entity';
 import {
   CreateProcessInfoDto,
   QueryProcessInfoDto,
@@ -33,9 +34,16 @@ const SHEET_HEADERS = [
   '模具编号',
   '工艺更新说明',
   '备注',
+  '开单注明',
+  '审核意见',
+  '审核人',
+  '审核日期',
 ] as const;
 
-const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 14, 20, 16];
+const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 14, 20, 16, 18, 24, 10, 12];
+
+/** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明~审核日期 */
+const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15];
 
 /** 组级列 → 实体字段（组内取首个非空值） */
 const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }> = [
@@ -46,7 +54,85 @@ const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }>
   { header: '生产机台', field: 'machines' },
   { header: '工艺更新说明', field: 'processUpdateNote' },
   { header: '备注', field: 'remark' },
+  { header: '开单注明', field: 'billingNote' },
+  { header: '审核意见', field: 'reviewOpinion' },
+  { header: '审核人', field: 'reviewer' },
+  { header: '审核日期', field: 'reviewDate' },
 ];
+
+/**
+ * 履历追踪字段元数据：label 中文名 + scope 粒度（product 产品级 / outer|middle|inner 部件级）。
+ * 图片字段 isImages=true，履历中记录张数摘要而非完整 URL。
+ */
+const FIELD_META: Array<{
+  field: keyof CreateProcessInfoDto | 'machinesThick' | 'processUpdateImages' | 'reviewImages';
+  label: string;
+  scope: 'product' | 'outer' | 'middle' | 'inner';
+  isImages?: boolean;
+}> = [
+  { field: 'drawingNo', label: '生产图号', scope: 'product' },
+  { field: 'drawingVersion', label: '版本号', scope: 'product' },
+  { field: 'customerName', label: '客户名称', scope: 'product' },
+  { field: 'productName', label: '产品名称', scope: 'product' },
+  { field: 'machines', label: '机台(薄料)', scope: 'product' },
+  { field: 'machinesThick', label: '机台(厚料)', scope: 'product' },
+  { field: 'processUpdateNote', label: '工艺更新说明', scope: 'product' },
+  { field: 'processUpdateImages', label: '工艺附图', scope: 'product', isImages: true },
+  { field: 'billingNote', label: '开单注明', scope: 'product' },
+  { field: 'reviewOpinion', label: '审核意见', scope: 'product' },
+  { field: 'reviewImages', label: '审核截图', scope: 'product', isImages: true },
+  { field: 'reviewer', label: '审核人', scope: 'product' },
+  { field: 'reviewDate', label: '审核日期', scope: 'product' },
+  { field: 'remark', label: '备注', scope: 'product' },
+  { field: 'lengthReqOuter', label: '长度要求', scope: 'outer' },
+  { field: 'specialReqOuter', label: '特殊要求', scope: 'outer' },
+  { field: 'moldNoOuter', label: '模具编号', scope: 'outer' },
+  { field: 'lengthReqMiddle', label: '长度要求', scope: 'middle' },
+  { field: 'specialReqMiddle', label: '特殊要求', scope: 'middle' },
+  { field: 'moldNoMiddle', label: '模具编号', scope: 'middle' },
+  { field: 'lengthReqInner', label: '长度要求', scope: 'inner' },
+  { field: 'specialReqInner', label: '特殊要求', scope: 'inner' },
+  { field: 'moldNoInner', label: '模具编号', scope: 'inner' },
+];
+
+/** 字段值 → 履历展示值（图片字段记张数摘要；日期截前10位；空值统一 ''） */
+function historyValue(meta: (typeof FIELD_META)[number], v: unknown): string {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim();
+  if (meta.isImages) {
+    try {
+      const arr = JSON.parse(s || '[]');
+      return Array.isArray(arr) && arr.length ? `${arr.length} 张` : '';
+    } catch {
+      return s ? '1 张' : '';
+    }
+  }
+  if (meta.field === 'reviewDate') s = s.slice(0, 10);
+  return s;
+}
+
+/** 对比新旧记录，产出履历变更明细（仅记有变化的字段） */
+function buildDiff(
+  before: Partial<ProcessInfo> | null,
+  after: Partial<ProcessInfo>,
+): Array<{ field: string; label: string; scope: string; old: string; new: string }> {
+  const changes: Array<{ field: string; label: string; scope: string; old: string; new: string }> = [];
+  for (const meta of FIELD_META) {
+    const oldV = historyValue(meta, before ? (before as any)[meta.field] : '');
+    const newV = historyValue(meta, (after as any)[meta.field]);
+    if (oldV !== newV) changes.push({ field: meta.field, label: meta.label, scope: meta.scope, old: oldV, new: newV });
+  }
+  return changes;
+}
+
+/** 日期文本归一化为 YYYY-MM-DD（兼容 2026/8/5、2026.8.5、ISO 串；无法识别原样返回） */
+function normalizeDate(s?: string): string | undefined {
+  if (!s?.trim()) return undefined;
+  const t = s.trim();
+  const m = t.match(/^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return t.slice(0, 10);
+}
 
 /** 部件行 → 三列字段映射（含常见简写别名） */
 const PART_ROW_FIELDS: Record<
@@ -139,8 +225,44 @@ export class ProcessInfoService {
   constructor(
     @InjectRepository(ProcessInfo)
     private readonly repo: Repository<ProcessInfo>,
+    @InjectRepository(ProcessInfoHistory)
+    private readonly historyRepo: Repository<ProcessInfoHistory>,
     private readonly dataSource: DataSource,
   ) {}
+
+  /** 写一条履历（changes 为空数组时不写） */
+  private buildHistoryRow(
+    item: { id: number; drawingNo: string },
+    action: 'create' | 'update' | 'import',
+    changes: ReturnType<typeof buildDiff>,
+    user: CurrentUserPayload,
+  ): Partial<ProcessInfoHistory> | null {
+    if (!changes.length) return null;
+    return {
+      processInfoId: item.id,
+      drawingNo: item.drawingNo,
+      action,
+      changes: JSON.stringify(changes),
+      operatorId: user.id ?? null,
+      operatorName: user.realName || user.username || null,
+    };
+  }
+
+  /** 修改履历（含新增/修改/导入更新；按时间倒序） */
+  async findHistory(id: number) {
+    await this.findOne(id);
+    const list = await this.historyRepo.find({
+      where: { processInfoId: id },
+      order: { id: 'DESC' },
+    });
+    return list.map((h) => ({
+      id: h.id,
+      action: h.action,
+      changes: h.changes ? JSON.parse(h.changes) : [],
+      operatorName: h.operatorName,
+      createdAt: h.createdAt,
+    }));
+  }
 
   async findList(query: QueryProcessInfoDto) {
     const page = query.page ?? 1;
@@ -174,7 +296,10 @@ export class ProcessInfoService {
   async create(dto: CreateProcessInfoDto, user: CurrentUserPayload) {
     const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
     if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
+    if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
     const saved = await this.repo.save(this.repo.create({ ...dto, ...auditOnCreate(user) }));
+    const hist = this.buildHistoryRow(saved, 'create', buildDiff(null, saved), user);
+    if (hist) await this.historyRepo.save(this.historyRepo.create(hist));
     return { id: saved.id };
   }
 
@@ -185,7 +310,16 @@ export class ProcessInfoService {
       const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
       if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
     }
+    if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
+    const changes = buildDiff(item, { ...item, ...dto });
     await this.repo.update(id, { ...dto, ...auditOnUpdate(user) });
+    const hist = this.buildHistoryRow(
+      { id, drawingNo: dto.drawingNo ?? item.drawingNo },
+      'update',
+      changes,
+      user,
+    );
+    if (hist) await this.historyRepo.save(this.historyRepo.create(hist));
     return { id };
   }
 
@@ -203,6 +337,7 @@ export class ProcessInfoService {
       );
     }
     await this.repo.delete(id);
+    await this.historyRepo.delete({ processInfoId: id });
     return { id };
   }
 
@@ -227,6 +362,7 @@ export class ProcessInfoService {
     }
 
     await this.repo.delete(items.map((i) => i.id));
+    await this.historyRepo.delete({ processInfoId: In(items.map((i) => i.id)) });
     return { deleted: items.length, skipped: uniqIds.length - items.length };
   }
 
@@ -283,18 +419,22 @@ export class ProcessInfoService {
         f ? ((p as any)[f.mold] ?? '') : '',
         p.processUpdateNote ?? '',
         p.remark ?? '',
+        p.billingNote ?? '',
+        p.reviewOpinion ?? '',
+        p.reviewer ?? '',
+        p.reviewDate ? String(p.reviewDate).slice(0, 10) : '',
       ]);
     }
     const end = ws.rowCount;
     if (end === start) {
       // 单行组无需合并，仅设置对齐
-      for (const col of [1, 2, 3, 4, 5, 6, 10, 11]) {
+      for (const col of [...GROUP_MERGE_COLS, 6]) {
         ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       }
       return;
     }
-    // 组级列合并（图号/版本/客户/产品名称/生产机台/工艺更新说明/备注）
-    for (const col of [1, 2, 3, 4, 5, 10, 11]) {
+    // 组级列合并（图号~生产机台、工艺更新说明~审核日期）
+    for (const col of GROUP_MERGE_COLS) {
       ws.mergeCells(start, col, end, col);
       ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     }
@@ -451,6 +591,7 @@ export class ProcessInfoService {
       const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
       r.machines = thin;
       (r as any).machinesThick = thick;
+      if (r.reviewDate) r.reviewDate = normalizeDate(r.reviewDate);
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');
@@ -477,10 +618,12 @@ export class ProcessInfoService {
       throw new BadRequestException({ message: '导入校验未通过，本次未导入任何数据', errors });
     }
 
-    // 整批落库（同一事务）
+    // 整批落库（同一事务），并逐条写履历（新增 create / 覆盖更新 import）
     let created = 0;
     let updated = 0;
     await this.dataSource.transaction(async (mgr) => {
+      const repo = mgr.getRepository(ProcessInfo);
+      const histRepo = mgr.getRepository(ProcessInfoHistory);
       for (const r of rows) {
         const { _row, ...dto } = r;
         const hit = byDrawing.get(dto.drawingNo as string);
@@ -491,12 +634,17 @@ export class ProcessInfoService {
             const v = (dto as any)[field];
             if (v !== undefined) (patch as any)[field] = v;
           }
-          await mgr.getRepository(ProcessInfo).update(hit.id, patch);
+          const changes = buildDiff(hit, { ...hit, ...patch });
+          await repo.update(hit.id, patch);
+          const hist = this.buildHistoryRow(hit, 'import', changes, user);
+          if (hist) await histRepo.save(histRepo.create(hist));
           updated += 1;
         } else {
-          await mgr.getRepository(ProcessInfo).save(
-            mgr.getRepository(ProcessInfo).create({ ...(dto as CreateProcessInfoDto), ...auditOnCreate(user) }),
+          const saved = await repo.save(
+            repo.create({ ...(dto as CreateProcessInfoDto), ...auditOnCreate(user) }),
           );
+          const hist = this.buildHistoryRow(saved, 'create', buildDiff(null, saved), user);
+          if (hist) await histRepo.save(histRepo.create(hist));
           created += 1;
         }
       }

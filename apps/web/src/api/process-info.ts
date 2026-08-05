@@ -21,6 +21,11 @@ export interface ProcessInfoItem {
   moldNoInner: string | null;
   processUpdateNote: string | null;
   processUpdateImages: string | null;
+  billingNote: string | null;
+  reviewOpinion: string | null;
+  reviewImages: string | null;
+  reviewer: string | null;
+  reviewDate: string | null;
   remark: string | null;
   creatorName?: string | null;
   updaterName?: string | null;
@@ -74,3 +79,16 @@ export const downloadProcessInfoTemplate = () =>
 /** 导出（手工工艺表格式：一图号三行+合并单元格；按当前筛选全量导出） */
 export const exportProcessInfos = (params: { keyword?: string }) =>
   request.get<any, Blob>('/api/process-info/export', { params, responseType: 'blob' });
+
+/** 修改履历条目（scope：product 产品级 / outer 外轨 / middle 中轨 / inner 内轨） */
+export interface ProcessInfoHistoryItem {
+  id: number;
+  action: 'create' | 'update' | 'import';
+  changes: Array<{ field: string; label: string; scope: string; old: string; new: string }>;
+  operatorName: string | null;
+  createdAt: string;
+}
+
+/** 修改履历（新增/修改/导入更新，时间倒序） */
+export const getProcessInfoHistory = (id: number) =>
+  request.get<any, ProcessInfoHistoryItem[]>(`/api/process-info/${id}/history`);

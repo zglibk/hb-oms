@@ -83,6 +83,21 @@ export class ProcessInfo {
   processUpdateNote: string | null;
 
   /** 工艺更新附图（FILE 上传多图，JSON 数组存 URL） */
+  @Column({ name: 'billing_note', type: 'varchar', length: 255, nullable: true, comment: '开单注明（产品级）' })
+  billingNote: string | null;
+
+  @Column({ name: 'review_opinion', type: 'text', nullable: true, comment: '审核意见（产品级，文字）' })
+  reviewOpinion: string | null;
+
+  @Column({ name: 'review_images', type: 'varchar', length: 512, nullable: true, comment: '审核意见截图（多图URL JSON数组，可传领导聊天记录截图）' })
+  reviewImages: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true, comment: '审核人（产品级）' })
+  reviewer: string | null;
+
+  @Column({ name: 'review_date', type: 'date', nullable: true, comment: '审核日期（产品级）' })
+  reviewDate: string | null;
+
   @Column({ name: 'process_update_images', type: 'varchar', length: 512, nullable: true, comment: '工艺更新附图（多图URL JSON数组）' })
   processUpdateImages: string | null;
 

@@ -78,6 +78,35 @@ export class CreateProcessInfoDto {
   @MaxLength(512)
   processUpdateImages?: string;
 
+  /** 开单注明（产品级） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  billingNote?: string;
+
+  /** 审核意见（产品级，文字） */
+  @IsOptional()
+  @IsString()
+  reviewOpinion?: string;
+
+  /** 审核意见截图（多图URL JSON数组） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  reviewImages?: string;
+
+  /** 审核人（产品级） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  reviewer?: string;
+
+  /** 审核日期（产品级，YYYY-MM-DD） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  reviewDate?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)
