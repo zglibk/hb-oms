@@ -16,7 +16,12 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { CustomerService } from './customer.service';
-import { CreateCustomerDto, QueryCustomerDto, UpdateCustomerDto } from './dto/customer.dto';
+import {
+  BatchDeleteCustomerDto,
+  CreateCustomerDto,
+  QueryCustomerDto,
+  UpdateCustomerDto,
+} from './dto/customer.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
@@ -60,6 +65,14 @@ export class CustomerController {
   @OperationLog('客户资料', '删除客户')
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  /** 批量删除（整批校验：任一被订单引用则整批拒绝；权限复用单删） */
+  @Post('batch-delete')
+  @RequirePermissions('customer:delete')
+  @OperationLog('客户资料', '批量删除客户')
+  async batchRemove(@Body() dto: BatchDeleteCustomerDto) {
+    return this.service.batchRemove(dto.ids);
   }
 
   /** 下载导入模板 */

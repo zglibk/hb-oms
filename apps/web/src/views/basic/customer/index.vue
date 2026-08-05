@@ -27,10 +27,21 @@
       <div class="toolbar">
         <el-button size="small" v-permission="'customer:create'" type="primary" :icon="Plus" @click="openCreate">新增客户</el-button>
         <el-button size="small" v-permission="'customer:import'" type="primary" plain :icon="Upload" @click="openImport">批量导入</el-button>
+        <el-button
+          size="small"
+          v-permission="'customer:delete'"
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selection.length"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >批量删除{{ selection.length ? `（${selection.length}）` : '' }}</el-button>
       </div>
-      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize">
-        <el-table-column label="客户代码" prop="customerCode" width="130" />
-        <el-table-column label="客户名称" prop="customerName" min-width="180" class-name="col-left" />
+      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="55" />
+        <el-table-column label="客户代码" prop="customerCode" width="87" />
+        <el-table-column label="客户名称" prop="customerName" min-width="90" class-name="col-left" />
         <el-table-column label="联系人" prop="contactPerson" width="100" />
         <el-table-column label="联系电话" prop="contactPhone" width="130" />
         <el-table-column label="默认业务员" prop="salesman" width="110" />
@@ -138,6 +149,7 @@ import {
   createCustomer,
   updateCustomer,
   deleteCustomer,
+  batchDeleteCustomers,
   importCustomers,
   downloadCustomerTemplate,
   type CustomerItem,
@@ -150,7 +162,7 @@ import AppActions from '@/components/AppActions.vue';
 const loading = ref(false);
 const list = ref<CustomerItem[]>([]);
 const total = ref(0);
-const query = reactive({ page: 1, pageSize: 20, keyword: '', status: undefined as number | undefined });
+const query = reactive({ page: 1, pageSize: 10, keyword: '', status: undefined as number | undefined });
 
 async function load() {
   loading.value = true;
@@ -234,6 +246,40 @@ async function onDelete(row: CustomerItem) {
   }
 }
 
+/* ===== 批量删除 ===== */
+const selection = ref<CustomerItem[]>([]);
+const batchDeleting = ref(false);
+function onSelectionChange(rows: CustomerItem[]) {
+  selection.value = rows;
+}
+async function onBatchDelete() {
+  if (!selection.value.length) return;
+  await ElMessageBox.confirm(
+    `确定删除选中的 ${selection.value.length} 个客户吗？任一客户被订单引用则整批不删除。`,
+    '批量删除',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
+  );
+  batchDeleting.value = true;
+  try {
+    const res = await batchDeleteCustomers(selection.value.map((r) => r.id));
+    ElMessage.success(`已删除 ${res.deleted} 个客户${res.skipped ? `（${res.skipped} 个已不存在，自动跳过）` : ''}`);
+    selection.value = [];
+    load();
+  } catch (e: any) {
+    // 整批被拒：后端 400 返回 { message, errors: [...] }（request.ts 已弹 message，这里补逐条原因）
+    const errs = e?.response?.data?.errors ?? e?.errors;
+    if (Array.isArray(errs) && errs.length) {
+      ElMessageBox.alert(
+        errs.slice(0, 10).join('<br>') + (errs.length > 10 ? `<br>…共 ${errs.length} 条` : ''),
+        '未删除原因',
+        { dangerouslyUseHTMLString: true, type: 'warning' },
+      );
+    }
+  } finally {
+    batchDeleting.value = false;
+  }
+}
+
 /* ===== 批量导入 ===== */
 const importVisible = ref(false);
 const importing = ref(false);
@@ -284,6 +330,11 @@ async function onImport() {
 <style scoped lang="scss">
 .toolbar { margin-bottom: 12px; }
 .pager { margin-top: 12px; }
+/* 筛选卡片：内联表单项横向排列、底部不留间距，避免卡片出现垂直滚动条 */
+.filter-card :deep(.el-form--inline .el-form-item) {
+  display: inline-flex;
+  margin-bottom: 0;
+}
 .import-tip {
   margin-bottom: 12px;
   p { margin: 2px 0; color: var(--el-text-color-secondary); font-size: 13px; }

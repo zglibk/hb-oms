@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Customer } from './entities/customer.entity';
 import { CreateCustomerDto, QueryCustomerDto, UpdateCustomerDto } from './dto/customer.dto';
@@ -120,6 +120,42 @@ export class CustomerService {
     }
     await this.repo.delete(id);
     return { id };
+  }
+
+  /**
+   * 批量删除：整批校验口径与导入一致——任一客户被订单引用则整批拒绝并返回逐条原因，
+   * 不做部分删除（避免"删了一半"的中间态让操作者误判）。已不存在的 id 静默跳过（幂等）。
+   */
+  async batchRemove(ids: number[]) {
+    const uniqIds = [...new Set(ids)];
+    const items = await this.repo.find({ where: { id: In(uniqIds) } });
+    if (!items.length) throw new NotFoundException('所选客户均不存在（可能已被删除），请刷新列表');
+
+    // 引用校验：t_order 在 M2 落地，表未建时视为无引用（与单删同口径）
+    const refMap = new Map<number, number>();
+    try {
+      const rows: Array<{ customer_id: number; cnt: string }> = await this.dataSource.query(
+        `SELECT customer_id, COUNT(*) AS cnt FROM t_order WHERE customer_id IN (${uniqIds
+          .map(() => '?')
+          .join(',')}) GROUP BY customer_id`,
+        uniqIds,
+      );
+      rows.forEach((r) => refMap.set(Number(r.customer_id), Number(r.cnt)));
+    } catch {
+      /* t_order 未建表：无引用 */
+    }
+    const blocked = items.filter((c) => (refMap.get(c.id) ?? 0) > 0);
+    if (blocked.length) {
+      throw new BadRequestException({
+        message: `批量删除未执行：${blocked.length} 个客户已被订单引用，建议改为「停用」`,
+        errors: blocked.map(
+          (c) => `客户「${c.customerCode} / ${c.customerName}」已被 ${refMap.get(c.id)} 张订单引用`,
+        ),
+      });
+    }
+
+    await this.repo.delete(items.map((c) => c.id));
+    return { deleted: items.length, skipped: uniqIds.length - items.length };
   }
 
   /** 唯一性只卡客户代码——真实客户「一名多码」是常态（同名客户多个代码），名称不做唯一约束 */

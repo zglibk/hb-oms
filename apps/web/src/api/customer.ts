@@ -44,6 +44,10 @@ export const updateCustomer = (id: number, data: Partial<CustomerItem>) =>
 export const deleteCustomer = (id: number) =>
   request.delete(`/api/customer/${id}`);
 
+/** 批量删除：整批校验，任一被订单引用则整批拒绝（返回 errors 逐条原因） */
+export const batchDeleteCustomers = (ids: number[]) =>
+  request.post<any, { deleted: number; skipped: number }>('/api/customer/batch-delete', { ids });
+
 /** 导入模板下载地址（走 axios blob 下载） */
 export const downloadCustomerTemplate = () =>
   request.get<any, Blob>('/api/customer/import-template', { responseType: 'blob' });
