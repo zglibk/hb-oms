@@ -330,8 +330,8 @@
 </tr>
 <tr>
 <td>customer_name</td>
-<td>varchar(128) UK</td>
-<td>客户名称（必填，唯一）</td>
+<td>varchar(128) idx</td>
+<td>客户名称（必填，<strong>可重复</strong>——真实客户「一名多码」是常态，同一客户名下可挂多个客户代码；customer_code 才是唯一业务键，导入判重/引用均按代码）</td>
 </tr>
 <tr>
 <td>contact_person / contact_phone</td>

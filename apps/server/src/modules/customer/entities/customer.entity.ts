@@ -20,7 +20,8 @@ export class Customer {
   customerCode: string;
 
   /** 客户名称（唯一，必填） */
-  @Column({ name: 'customer_name', type: 'varchar', length: 128, unique: true, comment: '客户名称（唯一）' })
+  /** 名称不唯一：真实客户存在「一名多码」（同一客户名下多个客户代码，如汉斯达 40+ 码），客户代码才是唯一业务键 */
+  @Column({ name: 'customer_name', type: 'varchar', length: 128, comment: '客户名称（可重复，一名多码）' })
   customerName: string;
 
   /** 联系人 */

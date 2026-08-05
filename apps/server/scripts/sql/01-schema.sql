@@ -202,7 +202,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE IF NOT EXISTS t_customer (
   id               INT AUTO_INCREMENT PRIMARY KEY,
   customer_code    VARCHAR(64)  NOT NULL COMMENT '客户代码（唯一）',
-  customer_name    VARCHAR(128) NOT NULL COMMENT '客户名称（唯一）',
+  customer_name    VARCHAR(128) NOT NULL COMMENT '客户名称（可重复，一名多码）',
   contact_person   VARCHAR(64)  NULL COMMENT '联系人',
   contact_phone    VARCHAR(64)  NULL COMMENT '联系电话',
   salesman         VARCHAR(64)  NULL COMMENT '默认业务员',
@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS t_customer (
   created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_customer_code (customer_code),
-  UNIQUE KEY uk_customer_name (customer_name)
+  KEY idx_customer_name (customer_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户资料';
 
 -- 工艺信息（设计文档 §4.1.3；订单按生产图号匹配自动带入，引用为快照不回写）

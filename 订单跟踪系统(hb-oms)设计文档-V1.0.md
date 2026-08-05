@@ -157,7 +157,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | customer_code | varchar(64) UK | 客户代码（必填，唯一） |
-| customer_name | varchar(128) UK | 客户名称（必填，唯一） |
+| customer_name | varchar(128) idx | 客户名称（必填，**可重复**——真实客户「一名多码」是常态，同一客户名下可挂多个客户代码；customer_code 才是唯一业务键，导入判重/引用均按代码） |
 | contact_person / contact_phone | varchar(64) | 联系人 / 电话 |
 | salesman | varchar(64) | 默认业务员（订单创建时带出，可改） |
 | merchandiser | varchar(64) | 默认跟单员（同上） |

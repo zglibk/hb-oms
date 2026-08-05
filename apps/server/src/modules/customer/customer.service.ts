@@ -122,16 +122,12 @@ export class CustomerService {
     return { id };
   }
 
-  private async assertUnique(code?: string, name?: string, excludeId?: number) {
+  /** 唯一性只卡客户代码——真实客户「一名多码」是常态（同名客户多个代码），名称不做唯一约束 */
+  private async assertUnique(code?: string, _name?: string, excludeId?: number) {
     if (code) {
       const qb = this.repo.createQueryBuilder('c').where('c.customerCode = :code', { code });
       if (excludeId) qb.andWhere('c.id != :id', { id: excludeId });
       if (await qb.getExists()) throw new ConflictException(`客户代码「${code}」已存在`);
-    }
-    if (name) {
-      const qb = this.repo.createQueryBuilder('c').where('c.customerName = :name', { name });
-      if (excludeId) qb.andWhere('c.id != :id', { id: excludeId });
-      if (await qb.getExists()) throw new ConflictException(`客户名称「${name}」已存在`);
     }
   }
 
@@ -192,35 +188,23 @@ export class CustomerService {
     });
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');
 
-    // 批内判重
+    // 批内判重——只卡客户代码；名称允许重复（一名多码是业务常态，如同名客户挂 40+ 个代码）
     const seenCode = new Map<string, number>();
-    const seenName = new Map<string, number>();
     for (const r of rows) {
       if (r.customerCode) {
         if (seenCode.has(r.customerCode)) {
           errors.push(`第 ${r._row} 行：客户代码「${r.customerCode}」与第 ${seenCode.get(r.customerCode)} 行重复`);
         } else seenCode.set(r.customerCode, r._row);
       }
-      if (r.customerName) {
-        if (seenName.has(r.customerName)) {
-          errors.push(`第 ${r._row} 行：客户名称「${r.customerName}」与第 ${seenName.get(r.customerName)} 行重复`);
-        } else seenName.set(r.customerName, r._row);
-      }
     }
 
-    // 与库内判重
+    // 与库内判重（同样只按客户代码）
     const existing = await this.repo.find();
     const byCode = new Map(existing.map((c) => [c.customerCode, c]));
-    const byName = new Map(existing.map((c) => [c.customerName, c]));
     for (const r of rows) {
       const hitCode = r.customerCode ? byCode.get(r.customerCode) : undefined;
-      const hitName = r.customerName ? byName.get(r.customerName) : undefined;
       if (!overwrite && hitCode) {
         errors.push(`第 ${r._row} 行：客户代码「${r.customerCode}」已存在（可开启「覆盖更新」）`);
-      }
-      // 名称撞了别的代码的客户：无论是否覆盖模式都视为冲突
-      if (hitName && (!hitCode || hitName.id !== hitCode.id)) {
-        errors.push(`第 ${r._row} 行：客户名称「${r.customerName}」已被客户代码「${hitName.customerCode}」占用`);
       }
     }
 
