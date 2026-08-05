@@ -165,9 +165,5 @@ export function applyThemeColor(color: string): void {
   // 选中项：略亮（与主色混入白色），在主色背景上突出显示
   root.style.setProperty('--sidebar-active-bg', mix(primary, WHITE, 0.20));
 
-  // ---- 列表（el-table）主题色 ----
-  // 表头底色（主色浅色调）、表头文字（主色深色调，保证可读）、隔行浅色底
-  root.style.setProperty('--table-header-bg', mix(primary, WHITE, 0.45));
-  root.style.setProperty('--table-header-color', mix(primary, BLACK, 0.15));
-  root.style.setProperty('--table-stripe-bg', mix(primary, WHITE, 0.92));
+  // 列表表头 / 隔行灰在 styles/index.scss :root 硬编码，不随主题色变化
 }

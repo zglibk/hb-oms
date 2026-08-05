@@ -26,12 +26,42 @@ export interface PermSeed {
 }
 
 export const PERMISSIONS: PermSeed[] = [
-  // ===== 订单管理（M2） =====
-  { perm_code: 'order', perm_name: '订单管理', perm_type: 1, menu_path: '/order', component: 'order/index', icon: 'Tickets', sort: 5 },
+  // ===== 生产管理（订单管理挂其下；后续 M3 外发/M3.5 装配/M4 出入库同入此组） =====
+  { perm_code: 'production', perm_name: '生产管理', perm_type: 1, menu_path: '/production', icon: 'Operation', sort: 5 },
+
+  { perm_code: 'order', perm_name: '订单管理', perm_type: 1, parent_code: 'production', menu_path: '/order', component: 'order/index', icon: 'Tickets', sort: 1 },
   { perm_code: 'order:create', perm_name: '新增订单', perm_type: 2, parent_code: 'order', sort: 1 },
   { perm_code: 'order:update', perm_name: '编辑订单', perm_type: 2, parent_code: 'order', sort: 2 },
   { perm_code: 'order:finish', perm_name: '完结/重开订单', perm_type: 2, parent_code: 'order', sort: 3 },
   { perm_code: 'order:cancel', perm_name: '作废订单', perm_type: 2, parent_code: 'order', sort: 4 },
+
+  // ===== 工艺管理 =====
+  { perm_code: 'process', perm_name: '工艺管理', perm_type: 1, menu_path: '/process', icon: 'SetUp', sort: 6 },
+
+  { perm_code: 'basic:process-info', perm_name: '工艺信息', perm_type: 1, parent_code: 'process', menu_path: '/basic/process-info', component: 'basic/process-info/index', icon: 'Document', sort: 1 },
+  { perm_code: 'process-info:create', perm_name: '新增工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 1 },
+  { perm_code: 'process-info:update', perm_name: '编辑工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 2 },
+  { perm_code: 'process-info:delete', perm_name: '删除工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 3 },
+  { perm_code: 'process-info:import', perm_name: '批量导入工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 4 },
+  { perm_code: 'process-info:export', perm_name: '导出工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 5 },
+
+  // ===== 物料管理 =====
+  { perm_code: 'material-mgmt', perm_name: '物料管理', perm_type: 1, menu_path: '/material', icon: 'Box', sort: 7 },
+
+  { perm_code: 'basic:material', perm_name: '物料信息', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 1 },
+  { perm_code: 'material:create', perm_name: '新增物料', perm_type: 2, parent_code: 'basic:material', sort: 1 },
+  { perm_code: 'material:update', perm_name: '编辑物料', perm_type: 2, parent_code: 'basic:material', sort: 2 },
+  { perm_code: 'material:delete', perm_name: '删除物料', perm_type: 2, parent_code: 'basic:material', sort: 3 },
+  { perm_code: 'material:import', perm_name: '批量导入物料', perm_type: 2, parent_code: 'basic:material', sort: 4 },
+  { perm_code: 'material:export', perm_name: '导出物料清单', perm_type: 2, parent_code: 'basic:material', sort: 5 },
+
+  // ===== 设备管理 =====
+  { perm_code: 'equipment', perm_name: '设备管理', perm_type: 1, menu_path: '/equipment', icon: 'Cpu', sort: 8 },
+
+  { perm_code: 'equipment:info', perm_name: '设备信息', perm_type: 1, parent_code: 'equipment', menu_path: '/equipment/info', component: 'equipment/info/index', icon: 'Monitor', sort: 1 },
+  { perm_code: 'equipment-info:create', perm_name: '新增设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 1 },
+  { perm_code: 'equipment-info:update', perm_name: '编辑设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 2 },
+  { perm_code: 'equipment-info:delete', perm_name: '删除设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 3 },
 
   // ===== 基础数据 =====
   { perm_code: 'basic', perm_name: '基础数据', perm_type: 1, menu_path: '/basic', icon: 'Coin', sort: 10 },
@@ -41,20 +71,6 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'customer:update', perm_name: '编辑客户', perm_type: 2, parent_code: 'basic:customer', sort: 2 },
   { perm_code: 'customer:delete', perm_name: '删除客户', perm_type: 2, parent_code: 'basic:customer', sort: 3 },
   { perm_code: 'customer:import', perm_name: '批量导入客户', perm_type: 2, parent_code: 'basic:customer', sort: 4 },
-
-  { perm_code: 'basic:process-info', perm_name: '工艺信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/process-info', component: 'basic/process-info/index', icon: 'Setting', sort: 2 },
-  { perm_code: 'process-info:create', perm_name: '新增工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 1 },
-  { perm_code: 'process-info:update', perm_name: '编辑工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 2 },
-  { perm_code: 'process-info:delete', perm_name: '删除工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 3 },
-  { perm_code: 'process-info:import', perm_name: '批量导入工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 4 },
-  { perm_code: 'process-info:export', perm_name: '导出工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 5 },
-
-  { perm_code: 'basic:material', perm_name: '物料管理', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 3 },
-  { perm_code: 'material:create', perm_name: '新增物料', perm_type: 2, parent_code: 'basic:material', sort: 1 },
-  { perm_code: 'material:update', perm_name: '编辑物料', perm_type: 2, parent_code: 'basic:material', sort: 2 },
-  { perm_code: 'material:delete', perm_name: '删除物料', perm_type: 2, parent_code: 'basic:material', sort: 3 },
-  { perm_code: 'material:import', perm_name: '批量导入物料', perm_type: 2, parent_code: 'basic:material', sort: 4 },
-  { perm_code: 'material:export', perm_name: '导出物料清单', perm_type: 2, parent_code: 'basic:material', sort: 5 },
 
   // ===== 系统管理 =====
   // SetUp：不用 Setting——后者在 el-sub-menu 展开重绘时偶发不渲染（沿袭 hb-mes 经验）

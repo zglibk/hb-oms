@@ -43,6 +43,11 @@ html {
   --hb-card-padding: clamp(12px, 1.25rem, 22px);
   --hb-dialog-edge: clamp(16px, 1.25rem, 24px);
 
+  /* 列表（el-table）：极浅灰硬编码，表头略深于隔行底，不随主题色变化 */
+  --table-header-bg: #f0f2f5;
+  --table-stripe-bg: #fafafa;
+  --table-header-color: #606266;
+
   /* 统一接管 Element Plus 的基础字号与三档控件高度。 */
   --el-font-size-extra-small: var(--hb-font-size-xs);
   --el-font-size-small: var(--hb-font-size-small);
@@ -129,14 +134,11 @@ a {
   font-size: var(--hb-font-size-base);
 
   /* ----------------------------------------------------------
-   * 表头与 hover 跟随主题色（覆盖 Element Plus 自带变量）
-   * - 表头底色：主色浅色调  --table-header-bg
-   * - 表头文字：主色深色调  --table-header-color
-   * - 行 hover：主色 light-8
+   * 表头 / 隔行：极浅灰硬编码（见 :root）；hover 仍跟随主题色
    * ---------------------------------------------------------- */
   --el-table-header-bg-color: var(--table-header-bg);
   --el-table-header-text-color: var(--table-header-color);
-  /* 行 hover：主色 light-8（比隔行色更深，保证悬停始终清晰） */
+  /* 行 hover：主色 light-8（比隔行灰更深，保证悬停始终清晰） */
   --el-table-row-hover-bg-color: var(--el-color-primary-light-8);
   /* 表格边框颜色：Element Plus 默认 #ebeef5 过浅，适度加深保证可见 */
   --el-table-border-color: var(--el-border-color);
@@ -298,7 +300,7 @@ a {
 
   /* ----------------------------------------------------------
    * 隔行变色（斑马纹）
-   * 未使用 stripe 属性也全局生效：偶数行加主题浅色底。
+   * 未使用 stripe 属性也全局生效：偶数行加极浅灰底。
    * nth-child 选择器权重高于 EP hover 规则，故 hover / 当前行
    * 需以 !important 覆盖，保证悬停与选中态始终优先。
    * ---------------------------------------------------------- */

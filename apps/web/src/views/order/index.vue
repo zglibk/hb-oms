@@ -39,7 +39,7 @@
         <el-button size="small" v-permission="'order:create'" type="primary" :icon="Plus" @click="openCreate">新增订单</el-button>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
-        <el-table-column type="expand" width="36">
+        <el-table-column type="expand" width="36" fixed="left">
           <template #default="{ row }">
             <div class="expand-wrap">
               <table class="expand-grid">
