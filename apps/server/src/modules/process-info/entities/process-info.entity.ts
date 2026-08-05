@@ -36,8 +36,11 @@ export class ProcessInfo {
   productName: string | null;
 
   /** 生产机台（多值逗号存储，展示 89/90/91） */
-  @Column({ type: 'varchar', length: 128, nullable: true, comment: '生产机台（多值逗号存储，如 89,90,91）' })
+  @Column({ type: 'varchar', length: 128, nullable: true, comment: '生产机台-薄料/通用（多值逗号存储，如 362,363,364；无厚薄之分时填此列）' })
   machines: string | null;
+
+  @Column({ name: 'machines_thick', type: 'varchar', length: 128, nullable: true, comment: '生产机台-厚料（多值逗号存储，如 82,80,81）' })
+  machinesThick: string | null;
 
   /** 长度要求：外轨 */
   @Column({ name: 'length_req_outer', type: 'varchar', length: 128, nullable: true, comment: '长度要求-外轨' })

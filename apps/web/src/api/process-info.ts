@@ -9,6 +9,7 @@ export interface ProcessInfoItem {
   customerName: string | null;
   productName: string | null;
   machines: string | null;
+  machinesThick: string | null;
   lengthReqOuter: string | null;
   lengthReqMiddle: string | null;
   lengthReqInner: string | null;

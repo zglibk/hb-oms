@@ -41,7 +41,7 @@
         <el-table-column label="客户名称" prop="customerName" min-width="140" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="产品名称" prop="productName" min-width="140" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="生产机台" width="110">
-          <template #default="{ row }">{{ machinesDisplay(row.machines) }}</template>
+          <template #default="{ row }">{{ machinesDisplay(row) }}</template>
         </el-table-column>
         <el-table-column label="长度要求(外/中/内)" min-width="170" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ triple(row.lengthReqOuter, row.lengthReqMiddle, row.lengthReqInner) }}</template>
@@ -113,15 +113,28 @@
               <el-input v-model="form.productName" />
             </el-form-item>
           </el-col>
-          <el-col :span="24">
-            <el-form-item label="生产机台">
+          <el-col :span="12">
+            <el-form-item label="机台(薄料)">
               <el-select
                 v-model="machineTags"
                 multiple
                 filterable
                 allow-create
                 default-first-option
-                placeholder="输入机台号回车，可多个（如 89、90、91）"
+                placeholder="输入机台号回车；无厚薄之分时填此栏（如 362、363、364）"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="机台(厚料)">
+              <el-select
+                v-model="machineThickTags"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                placeholder="厚料生产机台（如 82、80、81），无则留空"
                 style="width: 100%"
               />
             </el-form-item>
@@ -147,7 +160,7 @@
             </tr>
             <tr>
               <td class="pg-part">中轨</td>
-              <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM" /></td>
+              <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
               <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></td>
               <td><el-input v-model="form.moldNoMiddle" /></td>
             </tr>
@@ -270,8 +283,11 @@ const customers = ref<CustomerItem[]>([]);
 getAllCustomers().then((res) => (customers.value = res));
 
 /* ===== 展示辅助 ===== */
-function machinesDisplay(machines: string | null): string {
-  return machines ? machines.split(',').filter(Boolean).join('/') : '—';
+function machinesDisplay(row: ProcessInfoItem): string {
+  const thin = (row.machines || '').split(',').filter(Boolean).join('/');
+  const thick = (row.machinesThick || '').split(',').filter(Boolean).join('/');
+  if (thick) return thin ? `薄:${thin} 厚:${thick}` : `厚:${thick}`;
+  return thin || '—';
 }
 function triple(a: string | null, b: string | null, c: string | null): string {
   if (!a && !b && !c) return '—';
@@ -292,6 +308,7 @@ const saving = ref(false);
 const editId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
 const machineTags = ref<string[]>([]);
+const machineThickTags = ref<string[]>([]);
 const images = ref<string[]>([]);
 const uploading = ref(false);
 
@@ -320,6 +337,7 @@ function openCreate() {
   editId.value = null;
   Object.assign(form, emptyForm());
   machineTags.value = [];
+  machineThickTags.value = [];
   images.value = [];
   formVisible.value = true;
 }
@@ -338,6 +356,7 @@ function openEdit(row: ProcessInfoItem) {
     remark: row.remark ?? '',
   });
   machineTags.value = (row.machines || '').split(',').filter(Boolean);
+  machineThickTags.value = (row.machinesThick || '').split(',').filter(Boolean);
   images.value = imageList(row);
   formVisible.value = true;
 }
@@ -365,6 +384,7 @@ async function onSave() {
     const payload = {
       ...form,
       machines: machineTags.value.map((s) => s.trim()).filter(Boolean).join(','),
+      machinesThick: machineThickTags.value.map((s) => s.trim()).filter(Boolean).join(','),
       processUpdateImages: JSON.stringify(images.value),
     };
     if (editId.value) await updateProcessInfo(editId.value, payload);

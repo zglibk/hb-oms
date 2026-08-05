@@ -50,6 +50,12 @@ export class CreateProcessInfoDto {
   @MaxLength(128)
   machines?: string;
 
+  /** 生产机台-厚料（多值逗号存储） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  machinesThick?: string;
+
   @IsOptional() @IsString() @MaxLength(128) lengthReqOuter?: string;
   @IsOptional() @IsString() @MaxLength(128) lengthReqMiddle?: string;
   @IsOptional() @IsString() @MaxLength(128) lengthReqInner?: string;

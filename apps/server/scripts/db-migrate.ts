@@ -30,6 +30,7 @@ const MIGRATIONS: string[] = [
   // 台账对齐：表面处理字典化(none保留值) + 部件组类型 + 装配车间字典（决策 #4/#11/#12）
   'migration-surface-assembly-dicts.sql',
   'migration-customer-name-drop-unique.sql',
+  'migration-process-machines-thick.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */

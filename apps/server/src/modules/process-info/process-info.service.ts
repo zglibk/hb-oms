@@ -70,6 +70,7 @@ const PART_ORDER: Array<{ label: string; key: '外轨' | '中轨' | '内轨' }> 
 /** Excel 可导入的全部实体字段（组级 + 部件行级；覆盖更新按此清单取非空列） */
 const IMPORTABLE_FIELDS: Array<keyof CreateProcessInfoDto> = [
   ...GROUP_FIELDS.map((g) => g.field),
+  'machinesThick',
   'lengthReqOuter', 'lengthReqMiddle', 'lengthReqInner',
   'specialReqOuter', 'specialReqMiddle', 'specialReqInner',
   'moldNoOuter', 'moldNoMiddle', 'moldNoInner',
@@ -96,16 +97,41 @@ function normalizeHeader(s: string): string {
 }
 
 /**
- * 机台多值归一化：分隔符（/ 、 ； ; 空格 . ）统一为英文逗号存储
+ * 机台多值归一化：分隔符（/ 、 ； ; ， 。 . 空格）统一为英文逗号存储
  * （如 89/90/91 → 89,90,91；手工表点分写法 16.15.5 → 16,15,5——机台号为整数编号，点号仅作分隔符）
  */
 function normalizeMachines(s?: string): string | undefined {
   if (!s) return undefined;
   const parts = s
-    .split(/[/、;；,，.\s]+/)
+    .split(/[/、;；,，.。\s]+/)
     .map((x) => x.trim())
     .filter(Boolean);
   return parts.length ? parts.join(',') : undefined;
+}
+
+/**
+ * 生产机台单元格解析（厚/薄料两套机台，设计口径：同一图号薄料与厚料用不同机台组）：
+ * - 含「薄料/厚料」标签：分别提取归一化（标签后冒号可有可无，两段先后顺序不限、可换行）；
+ * - 无标签：整体视为 薄料/通用 机台。
+ */
+function parseMachinesCell(text?: string): { thin?: string; thick?: string } {
+  if (!text?.trim()) return {};
+  const t = text.trim();
+  if (!/[厚薄]料/.test(t)) return { thin: normalizeMachines(t) };
+  const thinM = t.match(/薄料[:：]?\s*([^厚薄]*)/);
+  const thickM = t.match(/厚料[:：]?\s*([^厚薄]*)/);
+  return {
+    thin: normalizeMachines(thinM?.[1]),
+    thick: normalizeMachines(thickM?.[1]),
+  };
+}
+
+/** 机台展示文本（导出/回显）：逗号存储 → 斜杠；双机台带厚薄标签分行 */
+function formatMachinesCell(thin?: string | null, thick?: string | null): string {
+  const a = (thin ?? '').replace(/,/g, '/');
+  const b = (thick ?? '').replace(/,/g, '/');
+  if (b) return a ? `薄料：${a}\n厚料：${b}` : `厚料：${b}`;
+  return a;
 }
 
 @Injectable()
@@ -232,26 +258,41 @@ export class ProcessInfoService {
     ws.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
   }
 
-  /** 追加一条工艺记录 = 外/中/内轨三行，组级列纵向合并 */
+  /**
+   * 追加一条工艺记录：有内容的部件各一行（三节轨 3 行、二节轨 2 行——中轨列全空即不出行），
+   * 全空时兜底一行承载组级信息；组级列纵向合并。
+   */
   private appendRecordRows(ws: ExcelJS.Worksheet, p: Partial<ProcessInfo>) {
     const start = ws.rowCount + 1;
-    for (const part of PART_ORDER) {
+    const parts = PART_ORDER.filter((part) => {
       const f = PART_ROW_FIELDS[part.key];
+      return (p as any)[f.length] || (p as any)[f.special] || (p as any)[f.mold];
+    });
+    const rows = parts.length ? parts : [null];
+    for (const part of rows) {
+      const f = part ? PART_ROW_FIELDS[part.key] : null;
       ws.addRow([
         p.drawingNo ?? '',
         p.drawingVersion ?? '',
         p.customerName ?? '',
         p.productName ?? '',
-        (p.machines ?? '').replace(/,/g, '/'),
-        part.label,
-        (p as any)[f.length] ?? '',
-        (p as any)[f.special] ?? '',
-        (p as any)[f.mold] ?? '',
+        formatMachinesCell(p.machines, p.machinesThick),
+        part?.label ?? '',
+        f ? ((p as any)[f.length] ?? '') : '',
+        f ? ((p as any)[f.special] ?? '') : '',
+        f ? ((p as any)[f.mold] ?? '') : '',
         p.processUpdateNote ?? '',
         p.remark ?? '',
       ]);
     }
     const end = ws.rowCount;
+    if (end === start) {
+      // 单行组无需合并，仅设置对齐
+      for (const col of [1, 2, 3, 4, 5, 6, 10, 11]) {
+        ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      }
+      return;
+    }
     // 组级列合并（图号/版本/客户/产品名称/生产机台/工艺更新说明/备注）
     for (const col of [1, 2, 3, 4, 5, 10, 11]) {
       ws.mergeCells(start, col, end, col);
@@ -282,7 +323,18 @@ export class ProcessInfoService {
       specialReqInner: '光板不弯尾在外轨正常长度+5',
       moldNoOuter: 'M-45-W',
       processUpdateNote: '',
-      remark: '示例组（三行一组），导入前请删除',
+      remark: '示例组（三节轨三行），导入前请删除',
+    } as Partial<ProcessInfo>);
+    this.appendRecordRows(ws, {
+      drawingNo: 'HH-2601A',
+      drawingVersion: '1.0',
+      customerName: '示例客户',
+      productName: '26#二节轨滑轨',
+      machines: '362,363,364',
+      machinesThick: '82,80,81',
+      lengthReqOuter: '正常长度（不变）',
+      lengthReqInner: '外轨正常长度-3MM',
+      remark: '示例组（二节轨两行；机台分厚薄料写法），导入前请删除',
     } as Partial<ProcessInfo>);
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
@@ -396,7 +448,9 @@ export class ProcessInfoService {
     });
 
     for (const r of rows) {
-      r.machines = normalizeMachines(r.machines as string | undefined);
+      const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
+      r.machines = thin;
+      (r as any).machinesThick = thick;
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');
