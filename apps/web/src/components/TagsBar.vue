@@ -90,7 +90,7 @@ function onCommand(cmd: string) {
     tagsStore.removeOthers(route.path);
   } else if (cmd === 'closeAll') {
     tagsStore.removeAll();
-    router.push('/dashboard');
+    router.push('/home');
   }
 }
 
@@ -130,7 +130,7 @@ function ctxCloseOthers() {
 }
 function ctxCloseAll() {
   tagsStore.removeAll();
-  router.push('/dashboard');
+  router.push('/home');
   closeCtx();
 }
 

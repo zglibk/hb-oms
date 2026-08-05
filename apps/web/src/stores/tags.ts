@@ -18,7 +18,7 @@ interface TagsState {
 
 export const useTagsStore = defineStore('tags', {
   state: (): TagsState => ({
-    visitedTabs: [{ path: '/dashboard', title: '首页', name: 'Dashboard', affix: true }],
+    visitedTabs: [{ path: '/home', title: '首页', name: 'Home', affix: true }],
   }),
 
   actions: {

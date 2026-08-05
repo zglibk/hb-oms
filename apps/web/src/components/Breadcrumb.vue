@@ -43,8 +43,8 @@ function findMenuPath(
 
 const items = computed<Crumb[]>(() => {
   const path = route.path;
-  const result: Crumb[] = [{ title: '首页', path: '/dashboard' }];
-  if (path === '/dashboard') return result;
+  const result: Crumb[] = [{ title: '首页', path: '/home' }];
+  if (path === '/home') return result;
 
   const found = findMenuPath(userStore.menus, path);
   if (found) {
