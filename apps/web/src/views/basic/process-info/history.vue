@@ -105,8 +105,12 @@ export default { name: 'ProcessInfoHistory' };
   .title-sub { color: var(--el-text-color-secondary); font-size: 13px; }
   .hist-total { color: var(--el-text-color-secondary); font-size: 13px; }
 }
+/* 标题行固定：时间线区域内部滚动，内容超出视口时仅滚动此区、标题行不动 */
 .history-timeline {
-  padding-left: 8px; max-width: 900px;
+  max-height: calc(100vh - 252px);
+  min-height: 200px;
+  overflow-y: auto;
+  padding-left: 8px; padding-right: 8px; max-width: 900px;
   .hist-card {
     background: var(--el-fill-color-lighter);
     border: 1px solid var(--el-border-color-lighter);
