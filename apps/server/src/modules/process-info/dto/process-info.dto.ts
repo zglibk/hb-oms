@@ -78,11 +78,10 @@ export class CreateProcessInfoDto {
   @MaxLength(512)
   processUpdateImages?: string;
 
-  /** 开单注明（产品级） */
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  billingNote?: string;
+  /** 开单注明（部件级：外/中/内轨） */
+  @IsOptional() @IsString() @MaxLength(255) billingNoteOuter?: string;
+  @IsOptional() @IsString() @MaxLength(255) billingNoteMiddle?: string;
+  @IsOptional() @IsString() @MaxLength(255) billingNoteInner?: string;
 
   /** 审核意见（产品级，文字） */
   @IsOptional()

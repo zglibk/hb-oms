@@ -18,12 +18,12 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="生产图号" prop="drawingNo">
-              <el-input v-model="form.drawingNo" placeholder="唯一；订单录入按此图号自动带入" :spellcheck="false" />
+              <el-input v-model="form.drawingNo" placeholder="唯一；订单录入按此图号自动带入" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="版本号">
-              <el-input v-model="form.drawingVersion" />
+              <el-input v-model="form.drawingVersion" placeholder="如 1.01、2.0、1.5" @blur="onVersionBlur" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -88,6 +88,7 @@
               <th class="pg-part">部件</th>
               <th>长度要求</th>
               <th>特殊要求</th>
+              <th>开单注明</th>
               <th class="pg-mold">模具编号</th>
             </tr>
           </thead>
@@ -96,19 +97,22 @@
               <td class="pg-part">外轨</td>
               <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
               <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
-              <td><el-input v-model="form.moldNoOuter" /></td>
+              <td><el-input v-model="form.billingNoteOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="开单时需注明的事项" /></td>
+              <td><el-input v-model="form.moldNoOuter" :formatter="upperFmt" :parser="upperFmt" /></td>
             </tr>
             <tr>
               <td class="pg-part">中轨</td>
               <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
               <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
-              <td><el-input v-model="form.moldNoMiddle" /></td>
+              <td><el-input v-model="form.billingNoteMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
+              <td><el-input v-model="form.moldNoMiddle" :formatter="upperFmt" :parser="upperFmt" /></td>
             </tr>
             <tr>
               <td class="pg-part">内轨</td>
               <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
               <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
-              <td><el-input v-model="form.moldNoInner" /></td>
+              <td><el-input v-model="form.billingNoteInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
+              <td><el-input v-model="form.moldNoInner" :formatter="upperFmt" :parser="upperFmt" /></td>
             </tr>
           </tbody>
         </table>
@@ -145,13 +149,8 @@
           </el-col>
         </el-row>
 
-        <div class="section-title">开单与审核（产品级）</div>
+        <div class="section-title">审核（产品级，不随 Excel 导入导出）</div>
         <el-row :gutter="16">
-          <el-col :xs="24" :md="12">
-            <el-form-item label="开单注明">
-              <el-input v-model="form.billingNote" type="textarea" :rows="3" placeholder="开单时需注明的事项" />
-            </el-form-item>
-          </el-col>
           <el-col :xs="24" :md="12">
             <el-form-item label="审核意见">
               <el-input v-model="form.reviewOpinion" type="textarea" :rows="3" placeholder="领导/技术审核意见（文字）" />
@@ -213,6 +212,25 @@ const route = useRoute();
 const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
 
+/* 输入自动大写：生产图号、模具编号等含字母字段统一调用 */
+const upperFmt = (v: string) => (v ?? '').toUpperCase();
+
+/* 版本号：失焦时若为纯小数（如 1.01、2.0、1.5、2.2）自动加 "Ver " 前缀；
+ * 已带前缀（不区分大小写）则规范化为 "Ver "。非小数格式保持原值。 */
+function onVersionBlur() {
+  let v = (form.drawingVersion || '').trim();
+  if (!v) return;
+  const m = /^ver\s*/i.exec(v);
+  if (m) v = v.slice(m[0].length).trim();
+  if (/^\d+\.\d+$/.test(v)) {
+    form.drawingVersion = `Ver ${v}`;
+  } else if (v) {
+    form.drawingVersion = v;
+  } else {
+    form.drawingVersion = '';
+  }
+}
+
 const pageLoading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
@@ -230,9 +248,9 @@ const form = reactive({
   productName: '',
   lengthReqOuter: '', lengthReqMiddle: '', lengthReqInner: '',
   specialReqOuter: '', specialReqMiddle: '', specialReqInner: '',
+  billingNoteOuter: '', billingNoteMiddle: '', billingNoteInner: '',
   moldNoOuter: '', moldNoMiddle: '', moldNoInner: '',
   processUpdateNote: '',
-  billingNote: '',
   reviewOpinion: '',
   reviewer: '',
   reviewDate: '' as string | null,
@@ -288,9 +306,9 @@ async function init() {
         productName: row.productName ?? '',
         lengthReqOuter: row.lengthReqOuter ?? '', lengthReqMiddle: row.lengthReqMiddle ?? '', lengthReqInner: row.lengthReqInner ?? '',
         specialReqOuter: row.specialReqOuter ?? '', specialReqMiddle: row.specialReqMiddle ?? '', specialReqInner: row.specialReqInner ?? '',
+        billingNoteOuter: row.billingNoteOuter ?? '', billingNoteMiddle: row.billingNoteMiddle ?? '', billingNoteInner: row.billingNoteInner ?? '',
         moldNoOuter: row.moldNoOuter ?? '', moldNoMiddle: row.moldNoMiddle ?? '', moldNoInner: row.moldNoInner ?? '',
         processUpdateNote: row.processUpdateNote ?? '',
-        billingNote: row.billingNote ?? '',
         reviewOpinion: row.reviewOpinion ?? '',
         reviewer: row.reviewer ?? '',
         reviewDate: row.reviewDate ? String(row.reviewDate).slice(0, 10) : '',
@@ -392,8 +410,10 @@ export default { name: 'ProcessInfoForm' };
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 6px;
-  th, td { border: 1px solid var(--el-border-color); padding: 6px 8px; }
-  th { background: var(--el-fill-color-light); font-weight: 600; font-size: 13px; text-align: center; }
+  th, td { border: 1px solid var(--el-border-color); }
+  th { padding: 6px 8px; background: var(--el-fill-color-light); font-weight: 600; font-size: 13px; text-align: center; }
+  /* 外轨/中轨/内轨所在行：表单控件较紧凑，缩小单元格内边距 */
+  td { padding: 3px 4px; }
   .pg-part { width: 64px; text-align: center; font-size: 13px; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
   .pg-mold { width: 150px; }
   :deep(.el-input__wrapper), :deep(.el-textarea__inner) { box-shadow: none; background: transparent; }

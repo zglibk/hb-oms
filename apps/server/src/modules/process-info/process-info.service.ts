@@ -31,19 +31,17 @@ const SHEET_HEADERS = [
   '部件',
   '长度要求',
   '特殊要求',
+  '开单注明',
   '模具编号',
   '工艺更新说明',
   '备注',
-  '开单注明',
-  '审核意见',
-  '审核人',
-  '审核日期',
 ] as const;
 
-const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 14, 20, 16, 18, 24, 10, 12];
+const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 18, 14, 20, 16];
 
-/** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明~审核日期 */
-const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15];
+/** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明/备注。
+ * 审核意见/审核人/审核日期/审核截图不进 Excel（仅表单维护）。 */
+const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 11, 12];
 
 /** 组级列 → 实体字段（组内取首个非空值） */
 const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }> = [
@@ -54,10 +52,6 @@ const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }>
   { header: '生产机台', field: 'machines' },
   { header: '工艺更新说明', field: 'processUpdateNote' },
   { header: '备注', field: 'remark' },
-  { header: '开单注明', field: 'billingNote' },
-  { header: '审核意见', field: 'reviewOpinion' },
-  { header: '审核人', field: 'reviewer' },
-  { header: '审核日期', field: 'reviewDate' },
 ];
 
 /**
@@ -78,7 +72,6 @@ const FIELD_META: Array<{
   { field: 'machinesThick', label: '机台(厚料)', scope: 'product' },
   { field: 'processUpdateNote', label: '工艺更新说明', scope: 'product' },
   { field: 'processUpdateImages', label: '工艺附图', scope: 'product', isImages: true },
-  { field: 'billingNote', label: '开单注明', scope: 'product' },
   { field: 'reviewOpinion', label: '审核意见', scope: 'product' },
   { field: 'reviewImages', label: '审核截图', scope: 'product', isImages: true },
   { field: 'reviewer', label: '审核人', scope: 'product' },
@@ -86,12 +79,15 @@ const FIELD_META: Array<{
   { field: 'remark', label: '备注', scope: 'product' },
   { field: 'lengthReqOuter', label: '长度要求', scope: 'outer' },
   { field: 'specialReqOuter', label: '特殊要求', scope: 'outer' },
+  { field: 'billingNoteOuter', label: '开单注明', scope: 'outer' },
   { field: 'moldNoOuter', label: '模具编号', scope: 'outer' },
   { field: 'lengthReqMiddle', label: '长度要求', scope: 'middle' },
   { field: 'specialReqMiddle', label: '特殊要求', scope: 'middle' },
+  { field: 'billingNoteMiddle', label: '开单注明', scope: 'middle' },
   { field: 'moldNoMiddle', label: '模具编号', scope: 'middle' },
   { field: 'lengthReqInner', label: '长度要求', scope: 'inner' },
   { field: 'specialReqInner', label: '特殊要求', scope: 'inner' },
+  { field: 'billingNoteInner', label: '开单注明', scope: 'inner' },
   { field: 'moldNoInner', label: '模具编号', scope: 'inner' },
 ];
 
@@ -134,17 +130,23 @@ function normalizeDate(s?: string): string | undefined {
   return t.slice(0, 10);
 }
 
-/** 部件行 → 三列字段映射（含常见简写别名） */
-const PART_ROW_FIELDS: Record<
-  string,
-  { length: keyof CreateProcessInfoDto; special: keyof CreateProcessInfoDto; mold: keyof CreateProcessInfoDto }
-> = {
-  外轨: { length: 'lengthReqOuter', special: 'specialReqOuter', mold: 'moldNoOuter' },
-  中轨: { length: 'lengthReqMiddle', special: 'specialReqMiddle', mold: 'moldNoMiddle' },
-  内轨: { length: 'lengthReqInner', special: 'specialReqInner', mold: 'moldNoInner' },
-  外: { length: 'lengthReqOuter', special: 'specialReqOuter', mold: 'moldNoOuter' },
-  中: { length: 'lengthReqMiddle', special: 'specialReqMiddle', mold: 'moldNoMiddle' },
-  内: { length: 'lengthReqInner', special: 'specialReqInner', mold: 'moldNoInner' },
+/** 部件行 → 四列字段映射（长度/特殊/开单注明/模具；含常见简写别名） */
+type PartFieldMap = {
+  length: keyof CreateProcessInfoDto;
+  special: keyof CreateProcessInfoDto;
+  billing: keyof CreateProcessInfoDto;
+  mold: keyof CreateProcessInfoDto;
+};
+const OUTER_FIELDS: PartFieldMap = { length: 'lengthReqOuter', special: 'specialReqOuter', billing: 'billingNoteOuter', mold: 'moldNoOuter' };
+const MIDDLE_FIELDS: PartFieldMap = { length: 'lengthReqMiddle', special: 'specialReqMiddle', billing: 'billingNoteMiddle', mold: 'moldNoMiddle' };
+const INNER_FIELDS: PartFieldMap = { length: 'lengthReqInner', special: 'specialReqInner', billing: 'billingNoteInner', mold: 'moldNoInner' };
+const PART_ROW_FIELDS: Record<string, PartFieldMap> = {
+  外轨: OUTER_FIELDS,
+  中轨: MIDDLE_FIELDS,
+  内轨: INNER_FIELDS,
+  外: OUTER_FIELDS,
+  中: MIDDLE_FIELDS,
+  内: INNER_FIELDS,
 };
 
 const PART_ORDER: Array<{ label: string; key: '外轨' | '中轨' | '内轨' }> = [
@@ -153,12 +155,13 @@ const PART_ORDER: Array<{ label: string; key: '外轨' | '中轨' | '内轨' }> 
   { label: '内轨', key: '内轨' },
 ];
 
-/** Excel 可导入的全部实体字段（组级 + 部件行级；覆盖更新按此清单取非空列） */
+/** Excel 可导入的全部实体字段（组级 + 部件行级；覆盖更新按此清单取非空列。审核类字段不进 Excel） */
 const IMPORTABLE_FIELDS: Array<keyof CreateProcessInfoDto> = [
   ...GROUP_FIELDS.map((g) => g.field),
   'machinesThick',
   'lengthReqOuter', 'lengthReqMiddle', 'lengthReqInner',
   'specialReqOuter', 'specialReqMiddle', 'specialReqInner',
+  'billingNoteOuter', 'billingNoteMiddle', 'billingNoteInner',
   'moldNoOuter', 'moldNoMiddle', 'moldNoInner',
 ];
 
@@ -402,7 +405,7 @@ export class ProcessInfoService {
     const start = ws.rowCount + 1;
     const parts = PART_ORDER.filter((part) => {
       const f = PART_ROW_FIELDS[part.key];
-      return (p as any)[f.length] || (p as any)[f.special] || (p as any)[f.mold];
+      return (p as any)[f.length] || (p as any)[f.special] || (p as any)[f.billing] || (p as any)[f.mold];
     });
     const rows = parts.length ? parts : [null];
     for (const part of rows) {
@@ -416,13 +419,10 @@ export class ProcessInfoService {
         part?.label ?? '',
         f ? ((p as any)[f.length] ?? '') : '',
         f ? ((p as any)[f.special] ?? '') : '',
+        f ? ((p as any)[f.billing] ?? '') : '',
         f ? ((p as any)[f.mold] ?? '') : '',
         p.processUpdateNote ?? '',
         p.remark ?? '',
-        p.billingNote ?? '',
-        p.reviewOpinion ?? '',
-        p.reviewer ?? '',
-        p.reviewDate ? String(p.reviewDate).slice(0, 10) : '',
       ]);
     }
     const end = ws.rowCount;
@@ -461,6 +461,7 @@ export class ProcessInfoService {
       lengthReqInner: '外轨正常长度-2MM',
       specialReqOuter: '中轨从20寸以上不能排在69号机……（示例）',
       specialReqInner: '光板不弯尾在外轨正常长度+5',
+      billingNoteOuter: '开单注明色差标准（示例，部件级）',
       moldNoOuter: 'M-45-W',
       processUpdateNote: '',
       remark: '示例组（三节轨三行），导入前请删除',
@@ -551,10 +552,11 @@ export class ProcessInfoService {
       const partRaw = get('部件');
       const lengthReq = get('长度要求');
       const specialReq = get('特殊要求');
+      const billingNote = get('开单注明');
       const moldNo = get('模具编号');
       const groupCells = GROUP_FIELDS.map((g) => ({ g, v: get(g.header) }));
       // 全空行跳过
-      if (!drawingNo && !partRaw && !lengthReq && !specialReq && !moldNo && groupCells.every((x) => !x.v)) return;
+      if (!drawingNo && !partRaw && !lengthReq && !specialReq && !billingNote && !moldNo && groupCells.every((x) => !x.v)) return;
 
       if (drawingNo && (!current || drawingNo !== current.drawingNo)) {
         current = { _row: rowNumber, _parts: new Set(), drawingNo };
@@ -584,9 +586,10 @@ export class ProcessInfoService {
         current._parts.add(partKey);
         if (lengthReq) (current as any)[f.length] = lengthReq;
         if (specialReq) (current as any)[f.special] = specialReq;
+        if (billingNote) (current as any)[f.billing] = billingNote;
         if (moldNo) (current as any)[f.mold] = moldNo;
-      } else if (lengthReq || specialReq || moldNo) {
-        errors.push(`第 ${rowNumber} 行：填写了长度/特殊要求/模具编号但「部件」列为空`);
+      } else if (lengthReq || specialReq || billingNote || moldNo) {
+        errors.push(`第 ${rowNumber} 行：填写了长度/特殊要求/开单注明/模具编号但「部件」列为空`);
       }
     });
 
@@ -594,7 +597,6 @@ export class ProcessInfoService {
       const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
       r.machines = thin;
       (r as any).machinesThick = thick;
-      if (r.reviewDate) r.reviewDate = normalizeDate(r.reviewDate);
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');

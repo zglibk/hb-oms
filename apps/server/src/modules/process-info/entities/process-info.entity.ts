@@ -66,6 +66,18 @@ export class ProcessInfo {
   @Column({ name: 'special_req_inner', type: 'varchar', length: 255, nullable: true, comment: '特殊要求-内轨' })
   specialReqInner: string | null;
 
+  /** 开单注明：外轨（部件级） */
+  @Column({ name: 'billing_note_outer', type: 'varchar', length: 255, nullable: true, comment: '开单注明-外轨' })
+  billingNoteOuter: string | null;
+
+  /** 开单注明：中轨（部件级） */
+  @Column({ name: 'billing_note_middle', type: 'varchar', length: 255, nullable: true, comment: '开单注明-中轨' })
+  billingNoteMiddle: string | null;
+
+  /** 开单注明：内轨（部件级） */
+  @Column({ name: 'billing_note_inner', type: 'varchar', length: 255, nullable: true, comment: '开单注明-内轨' })
+  billingNoteInner: string | null;
+
   /** 模具编号：外轨 */
   @Column({ name: 'mold_no_outer', type: 'varchar', length: 64, nullable: true, comment: '模具编号-外轨' })
   moldNoOuter: string | null;
@@ -83,9 +95,6 @@ export class ProcessInfo {
   processUpdateNote: string | null;
 
   /** 工艺更新附图（FILE 上传多图，JSON 数组存 URL） */
-  @Column({ name: 'billing_note', type: 'varchar', length: 255, nullable: true, comment: '开单注明（产品级）' })
-  billingNote: string | null;
-
   @Column({ name: 'review_opinion', type: 'text', nullable: true, comment: '审核意见（产品级，文字）' })
   reviewOpinion: string | null;
 

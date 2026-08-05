@@ -21,7 +21,9 @@ export interface ProcessInfoItem {
   moldNoInner: string | null;
   processUpdateNote: string | null;
   processUpdateImages: string | null;
-  billingNote: string | null;
+  billingNoteOuter: string | null;
+  billingNoteMiddle: string | null;
+  billingNoteInner: string | null;
   reviewOpinion: string | null;
   reviewImages: string | null;
   reviewer: string | null;
