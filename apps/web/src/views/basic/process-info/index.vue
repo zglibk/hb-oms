@@ -35,15 +35,41 @@
         >批量删除{{ selection.length ? `（${selection.length}）` : '' }}</el-button>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" @selection-change="onSelectionChange">
+        <el-table-column type="expand" width="36" fixed="left">
+          <template #default="{ row }">
+            <div class="expand-wrap">
+              <table class="expand-grid">
+                <thead>
+                  <tr>
+                    <th class="eg-part">部件</th>
+                    <th>长度要求</th>
+                    <th>特殊要求</th>
+                    <th>开单注明</th>
+                    <th class="eg-mold">模具编号</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="p in partRows(row)" :key="p.label">
+                    <td class="eg-part">{{ p.label }}</td>
+                    <td>{{ p.length || '—' }}</td>
+                    <td class="eg-pre">{{ p.special || '—' }}</td>
+                    <td class="eg-pre">{{ p.billing || '—' }}</td>
+                    <td>{{ p.mold || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column type="selection" width="42" fixed="left" />
-        <el-table-column label="生产图号" prop="drawingNo" width="150" fixed="left" />
+        <el-table-column label="生产图号" prop="drawingNo" width="120" fixed="left" />
         <el-table-column label="版本号" prop="drawingVersion" width="80" />
-        <el-table-column label="客户名称" prop="customerName" min-width="140" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="产品名称" prop="productName" min-width="140" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="客户名称" prop="customerName" min-width="93" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品名称" prop="productName" min-width="93" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="生产机台" width="110">
           <template #default="{ row }">{{ machinesDisplay(row) }}</template>
         </el-table-column>
-        <el-table-column label="长度要求(外/中/内)" min-width="170" class-name="col-left" show-overflow-tooltip>
+        <el-table-column label="长度要求(外/中/内)" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ triple(row.lengthReqOuter, row.lengthReqMiddle, row.lengthReqInner) }}</template>
         </el-table-column>
         <el-table-column label="审核人" prop="reviewer" width="80">
@@ -161,6 +187,15 @@ function machinesDisplay(row: ProcessInfoItem): string {
 function triple(a: string | null, b: string | null, c: string | null): string {
   if (!a && !b && !c) return '—';
   return `${a || '—'} / ${b || '—'} / ${c || '—'}`;
+}
+
+/** 折叠行：部件级信息（外/中/内轨 × 长度要求/特殊要求/开单注明/模具编号） */
+function partRows(row: ProcessInfoItem) {
+  return [
+    { label: '外轨', length: row.lengthReqOuter, special: row.specialReqOuter, billing: row.billingNoteOuter, mold: row.moldNoOuter },
+    { label: '中轨', length: row.lengthReqMiddle, special: row.specialReqMiddle, billing: row.billingNoteMiddle, mold: row.moldNoMiddle },
+    { label: '内轨', length: row.lengthReqInner, special: row.specialReqInner, billing: row.billingNoteInner, mold: row.moldNoInner },
+  ];
 }
 
 /* ===== 删除 ===== */
@@ -299,5 +334,15 @@ async function onImport() {
 .import-errors {
   margin-top: 10px; max-height: 180px; overflow-y: auto;
   p { margin: 2px 0; }
+}
+/* 折叠行：部件级信息网格（对照手工工艺表） */
+.expand-wrap { padding: 8px 16px 8px 56px; }
+.expand-grid {
+  width: 100%; max-width: 1100px; border-collapse: collapse; font-size: 13px;
+  th, td { border: 1px solid var(--el-border-color); padding: 5px 10px; text-align: left; }
+  th { background: var(--el-fill-color-light); font-weight: 600; text-align: center; white-space: nowrap; }
+  .eg-part { width: 56px; text-align: center; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
+  .eg-mold { width: 130px; }
+  .eg-pre { white-space: pre-wrap; word-break: break-all; }
 }
 </style>

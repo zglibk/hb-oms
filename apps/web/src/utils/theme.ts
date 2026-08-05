@@ -8,20 +8,27 @@
  * 切换主题色即动态生成上述变量并写入 :root。
  */
 
-/** 预设主题色 */
+/**
+ * 预设主题色
+ * ------------------------------------------------------------
+ * 围绕「五金滑轨制造 · 订单管理」场景设计：
+ * - 整体偏工业冷调，饱和度适中，降低长时间盯屏的视觉疲劳；
+ * - 蓝色系占比更高（钢蓝/钛钢蓝/钴蓝/默认蓝），契合制造业稳重气质；
+ * - 工程橙作五金工具联想的强调色，钢铁灰作中性工业灰兜底。
+ */
 export const PRESET_COLORS = [
+  { label: '钢蓝', value: '#2563EB' },
+  { label: '钛钢蓝', value: '#4A6FA5' },
+  { label: '钴蓝', value: '#1E3A8A' },
   { label: '默认蓝', value: '#409EFF' },
+  { label: '工程橙', value: '#C2410C' },
   { label: '主题绿', value: '#13A67D' },
-  { label: '活力橙', value: '#E6693B' },
-  { label: '典雅紫', value: '#7166F0' },
-  { label: '玫瑰红', value: '#E1447A' },
-  { label: '深海蓝', value: '#1E5EFF' },
-  { label: '青碧', value: '#0D9BB3' },
+  { label: '钢铁灰', value: '#475569' },
   { label: '墨黑', value: '#303133' },
 ];
 
-/** 默认主题色：深海蓝 */
-export const DEFAULT_COLOR = '#1E5EFF';
+/** 默认主题色：钢蓝（饱和度低于原 #1E5EFF，长时间阅读更舒适） */
+export const DEFAULT_COLOR = '#2563EB';
 
 const WHITE = '#FFFFFF';
 const BLACK = '#000000';
