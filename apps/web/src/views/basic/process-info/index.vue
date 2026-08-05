@@ -46,22 +46,6 @@
         <el-table-column label="长度要求(外/中/内)" min-width="170" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ triple(row.lengthReqOuter, row.lengthReqMiddle, row.lengthReqInner) }}</template>
         </el-table-column>
-        <el-table-column label="模具编号(外/中/内)" min-width="150" class-name="col-left" show-overflow-tooltip>
-          <template #default="{ row }">{{ triple(row.moldNoOuter, row.moldNoMiddle, row.moldNoInner) }}</template>
-        </el-table-column>
-        <el-table-column label="工艺附图" width="90">
-          <template #default="{ row }">
-            <el-image
-              v-if="imageList(row).length"
-              :src="imageList(row)[0]"
-              :preview-src-list="imageList(row)"
-              :preview-teleported="true"
-              fit="cover"
-              style="width: 36px; height: 36px; border-radius: 4px"
-            />
-            <span v-else class="text-muted">—</span>
-          </template>
-        </el-table-column>
         <el-table-column label="审核人" prop="reviewer" width="80">
           <template #default="{ row }">{{ row.reviewer || '—' }}</template>
         </el-table-column>
@@ -118,30 +102,6 @@
       </template>
     </el-dialog>
 
-    <!-- 修改履历 -->
-    <el-dialog v-model="historyVisible" :title="`修改履历 — ${historyRow?.drawingNo ?? ''}`" width="680px" top="4vh">
-      <el-skeleton v-if="historyLoading" :rows="5" animated />
-      <el-empty v-else-if="!historyList.length" description="暂无履历" />
-      <el-timeline v-else class="history-timeline">
-        <el-timeline-item
-          v-for="h in historyList"
-          :key="h.id"
-          :timestamp="`${(h.createdAt || '').replace('T', ' ').slice(0, 19)} · ${h.operatorName || '—'}`"
-          :type="h.action === 'create' ? 'success' : h.action === 'import' ? 'warning' : 'primary'"
-          placement="top"
-        >
-          <div class="hist-action">{{ actionLabel(h.action) }}<span class="hist-count">（{{ h.changes.length }} 项变更）</span></div>
-          <div v-for="grp in groupChanges(h.changes)" :key="grp.scope" class="hist-group">
-            <span class="hist-scope" :class="`scope-${grp.scope}`">{{ scopeLabel(grp.scope) }}</span>
-            <div v-for="c in grp.items" :key="c.field" class="hist-line">
-              <span class="hist-field">{{ c.label }}</span>
-              <template v-if="c.old"><span class="hist-old">{{ c.old }}</span><span class="hist-arrow">→</span></template>
-              <span class="hist-new">{{ c.new || '（清空）' }}</span>
-            </div>
-          </div>
-        </el-timeline-item>
-      </el-timeline>
-    </el-dialog>
   </div>
 </template>
 
@@ -157,9 +117,7 @@ import {
   importProcessInfos,
   downloadProcessInfoTemplate,
   exportProcessInfos,
-  getProcessInfoHistory,
   type ProcessInfoItem,
-  type ProcessInfoHistoryItem,
 } from '@/api/process-info';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
@@ -203,17 +161,6 @@ function machinesDisplay(row: ProcessInfoItem): string {
 function triple(a: string | null, b: string | null, c: string | null): string {
   if (!a && !b && !c) return '—';
   return `${a || '—'} / ${b || '—'} / ${c || '—'}`;
-}
-function parseImages(json: string | null): string[] {
-  try {
-    const arr = JSON.parse(json || '[]');
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-function imageList(row: ProcessInfoItem): string[] {
-  return parseImages(row.processUpdateImages);
 }
 
 /* ===== 删除 ===== */
@@ -264,33 +211,9 @@ async function onBatchDelete() {
   }
 }
 
-/* ===== 修改履历 ===== */
-const historyVisible = ref(false);
-const historyLoading = ref(false);
-const historyRow = ref<ProcessInfoItem | null>(null);
-const historyList = ref<ProcessInfoHistoryItem[]>([]);
-async function openHistory(row: ProcessInfoItem) {
-  historyRow.value = row;
-  historyVisible.value = true;
-  historyLoading.value = true;
-  try {
-    historyList.value = await getProcessInfoHistory(row.id);
-  } finally {
-    historyLoading.value = false;
-  }
-}
-function actionLabel(action: string): string {
-  return action === 'create' ? '新增' : action === 'import' ? '导入更新' : '修改';
-}
-const SCOPE_LABELS: Record<string, string> = { product: '产品级', outer: '外轨', middle: '中轨', inner: '内轨' };
-function scopeLabel(scope: string): string {
-  return SCOPE_LABELS[scope] ?? scope;
-}
-function groupChanges(changes: ProcessInfoHistoryItem['changes']) {
-  const order = ['product', 'outer', 'middle', 'inner'];
-  return order
-    .map((scope) => ({ scope, items: changes.filter((c) => c.scope === scope) }))
-    .filter((g) => g.items.length);
+/* ===== 修改履历：跳转子页面时间线展示 ===== */
+function openHistory(row: ProcessInfoItem) {
+  router.push({ name: 'ProcessInfoHistory', query: { id: row.id } });
 }
 
 /* ===== 导出 ===== */
@@ -376,21 +299,5 @@ async function onImport() {
 .import-errors {
   margin-top: 10px; max-height: 180px; overflow-y: auto;
   p { margin: 2px 0; }
-}
-.history-timeline {
-  padding-left: 4px; max-height: 60vh; overflow-y: auto;
-  .hist-action { font-weight: 600; margin-bottom: 6px; }
-  .hist-count { font-weight: 400; color: var(--el-text-color-secondary); font-size: 12px; }
-  .hist-group { margin: 6px 0; }
-  .hist-scope {
-    display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 4px; margin-bottom: 4px;
-    background: var(--el-fill-color-light); color: var(--el-text-color-regular);
-    &.scope-product { background: var(--el-color-primary-light-9); color: var(--el-color-primary); }
-  }
-  .hist-line { font-size: 13px; margin: 2px 0 2px 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
-  .hist-field { color: var(--el-text-color-secondary); flex: none; }
-  .hist-old { color: var(--el-text-color-placeholder); text-decoration: line-through; word-break: break-all; }
-  .hist-arrow { color: var(--el-color-warning); flex: none; }
-  .hist-new { color: var(--el-text-color-primary); word-break: break-all; }
 }
 </style>

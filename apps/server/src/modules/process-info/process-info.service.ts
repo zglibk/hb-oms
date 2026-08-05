@@ -39,6 +39,17 @@ const SHEET_HEADERS = [
 
 const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 18, 14, 20, 16];
 
+/** 表格样式：等宽字体、浅灰表头、隔组变色（更浅灰）、细边框 */
+const SHEET_FONT = 'Consolas';
+const HEADER_FILL = 'FFE9EBEF';
+const BAND_FILL = 'FFF5F6F8';
+const CELL_BORDER: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FFD0D4DA' } },
+  left: { style: 'thin', color: { argb: 'FFD0D4DA' } },
+  bottom: { style: 'thin', color: { argb: 'FFD0D4DA' } },
+  right: { style: 'thin', color: { argb: 'FFD0D4DA' } },
+};
+
 /** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明/备注。
  * 审核意见/审核人/审核日期/审核截图不进 Excel（仅表单维护）。 */
 const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 11, 12];
@@ -119,6 +130,24 @@ function buildDiff(
     if (oldV !== newV) changes.push({ field: meta.field, label: meta.label, scope: meta.scope, old: oldV, new: newV });
   }
   return changes;
+}
+
+/**
+ * 版本号归一化为**文本型小数**：纯整数补一位小数（4 → "4.0"），
+ * 数值型消除浮点尾差（1.1000000000000001 → "1.1"）；非数值写法（A/1）原样保留。
+ * Excel 导出时版本列强制文本格式（numFmt '@'），防止被 Excel 转回数值丢尾零。
+ */
+function normalizeVersion(s?: string): string | undefined {
+  if (s === undefined || s === null) return undefined;
+  const t = String(s).trim();
+  if (!t) return undefined;
+  if (/^\d+$/.test(t)) return `${t}.0`;
+  if (/^\d+\.\d+$/.test(t)) {
+    const n = Number(t);
+    // 浮点尾差（超长小数位）用 Number 还原；正常写法（如 1.10）保留原文尾零
+    return t.length > 8 ? String(n) : t;
+  }
+  return t;
 }
 
 /** 日期文本归一化为 YYYY-MM-DD（兼容 2026/8/5、2026.8.5、ISO 串；无法识别原样返回） */
@@ -300,6 +329,7 @@ export class ProcessInfoService {
     const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
     if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
+    if (dto.drawingVersion !== undefined) dto.drawingVersion = normalizeVersion(dto.drawingVersion);
     const saved = await this.repo.save(this.repo.create({ ...dto, ...auditOnCreate(user) }));
     const hist = this.buildHistoryRow(saved, 'create', buildDiff(null, saved), user);
     if (hist) await this.historyRepo.save(this.historyRepo.create(hist));
@@ -314,6 +344,7 @@ export class ProcessInfoService {
       if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
     }
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
+    if (dto.drawingVersion !== undefined) dto.drawingVersion = normalizeVersion(dto.drawingVersion);
     const changes = buildDiff(item, { ...item, ...dto });
     await this.repo.update(id, { ...dto, ...auditOnUpdate(user) });
     const hist = this.buildHistoryRow(
@@ -393,15 +424,23 @@ export class ProcessInfoService {
       header: h === '图号' ? `*${h}` : h,
       width: SHEET_WIDTHS[i],
     }));
-    ws.getRow(1).font = { bold: true };
-    ws.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    const header = ws.getRow(1);
+    header.height = 22;
+    header.eachCell((cell) => {
+      cell.font = { name: SHEET_FONT, size: 10, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+      cell.border = CELL_BORDER;
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
   }
 
   /**
    * 追加一条工艺记录：有内容的部件各一行（三节轨 3 行、二节轨 2 行——中轨列全空即不出行），
    * 全空时兜底一行承载组级信息；组级列纵向合并。
+   * groupIndex 用于按图号组隔组变色（奇数组浅灰底）。
    */
-  private appendRecordRows(ws: ExcelJS.Worksheet, p: Partial<ProcessInfo>) {
+  private appendRecordRows(ws: ExcelJS.Worksheet, p: Partial<ProcessInfo>, groupIndex = 0) {
     const start = ws.rowCount + 1;
     const parts = PART_ORDER.filter((part) => {
       const f = PART_ROW_FIELDS[part.key];
@@ -426,22 +465,32 @@ export class ProcessInfoService {
       ]);
     }
     const end = ws.rowCount;
-    if (end === start) {
-      // 单行组无需合并，仅设置对齐
-      for (const col of [...GROUP_MERGE_COLS, 6]) {
-        ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      }
-      return;
-    }
-    // 组级列合并（图号~生产机台、工艺更新说明~审核日期）
-    for (const col of GROUP_MERGE_COLS) {
-      ws.mergeCells(start, col, end, col);
-      ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    }
+
+    // 数据区统一样式：等宽字体、全边框、隔组变色（按首列图号组）；版本列文本格式防 Excel 转数值
+    const banded = groupIndex % 2 === 1;
     for (let r = start; r <= end; r++) {
+      for (let c = 1; c <= SHEET_HEADERS.length; c++) {
+        const cell = ws.getCell(r, c);
+        cell.font = { name: SHEET_FONT, size: 10 };
+        cell.border = CELL_BORDER;
+        if (banded) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BAND_FILL } };
+        if (c === 2) cell.numFmt = '@';
+      }
       ws.getCell(r, 6).alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getCell(r, 7).alignment = { vertical: 'middle', wrapText: true };
       ws.getCell(r, 8).alignment = { vertical: 'middle', wrapText: true };
+      ws.getCell(r, 9).alignment = { vertical: 'middle', wrapText: true };
+    }
+    if (end > start) {
+      // 组级列合并（图号~生产机台、工艺更新说明/备注）
+      for (const col of GROUP_MERGE_COLS) {
+        ws.mergeCells(start, col, end, col);
+        ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      }
+    } else {
+      for (const col of [...GROUP_MERGE_COLS, 6]) {
+        ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      }
     }
   }
 
@@ -465,7 +514,7 @@ export class ProcessInfoService {
       moldNoOuter: 'M-45-W',
       processUpdateNote: '',
       remark: '示例组（三节轨三行），导入前请删除',
-    } as Partial<ProcessInfo>);
+    } as Partial<ProcessInfo>, 0);
     this.appendRecordRows(ws, {
       drawingNo: 'HH-2601A',
       drawingVersion: '1.0',
@@ -476,7 +525,7 @@ export class ProcessInfoService {
       lengthReqOuter: '正常长度（不变）',
       lengthReqInner: '外轨正常长度-3MM',
       remark: '示例组（二节轨两行；机台分厚薄料写法），导入前请删除',
-    } as Partial<ProcessInfo>);
+    } as Partial<ProcessInfo>, 1);
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
@@ -498,7 +547,7 @@ export class ProcessInfoService {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('工艺信息');
     this.decorateSheet(ws);
-    for (const p of items) this.appendRecordRows(ws, p);
+    items.forEach((p, i) => this.appendRecordRows(ws, p, i));
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
@@ -597,6 +646,7 @@ export class ProcessInfoService {
       const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
       r.machines = thin;
       (r as any).machinesThick = thick;
+      if (r.drawingVersion !== undefined) r.drawingVersion = normalizeVersion(r.drawingVersion);
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');
