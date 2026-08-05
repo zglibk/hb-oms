@@ -53,25 +53,19 @@ export const ORDER_SOURCE_OPTIONS: Array<{ label: string; value: string }> = [
 
 /* ===================== 表面处理 ===================== */
 
-/** 表面处理：0无 1封漆 2电泳 3喷涂（设计文档决策 #4；「无」= 镀锌板等不外发产品） */
-export const SURFACE_TYPE = {
-  NONE: 0,
-  SEAL_PAINT: 1,
-  ELECTROPHORESIS: 2,
-  SPRAY: 3,
-} as const;
+/**
+ * 表面处理为**字典驱动**（dict_type='surface_type'，设计文档决策 #4）：
+ * 初始值 none 无 / seal_paint 封漆 / electrophoresis 电泳 / spray 喷涂 /
+ * smooth_paint 平滑漆，业务可经字典管理自行增减，**不在代码里枚举**。
+ * 仅保留 `none` 哨兵值——镀锌板等不外发产品，控制外发必填逻辑；
+ * 字典管理界面禁止删除/改值该项（§7.16）。
+ */
+export const SURFACE_NONE = 'none';
 
-export const SURFACE_TYPE_OPTIONS: StatusOption[] = [
-  { label: '无', value: SURFACE_TYPE.NONE, type: 'info' },
-  { label: '封漆', value: SURFACE_TYPE.SEAL_PAINT, type: 'primary' },
-  { label: '电泳', value: SURFACE_TYPE.ELECTROPHORESIS, type: 'warning' },
-  { label: '喷涂', value: SURFACE_TYPE.SPRAY, type: 'success' },
-];
-
-/** 外发单可选的表面处理（去掉「无」——外发必有表面处理） */
-export const OUTSOURCE_SURFACE_OPTIONS: StatusOption[] = SURFACE_TYPE_OPTIONS.filter(
-  (o) => o.value !== SURFACE_TYPE.NONE,
-);
+/** 是否需要外发表面处理（none/空 = 不外发） */
+export function needsOutsource(surfaceType: string | null | undefined): boolean {
+  return !!surfaceType && surfaceType !== SURFACE_NONE;
+}
 
 /* ===================== 外发（发坯单） ===================== */
 

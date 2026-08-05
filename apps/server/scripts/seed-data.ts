@@ -78,6 +78,30 @@ export const DICTS: Array<{
   { dict_type: 'order_unit', dict_label: '套', dict_value: 'set', sort: 1 },
   { dict_type: 'order_unit', dict_label: '支', dict_value: 'piece', sort: 2 },
 
+  // 表面处理（字典驱动，设计文档决策 #4；none 为代码保留值——外发必填逻辑判断依据，禁删禁改值）
+  { dict_type: 'surface_type', dict_label: '无', dict_value: 'none', sort: 1 },
+  { dict_type: 'surface_type', dict_label: '封漆', dict_value: 'seal_paint', sort: 2 },
+  { dict_type: 'surface_type', dict_label: '电泳', dict_value: 'electrophoresis', sort: 3 },
+  { dict_type: 'surface_type', dict_label: '喷涂', dict_value: 'spray', sort: 4 },
+  { dict_type: 'surface_type', dict_label: '平滑漆', dict_value: 'smooth_paint', sort: 5 },
+
+  // 部件组类型（t_order_part_group.group_type，设计文档决策 #11；与共享包 PART_GROUP_OPTIONS 同步）
+  { dict_type: 'part_group_type', dict_label: '整品', dict_value: 'whole', sort: 1 },
+  { dict_type: 'part_group_type', dict_label: '外中轨', dict_value: 'outer_middle', sort: 2 },
+  { dict_type: 'part_group_type', dict_label: '内轨', dict_value: 'inner', sort: 3 },
+  { dict_type: 'part_group_type', dict_label: '外轨', dict_value: 'outer', sort: 4 },
+  { dict_type: 'part_group_type', dict_label: '中轨', dict_value: 'middle', sort: 5 },
+
+  // 装配车间（设计文档决策 #12；按手工台账现状 装一~装八，可在字典管理维护）
+  { dict_type: 'assembly_workshop', dict_label: '装一', dict_value: 'assembly_1', sort: 1 },
+  { dict_type: 'assembly_workshop', dict_label: '装二', dict_value: 'assembly_2', sort: 2 },
+  { dict_type: 'assembly_workshop', dict_label: '装三', dict_value: 'assembly_3', sort: 3 },
+  { dict_type: 'assembly_workshop', dict_label: '装四', dict_value: 'assembly_4', sort: 4 },
+  { dict_type: 'assembly_workshop', dict_label: '装五', dict_value: 'assembly_5', sort: 5 },
+  { dict_type: 'assembly_workshop', dict_label: '装六', dict_value: 'assembly_6', sort: 6 },
+  { dict_type: 'assembly_workshop', dict_label: '装七', dict_value: 'assembly_7', sort: 7 },
+  { dict_type: 'assembly_workshop', dict_label: '装八', dict_value: 'assembly_8', sort: 8 },
+
   // 表面处理颜色（常用值，可在字典管理维护）
   { dict_type: 'surface_color', dict_label: '黑色', dict_value: '黑色', sort: 1 },
   { dict_type: 'surface_color', dict_label: '白色', dict_value: '白色', sort: 2 },

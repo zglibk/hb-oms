@@ -110,9 +110,35 @@ export class DictService {
     return { id: saved.id };
   }
 
+  /**
+   * 代码保留字典项：(dict_type, dict_value) 命中即禁止删除/修改值/停用。
+   * surface_type.none 是外发必填逻辑的判断依据（共享包 SURFACE_NONE，§7.16）。
+   */
+  private static readonly RESERVED_DICT_ITEMS: Array<{ type: string; value: string }> = [
+    { type: 'surface_type', value: 'none' },
+  ];
+
+  private assertNotReserved(dict: Dict, action: string, changingValue?: string) {
+    const hit = DictService.RESERVED_DICT_ITEMS.some(
+      (r) => r.type === dict.dictType && r.value === dict.dictValue,
+    );
+    if (hit && (changingValue === undefined || changingValue !== dict.dictValue)) {
+      throw new BadRequestException(
+        `「${dict.dictLabel}」是系统保留字典项（${dict.dictType}.${dict.dictValue}），不允许${action}`,
+      );
+    }
+  }
+
   async update(id: number, data: Partial<Dict>) {
     const dict = await this.dictRepo.findOne({ where: { id } });
     if (!dict) throw new NotFoundException('字典项不存在');
+    // 保留项：禁止改值与停用（改 label/排序/备注放行）
+    if (data.dictValue !== undefined && data.dictValue !== dict.dictValue) {
+      this.assertNotReserved(dict, '修改字典值', data.dictValue);
+    }
+    if (data.status !== undefined && data.status !== 1) {
+      this.assertNotReserved(dict, '停用');
+    }
     await this.dictRepo.update(id, {
       dictLabel: data.dictLabel ?? dict.dictLabel,
       dictValue: data.dictValue ?? dict.dictValue,
@@ -166,14 +192,29 @@ export class DictService {
       ],
     },
     {
+      // 表面处理为字符串字典值（决策 #4）；none 为代码保留值，删除在 remove() 中单独拦截
       dictType: 'surface_type',
-      refs: [{ table: 't_order_product', column: 'surface_type', numeric: true }],
+      refs: [{ table: 't_order_product', column: 'surface_type' }],
+    },
+    {
+      dictType: 'part_group_type',
+      refs: [{ table: 't_order_part_group', column: 'group_type' }],
+    },
+    {
+      dictType: 'assembly_workshop',
+      refs: [
+        { table: 't_order_product', column: 'assembly_workshop' },
+        { table: 't_assembly_batch', column: 'workshop' },
+      ],
     },
   ];
 
   async remove(id: number) {
     const dict = await this.dictRepo.findOne({ where: { id } });
     if (!dict) throw new NotFoundException('字典项不存在');
+
+    // 代码保留项禁止删除（如 surface_type.none）
+    this.assertNotReserved(dict, '删除');
 
     // 引用完整性校验：该字典项被业务记录引用时禁止删除，建议停用
     const refConfig = DictService.DICT_REF_CHECKS.find(

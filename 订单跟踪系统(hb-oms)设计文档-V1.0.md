@@ -31,7 +31,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 
 ```
 客户下单（官方订单文件 / 口头 / 电话 / 社交软件）
-   → 创建订单（订单 → 产品行 → 部件行 三层；按生产图号自动带入工艺信息）
+   → 创建订单（订单 → 产品行 → 部件组 → 部件行 四级；部件组按生产图号自动带入工艺信息）
    → 部件外发表面处理【可选：镀锌板产品不外发】（发出登记）
    → 外发回货【可选】（分批回货登记）
    → 装配（计划员手工录计划完成时间 / 实际完成时间 + 装配数量，多批次）
@@ -52,13 +52,16 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 1 | 落地方式 | 新项目 `hb-oms` 全新起步，复用 hb-mes 架构模式（pnpm+turbo monorepo / NestJS+TypeORM+MySQL / Vue3+Element Plus / packages/shared），**全新数据库 `haibao_oms`**，历史数据靠期初录入，hb-mes 保持不动 |
 | 2 | 排产去留 | **彻底移除**：无排产单、无审核流、无报工；外发单直接锚定订单产品行 |
 | 3 | 欠数口径 | **双欠数并列展示**：生产欠数 = 订单数 − 累计入库；发货欠数 = 订单数 − 累计出库 |
-| 4 | 表面处理枚举 | **四值：0 无 / 1 封漆 / 2 电泳 / 3 喷涂**（「无」= 镀锌板等不外发产品） |
+| 4 | 表面处理口径 | **字典驱动**（`surface_type`，初始：无/封漆/电泳/喷涂/平滑漆，业务可自行增减不改代码）；`none`（无）为保留值 = 镀锌板等不外发产品，控制外发必填逻辑 |
 | 5 | 外发单粒度 | 一张发坯单 = **单头（加工商/日期/表面处理）+ 多产品明细行**；回货按明细行**分批登记**，一行可多次回货 |
 | 6 | 外购零配件 | V1 **暂不涉及**（不建台账、不做出入库），列入后续扩展 |
-| 7 | 期初成品与订单 | **先补录历史订单再挂期初**：未完结历史订单补录为正式订单（标记「期初补录」），期初成品挂产品行、参与欠数计算；已完结订单的剩余库存用**纯属性期初行**（不挂订单，只计库存数） |
+| 7 | 期初成品与订单 | **先补录历史订单再挂期初**：未完结历史订单补录为正式订单（标记「期初补录」），期初成品挂**部件组**、参与欠数计算；已完结订单的剩余库存用**纯属性期初行**（不挂订单，只计库存数） |
 | 8 | 产品类型 | **多选组合**（如「普通自锁」「卡口自锁」）；组合中**含「卡口」即触发全部卡口规则**（左右分列、2 支 = 1 套、部件/库存分边别） |
 | 9 | 工艺信息 | 独立基础数据模块，创建订单时**按生产图号匹配**自动带入（可修改） |
-| 10 | 装配环节 | 外发回货与成品入库之间新增装配；**一产品可多批装配**（锚定产品行），计划员手工录计划/实际完成时间 + 装配数量；作为入库**硬闸门**：`可入库量 = Σ已完成装配量 − 已入库量`，**按量卡**、支持部分装配部分入库；期初入库豁免 |
+| 10 | 装配环节 | 外发回货与成品入库之间新增装配；**一组可多批装配**（锚定部件组），计划员手工录计划/实际完成时间 + 装配数量；作为入库**硬闸门**：`可入库量 = Σ已完成装配量 − 已入库量`，**按量卡**、支持部分装配部分入库；期初入库豁免 |
+| 11 | 部件组跟踪维度 | 产品行下设**部件组**（`t_order_part_group`）作为跟踪/台账锚点：默认一产品一组（整品）；缓冲类可拆「外中轨」「内轨」等多组，各组独立图号/版本/料厚，外发/装配/出入库/台账四数按组核算（对齐手工台账行粒度）；组不拆数量，各组支数默认=产品支数 |
+| 12 | 装配车间 | 产品行字段 `assembly_workshop`（字典：装一~装八，可扩展）作为计划属性与台账列；装配批次带车间字段，默认继承产品行、可覆写 |
+| 13 | 单号展示 | 手工台账「订单编号」（如 `GLI46212-A`，客户前缀+业务自编后缀）= 产品行**生产单号 production_no**；台账默认展示此号，ORD 系统采番号仅内部定位用 |
 
 ### 2.1 统一口径
 
@@ -66,7 +69,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 - **数量口径**：台账、库存、外发一律以「支」为准；订单单位为「套」时 **1 套 = 2 支**（滑轨两支一组；卡口产品左右各 1 支为 1 套）。
 - **产品类型多选**：字典值按固定字典顺序排序后逗号拼接存储（如 `standard,self_lock`，保证同一组合唯一表达），展示为中文顺序拼接「普通自锁」；共享包提供 `parseProductTypes / formatProductTypes / hasSocket`（含卡口判断）纯函数，两端统一经此函数处理，禁止各自手工拆串。
 - **卡口区分左右**：产品类型组合含「卡口」时，部件行、成品库存、出入库明细均区分左/右（`side`），其余产品 `side=''`。
-- **产品型号拼接规则**：`货号 + 产品类型中文组合 + "滑轨"`（如 `53#普通滑轨`、`53#卡口自锁滑轨`），共享包纯函数实现，外发单等处引用。
+- **产品型号拼接规则**：`货号 + 产品类型中文组合 + 部件组后缀`（整品组后缀"滑轨"，如 `53#普通滑轨`；外中轨组后缀"外中轨"，如 `45#缓冲外中轨`；内轨组后缀"内轨"），共享包纯函数实现，部件组快照与外发单等处引用。
 - **部件台账 V1 定位**：独立参考台账（期初 + 手工调整留痕），**不与外发/入库单据自动联动**——无排产报工后部件产出无采集点，强联动没有数据基础；联动列入 V2 扩展（§10）。
 - **料厚**：产品级字段，格式 `外×中×内`（如 `1.2×1.0×1.2`），文本存储。
 
@@ -142,7 +145,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 表 | 说明 |
 |---|---|
 | `t_user` / `t_role` / `t_permission` / 关联表 | 用户/角色/权限，权限清单 SSOT（permission-manifest.ts 启动自动 upsert）模式照搬 hb-mes |
-| `t_dict` | 数据字典：产品类型、部件类型、轨道节数、单位、下单来源、加工商可用颜色等 |
+| `t_dict` | 数据字典：产品类型、部件类型、部件组类型、轨道节数、单位、下单来源、**表面处理（surface_type，none 为保留值）**、**装配车间（assembly_workshop）**、加工商可用颜色等 |
 | `t_customer` | 客户资料（§4.1.1） |
 | `t_material` | 物料（产品）主数据（§4.1.2） |
 | `t_process_info` | 工艺信息（§4.1.3） |
@@ -191,7 +194,9 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | remark | varchar(255) | 备注 |
 | （审计字段） | | 创建日期/创建人/更新日期/更新人（即通用审计字段） |
 
-### 4.2 订单三层：`t_order` → `t_order_product` → `t_order_part`
+### 4.2 订单四级：`t_order` → `t_order_product` → `t_order_part_group` → `t_order_part`
+
+> 订单 → 产品行 → **部件组** → 部件行。部件组是**跟踪与台账的锚点粒度**（对齐手工台账习惯）：多数产品一产品一组（整品）；缓冲类等产品可拆「外中轨」「内轨」两组，各组有**独立的图号/版本/料厚**，外发、装配、出入库、台账四数均按组核算。
 
 #### t_order（订单主表）
 
@@ -224,31 +229,48 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | rail_section | varchar(32) | 轨道节数：two_section 二节轨 / three_section 三节轨 |
 | dimension_mm | int | 规格（mm 统一口径，计算/匹配用） |
 | dimension_raw / dimension_unit | varchar(32) / varchar(8) | 原始录入值 / 单位（inch/mm），1 英寸 = 25mm；展示拼 `14"（350mm）` |
-| surface_type | tinyint | 表面处理：0无 1封漆 2电泳 3喷涂 |
+| surface_type | varchar(32) | 表面处理（**字典 `surface_type`**，初始值：none 无 / seal_paint 封漆 / electrophoresis 电泳 / spray 喷涂 / smooth_paint 平滑漆，业务可自行增减）；`none` 为保留值 = 镀锌板等不外发产品，控制外发必填逻辑 |
 | color | varchar(64) | 颜色 |
-| drawing_no | varchar(128) | 生产图号（录入/选择后按图号匹配工艺信息自动带入，见下方联动说明） |
-| drawing_version | varchar(32) | 版本号 |
 | sheet_material | varchar(64) | 材质（如 Q235） |
-| material_thickness | varchar(32) | 料厚 `外×中×内`（如 1.2×1.0×1.2） |
 | order_qty | int | 订单数量（按 unit 计） |
 | unit | varchar(16) | 单位：套 / 支 |
 | qty_pcs | int | **支数口径**（服务端计算冗余）：unit=套 → order_qty×2，unit=支 → order_qty。台账「订单数」即此值 |
-| production_no | varchar(64) | 生产单号（手工填写，产品行级，外发单快照引用；同订单内不同产品行可不同） |
+| production_no | varchar(64) | 生产单号（手工填写，产品行级，同订单内不同产品行可不同；对应手工台账「订单编号」如 `GLI46212-A`，-A/-B 后缀由业务自编；**台账默认展示此号**，ORD 系统号仅内部用） |
+| assembly_workshop | varchar(32) | 装配车间（字典 `assembly_workshop`：装一~装八，可扩展）；计划属性，台账列展示；装配批次默认继承、可覆写 |
 | delivery_date | date | 交货日期 |
 | delivery_address | varchar(255) | 交货地址 |
 | remark / sort | | 备注 / 行序 |
 
-> **工艺信息联动**：产品行录入/选择生产图号后，按图号匹配 `t_process_info` 自动带入版本号、产品名称（订单客户为空时一并带客户），带入值均为快照、可修改；订单表单提供「查看工艺」抽屉，展示该图号的生产机台、长度要求、特殊要求、模具编号、工艺更新附图——仅参考展示，不落订单字段。
+> 图号/版本/料厚不在产品行——已下沉至部件组（见下）。
 >
-> **不落台账冗余列**：完成数/出库数/库存数/双欠数一律实时聚合（§5），产品行不存这些数字，杜绝对账漂移。
+> **不落台账冗余列**：完成数/出库数/库存数/双欠数一律实时聚合（§5），产品行与部件组不存这些数字，杜绝对账漂移。
 
-#### t_order_part（部件行）
+#### t_order_part_group（部件组——跟踪/台账锚点）
 
-产品行保存时按规则自动展开（非卡口产品 3 行：外/中/内轨；含卡口组合左右分列 6 行），支持人工微调备注与追溯码，数量默认 = 产品支数（卡口按左右各半）。
+产品行保存时默认生成**一个整品组**（whole）；缓冲类等按业务需要可拆多组（如「外中轨」+「内轨」），各组独立图号/料厚、独立跟踪。组不拆数量：每组 `qty_pcs` 默认 = 产品支数（组间是同一批产品的互补部件，非数量拆分）。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| order_id / product_id | int idx | 冗余订单 ID / 所属产品行 |
+| order_id / order_product_id | int idx | 冗余订单 ID / 所属产品行 |
+| group_type | varchar(32) | 部件组类型（字典）：whole 整品 / outer_middle 外中轨 / inner 内轨 / outer 外轨 / middle 中轨（可扩展）；同产品行内 group_type 唯一 |
+| drawing_no | varchar(128) | 生产图号（组级；录入后按图号匹配工艺信息自动带入，见下方联动说明） |
+| drawing_version | varchar(32) | 版本号（组级） |
+| material_thickness | varchar(32) | 料厚（组级）：整品组 `外×中×内`（如 2.0×2.0×2.0）、外中轨组 `外×中`（如 1.2×1.2）、内轨组单值（如 1.5） |
+| qty_pcs | int | 组支数口径，默认 = 产品行 qty_pcs |
+| product_model | varchar(128) | 产品型号快照 = `货号 + 产品类型组合 + 组后缀`（whole→"滑轨"、outer_middle→"外中轨"、inner→"内轨"…共享包函数拼接，如 `45#缓冲外中轨`、`53#普通滑轨`） |
+| remark / sort | | 备注 / 组序 |
+
+> **工艺信息联动（组级）**：部件组录入/选择生产图号后，按图号匹配 `t_process_info` 自动带入版本号、产品名称（订单客户为空时一并带客户），带入值均为快照、可修改；订单表单提供「查看工艺」抽屉，展示该图号的生产机台、长度要求、特殊要求、模具编号、工艺更新附图——仅参考展示，不落订单字段。
+>
+> **锚点约定**：外发明细、装配批次、成品出入库明细/余额、台账行一律锚定 `order_part_group_id`（+side），不再直接锚产品行；产品行/订单 ID 作为冗余列保留便于直查。
+
+#### t_order_part（部件行）
+
+部件组保存时按组类型自动展开（whole 组 3 行：外/中/内轨；outer_middle 组 2 行：外/中；inner 组 1 行；含卡口组合再按左右分列 ×2），支持人工微调备注与追溯码，数量默认 = 组支数（卡口按左右各半）。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| order_id / product_id / part_group_id | int idx | 冗余订单 ID / 冗余产品行 ID / 所属部件组 |
 | part_type | varchar(32) | 部件：outer 外轨 / middle 中轨 / inner 内轨 |
 | side | varchar(16) | 边别：left / right，仅含卡口组合使用，其余 `''` |
 | cycle_code | varchar(64) | 产品周期（追溯码）：客户要求压印的追溯日期码，非必填；外发单快照引用 |
@@ -263,7 +285,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 |---|---|---|
 | blank_no | varchar(7) UK | **发坯单号**：7 位定长纯数字序号（`generatePaddedSequence` 模式），库存数字、展示拼前缀 `No.`；即本单据号 |
 | processor_name | varchar(128) | 加工商 |
-| surface_type | tinyint | 表面处理：1封漆 2电泳 3喷涂（外发必有表面处理，无「0无」） |
+| surface_type | varchar(32) | 表面处理（字典 `surface_type`，除保留值 `none` 外均可选——外发必有表面处理） |
 | color | varchar(64) | 颜色 |
 | plan_send_date | date | 计划发外日期 |
 | actual_send_date | date | 实际发外日期（登记后状态 → 已发出） |
@@ -277,9 +299,9 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | doc_id | int idx | 所属发坯单 |
-| order_id / order_product_id | int idx | 锚点：订单 / 产品行 |
+| order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | production_no | varchar(64) | 生产单号（自产品行快照） |
-| product_model | varchar(128) | 产品型号 = `货号+产品类型组合+"滑轨"`（共享包函数拼接快照，如 53#普通滑轨） |
+| product_model | varchar(128) | 产品型号（自部件组快照 = `货号+产品类型组合+组后缀`，如 45#缓冲外中轨、53#普通滑轨） |
 | dimension_text | varchar(64) | 规格（展示快照） |
 | cycle_code | varchar(64) | 周期码（自部件行追溯码快照） |
 | send_weight | decimal(10,2) | 发出重量（kg） |
@@ -302,15 +324,16 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 ### 4.4 装配批次：`t_assembly_batch`
 
-计划员按订单产品行手工录入装配批次，一产品可多批。**轻量跟踪、不采番**（批次行类比部件调整流水，不走 NumberGeneratorService）。已完成批次（实际完成时间已填）的数量参与成品入库闸门（§4.5）。
+计划员按**部件组**手工录入装配批次，一组可多批。**轻量跟踪、不采番**（批次行类比部件调整流水，不走 NumberGeneratorService）。已完成批次（实际完成时间已填）的数量参与成品入库闸门（§4.5）。
 
 #### t_assembly_batch（装配批次）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | id | int PK | |
-| order_id / order_product_id | int idx | 锚点：订单 / 产品行 |
+| order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | side | varchar(16) | 边别：含卡口组合 left/right，其余 `''`（闸门按 side 分别卡量） |
+| workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；默认继承产品行 assembly_workshop，可覆写（实际在哪装） |
 | plan_date | date | 计划完成时间（计划员录入） |
 | actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
 | qty | int | 装配数量（支） |
@@ -318,8 +341,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | remark | varchar(255) | 备注 |
 | （审计字段） | | creator/updater/create_time/update_time |
 
-- **索引**：`idx(order_product_id, side)`，供闸门与台账按产品行聚合。
-- **闸门口径（唯一实现，入库侧复用）**：`可入库量(产品行, side) = Σqty(actual_date 非空) − Σ已入库量(该产品行该 side，按 direction 抵扣红字)`。
+- **索引**：`idx(order_part_group_id, side)`，供闸门与台账按部件组聚合。
+- **闸门口径（唯一实现，入库侧复用）**：`可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)`。
 - 批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 < 已入库量（§7）。
 
 ### 4.5 成品出入库：`t_finished_doc` + `t_finished_item` + `t_finished_balance`
@@ -344,8 +367,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | doc_id | int idx | 所属单据 |
-| order_id / order_product_id | int idx | 锚点：订单 / 产品行（期初纯属性行两者为 NULL） |
-| item_no / product_model / dimension_text 等 | varchar | 展示快照（货号/型号/规格/产品类型组合/节数） |
+| order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列；期初纯属性行三者为 NULL） |
+| item_no / product_model / dimension_text 等 | varchar | 展示快照（货号/型号含组后缀/规格/产品类型组合/节数） |
 | side | varchar(16) | 边别：含卡口组合 left/right，其余 `''` |
 | batch_no | varchar(64) | 批次号（可空 `''`，预留） |
 | quantity | int | 数量（支），恒为正；方向由单头 direction 表达 |
@@ -356,15 +379,15 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| order_id / order_product_id | int | 锚点（期初纯属性行为 NULL，改用属性列匹配） |
-| item_no / product_type / rail_section / dimension_mm / surface_type / color | | 属性快照列（纯属性期初行的匹配与展示依据；product_type 存多选组合串） |
+| order_id / order_product_id / order_part_group_id | int | 锚点：**部件组**（期初纯属性行为 NULL，改用属性列匹配） |
+| item_no / product_type / group_type / rail_section / dimension_mm / surface_type / color | | 属性快照列（纯属性期初行的匹配与展示依据；product_type 存多选组合串，group_type 部件组类型，surface_type 字典值） |
 | side | varchar(16) | 边别（含卡口组合 left/right，其余 ''） |
 | batch_no | varchar(64) | 批次（默认 ''） |
 | quantity | int | 当前结存（支） |
 
-- **唯一键**：`(order_product_id, side, batch_no)`，其中 order_product_id 为 NULL 的纯属性期初行以 `(item_no, product_type, rail_section, dimension_mm, surface_type, color, side, batch_no)` 逻辑唯一（应用层保证，维度空串兜底规避 MySQL 唯一键多 NULL 问题——参照 hb-mes 部件台账做法，锚点列用 0 代替 NULL 参与唯一键）。
+- **唯一键**：`(order_part_group_id, side, batch_no)`，其中 order_part_group_id 为 NULL 的纯属性期初行以 `(item_no, product_type, group_type, rail_section, dimension_mm, surface_type, color, side, batch_no)` 逻辑唯一（应用层保证，维度空串兜底规避 MySQL 唯一键多 NULL 问题——参照 hb-mes 部件台账做法，锚点列用 0 代替 NULL 参与唯一键）。
 - 出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，**禁止直接改 balance**。
-- **装配入库闸门**：`biz_type='inbound'` 入库单**确认时**，按每条明细的 order_product_id + side 校验 `本次入库量 ≤ 可入库量(§4.4)`；超额则拒绝（`BadRequestException` 中文提示，含产品行、可入库量、本次量）。`biz_type='opening_balance'`（期初）与 `reversal`（红字）**豁免**该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，`Σ已入库量` 按 direction 自然回落，可入库量随之回补。
+- **装配入库闸门**：`biz_type='inbound'` 入库单**确认时**，按每条明细的 order_part_group_id + side 校验 `本次入库量 ≤ 可入库量(§4.4)`；超额则拒绝（`BadRequestException` 中文提示，含部件组、可入库量、本次量）。`biz_type='opening_balance'`（期初）与 `reversal`（红字）**豁免**该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，`Σ已入库量` 按 direction 自然回落，可入库量随之回补。
 
 ### 4.6 部件台账：`t_part_balance`（属性锚定，独立参考台账）
 
@@ -402,7 +425,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 ### 4.8 期初录入（系统上线初始化，菜单常驻可复录）
 
 1. **补录历史订单**：未完结历史订单按正常订单录入，`is_opening=1`（免附件/来源等非关键校验；豁免逻辑集中在 DTO 校验层）。
-2. **成品期初（挂订单）**：选补录订单的产品行 → 生成 `biz_type='opening_balance'` 入库单（FGO 序列、direction=1）→ 确认后累加 balance。字段自动带出：订单号、生产单号、客户、产品编号（物料代码）、货号、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。
+2. **成品期初（挂订单）**：选补录订单的**部件组** → 生成 `biz_type='opening_balance'` 入库单（FGO 序列、direction=1）→ 确认后累加 balance。字段自动带出：订单号、生产单号、客户、产品编号（物料代码）、货号、产品型号（含组后缀）、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。
 3. **成品期初（纯属性，不挂订单）**：已完结订单的剩余库存，录属性行（货号/产品类型/节数/规格/表面处理/颜色/边别）+ 数量，只进库存数、不参与任何订单欠数。
 4. **部件期初**：按 7 维属性行录入累加，字段：部件、边别、货号、轨道节数、产品类型、料厚、规格、数量（支）、备注。
 
@@ -410,34 +433,61 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 ## 5. 台账与统计口径（系统核心）
 
-### 5.1 订单跟踪台账（核心页面，按产品行一行）
+### 5.1 订单跟踪台账（核心页面，按**部件组**一行——对齐手工台账粒度）
 
-实时聚合，无冗余列。口径伪 SQL：
+台账列结构与手工《订单跟踪表台账》逐列对照（手工列名 → 系统来源）：
+
+| 手工台账列 | 系统来源 |
+|---|---|
+| 下单日期 | t_order.order_date |
+| 业务跟单 | t_order.salesman / merchandiser |
+| 客户 | t_order.customer_name |
+| 订单编号 | t_order_product.production_no（生产单号，台账默认展示；ORD 系统号仅内部） |
+| 产品编码 | t_order_product.material_code |
+| 产品型号 | t_order_part_group.product_model（货号+类型组合+组后缀，如 45#缓冲外中轨） |
+| 规格(MM) | t_order_product.dimension_mm |
+| 数量 / 单位 | t_order_product.order_qty / unit（聚合口径用组 qty_pcs 支数） |
+| 表面处理 | t_order_product.surface_type（字典） |
+| 图号 / 版本 | t_order_part_group.drawing_no / drawing_version |
+| 材料厚度 | t_order_part_group.material_thickness |
+| 外发已回货数量 | Σt_outsource_return.return_qty（按组聚合） |
+| 装配车间 | t_order_product.assembly_workshop（批次覆写时展示批次值） |
+| 成品入库 | 完成数（下方聚合） |
+| 订单欠数 | 生产欠数 = 订单数 − 完成数 |
+| 订单交期 | t_order_product.delivery_date |
+| 成品出货 | 出库数 |
+| 成品结存 | **发货欠数** = 订单数 − 出库数（手工表「结存」即此口径）；当前实物库存另有「库存数」列 |
+
+聚合口径伪 SQL（实时聚合，无冗余列）：
 
 ```sql
 SELECT
-  p.qty_pcs                                                   AS 订单数,     -- 支
+  g.qty_pcs                                                   AS 订单数,     -- 支（组支数，默认=产品支数）
   IFNULL(fin.in_qty, 0)                                       AS 完成数,     -- Σ已确认入库(FGI+期初) − Σ对应红字
   IFNULL(fout.out_qty, 0)                                     AS 出库数,     -- Σ已确认出库(FGO) − Σ对应红字
-  IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该产品行）
-  p.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 生产欠数,   -- 可为负 = 超产
-  p.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数,   -- 可为负 = 超发
+  IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该组）
+  g.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 生产欠数,   -- 手工表「订单欠数」；可为负 = 超产
+  g.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数,   -- 手工表「成品结存」；可为负 = 超发
+  IFNULL(ret.return_qty, 0)                                   AS 外发已回货,
   IFNULL(asm.done_qty, 0)                                     AS 装配完成量, -- Σ已完成装配批次 qty（actual_date 非空）
-  p.qty_pcs - IFNULL(asm.done_qty, 0)                         AS 装配未完成量
-FROM t_order_product p
-LEFT JOIN (按 order_product_id 聚合已确认入向明细，红字按 direction 自然抵扣) fin ...
+  g.qty_pcs - IFNULL(asm.done_qty, 0)                         AS 装配未完成量
+FROM t_order_part_group g
+JOIN t_order_product p ON p.id = g.order_product_id
+JOIN t_order o ON o.id = g.order_id
+LEFT JOIN (按 order_part_group_id 聚合已确认入向明细，红字按 direction 自然抵扣) fin ...
 LEFT JOIN (同上，出向) fout ...
-LEFT JOIN (按 order_product_id 聚合 balance) bal ...
-LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空) asm ...
+LEFT JOIN (按 order_part_group_id 聚合 balance) bal ...
+LEFT JOIN (按 order_part_group_id 聚合 t_outsource_return) ret ...
+LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非空) asm ...
 ```
 
 - 红字单 direction 与原单相反，聚合时按 `direction × quantity` 求和即自然抵扣，无需特判。
 - 欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
-- 外发进度列（可选展开）：Σsend_qty / Σreturn_qty / 未回数 = Σsend_qty − Σreturn_qty（按 order_product_id 聚合 outsource 明细与回货）。
-- 装配进度列：装配完成量 / 装配未完成量（如上聚合）；最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
-- 台账行内可展开：该产品行的出入库流水、外发流水、装配批次明细。
-- 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、表面处理、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）。
-- 支持 Excel 导出（沿用 hb-mes export 模块模式）。
+- 同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。
+- 装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
+- 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。
+- 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、表面处理（字典）、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）、装配车间。
+- 支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。
 
 ### 5.2 首页看板（销售视角）
 
@@ -455,13 +505,13 @@ LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空
 |---|---|---|
 | customer | CRUD + `POST /customer/import`、`GET /customer/import-template` | 客户资料；Excel 批量导入（整批校验、逐行错误、覆盖更新开关） |
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
-| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`POST /order/:id/cancel` | 三层结构一次性提交（产品行+部件行嵌套 DTO）；被引用后的修改限制见 §7 |
+| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`POST /order/:id/cancel` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
 | outsource | `GET /outsource/print/:id` | 发坯单打印数据（后续可加 Excel 导出） |
-| assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id`、`GET /assembly?orderProductId=` | 装配批次增删改查（按产品行，一产品多批）；删/改受 §7 闸门约束 |
-| assembly | `GET /assembly/inbound-quota?orderProductId=&side=` | 供成品入库表单查该产品行可入库量（§4.4 口径） |
+| assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id`、`GET /assembly?orderPartGroupId=` | 装配批次增删改查（按部件组，一组多批）；删/改受 §7 闸门约束 |
+| assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
 | finished-stock | `POST /finished-stock`（建单含明细）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/balance` | confirm 入库时校验装配闸门（§4.5）；reverse=生成红字单并自动确认；balance=库存查询 |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
@@ -476,10 +526,10 @@ LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空
 ## 7. 边界与不变式
 
 1. **已确认出入库单**只可红字冲销，禁止修改/删除；红字单本身不可再冲销。
-2. **出库确认**校验结存充足（按 order_product_id + side + batch_no 定位 balance），不足拒绝。
+2. **出库确认**校验结存充足（按 order_part_group_id + side + batch_no 定位 balance），不足拒绝。
 3. **外发明细行**被回货登记引用后禁止删除；外发单已有回货禁止作废；发出数量修改需重算回齐状态。
-4. **订单修改限制**：产品行被外发单或出入库单引用后，禁止直接改数量/删行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。
-5. **卡口守恒**：含卡口组合的产品部件行左右数量之和 = 产品支数；入库/出库明细按左右分行，台账聚合时左右合并计入产品行四数，库存查询可按边别下钻。
+4. **订单修改限制**：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。
+5. **卡口守恒**：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，库存查询可按边别下钻。
 6. **回货超发出**允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。
 7. **期初补录订单**（is_opening=1）免非关键必填校验，但四数口径与正常订单完全一致。
 8. **并发**：单号采番走 NumberGeneratorService 原子自增；余额增减在 `dataSource.transaction` 内行锁（`SELECT ... FOR UPDATE`）后更新，防并发超扣。
@@ -487,7 +537,8 @@ LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空
 10. **产品类型组合串**一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。
 11. **客户资料**被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。
 12. **工艺信息**被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。
-13. **装配入库闸门**：成品入库（inbound）确认时按 order_product_id + side 校验 `本次入库量 ≤ 可入库量 = Σ已完成装配量 − 已入库量`；期初、红字豁免。闸门计算与入库确认在同一事务、对相关行加锁，防并发绕过。
+13. **装配入库闸门**：成品入库（inbound）确认时按 order_part_group_id + side 校验 `本次入库量 ≤ 可入库量 = Σ已完成装配量 − 已入库量`；期初、红字豁免。闸门计算与入库确认在同一事务、对相关行加锁，防并发绕过。
+16. **表面处理字典**：`surface_type` 为字典驱动，`none` 是代码保留值（外发必填逻辑判断依据），字典管理界面禁止删除/改值 `none` 项；其余项被订单引用后禁删（可停用）。
 14. **装配批次不可回退致负**：已完成批次被入库消耗后，禁止删除、下调 qty、或退回计划中致 `可入库量 < 已入库量`；违反则拒绝并提示先冲销对应入库。红字冲销入库后可入库量自然回补。
 15. **装配卡口分边**：含卡口组合产品的装配批次、入库明细均带 side，闸门按 side 分别核算，左右不串量。
 
@@ -509,7 +560,7 @@ LEFT JOIN (按 order_product_id 聚合 t_assembly_batch，仅 actual_date 非空
 | 里程碑 | 内容 | 验收要点 |
 |---|---|---|
 | M1 骨架 | monorepo 初始化、登录/权限/菜单、基础数据（客户资料含批量导入、工艺信息、物料、字典）、共享包 | 登录进系统，基础数据 CRUD 可用；客户 Excel 导入整批校验生效；工艺信息多图上传可用 |
-| M2 订单 | 订单三层 CRUD、附件上传、部件行自动展开、图号匹配自动带入工艺、状态机 | 建单→图号带入→展开部件→作废/完结全流程；含卡口组合左右展开正确 |
+| M2 订单 | 订单四级 CRUD（产品行/部件组/部件行）、附件上传、组按类型自动展开部件、组级图号匹配带入工艺、状态机 | 建单→拆组→图号带入→展开部件→作废/完结全流程；缓冲拆组（外中轨/内轨独立图号料厚）与含卡口左右展开正确 |
 | M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、打印 | 分批回货、回齐自动判定、超回提示 |
 | M3.5 装配 | 装配批次 CRUD（一产品多批、计划/实际完成时间+数量）、装配管理页、可入库量接口 | 多批装配、状态派生正确、可入库量口径准 |
 | M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**、balance、**订单跟踪台账**（含装配进度列） | 四数与手工核算一致；装配未完成入库被拒、部分装配部分入库、超量入库被拒、红字后可入库量+台账自然回退 |

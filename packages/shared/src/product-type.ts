@@ -6,6 +6,7 @@
  * 展示为中文顺序拼接（如「普通自锁」）。
  * 两端一律经本文件函数处理，禁止各自手工拆串。
  */
+import { partGroupSuffix } from './rail';
 
 /** 产品类型候选值（顺序即组合串的规范排序；扩展新类型追加到末尾并同步字典） */
 export const PRODUCT_TYPE_OPTIONS: Array<{ label: string; value: string }> = [
@@ -59,12 +60,15 @@ export function hasSocket(values: string[] | string | null | undefined): boolean
 }
 
 /**
- * 产品型号拼接：`货号 + 产品类型中文组合 + "滑轨"`（设计文档 §2.1）。
- * 如 (53#, standard) → 53#普通滑轨；(53#, socket,self_lock) → 53#卡口自锁滑轨。
+ * 产品型号拼接：`货号 + 产品类型中文组合 + 部件组后缀`（设计文档 §2.1、决策 #11）。
+ * 整品组后缀「滑轨」：(53#, standard) → 53#普通滑轨；
+ * 拆组后缀为组名：(45#, buffer, 'outer_middle') → 45#缓冲外中轨。
+ * 不传 groupType 时默认整品（兼容不拆组场景）。
  */
 export function formatProductModel(
   itemNo: string | null | undefined,
   productTypes: string[] | string | null | undefined,
+  groupType?: string | null,
 ): string {
-  return `${itemNo ?? ''}${formatProductTypes(productTypes)}滑轨`;
+  return `${itemNo ?? ''}${formatProductTypes(productTypes)}${partGroupSuffix(groupType)}`;
 }

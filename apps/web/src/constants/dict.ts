@@ -16,10 +16,9 @@ export {
   ORDER_TYPE_OPTIONS as ORDER_TYPE,
   ORDER_TYPE as ORDER_TYPE_VALUE,
   ORDER_SOURCE_OPTIONS as ORDER_SOURCE,
-  // 表面处理
-  SURFACE_TYPE_OPTIONS as SURFACE_TYPE,
-  SURFACE_TYPE as SURFACE_TYPE_VALUE,
-  OUTSOURCE_SURFACE_OPTIONS,
+  // 表面处理（字典驱动，页面经 useDict('surface_type') 取选项；此处仅哨兵与判断函数）
+  SURFACE_NONE,
+  needsOutsource,
   // 外发
   OUTSOURCE_STATUS_OPTIONS as OUTSOURCE_STATUS,
   OUTSOURCE_STATUS as OUTSOURCE_STATUS_VALUE,
@@ -54,13 +53,17 @@ export {
   formatProductTypes,
   hasSocket,
   formatProductModel,
-  // 部件/边别/节数
+  // 部件/边别/节数/部件组
   PART_TYPE_OPTIONS,
   SIDE_OPTIONS,
   RAIL_SECTION_OPTIONS,
+  PART_GROUP_OPTIONS,
   partTypeLabel,
   sideLabel,
   railSectionLabel,
+  partGroupLabel,
+  partGroupSuffix,
+  partGroupParts,
 } from '@hb-oms/shared';
 
 /** 角色编码 → 中文名映射（与后端种子角色一致） */
