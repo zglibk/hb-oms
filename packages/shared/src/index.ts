@@ -11,3 +11,4 @@ export * from './business-status';
 export * from './unit';
 export * from './product-type';
 export * from './rail';
+export * from './version';

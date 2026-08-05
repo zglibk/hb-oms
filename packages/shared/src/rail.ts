@@ -57,6 +57,33 @@ export function partGroupParts(v: string | null | undefined): string[] {
   return (v && PART_GROUP_MAP.get(v)?.parts) || ['outer', 'middle', 'inner'];
 }
 
+/**
+ * 部件行展开蓝图（订单部件组保存时自动展开，设计文档 §4.2）：
+ * - 二节轨（two_section）无中轨，组内 middle 部件自动剔除；
+ * - 含卡口（socket）左右分列 ×2，每边数量 = 组支数一半（卡口左右各1支为1套）；
+ * - 返回 [{ partType, side, qty }]；qty 由 groupQtyPcs 推导，非卡口整行全量。
+ * 卡口奇数支数时左边多 1 支（Math.ceil / Math.floor），保证合计守恒。
+ */
+export function expandPartRows(
+  groupType: string | null | undefined,
+  railSection: string | null | undefined,
+  socket: boolean,
+  groupQtyPcs: number,
+): Array<{ partType: string; side: string; qty: number }> {
+  const base = partGroupParts(groupType).filter(
+    (pt) => railSection !== 'two_section' || pt !== 'middle',
+  );
+  if (!socket) {
+    return base.map((pt) => ({ partType: pt, side: '', qty: groupQtyPcs }));
+  }
+  const left = Math.ceil(groupQtyPcs / 2);
+  const right = groupQtyPcs - left;
+  return base.flatMap((pt) => [
+    { partType: pt, side: 'left', qty: left },
+    { partType: pt, side: 'right', qty: right },
+  ]);
+}
+
 const label = (opts: Array<{ label: string; value: string }>) =>
   new Map(opts.map((o) => [o.value, o.label]));
 

@@ -53,6 +53,12 @@ const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/basic/process-info/history.vue'),
         meta: { title: '工艺修改履历' },
       },
+      {
+        path: 'order/form',
+        name: 'OrderForm',
+        component: () => import('@/views/order/form.vue'),
+        meta: { title: '订单录入' },
+      },
     ],
   },
 ];

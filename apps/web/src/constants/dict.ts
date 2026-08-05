@@ -64,6 +64,9 @@ export {
   partGroupLabel,
   partGroupSuffix,
   partGroupParts,
+  expandPartRows,
+  // 版本号文本型小数
+  normalizeVersion,
 } from '@hb-oms/shared';
 
 /** 角色编码 → 中文名映射（与后端种子角色一致） */

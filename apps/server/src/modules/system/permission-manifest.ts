@@ -26,6 +26,13 @@ export interface PermSeed {
 }
 
 export const PERMISSIONS: PermSeed[] = [
+  // ===== 订单管理（M2） =====
+  { perm_code: 'order', perm_name: '订单管理', perm_type: 1, menu_path: '/order', component: 'order/index', icon: 'Tickets', sort: 5 },
+  { perm_code: 'order:create', perm_name: '新增订单', perm_type: 2, parent_code: 'order', sort: 1 },
+  { perm_code: 'order:update', perm_name: '编辑订单', perm_type: 2, parent_code: 'order', sort: 2 },
+  { perm_code: 'order:finish', perm_name: '完结/重开订单', perm_type: 2, parent_code: 'order', sort: 3 },
+  { perm_code: 'order:cancel', perm_name: '作废订单', perm_type: 2, parent_code: 'order', sort: 4 },
+
   // ===== 基础数据 =====
   { perm_code: 'basic', perm_name: '基础数据', perm_type: 1, menu_path: '/basic', icon: 'Coin', sort: 10 },
 

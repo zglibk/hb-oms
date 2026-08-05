@@ -16,6 +16,7 @@ import {
 } from './dto/process-info.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { normalizeVersion } from '@hb-oms/shared';
 
 /**
  * 导入/导出表格采用**手工工艺表格式**：一个图号一组、外/中/内轨各一行，
@@ -130,24 +131,6 @@ function buildDiff(
     if (oldV !== newV) changes.push({ field: meta.field, label: meta.label, scope: meta.scope, old: oldV, new: newV });
   }
   return changes;
-}
-
-/**
- * 版本号归一化为**文本型小数**：纯整数补一位小数（4 → "4.0"），
- * 数值型消除浮点尾差（1.1000000000000001 → "1.1"）；非数值写法（A/1）原样保留。
- * Excel 导出时版本列强制文本格式（numFmt '@'），防止被 Excel 转回数值丢尾零。
- */
-function normalizeVersion(s?: string): string | undefined {
-  if (s === undefined || s === null) return undefined;
-  const t = String(s).trim();
-  if (!t) return undefined;
-  if (/^\d+$/.test(t)) return `${t}.0`;
-  if (/^\d+\.\d+$/.test(t)) {
-    const n = Number(t);
-    // 浮点尾差（超长小数位）用 Number 还原；正常写法（如 1.10）保留原文尾零
-    return t.length > 8 ? String(n) : t;
-  }
-  return t;
 }
 
 /** 日期文本归一化为 YYYY-MM-DD（兼容 2026/8/5、2026.8.5、ISO 串；无法识别原样返回） */

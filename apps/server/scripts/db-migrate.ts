@@ -33,6 +33,7 @@ const MIGRATIONS: string[] = [
   'migration-process-machines-thick.sql',
   'migration-process-review-history.sql',
   'migration-process-billing-part-level.sql',
+  'migration-order-tables.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -47,7 +48,16 @@ const expectedColumns = [
   't_process_info.drawing_no',
   't_process_info.mold_no_inner',
   't_process_info.process_update_images',
+  't_process_info.machines_thick',
+  't_process_info.billing_note_outer',
   't_no_sequence.seq_key',
+  // M2 订单四级结构
+  't_order.order_no',
+  't_order_product.qty_pcs',
+  't_order_product.assembly_workshop',
+  't_order_part_group.group_type',
+  't_order_part_group.drawing_no',
+  't_order_part.part_group_id',
 ];
 
 async function main() {
