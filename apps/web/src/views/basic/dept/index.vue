@@ -28,13 +28,13 @@
         default-expand-all
         :tree-props="{ children: 'children' }"
       >
-        <el-table-column label="部门名称" prop="deptName" min-width="220" class-name="col-left" />
-        <el-table-column label="部门编码" prop="deptCode" width="140" />
+        <el-table-column label="部门名称" prop="deptName" min-width="200" class-name="col-left" />
+        <el-table-column label="部门编码" prop="deptCode" min-width="130" />
         <el-table-column label="排序" prop="sort" width="70" />
-        <el-table-column label="负责人" width="100">
+        <el-table-column label="负责人" min-width="110">
           <template #default="{ row }">{{ row.leader || '—' }}</template>
         </el-table-column>
-        <el-table-column label="联系电话" width="130">
+        <el-table-column label="联系电话" min-width="140">
           <template #default="{ row }">{{ row.phone || '—' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="80">
