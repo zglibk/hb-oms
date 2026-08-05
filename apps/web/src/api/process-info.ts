@@ -50,3 +50,22 @@ export const updateProcessInfo = (id: number, data: Partial<ProcessInfoItem>) =>
 
 export const deleteProcessInfo = (id: number) =>
   request.delete(`/api/process-info/${id}`);
+
+/** 批量删除：整批校验，任一图号被订单部件组引用则整批拒绝（返回 errors 逐条原因） */
+export const batchDeleteProcessInfos = (ids: number[]) =>
+  request.post<any, { deleted: number; skipped: number }>('/api/process-info/batch-delete', { ids });
+
+/** Excel 批量导入（overwrite=按图号覆盖更新非空列） */
+export const importProcessInfos = (file: File, overwrite: boolean) => {
+  const form = new FormData();
+  form.append('file', file);
+  return request.post<any, { created: number; updated: number; total: number }>(
+    `/api/process-info/import?overwrite=${overwrite ? 1 : 0}`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+};
+
+/** 导入模板下载（axios blob） */
+export const downloadProcessInfoTemplate = () =>
+  request.get<any, Blob>('/api/process-info/import-template', { responseType: 'blob' });

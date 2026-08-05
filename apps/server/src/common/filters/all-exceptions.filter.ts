@@ -8,7 +8,11 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-/** 统一异常输出：{ code: <httpStatus>, message, data: null } */
+/**
+ * 统一异常输出：{ code: <httpStatus>, message, data: null [, errors] }
+ * errors：业务侧抛 BadRequestException({ message, errors: string[] }) 时透传的
+ * 逐条错误清单（批量导入/批量删除整批校验用），前端逐行展示。
+ */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Exception');
@@ -20,6 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = '服务器内部错误';
+    let errors: string[] | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -29,6 +34,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else if (typeof res === 'object' && res !== null) {
         const m = (res as any).message;
         message = Array.isArray(m) ? m[0] : m || exception.message;
+        if (Array.isArray((res as any).errors)) errors = (res as any).errors;
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -40,6 +46,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message,
       data: null,
       path: request.url,
+      ...(errors ? { errors } : {}),
     });
   }
 }

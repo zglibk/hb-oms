@@ -21,8 +21,20 @@
     <el-card shadow="never">
       <div class="toolbar">
         <el-button size="small" v-permission="'process-info:create'" type="primary" :icon="Plus" @click="openCreate">新增工艺</el-button>
+        <el-button size="small" v-permission="'process-info:import'" type="primary" plain :icon="Upload" @click="openImport">批量导入</el-button>
+        <el-button
+          size="small"
+          v-permission="'process-info:delete'"
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selection.length"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >批量删除{{ selection.length ? `（${selection.length}）` : '' }}</el-button>
       </div>
-      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize">
+      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="42" fixed="left" />
         <el-table-column label="生产图号" prop="drawingNo" width="150" fixed="left" />
         <el-table-column label="版本号" prop="drawingVersion" width="80" />
         <el-table-column label="客户名称" prop="customerName" min-width="140" class-name="col-left" show-overflow-tooltip />
@@ -159,18 +171,54 @@
         <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量导入 -->
+    <el-dialog v-model="importVisible" title="批量导入工艺信息" width="480px" @closed="resetImport">
+      <div class="import-tip">
+        <p>1. 下载模板，按模板填写（<b>生产图号必填且唯一</b>）；</p>
+        <p>2. 生产机台多个用 / 或逗号分隔（如 89/90/91）；工艺附图请在编辑页单独上传；</p>
+        <p>3. 整批校验：任一行出错则本次全部不导入，并逐行提示错误；</p>
+        <p>4. 开启「覆盖更新」后，已存在的生产图号将按导入内容更新非空列。</p>
+        <el-button size="small" link type="primary" :icon="Download" @click="onDownloadTemplate">下载导入模板</el-button>
+      </div>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx"
+        :on-change="onImportFileChange"
+        :on-remove="() => (importFile = null)"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖拽 .xlsx 文件到此处，或<em>点击选择</em></div>
+      </el-upload>
+      <div class="import-overwrite">
+        <el-switch v-model="importOverwrite" />
+        <span>覆盖更新（按生产图号 upsert 非空列）</span>
+      </div>
+      <el-alert v-if="importErrors.length" type="error" :closable="false" class="import-errors">
+        <p v-for="(e, i) in importErrors" :key="i">{{ e }}</p>
+      </el-alert>
+      <template #footer>
+        <el-button size="small" @click="importVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="importing" :disabled="!importFile" @click="onImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCloseFilled } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCloseFilled, Upload, Download, UploadFilled } from '@element-plus/icons-vue';
 import {
   getProcessInfoList,
   createProcessInfo,
   updateProcessInfo,
   deleteProcessInfo,
+  batchDeleteProcessInfos,
+  importProcessInfos,
+  downloadProcessInfoTemplate,
   type ProcessInfoItem,
 } from '@/api/process-info';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
@@ -321,6 +369,86 @@ async function onDelete(row: ProcessInfoItem) {
     deletingId.value = null;
   }
 }
+
+/* ===== 批量删除 ===== */
+const selection = ref<ProcessInfoItem[]>([]);
+const batchDeleting = ref(false);
+function onSelectionChange(rows: ProcessInfoItem[]) {
+  selection.value = rows;
+}
+async function onBatchDelete() {
+  if (!selection.value.length) return;
+  await ElMessageBox.confirm(
+    `确定删除选中的 ${selection.value.length} 条工艺记录吗？任一图号被订单引用则整批不删除；历史订单保留快照不受影响。`,
+    '批量删除',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
+  );
+  batchDeleting.value = true;
+  try {
+    const res = await batchDeleteProcessInfos(selection.value.map((r) => r.id));
+    ElMessage.success(`已删除 ${res.deleted} 条工艺${res.skipped ? `（${res.skipped} 条已不存在，自动跳过）` : ''}`);
+    selection.value = [];
+    load();
+  } catch (e: any) {
+    // 整批被拒：后端 400 返回 { message, errors: [...] }（request.ts 已弹 message，这里补逐条原因）
+    const errs = e?.response?.data?.errors ?? e?.errors;
+    if (Array.isArray(errs) && errs.length) {
+      ElMessageBox.alert(
+        errs.slice(0, 10).join('<br>') + (errs.length > 10 ? `<br>…共 ${errs.length} 条` : ''),
+        '未删除原因',
+        { dangerouslyUseHTMLString: true, type: 'warning' },
+      );
+    }
+  } finally {
+    batchDeleting.value = false;
+  }
+}
+
+/* ===== 批量导入 ===== */
+const importVisible = ref(false);
+const importing = ref(false);
+const importOverwrite = ref(false);
+const importFile = ref<File | null>(null);
+const importErrors = ref<string[]>([]);
+
+function openImport() {
+  importVisible.value = true;
+}
+function resetImport() {
+  importFile.value = null;
+  importErrors.value = [];
+  importOverwrite.value = false;
+}
+function onImportFileChange(file: UploadFile) {
+  importFile.value = (file.raw as File) ?? null;
+  importErrors.value = [];
+}
+async function onDownloadTemplate() {
+  const blob = await downloadProcessInfoTemplate();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '工艺信息导入模板.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function onImport() {
+  if (!importFile.value) return;
+  importing.value = true;
+  importErrors.value = [];
+  try {
+    const res = await importProcessInfos(importFile.value, importOverwrite.value);
+    ElMessage.success(`导入成功：新增 ${res.created} 条，更新 ${res.updated} 条`);
+    importVisible.value = false;
+    load();
+  } catch (e: any) {
+    // 后端 400 返回 { message, errors: [...] }（request.ts 已弹出 message，这里补充逐行明细）
+    const errs = e?.response?.data?.errors ?? e?.errors;
+    if (Array.isArray(errs)) importErrors.value = errs;
+  } finally {
+    importing.value = false;
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -343,5 +471,17 @@ async function onDelete(row: ProcessInfoItem) {
     color: var(--el-text-color-secondary); cursor: pointer;
     &:hover { border-color: var(--el-color-primary); color: var(--el-color-primary); }
   }
+}
+.import-tip {
+  margin-bottom: 12px;
+  p { margin: 2px 0; color: var(--el-text-color-secondary); font-size: 13px; }
+}
+.import-overwrite {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  font-size: 13px; color: var(--el-text-color-secondary);
+}
+.import-errors {
+  margin-top: 10px; max-height: 180px; overflow-y: auto;
+  p { margin: 2px 0; }
 }
 </style>

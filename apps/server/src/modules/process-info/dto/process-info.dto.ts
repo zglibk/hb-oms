@@ -1,6 +1,23 @@
-import { IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
+
+export class BatchDeleteProcessInfoDto {
+  @IsArray({ message: 'ids 必须为数组' })
+  @ArrayNotEmpty({ message: '请选择要删除的工艺记录' })
+  @ArrayMaxSize(500, { message: '单次批量删除不能超过 500 条' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'ids 必须为整数数组' })
+  ids: number[];
+}
 
 export class CreateProcessInfoDto {
   @IsString({ message: '生产图号必须为字符串' })

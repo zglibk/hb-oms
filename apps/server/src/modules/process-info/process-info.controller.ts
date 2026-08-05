@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,15 +9,22 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { ProcessInfoService } from './process-info.service';
 import {
+  BatchDeleteProcessInfoDto,
   CreateProcessInfoDto,
   QueryProcessInfoDto,
   UpdateProcessInfoDto,
 } from './dto/process-info.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 @Controller('process-info')
@@ -34,6 +42,22 @@ export class ProcessInfoController {
     return this.service.findByDrawingNo(drawingNo);
   }
 
+  /** 下载导入模板（注意：必须注册在 @Get(':id') 之前，否则被参数路由拦截） */
+  @Get('import-template')
+  @SkipTransform()
+  async importTemplate(@Res() res: Response) {
+    const buf = await this.service.buildImportTemplate();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent('工艺信息导入模板.xlsx')}"`,
+    );
+    res.send(buf);
+  }
+
   @Get(':id')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
@@ -44,6 +68,32 @@ export class ProcessInfoController {
   @OperationLog('工艺信息', '新增工艺')
   async create(@Body() dto: CreateProcessInfoDto, @CurrentUser() user: CurrentUserPayload) {
     return this.service.create(dto, user);
+  }
+
+  /** Excel 批量导入（整批校验、逐行错误；overwrite=1 按生产图号覆盖更新） */
+  @Post('import')
+  @RequirePermissions('process-info:import')
+  @OperationLog('工艺信息', '批量导入工艺')
+  @UseInterceptors(FileInterceptor('file'))
+  async importExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('overwrite') overwrite: string | undefined,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    if (!file) throw new BadRequestException('请选择要上传的 Excel 文件');
+    const name = (file.originalname || '').toLowerCase();
+    if (!name.endsWith('.xlsx')) {
+      throw new BadRequestException('仅支持 .xlsx 格式文件');
+    }
+    return this.service.importFromExcel(file.buffer, overwrite === '1', user);
+  }
+
+  /** 批量删除（整批校验：任一图号被订单部件组引用则整批拒绝；权限复用单删） */
+  @Post('batch-delete')
+  @RequirePermissions('process-info:delete')
+  @OperationLog('工艺信息', '批量删除工艺')
+  async batchRemove(@Body() dto: BatchDeleteProcessInfoDto) {
+    return this.service.batchRemove(dto.ids);
   }
 
   @Put(':id')

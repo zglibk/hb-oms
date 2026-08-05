@@ -39,6 +39,7 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'process-info:create', perm_name: '新增工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 1 },
   { perm_code: 'process-info:update', perm_name: '编辑工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 2 },
   { perm_code: 'process-info:delete', perm_name: '删除工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 3 },
+  { perm_code: 'process-info:import', perm_name: '批量导入工艺', perm_type: 2, parent_code: 'basic:process-info', sort: 4 },
 
   { perm_code: 'basic:material', perm_name: '物料管理', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 3 },
   { perm_code: 'material:create', perm_name: '新增物料', perm_type: 2, parent_code: 'basic:material', sort: 1 },
