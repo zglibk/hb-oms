@@ -12,6 +12,8 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
+import { ChangelogModule } from './modules/changelog/changelog.module';
+import { SystemConfigModule } from './modules/system-config/system-config.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { EquipmentModule } from './modules/equipment/equipment.module';
     ProcessInfoModule,
     OrderModule,
     EquipmentModule,
+    ChangelogModule,
+    SystemConfigModule,
   ],
 })
 export class AppModule {}

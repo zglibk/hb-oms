@@ -193,6 +193,17 @@ a {
     text-align: left;
   }
 
+  /* 行选择列（type="selection"）复选框：垂直水平居中
+   * 该列 td 无专属 class，用 :has() 精准匹配仅含 el-checkbox 的单元格；
+   * 清除左右 padding 并改用 flex 居中，适配任意列宽，无需各页面单独设置。 */
+  td.el-table__cell .cell:has(> .el-checkbox) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   /* 操作列按钮使用表格小字号 */
   .el-table__cell .el-button {
     font-size: var(--hb-font-size-small);

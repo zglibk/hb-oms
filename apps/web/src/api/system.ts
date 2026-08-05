@@ -292,28 +292,7 @@ export const updateSystemConfig = (data: Partial<SystemConfig>) =>
 export const getPublicSystemConfig = () =>
   request.get<any, PublicSystemConfig>('/api/system/config/public');
 
-/* ===== 审批管理（系统配置·审批开关） ===== */
-export interface ApprovalConfigItem {
-  id: number;
-  bizKey: string;
-  bizName: string;
-  /** 1开启（提交进入审核工作台）0关闭（提交直通，排产=直接下发生产） */
-  enabled: number;
-  remark: string | null;
-  updaterName: string | null;
-  updatedAt: string | null;
-}
-
-/** 审批开关列表 */
-export const getApprovalConfigs = () =>
-  request.get<any, ApprovalConfigItem[]>('/api/system/config/approval');
-
-/** 切换审批开关（权限 config:approval） */
-export const updateApprovalConfig = (bizKey: string, enabled: number) =>
-  request.put<any, { bizKey: string; enabled: number }>(
-    `/api/system/config/approval/${bizKey}`,
-    { enabled },
-  );
+/* 审批管理不移植：OMS 无审核流（设计文档决策 #2） */
 
 /** 危险操作：清理业务测试数据（仅 admin） */
 export interface CleanupResult {

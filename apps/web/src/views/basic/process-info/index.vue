@@ -64,8 +64,8 @@
         <el-table-column type="selection" width="42" fixed="left" />
         <el-table-column label="生产图号" prop="drawingNo" width="120" fixed="left" />
         <el-table-column label="版本号" prop="drawingVersion" width="80" />
-        <el-table-column label="客户名称" prop="customerName" min-width="93" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="产品名称" prop="productName" min-width="93" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="客户名称" prop="customerName" min-width="62" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品名称" prop="productName" min-width="70" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="生产机台" width="110">
           <template #default="{ row }">{{ machinesDisplay(row) }}</template>
         </el-table-column>

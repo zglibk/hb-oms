@@ -1,0 +1,203 @@
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { SystemConfig } from './entities/system-config.entity';
+import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
+import { normalizeUploadUrl } from '../../common/utils/upload-url.util';
+
+const UPLOAD_URL_FIELDS = ['logoUrl', 'faviconUrl', 'loginBgUrl'] as const;
+
+/**
+ * 系统配置服务（单行表，id 固定为 1）
+ */
+@Injectable()
+export class SystemConfigService {
+  constructor(
+    @InjectRepository(SystemConfig)
+    private readonly repo: Repository<SystemConfig>,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  private normalizeUploadFields<T extends SystemConfig | UpdateSystemConfigDto>(data: T): T {
+    const target = data as Record<string, string | null | undefined>;
+    for (const field of UPLOAD_URL_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(target, field)) {
+        target[field] = normalizeUploadUrl(target[field]);
+      }
+    }
+    return data;
+  }
+
+  /** 获取单行配置；不存在时自动创建空行 */
+  async get(): Promise<SystemConfig> {
+    let row = await this.repo.findOne({ where: { id: 1 } });
+    if (!row) {
+      row = this.repo.create({ id: 1, loginBgSetAsDefault: 0 });
+      row = await this.repo.save(row);
+    }
+    return this.normalizeUploadFields(row);
+  }
+
+  /** 更新配置（传入的字段覆盖现有值） */
+  async update(dto: UpdateSystemConfigDto, userId: number): Promise<SystemConfig> {
+    const row = await this.get();
+    Object.assign(row, this.normalizeUploadFields({ ...dto }), { updatedBy: userId });
+    const saved = await this.repo.save(row);
+    return this.normalizeUploadFields(saved);
+  }
+
+  /**
+   * 公开接口返回（脱敏：不含银行账号/税号/联系电话/公司地址等敏感字段）
+   * 仅返回登录页免登读取所需的 logo + favicon + 公司名/系统名/版权 + 默认背景
+   */
+  async getPublic() {
+    const row = await this.get();
+    return {
+      logoUrl: row.logoUrl,
+      faviconUrl: row.faviconUrl,
+      companyName: row.companyName,
+      systemName: row.systemName,
+      copyrightInfo: row.copyrightInfo,
+      loginBgUrl: row.loginBgUrl,
+      loginBgSetAsDefault: row.loginBgSetAsDefault,
+    };
+  }
+
+  /**
+   * 渲染供社交分享爬虫抓取的 HTML（含实时系统配置的 og / twitter meta）
+   *
+   * 用途：Nginx 检测到分享爬虫 UA（微信/QQ/微博等）时，将请求转发到此端点，
+   * 返回带有当前系统名/Logo/描述的最小 HTML，使分享卡片实时反映后台配置，
+   * 管理员在「系统配置」中修改后立即生效，无需改动服务器配置。
+   *
+   * @param origin  请求来源（如 http://120.79.138.198），用于拼接 og:image 绝对地址
+   */
+  async renderShareHtml(origin: string): Promise<string> {
+    const row = await this.get();
+    const system = (row.systemName || '海宝五金 MES/PMC 系统').trim();
+    const company = (row.companyName || '海宝五金').trim();
+    const title =
+      company && !system.includes(company) ? `${company} · ${system}` : system;
+    const description = `${company} PMC 生产计划管理平台 —— 以客户订单为驱动，贯通接单、排产、审核、外协全链路数字化管理。`;
+
+    // og:image 需为可公网访问的绝对地址；优先 logo，回退 favicon，再回退站点默认图标
+    const rawImg = row.logoUrl || row.faviconUrl || '/favicon.svg';
+    const image = rawImg.startsWith('http')
+      ? rawImg
+      : `${origin}${rawImg.startsWith('/') ? '' : '/'}${rawImg}`;
+
+    // HTML 转义，避免配置中的特殊字符破坏标签
+    const esc = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+    const t = esc(title);
+    const d = esc(description);
+    const s = esc(system);
+    const img = esc(image);
+
+    return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>${t}</title>
+<meta name="description" content="${d}" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="${s}" />
+<meta property="og:title" content="${t}" />
+<meta property="og:description" content="${d}" />
+<meta property="og:image" content="${img}" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="${t}" />
+<meta name="twitter:description" content="${d}" />
+<meta name="twitter:image" content="${img}" />
+</head>
+<body>
+<h1>${t}</h1>
+<p>${d}</p>
+</body>
+</html>`;
+  }
+
+  // ===================== 危险操作：业务数据清理 =====================
+
+  /**
+   * 清理业务测试数据（订单/排产/外协/消息/日志/文件/单号序列），
+   * 保留系统配置（用户/角色/权限/菜单/部门）、物料主数据、字典主数据。
+   *
+   * 技术性安全判断：订单数 > 50 视为已正式使用，拒绝清理。
+   * 即使管理员也无法清理，避免误删生产数据。
+   *
+   * @param user  执行清理的操作人（用于审计日志）
+   * @param confirm  二次确认口令，必须为 "清理" 二字
+   */
+  async cleanupBusinessData(
+    user: { id: number; username: string; realName: string },
+    confirm: string,
+  ): Promise<{ truncated: string[]; orderCount: number }> {
+    // 1. 二次确认口令校验
+    if (confirm !== '清理') {
+      throw new BadRequestException('请输入正确的确认口令「清理」');
+    }
+
+    // 2. 技术性安全判断：订单数 > 50 视为已正式使用，拒绝清理
+    const orderCount: number = await this.dataSource.query(
+      'SELECT COUNT(*) AS cnt FROM t_order',
+    ).then((rows: any[]) => Number(rows[0]?.cnt ?? 0));
+
+    if (orderCount > 50) {
+      throw new BadRequestException(
+        `检测到 ${orderCount} 条订单数据，系统疑似已正式投入使用，为安全起见禁止清理。如确需清理，请直接在数据库手动执行 scripts/ops/cleanup-business-data.sql。`,
+      );
+    }
+
+    // 3. 按依赖反向顺序清空 OMS 业务表（保留主数据与系统配置；
+    //    M3 外发 / M3.5 装配 / M4 出入库建表后在订单四表之前追加对应表）
+    const truncated = [
+      't_order_part',
+      't_order_part_group',
+      't_order_product',
+      't_order',
+      't_operation_log',
+      't_file',
+      't_no_sequence',
+    ];
+
+    // 改用可回滚的 DELETE + 显式事务（安全审查 P1）：
+    //   MySQL 的 TRUNCATE 是 DDL，会「隐式提交」并终止当前事务，此前用
+    //   dataSource.transaction 包裹 TRUNCATE 属于虚假保护——中途失败无法回滚，
+    //   且异常路径下连接可能带着 FOREIGN_KEY_CHECKS=0 归还连接池，污染后续请求。
+    // 现方案：
+    //   1. 独占一个 QueryRunner，会话级变量的作用域与回滚范围均可控；
+    //   2. DELETE 可参与事务，任一表失败则整体回滚；
+    //   3. finally 中无条件恢复 FOREIGN_KEY_CHECKS 并释放连接；
+    //   4. 不重置代理主键自增值，避免在提交后执行无法回滚的 ALTER TABLE。
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
+    try {
+      await runner.query('SET FOREIGN_KEY_CHECKS = 0');
+      await runner.startTransaction();
+      try {
+        for (const table of truncated) {
+          await runner.query(`DELETE FROM ${table}`);
+        }
+        await runner.commitTransaction();
+      } catch (e) {
+        await runner.rollbackTransaction();
+        throw e;
+      }
+    } finally {
+      // 无论成功失败，必须恢复外键检查后再归还连接，防止污染连接池
+      try {
+        await runner.query('SET FOREIGN_KEY_CHECKS = 1');
+      } finally {
+        await runner.release();
+      }
+    }
+
+    return { truncated, orderCount };
+  }
+}
