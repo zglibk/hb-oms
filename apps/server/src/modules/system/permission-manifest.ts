@@ -26,7 +26,10 @@ export interface PermSeed {
 }
 
 export const PERMISSIONS: PermSeed[] = [
-  // ===== 生产管理（订单管理挂其下；后续 M3 外发/M3.5 装配/M4 出入库同入此组） =====
+  // ===== 订单跟踪台账：系统核心产出，按设计文档 §8 作「首页级入口」置于一级菜单最前 =====
+  { perm_code: 'ledger', perm_name: '订单跟踪台账', perm_type: 1, menu_path: '/ledger', component: 'ledger/index', icon: 'DataAnalysis', sort: 4 },
+
+  // ===== 生产管理（订单管理挂其下；M3 外发/M3.5 装配/M4 出入库同入此组） =====
   { perm_code: 'production', perm_name: '生产管理', perm_type: 1, menu_path: '/production', icon: 'Operation', sort: 5 },
 
   { perm_code: 'order', perm_name: '订单管理', perm_type: 1, parent_code: 'production', menu_path: '/order', component: 'order/index', icon: 'Tickets', sort: 1 },

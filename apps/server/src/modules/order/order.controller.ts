@@ -9,18 +9,32 @@ import {
   Query,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
+import { OrderLedgerService } from './order-ledger.service';
 import { CreateOrderDto, QueryOrderDto, UpdateOrderDto } from './dto/order.dto';
+import { QueryLedgerDto } from './dto/ledger.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 @Controller('order')
 export class OrderController {
-  constructor(private readonly service: OrderService) {}
+  constructor(
+    private readonly service: OrderService,
+    private readonly ledgerService: OrderLedgerService,
+  ) {}
 
   @Get()
   async list(@Query() query: QueryOrderDto) {
     return this.service.findList(query);
+  }
+
+  /**
+   * 订单跟踪台账（系统核心页面，§5.1）：按部件组一行，四数实时聚合。
+   * **必须注册在 `:id` 之前**，否则 /order/ledger 会被参数路由吞掉（ParseIntPipe 直接 400）。
+   */
+  @Get('ledger')
+  async ledger(@Query() query: QueryLedgerDto) {
+    return this.ledgerService.findLedger(query);
   }
 
   @Get(':id')
