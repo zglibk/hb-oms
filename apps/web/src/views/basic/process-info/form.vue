@@ -35,7 +35,7 @@
                 allow-create
                 default-first-option
                 :filter-method="filterCustomers"
-                placeholder="选择或输入客户；可按名称/客户代码搜索"
+                placeholder="选择或输入客户"
                 popper-class="customer-2col-popper"
                 style="width: 100%"
                 @change="onCustomerPick"
@@ -81,7 +81,7 @@
           </el-col>
         </el-row>
 
-        <div class="section-title">分部件要求（对照手工工艺表格式）</div>
+        <div class="section-title">分部件要求</div>
         <table class="part-grid">
           <thead>
             <tr>
@@ -96,7 +96,7 @@
           <tbody>
             <tr>
               <td class="pg-part">外轨</td>
-              <td><el-input v-model="form.drawingVersionOuter" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionOuter')" /></td>
+              <td><el-input v-model="form.drawingVersionOuter" placeholder="如 1.0" @blur="onVersionBlur('drawingVersionOuter')" /></td>
               <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
               <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="开单时需注明的事项" /></td>
@@ -112,7 +112,7 @@
             </tr>
             <tr>
               <td class="pg-part">内轨</td>
-              <td><el-input v-model="form.drawingVersionInner" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionInner')" /></td>
+              <td><el-input v-model="form.drawingVersionInner" placeholder="如 1.0" @blur="onVersionBlur('drawingVersionInner')" /></td>
               <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
               <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>

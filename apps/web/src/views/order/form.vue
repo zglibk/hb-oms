@@ -245,7 +245,7 @@
                   </el-select>
                 </td>
                 <td>
-                  <el-input v-model="g.drawingNo" placeholder="图号；失焦自动带工艺" :spellcheck="false" @change="onDrawingChange(p, g)" />
+                  <el-input v-model="g.drawingNo" placeholder="输入后自动带出工艺" :spellcheck="false" @change="onDrawingChange(p, g)" />
                 </td>
                 <td><el-input v-model="g.drawingVersion" placeholder="如 1.1" @change="g.drawingVersion = normalizeVersion(g.drawingVersion) ?? ''" /></td>
                 <td><el-input v-model="g.materialThickness" :placeholder="thicknessPlaceholder(g.groupType)" /></td>
