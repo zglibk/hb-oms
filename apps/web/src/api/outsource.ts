@@ -36,6 +36,10 @@ export interface OutsourceItemRow {
   remark: string | null;
   sort: number;
   returns?: OutsourceReturnItem[];
+  /** 详情接口附带：所属部件组的组需求支数 */
+  qtyPcs?: number;
+  /** 详情接口附带：该部件组「他单已发」支数（已排除本单，口径同可发外选择器） */
+  sentQty?: number;
 }
 
 /** 发坯单（单头 + 明细汇总） */

@@ -237,8 +237,9 @@ async function init() {
       productionNo: it.productionNo,
       productModel: it.productModel,
       dimensionText: it.dimensionText,
-      qtyPcs: 0,
-      sentQty: 0,
+      // 组需求与「他单已发」由详情接口带出（已排除本单，口径同选择器），供编辑时对照超发
+      qtyPcs: it.qtyPcs ?? 0,
+      sentQty: it.sentQty ?? 0,
       sendWeight: Number(it.sendWeight) || 0,
       unitWeight: Number(it.unitWeight) || 0,
       sendQty: it.sendQty,

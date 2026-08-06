@@ -8,6 +8,7 @@ import {
   SURFACE_NONE,
   deriveOutsourceStatus,
   formatDimension,
+  needsOutsource,
 } from '@hb-oms/shared';
 import { OutsourceDoc } from './entities/outsource-doc.entity';
 import { OutsourceItem } from './entities/outsource-item.entity';
@@ -25,6 +26,7 @@ import {
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate, auditDisplayName } from '../../common/utils/audit.util';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
+import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 
 /** 发坯单号采番 key：全局序号、不按日期重置（设计文档 §4.7） */
 const BLANK_NO_SEQ_KEY = 'BLANK_NO';
@@ -60,6 +62,7 @@ export class OutsourceService {
     @InjectRepository(OutsourceReturn) private readonly returnRepo: Repository<OutsourceReturn>,
     private readonly dataSource: DataSource,
     private readonly numberGenerator: NumberGeneratorService,
+    private readonly partGroupSnapshot: PartGroupSnapshotService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -124,9 +127,58 @@ export class OutsourceService {
       arr.push(r);
       returnsByItem.set(r.itemId, arr);
     });
+    // 组需求量与「他单已发数」：编辑表单需要这两个数才能对照超发，
+    // 口径与选择器 findPartGroupOptions 一致（排除本单，已作废单不占额度）
+    const quota = await this.loadGroupSendQuota(
+      items.map((it) => it.orderPartGroupId),
+      id,
+    );
     return Object.assign(doc, {
-      items: items.map((it) => Object.assign(it, { returns: returnsByItem.get(it.id) ?? [] })),
+      items: items.map((it) => {
+        const q = quota.get(it.orderPartGroupId);
+        return Object.assign(it, {
+          returns: returnsByItem.get(it.id) ?? [],
+          qtyPcs: q?.qtyPcs ?? 0,
+          sentQty: q?.sentQty ?? 0,
+        });
+      }),
     });
+  }
+
+  /**
+   * 部件组的「组需求支数」与「他单已发支数」。
+   * excludeDocId 排除本单自身的明细，避免编辑时自己挤占自己的额度
+   * （与 findPartGroupOptions 的 excludeDocId 同一口径）。
+   */
+  private async loadGroupSendQuota(groupIds: number[], excludeDocId?: number) {
+    const map = new Map<number, { qtyPcs: number; sentQty: number }>();
+    const ids = [...new Set(groupIds.filter((v) => Number.isInteger(v) && v > 0))];
+    if (!ids.length) return map;
+    const params: Array<number | string> = [OUTSOURCE_STATUS.CANCELLED];
+    let excludeSql = '';
+    if (excludeDocId) {
+      excludeSql = ' AND oi.doc_id <> ?';
+      params.push(excludeDocId);
+    }
+    params.push(...ids);
+    const rows: any[] = await this.dataSource.query(
+      `SELECT g.id      AS group_id,
+              g.qty_pcs AS qty_pcs,
+              COALESCE((SELECT SUM(oi.send_qty) FROM t_outsource_item oi
+                         JOIN t_outsource_doc od ON od.id = oi.doc_id
+                        WHERE oi.order_part_group_id = g.id AND od.status <> ?${excludeSql}), 0)
+                        AS sent_qty
+         FROM t_order_part_group g
+        WHERE g.id IN (${ids.map(() => '?').join(',')})`,
+      params,
+    );
+    rows.forEach((r) => {
+      map.set(Number(r.group_id), {
+        qtyPcs: Number(r.qty_pcs) || 0,
+        sentQty: Number(r.sent_qty) || 0,
+      });
+    });
+    return map;
   }
 
   /**
@@ -319,13 +371,14 @@ export class OutsourceService {
     if (dupe) {
       throw new BadRequestException('同一张发坯单内同一部件组不能重复添加，请合并该行数量');
     }
-    const snapshots = await this.loadGroupSnapshots(mgr, groupIds);
+    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds);
     const rows = items.map((it, i) => {
       const snap = snapshots.get(it.orderPartGroupId);
       if (!snap) {
         throw new BadRequestException(`第 ${i + 1} 行明细：订单部件组不存在或订单已作废`);
       }
-      if (snap.surfaceType === SURFACE_NONE) {
+      // 表面处理为空/none 均视为不外发（共享包 needsOutsource 唯一口径）
+      if (!needsOutsource(snap.surfaceType)) {
         throw new BadRequestException(
           `第 ${i + 1} 行明细：产品「${snap.productModel ?? ''}」表面处理为「无」，无需外发`,
         );
@@ -350,48 +403,6 @@ export class OutsourceService {
       });
     });
     await mgr.getRepository(OutsourceItem).save(rows);
-  }
-
-  /** 按部件组ID批量取订单侧快照（订单已作废的组不返回） */
-  private async loadGroupSnapshots(mgr: EntityManager, groupIds: number[]) {
-    const map = new Map<number, {
-      orderId: number;
-      orderProductId: number;
-      orderNo: string | null;
-      customerName: string | null;
-      productionNo: string | null;
-      productModel: string | null;
-      dimensionText: string | null;
-      cycleCode: string | null;
-      surfaceType: string;
-    }>();
-    if (!groupIds.length) return map;
-    const rows: any[] = await mgr.query(
-      `SELECT g.id, g.order_id, g.order_product_id, o.order_no, o.customer_name,
-              p.production_no, g.product_model, p.dimension_raw, p.dimension_unit, p.dimension_mm,
-              p.surface_type,
-              (SELECT MIN(pt.cycle_code) FROM t_order_part pt
-                WHERE pt.part_group_id = g.id AND pt.cycle_code IS NOT NULL AND pt.cycle_code <> '') AS cycle_code
-         FROM t_order_part_group g
-         JOIN t_order_product p ON p.id = g.order_product_id
-         JOIN t_order o         ON o.id = g.order_id
-        WHERE g.id IN (${groupIds.map(() => '?').join(',')}) AND o.status <> ?`,
-      [...groupIds, ORDER_STATUS.CANCELLED],
-    );
-    rows.forEach((r) => {
-      map.set(Number(r.id), {
-        orderId: Number(r.order_id),
-        orderProductId: Number(r.order_product_id),
-        orderNo: r.order_no ?? null,
-        customerName: r.customer_name ?? null,
-        productionNo: r.production_no ?? null,
-        productModel: r.product_model ?? null,
-        dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),
-        cycleCode: r.cycle_code ?? null,
-        surfaceType: r.surface_type ?? SURFACE_NONE,
-      });
-    });
-    return map;
   }
 
   private assertSurfaceType(surfaceType: string) {

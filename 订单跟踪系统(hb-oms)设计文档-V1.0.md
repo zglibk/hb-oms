@@ -283,7 +283,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| blank_no | varchar(7) UK | **发坯单号**：7 位定长纯数字序号（`generatePaddedSequence` 模式），库存数字、展示拼前缀 `No.`；即本单据号 |
+| blank_no | varchar(16) UK | **发坯单号**：7 位定长纯数字序号（`generatePaddedSequence` 模式，宽度取共享包 `BLANK_NO_WIDTH`），库存数字、展示拼前缀 `No.`；即本单据号。列宽留余量以备位数扩展 |
 | processor_name | varchar(128) | 加工商 |
 | surface_type | varchar(32) | 表面处理（字典 `surface_type`，除保留值 `none` 外均可选——外发必有表面处理） |
 | color | varchar(64) | 颜色 |
@@ -300,6 +300,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 |---|---|---|
 | doc_id | int idx | 所属发坯单 |
 | order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
+| order_no / customer_name | varchar(32) / varchar(128) | 订单号、客户名称快照（列表与打印直接取用，免回联） |
 | production_no | varchar(64) | 生产单号（自产品行快照） |
 | product_model | varchar(128) | 产品型号（自部件组快照 = `货号+产品类型组合+组后缀`，如 45#缓冲外中轨、53#普通滑轨） |
 | dimension_text | varchar(64) | 规格（展示快照） |
@@ -307,7 +308,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | send_weight | decimal(10,2) | 发出重量（kg） |
 | unit_weight | decimal(10,4) | 单重（kg/支） |
 | send_qty | int | 发出数量 = send_weight ÷ unit_weight 取整（前端自动算，可微调） |
-| remark | varchar(255) | 备注 |
+| returned_qty | int | 累计回货数量（支）：由回货登记在同事务内按 `SUM(t_outsource_return.return_qty)` 重算回写，仅作行级回齐判定与列表展示的缓存列；台账「外发已回货数量」（§5.1）仍直接聚合 `t_outsource_return`，故不存在对账漂移 |
+| remark / sort | varchar(255) / int | 备注 / 行序 |
 
 #### t_outsource_return（回货登记，一明细行可多条 = 分批回货）
 
@@ -321,6 +323,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | remark | varchar(255) | 备注 |
 
 回齐判定（行级）：`Σreturn_qty ≥ send_qty`；全部明细行回齐 → 单头自动置 4 已回齐。回货数量允许超发出数量（重量折算误差），超出时界面黄色提示不拦截。
+
+> 审计字段例外：`t_outsource_return` 只有 `creator_id / creator_name / created_at`，**不带更新人与 updated_at**——回货登记只增不改（纠错走物理删除后重登），没有更新路径，留空字段反而误导。
 
 ### 4.4 装配批次：`t_assembly_batch`
 
