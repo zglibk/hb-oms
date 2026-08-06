@@ -261,4 +261,21 @@ export default { name: 'BasicDept' };
 
 <style scoped lang="scss">
 .toolbar { margin-bottom: 12px; }
+
+/* 树形表格展开/折叠图标：把 EP 默认箭头替换为文件夹图标
+ * 折叠态 = 关闭文件夹；展开态 = 打开文件夹。
+ * 叶子节点（无 children）EP 不渲染 expand-icon，故无需处理。 */
+:deep(.el-table__expand-icon) {
+  svg { display: none; }
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23606266' d='M880 298.4H521L405.6 186.4a8 8 0 0 0-5.6-2.4H144c-17.7 0-32 14.3-32 32v592c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V330.4c0-17.7-14.3-32-32-32z'/%3E%3C/svg%3E") center / contain no-repeat;
+
+  &.el-table__expand-icon--expanded {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23606266' d='M928 444H820V330.4c0-17.7-14.3-32-32-32H521L405.6 186.4a8 8 0 0 0-5.6-2.4H144c-17.7 0-32 14.3-32 32v592c0 17.7 14.3 32 32 32h696c12.3 0 23.5-7 28.6-18.2l96-209.2c3.4-7.4 3.4-15.9 0-23.3-5-11.2-16.3-18.3-28.6-18.3z'/%3E%3C/svg%3E");
+    /* 展开态不再旋转 */
+    transform: none;
+  }
+}
 </style>

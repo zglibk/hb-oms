@@ -45,7 +45,8 @@ html {
 
   /* 列表（el-table）：极浅灰硬编码，表头略深于隔行底，不随主题色变化 */
   --table-header-bg: #f0f2f5;
-  --table-stripe-bg: #fafafa;
+  /* 隔行底色：#fafafa 与白色(#fff)仅差 5/255 肉眼不可见，调为 #f5f7fa 保证可辨识 */
+  --table-stripe-bg: #f5f7fa;
   --table-header-color: #606266;
 
   /* 统一接管 Element Plus 的基础字号与三档控件高度。 */
@@ -138,6 +139,9 @@ a {
    * ---------------------------------------------------------- */
   --el-table-header-bg-color: var(--table-header-bg);
   --el-table-header-text-color: var(--table-header-color);
+  /* 同步 EP 隔行变量：EP 的 stripe 规则用 --el-fill-color-lighter，
+   * 默认 #fafafa 与白色仅差 5/255 不可见，此处指向 --table-stripe-bg(#f5f7fa) */
+  --el-fill-color-lighter: var(--table-stripe-bg);
   /* 行 hover：主色 light-8（比隔行灰更深，保证悬停始终清晰） */
   --el-table-row-hover-bg-color: var(--el-color-primary-light-8);
   /* 表格边框颜色：Element Plus 默认 #ebeef5 过浅，适度加深保证可见 */
@@ -194,9 +198,10 @@ a {
   }
 
   /* 行选择列（type="selection"）复选框：垂直水平居中
-   * 该列 td 无专属 class，用 :has() 精准匹配仅含 el-checkbox 的单元格；
-   * 清除左右 padding 并改用 flex 居中，适配任意列宽，无需各页面单独设置。 */
-  td.el-table__cell .cell:has(> .el-checkbox) {
+   * 该列 td/th 无专属 class，用 :has() 精准匹配仅含 el-checkbox 的单元格；
+   * 清除左右 padding 并改用 flex 居中，适配任意列宽，无需各页面单独设置。
+   * 同时覆盖表头全选复选框与记录行单选复选框。 */
+  .el-table__cell .cell:has(> .el-checkbox) {
     display: flex;
     align-items: center;
     justify-content: center;
