@@ -38,6 +38,8 @@ pnpm --filter @hb-oms/shared build  # 单独构建共享包
 
 pnpm db:migrate                   # 存量库增量迁移（幂等，可重复执行）
 pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已有数据库执行）
+
+pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数并与余额表/闸门比对）
 ```
 
 共享包构建时机（易踩坑）：`pnpm dev`（根）会先构建再以 `tsc -b --watch` 跟随改动；`pnpm dev:server` / `pnpm dev:web` 只构建一次，**会话中改了共享包必须重新执行**；裸执行 `pnpm --filter @hb-oms/web dev` **不会**自动构建共享包，须先手动构建。
@@ -55,7 +57,7 @@ pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已�
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
 - `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、`PartGroupSnapshotService`（订单部件组快照，外发/装配/成品出入库统一从它读订单侧展示字段，禁止各模块再写一份 SQL）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级）、outsource（外发发坯单）、assembly（装配批次）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发发坯单）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
@@ -79,7 +81,8 @@ pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已�
 - 应用启动时自动 upsert 到 `t_permission`、回填 parentId、并补授 admin，**新增权限点/改名/改父级都无需写迁移 SQL**（但授予非 admin 角色仍需迁移 SQL）。
 - 后端新增 `@RequirePermissions('xxx')` 或前端 `v-permission="'xxx'"` 时，必须在该清单登记。
 - `perm_type`：1=菜单 2=按钮；菜单节点的 `component` 对应前端 `src/views/` 下的组件路径。
-- 现有一级菜单（sort）：生产管理(5) / 工艺管理(6) / 物料管理(7) / 设备管理(8) / 基础数据(10) / 系统管理(90)。二级页面：订单管理、外发管理、开单信息、部件信息、设备信息、客户资料、部门信息、用户管理、角色管理、菜单权限、数据字典、操作日志、更新日志、系统配置。
+- 现有一级菜单（sort）：**订单跟踪台账(4，一级叶子菜单，系统核心产出)** / 生产管理(5) / 工艺管理(6) / 物料管理(7) / 设备管理(8) / 基础数据(10) / 系统管理(90)。二级页面：订单管理、外发管理、装配管理、成品出入库、库存查询、开单信息、部件信息、设备信息、客户资料、部门信息、用户管理、角色管理、菜单权限、数据字典、操作日志、更新日志、系统配置。
+- 一级菜单**可以是叶子**（带 component 无 children）：`dynamic.ts` 按 `component && path` 注册路由、`SidebarItem` 用 `v-else-if="menu.path"` 渲染成普通菜单项，订单跟踪台账即用此形态置顶。
 - 权限变更后，相关用户需**重新登录**刷新 JWT 权限。
 
 > **命名稳定性约定**：业务侧改展示名（如「物料信息」→「部件信息」、「工艺信息」→「开单信息」）时，**只改 perm_name / 菜单文案 / 页面标题 / 表注释**；内部标识（表名 `t_material` / `t_process_info`、权限码 `material:*` / `process-info:*`、路由路径、组件路径）保持不变，避免连锁改动与历史数据割裂。
@@ -95,7 +98,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 3. 同步更新 `apps/server/scripts/sql/01-schema.sql`（供全新安装 `db:init` 使用），列定义必须与迁移 SQL **完全一致**。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（截至 M3.5 共 13 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（截至 M4 共 15 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 ---
 
@@ -154,6 +157,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 - 脚本写在会话 scratchpad 目录，不进仓库；登录 helper 可复用既有 `oms-api.mjs`（导出 `api / login / ok / results`）。
 - 每个里程碑或较大功能完成后必须跑一轮 E2E，**覆盖正常流程 + 全部守卫（拒绝路径）+ 状态机每一条边**，并在结束后**清理测试数据**。
+- 涉及数量/金额口径的里程碑另需**独立重算脚本**（M4 的 `verify:ledger` 即此模式）：绕开业务代码用最朴素 SQL 重算一遍再比对。用同一份 SQL 自己验自己等于没验。
 - 构建校验必须取**真实退出码**（`pnpm ... build > log 2>&1; echo "EXIT=$?"`）。历史教训：`pnpm build | grep error | head; echo $?` 检查的是 `echo` 的退出码恒为 0，曾导致带类型错误的代码被推上生产。
 
 ---
@@ -193,9 +197,9 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 |---|---|---|---|
 | ORD | 销售订单 | `ORD + yymmdd + '-' + 4位当日序号` | order.service |
 | （无前缀） | **发坯单**（外发） | 7 位定长纯数字全局序号，展示层拼 `No.` | outsource.service（`generatePaddedSequence`，key `BLANK_NO`，宽度取共享包 `BLANK_NO_WIDTH`） |
-| FGI | 成品入库单 | 同 ORD | 待 M4 |
-| FGO | 成品出库单（含期初 `opening_balance`） | 同 ORD | 待 M4 |
-| FGR | 成品红字冲销单 | 同 ORD | 待 M4 |
+| FGI | 成品**生产入库**单 | 同 ORD | finished-stock.service（`prefixOf()`） |
+| FGO | 成品**出库**单 + **期初**（`opening_balance` 虽是入向但走 FGO 序列，§4.7 明文） | 同 ORD | 同上 |
+| FGR | 成品**红字冲销**单 | 同 ORD | 同上 |
 | FILE | 文件上传 | 同 ORD | file.service |
 
 **不采番的业务行**：装配批次、部件调整流水属轻量记账行，无单据号（主键 id 即可）。
@@ -241,6 +245,23 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - 超装配（Σ装配量 > 组支数）**允许**，前端黄色提示不拦截；台账「装配未完成量」可为负。
 - 批次是轻量记账行，**不采番、无单据号**（§5.4）。
 
+**成品出入库与订单跟踪台账（M4）**
+
+- 三表：`t_finished_doc`（单据头）/ `t_finished_item`（明细）/ `t_finished_balance`（余额）。明细锚定**部件组 + 边别**，卡口按左右分行。
+- **数量恒为正**，出入方向由单头 `direction`（1入 −1出）表达；聚合一律 `direction × quantity`。红字单方向与被冲原单相反，因此**天然抵扣、无需特判**——不要在聚合里写"如果是红字就减"这类分支。
+- 状态机 `1草稿 → 2已确认 → (更正) 开红字单`；`9已作废`仅从草稿进入。**已确认单禁改禁删禁作废，只能红字冲销**；红字单本身不可再冲销；红字单建后**立即确认生效**。
+- 红字支持**按行部分冲销**，每行冲销量 ≤ 原行数量 − 该行已冲销量。
+- **确认（confirm）是唯一驱动余额的入口**，同事务内三步：① 装配闸门（仅 `inbound`，复用 `assembly-quota.util.ts`，`lock:true`）② 余额行 `FOR UPDATE` ③ 增减后**结存不得为负**。任何地方都不得直接改 `t_finished_balance`。
+- 「结存不得为负」同时管住两类操作：销售出库、以及**红字冲销入库单**（货已发出时不能凭空把入库冲掉）。
+- `t_finished_balance` 唯一键 `(order_part_group_id, side, batch_no, attr_key)`：挂订单的行 `attr_key` 恒为空串；不挂订单的纯属性期初行锚点列为 0、靠 `attr_key`（属性指纹）兜底唯一。设计文档原写「应用层保证」，实现改为**下沉到数据库唯一键**，并发下应用层判重挡不住重复行。
+- **⚠️ 台账「完成数」与闸门「已入库量」口径故意不同，勿"统一"**：
+  - 台账完成数**包含期初**（`opening_balance`）——期初是上线前已完成的存量，不计入就对不上手工账；
+  - 闸门已入库量**排除期初**——期初没有装配过程，计入会让该组额度永久为负、挡死后续正常入库。
+  两处各自正确，改任一处前先想清楚服务的是哪个问题。
+- 台账（`order-ledger.service.ts`，`GET /order/ledger`）按部件组一行，四数**全部实时聚合、不落冗余列**；欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
+- 台账 SQL 注意：`rows` 是 MySQL 8 保留字，列别名不能用它（已踩）。
+- 口径核算脚本 `pnpm --filter server verify:ledger`：**绕开业务代码**用最朴素 SQL 从原始单据重算四数再比对，两条独立路径算出同一个数才算数。改台账聚合后必须重跑。
+
 ---
 
 ## 六、里程碑进度
@@ -251,8 +272,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | M2 订单 | 订单四级 CRUD、附件、组按类型自动展开部件、图号带入工艺、状态机 | ✅ 已完成 |
 | M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、数量修正、打印 | ✅ 已完成 |
 | M3.5 装配 | 装配批次 CRUD（一组多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
-| M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**（直接复用 `assembly-quota.util.ts`）、balance、**订单跟踪台账** | ⬜ 待开发（下一步） |
-| M5 期初+看板 | 补录订单、成品/部件期初、首页看板、Excel 导出 | ⬜ 待开发 |
+| M4 出入库+台账 | 出入库单、确认/红字冲销（支持部分冲销）、**装配入库闸门**（复用 `assembly-quota.util.ts`）、balance、库存查询、**订单跟踪台账** + 口径核算脚本 | ✅ 已完成 |
+| M5 期初+看板 | 补录订单、成品/部件期初、首页看板、Excel 导出 | ⬜ 待开发（下一步） |
 
 期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉。
 

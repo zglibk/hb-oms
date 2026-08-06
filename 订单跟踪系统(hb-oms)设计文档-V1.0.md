@@ -397,7 +397,10 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | batch_no | varchar(64) | 批次（默认 ''） |
 | quantity | int | 当前结存（支） |
 
-- **唯一键**：`(order_part_group_id, side, batch_no)`，其中 order_part_group_id 为 NULL 的纯属性期初行以 `(item_no, product_type, group_type, rail_section, dimension_mm, surface_type, color, side, batch_no)` 逻辑唯一（应用层保证，维度空串兜底规避 MySQL 唯一键多 NULL 问题——参照 hb-mes 部件台账做法，锚点列用 0 代替 NULL 参与唯一键）。
+- **唯一键**：`(order_part_group_id, side, batch_no, attr_key)`，锚点列 `NOT NULL DEFAULT 0`（0 = 不挂订单的纯属性行，规避 MySQL 唯一键多 NULL 不去重）。
+  - 挂订单的行由「部件组 + 边别 + 批次」唯一，`attr_key` 恒为空串；
+  - 纯属性期初行改由 `attr_key`（属性指纹 = `货号|产品类型|组类型|节数|规格|表面处理|颜色`）兜底唯一。
+  该逻辑唯一**下沉到数据库唯一键**而非仅靠应用层判重——并发下应用层「先查再插」挡不住重复行。
 - 出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，**禁止直接改 balance**。
 - **装配入库闸门**：`biz_type='inbound'` 入库单**确认时**，按每条明细的 order_part_group_id + side 校验 `本次入库量 ≤ 可入库量(§4.4)`；超额则拒绝（`BadRequestException` 中文提示，含部件组、可入库量、本次量）。`biz_type='opening_balance'`（期初）与 `reversal`（红字）**豁免**该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，`Σ已入库量` 按 direction 自然回落，可入库量随之回补。
 
@@ -495,6 +498,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 
 - 红字单 direction 与原单相反，聚合时按 `direction × quantity` 求和即自然抵扣，无需特判。
 - 欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
+- **完成数包含期初**（`opening_balance`）：期初是上线前已完成的存量，业务上确实"已完成"，不计入就与手工账对不上。
+  ⚠️ 这与 §4.4 入库闸门的「已入库量」**故意不同**——闸门必须排除期初，否则「装配 0 + 期初 N」的组额度恒为 −N、永久挡死后续正常入库。两处服务于不同问题，勿"统一"。
 - 同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。
 - 装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
 - 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。
@@ -526,7 +531,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | assembly | `GET /assembly/batch?orderPartGroupId=&side=` | 某组的批次明细 + 分边别小计（已录/已完成/已入库/可入库） |
 | assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id` | 装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束 |
 | assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
-| finished-stock | `POST /finished-stock`（建单含明细）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/balance` | confirm 入库时校验装配闸门（§4.5）；reverse=生成红字单并自动确认；balance=库存查询 |
+| finished-stock | `POST /finished-stock`（建单含明细）、`PUT /finished-stock/:id`（仅草稿）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/:id` | confirm 入库时校验装配闸门（§4.5）并驱动余额；reverse=生成红字单并自动确认，支持按行部分冲销；已确认单禁改禁作废 |
+| finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 库存查询；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
 | system | 用户/角色/菜单/字典/物料 CRUD | 照搬 hb-mes system 模块裁剪 |
