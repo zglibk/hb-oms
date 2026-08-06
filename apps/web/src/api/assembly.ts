@@ -10,6 +10,9 @@ export interface AssemblyBatchRow {
   /** 边别：含卡口 left/right，其余 '' */
   side: string;
   workshop: string | null;
+  /** 计划开始时间（预计开工日；纯计划属性，不参与闸门） */
+  planStartDate: string | null;
+  /** 计划完成时间（预计完工日） */
   planDate: string | null;
   /** 实际完成时间：null=计划中，非空=已完成（数量计入可入库量） */
   actualDate: string | null;
@@ -113,6 +116,7 @@ export interface AssemblyBatchPayload {
   orderPartGroupId: number;
   side?: string;
   workshop?: string;
+  planStartDate?: string | null;
   planDate?: string | null;
   actualDate?: string | null;
   qty: number;

@@ -218,7 +218,8 @@ export class AssemblyService {
       qb.andWhere('b.orderProductId = :pid', { pid: query.orderProductId });
     }
     if (query.side != null) qb.andWhere('b.side = :side', { side: query.side });
-    qb.orderBy('b.planDate', 'ASC').addOrderBy('b.id', 'ASC');
+    // 按预计装配区间排：先计划开始、再计划完成，未填计划的沉到最后按录入序
+    qb.orderBy('b.planStartDate', 'ASC').addOrderBy('b.planDate', 'ASC').addOrderBy('b.id', 'ASC');
     const list = await qb.getMany();
 
     // 分边别小计：含卡口按左右各算一份额度，非卡口只有空串一份
@@ -285,9 +286,10 @@ export class AssemblyService {
       if (!snap) throw new BadRequestException('订单部件组不存在，或所属订单已作废');
 
       const side = this.assertSide(dto.side, snap.productType, snap.productModel);
+      const planStartDate = this.normalizeDate(dto.planStartDate);
       const planDate = this.normalizeDate(dto.planDate);
       const actualDate = this.normalizeDate(dto.actualDate);
-      this.assertDates(planDate, actualDate);
+      this.assertDates(planStartDate, planDate, actualDate);
 
       const saved = await mgr.getRepository(AssemblyBatch).save(
         mgr.getRepository(AssemblyBatch).create({
@@ -296,6 +298,7 @@ export class AssemblyService {
           orderPartGroupId: snap.orderPartGroupId,
           side,
           workshop: dto.workshop?.trim() || snap.assemblyWorkshop || null,
+          planStartDate,
           planDate,
           actualDate,
           qty: dto.qty,
@@ -330,12 +333,14 @@ export class AssemblyService {
       const batch = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!batch) throw new NotFoundException('装配批次不存在');
 
+      const planStartDate = this.normalizeDate(dto.planStartDate);
       const planDate = this.normalizeDate(dto.planDate);
       const actualDate = this.normalizeDate(dto.actualDate);
-      this.assertDates(planDate, actualDate);
+      this.assertDates(planStartDate, planDate, actualDate);
 
       await mgr.getRepository(AssemblyBatch).update(id, {
         workshop: dto.workshop?.trim() || null,
+        planStartDate,
         planDate,
         actualDate,
         qty: dto.qty,
@@ -408,10 +413,23 @@ export class AssemblyService {
     return v;
   }
 
-  /** 计划完成时间与实际完成时间至少填一个，否则批次无跟踪意义 */
-  private assertDates(planDate: string | null, actualDate: string | null) {
+  /**
+   * 日期校验：
+   * 1. 计划完成与实际完成至少填一个——只有计划开始的批次没有完工时点，跟踪不了进度；
+   * 2. 计划开始不得晚于计划完成（两者都填时），防止把预计装配区间录反。
+   */
+  private assertDates(
+    planStartDate: string | null,
+    planDate: string | null,
+    actualDate: string | null,
+  ) {
     if (!planDate && !actualDate) {
       throw new BadRequestException('计划完成时间与实际完成时间至少填写一个');
+    }
+    if (planStartDate && planDate && planStartDate > planDate) {
+      throw new BadRequestException(
+        `计划开始时间（${planStartDate}）不能晚于计划完成时间（${planDate}）`,
+      );
     }
   }
 

@@ -411,7 +411,8 @@ CREATE TABLE IF NOT EXISTS t_assembly_batch (
   order_part_group_id INT          NOT NULL COMMENT '锚点：订单部件组（跟踪/台账粒度）',
   side                VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：含卡口组合 left左 right右，其余空串；入库闸门按 side 分别核算，左右不串量',
   workshop            VARCHAR(32)  NULL COMMENT '装配车间（字典 assembly_workshop：装一~装八）；默认继承产品行 assembly_workshop，可覆写为实际装配车间',
-  plan_date           DATE         NULL COMMENT '计划完成时间（计划员录入）',
+  plan_start_date     DATE         NULL COMMENT '计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门）',
+  plan_date           DATE         NULL COMMENT '计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间）',
   actual_date         DATE         NULL COMMENT '实际完成时间：NULL=计划中，非空=已完成（该批数量计入可入库量）',
   qty                 INT          NOT NULL DEFAULT 0 COMMENT '装配数量（支）',
   status              TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1计划中 2已完成；派生自 actual_date（共享包 deriveAssemblyStatus 唯一赋值），落库值须与 actual_date 保持一致',
@@ -431,6 +432,7 @@ CREATE TABLE IF NOT EXISTS t_assembly_batch (
   KEY idx_order (order_id),
   KEY idx_product (order_product_id),
   KEY idx_status (status),
+  KEY idx_plan_start_date (plan_start_date),
   KEY idx_plan_date (plan_date),
   KEY idx_actual_date (actual_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装配批次（锚定订单部件组+边别，一组可多批；已完成批次数量参与成品入库闸门）';

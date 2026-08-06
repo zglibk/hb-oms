@@ -37,7 +37,12 @@ export class CreateAssemblyBatchDto {
   @MaxLength(32)
   workshop?: string;
 
-  /** 计划完成时间 */
+  /** 计划开始时间（预计开工日；纯计划属性，不参与入库闸门） */
+  @ValidateIf((o) => o.planStartDate !== null && o.planStartDate !== '' && o.planStartDate !== undefined)
+  @IsDateString({}, { message: '计划开始时间格式不正确' })
+  planStartDate?: string | null;
+
+  /** 计划完成时间（预计完工日） */
   @ValidateIf((o) => o.planDate !== null && o.planDate !== '' && o.planDate !== undefined)
   @IsDateString({}, { message: '计划完成时间格式不正确' })
   planDate?: string | null;
@@ -66,6 +71,10 @@ export class UpdateAssemblyBatchDto {
   @IsString()
   @MaxLength(32)
   workshop?: string;
+
+  @ValidateIf((o) => o.planStartDate !== null && o.planStartDate !== '' && o.planStartDate !== undefined)
+  @IsDateString({}, { message: '计划开始时间格式不正确' })
+  planStartDate?: string | null;
 
   @ValidateIf((o) => o.planDate !== null && o.planDate !== '' && o.planDate !== undefined)
   @IsDateString({}, { message: '计划完成时间格式不正确' })

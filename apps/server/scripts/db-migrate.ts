@@ -41,6 +41,7 @@ const MIGRATIONS: string[] = [
   'migration-billing-info-rev.sql',
   'migration-outsource-tables.sql',
   'migration-assembly-batch.sql',
+  'migration-assembly-plan-start.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -85,6 +86,7 @@ const expectedColumns = [
   't_assembly_batch.order_part_group_id',
   't_assembly_batch.side',
   't_assembly_batch.workshop',
+  't_assembly_batch.plan_start_date',
   't_assembly_batch.plan_date',
   't_assembly_batch.actual_date',
   't_assembly_batch.qty',

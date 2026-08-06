@@ -124,11 +124,15 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 ### 3.4 装配批次状态机
 
 ```
-        1 计划中（仅填计划完成时间）
+        1 计划中（录预计装配区间：计划开始 ~ 计划完成）
              │ 填写实际完成时间
              ▼
         2 已完成（该批装配数量计入可入库量）
 ```
+
+计划员按批次录**预计的装配开始与完成时间**（`plan_start_date` / `plan_date`）作为排程依据；
+两者都是纯计划属性，**不参与入库闸门**——闸门只认 `actual_date`（实际完成）。
+约束：计划开始不得晚于计划完成；计划完成与实际完成至少填一个（只有开始时点的批次无法跟踪完工）。
 
 - 状态为**派生值**：`actual_date IS NULL → 计划中`，`actual_date 非空 → 已完成`，无独立状态列（`t_assembly_batch.status` 由服务端按 actual_date 计算返回，或前端按字段派生）。
 - 已完成批次的数量参与入库闸门（§4.5）；批次**被入库消耗后禁止删除或下调数量致可入库量为负**（§7）。
@@ -338,7 +342,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | side | varchar(16) | 边别：含卡口组合 left/right，其余 `''`（闸门按 side 分别卡量） |
 | workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；默认继承产品行 assembly_workshop，可覆写（实际在哪装） |
-| plan_date | date | 计划完成时间（计划员录入） |
+| plan_start_date | date | 计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门） |
+| plan_date | date | 计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间） |
 | actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
 | qty | int | 装配数量（支） |
 | status | tinyint | 状态派生值：1计划中 2已完成。**落库**（便于按状态走索引筛选），但只能由共享包 `deriveAssemblyStatus(actual_date)` 赋值；聚合已完成装配量时一律按 `actual_date IS NOT NULL` 判定，不依赖本列 |
@@ -346,8 +351,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | remark | varchar(255) | 备注 |
 | （审计字段） | | creator/updater/create_time/update_time |
 
-- **索引**：`idx(order_part_group_id, side)` 供闸门与台账按部件组聚合；另有 `idx_order`（订单下游引用探测）、`idx_status`、`idx_plan_date`、`idx_actual_date`（逾期与进度查询）。
-- **约束**：`plan_date` 与 `actual_date` 至少填一个；含卡口组合的 `side` 必须为 left/right，非卡口必须为空串。
+- **索引**：`idx(order_part_group_id, side)` 供闸门与台账按部件组聚合；另有 `idx_order`（订单下游引用探测）、`idx_status`、`idx_plan_start_date`、`idx_plan_date`、`idx_actual_date`（逾期与进度查询）。
+- **约束**：`plan_date` 与 `actual_date` 至少填一个；`plan_start_date` 不得晚于 `plan_date`；含卡口组合的 `side` 必须为 left/right，非卡口必须为空串。
 - **闸门口径（唯一实现 `assembly-quota.util.ts`，入库侧复用）**：`可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)`。
   其中「已入库量」**只统计入库方向的已确认单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单计负；**期初（opening_balance）与销售出库（sale_outbound）都不参与**——期初无装配过程且 §4.5 已明文豁免闸门，若计入会让该组额度永久为负、挡死后续正常入库；出库若参与（direction=-1）反而会凭空放大额度。冲销期初的红字单按 `origin_doc_id` 回查原单 biz_type 一并排除。
 - 批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 < 已入库量（§7）。

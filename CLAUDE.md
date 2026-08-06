@@ -229,7 +229,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 **装配批次（M3.5）**
 
 - 锚点是**部件组 + 边别**（`order_part_group_id` + `side`）：含卡口组合必须落 `left`/`right`，非卡口必须为空串；闸门按 side 分别核算，**左右不串量**（§7.15）。建单时由服务端按 `hasSocket(产品类型)` 硬校验，填错直接拒绝。
-- 一组可多批；`plan_date` 与 `actual_date` **至少填一个**（两个都空的批次没有跟踪意义）。
+- 时间三件套：`plan_start_date`（计划开始）/ `plan_date`（计划完成）为计划员录入的**预计装配区间**，纯计划属性、**不参与闸门**；`actual_date`（实际完成）才是完工与闸门的唯一依据。
+- 一组可多批；`plan_date` 与 `actual_date` **至少填一个**（只有计划开始的批次跟踪不到完工）；`plan_start_date` 不得晚于 `plan_date`，前后端双向校验。
 - 状态 `status` 落库但为**派生值**，只能由共享包 `deriveAssemblyStatus(actualDate)` 赋值：`actual_date` 空=1计划中、非空=2已完成。聚合已完成装配量时一律按 `actual_date IS NOT NULL` 判定，**不依赖 status 列**（防历史脏数据让闸门失准）。
 - 车间默认继承产品行 `assembly_workshop`，可覆写为实际装配车间；筛选时两者命中其一即算该车间的活。
 - **入库闸门口径的唯一实现在 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)，M4 成品入库确认必须复用，禁止另写第二份 SQL**：

@@ -45,6 +45,9 @@
         <el-table-column label="装配车间" width="100" align="center">
           <template #default="{ row }">{{ dictLabel(workshopDict, row.workshop) }}</template>
         </el-table-column>
+        <el-table-column label="计划开始" width="115" align="center">
+          <template #default="{ row }">{{ dateText(row.planStartDate) }}</template>
+        </el-table-column>
         <el-table-column label="计划完成" width="115" align="center">
           <template #default="{ row }">{{ dateText(row.planDate) }}</template>
         </el-table-column>
@@ -95,8 +98,17 @@
               <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
+          <el-form-item label="计划开始">
+            <el-date-picker
+              v-model="draft.planStartDate" type="date" value-format="YYYY-MM-DD" clearable
+              style="width: 140px" placeholder="预计开工"
+            />
+          </el-form-item>
           <el-form-item label="计划完成">
-            <el-date-picker v-model="draft.planDate" type="date" value-format="YYYY-MM-DD" style="width: 140px" />
+            <el-date-picker
+              v-model="draft.planDate" type="date" value-format="YYYY-MM-DD" clearable
+              style="width: 140px" placeholder="预计完工"
+            />
           </el-form-item>
           <el-form-item label="实际完成">
             <el-date-picker
@@ -179,6 +191,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 interface BatchDraft {
   side: string;
   workshop: string;
+  planStartDate: string | null;
   planDate: string | null;
   actualDate: string | null;
   qty: number;
@@ -187,7 +200,8 @@ interface BatchDraft {
 const draft = reactive<BatchDraft>({
   side: '',
   workshop: '',
-  planDate: today(),
+  planStartDate: today(),
+  planDate: null,
   actualDate: null,
   qty: 1,
   remark: '',
@@ -200,6 +214,7 @@ function resetDraft() {
   editingIndex.value = 0;
   draft.side = socket.value ? 'left' : '';
   draft.workshop = data.value?.group?.assemblyWorkshop ?? '';
+  draft.planStartDate = today();
   draft.planDate = today();
   draft.actualDate = null;
   draft.qty = defaultQty();
@@ -256,6 +271,7 @@ function startEdit(row: AssemblyBatchRow) {
   originalQty.value = row.qty;
   draft.side = row.side;
   draft.workshop = row.workshop ?? '';
+  draft.planStartDate = row.planStartDate ? String(row.planStartDate).slice(0, 10) : null;
   draft.planDate = row.planDate ? String(row.planDate).slice(0, 10) : null;
   draft.actualDate = row.actualDate ? String(row.actualDate).slice(0, 10) : null;
   draft.qty = row.qty;
@@ -272,6 +288,10 @@ async function onSubmit() {
     ElMessage.warning('计划完成时间与实际完成时间至少填写一个');
     return;
   }
+  if (draft.planStartDate && draft.planDate && draft.planStartDate > draft.planDate) {
+    ElMessage.warning('计划开始时间不能晚于计划完成时间');
+    return;
+  }
   if (!draft.qty || draft.qty <= 0) {
     ElMessage.warning('装配数量必须大于 0');
     return;
@@ -280,6 +300,7 @@ async function onSubmit() {
   try {
     const body = {
       workshop: draft.workshop || undefined,
+      planStartDate: draft.planStartDate || null,
       planDate: draft.planDate || null,
       actualDate: draft.actualDate || null,
       qty: draft.qty,

@@ -52,7 +52,20 @@ export class AssemblyBatch {
   })
   workshop: string | null;
 
-  @Column({ name: 'plan_date', type: 'date', nullable: true, comment: '计划完成时间（计划员录入）' })
+  @Column({
+    name: 'plan_start_date',
+    type: 'date',
+    nullable: true,
+    comment: '计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门）',
+  })
+  planStartDate: string | null;
+
+  @Column({
+    name: 'plan_date',
+    type: 'date',
+    nullable: true,
+    comment: '计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间）',
+  })
   planDate: string | null;
 
   @Column({
