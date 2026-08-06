@@ -36,6 +36,9 @@ interface ImportRow {
   railSection: string | null;
   partType: string | null;
   unit: string | null;
+  sheetMaterial: string | null;
+  materialThickness: string | null;
+  unitWeight: string | null;
   drawingNo: string | null;
   remark: string | null;
 }
