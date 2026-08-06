@@ -39,6 +39,7 @@ const MIGRATIONS: string[] = [
   'migration-changelog-systemconfig.sql',
   'migration-part-info-fields.sql',
   'migration-billing-info-rev.sql',
+  'migration-outsource-tables.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -70,6 +71,15 @@ const expectedColumns = [
   't_material.unit_weight',
   't_process_info.dimension',
   't_process_info.drawing_version_outer',
+  // M3 外发（发坯单）
+  't_outsource_doc.blank_no',
+  't_outsource_doc.actual_send_date',
+  't_outsource_doc.close_reason',
+  't_outsource_item.order_part_group_id',
+  't_outsource_item.send_qty',
+  't_outsource_item.returned_qty',
+  't_outsource_return.item_id',
+  't_outsource_return.return_qty',
 ];
 
 async function main() {

@@ -60,6 +60,18 @@ const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/order/form.vue'),
         meta: { title: '订单录入', activeMenu: '/order' },
       },
+      {
+        path: 'outsource/form',
+        name: 'OutsourceForm',
+        component: () => import('@/views/outsource/form.vue'),
+        meta: { title: '发坯单录入', activeMenu: '/outsource' },
+      },
+      {
+        path: 'outsource/print',
+        name: 'OutsourcePrint',
+        component: () => import('@/views/outsource/print.vue'),
+        meta: { title: '发坯单打印', activeMenu: '/outsource' },
+      },
     ],
   },
 ];

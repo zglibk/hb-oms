@@ -35,6 +35,16 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'order:finish', perm_name: '完结/重开订单', perm_type: 2, parent_code: 'order', sort: 3 },
   { perm_code: 'order:cancel', perm_name: '作废订单', perm_type: 2, parent_code: 'order', sort: 4 },
 
+  { perm_code: 'outsource', perm_name: '外发管理', perm_type: 1, parent_code: 'production', menu_path: '/outsource', component: 'outsource/index', icon: 'Van', sort: 2 },
+  { perm_code: 'outsource:create', perm_name: '新增发坯单', perm_type: 2, parent_code: 'outsource', sort: 1 },
+  { perm_code: 'outsource:update', perm_name: '编辑发坯单', perm_type: 2, parent_code: 'outsource', sort: 2 },
+  { perm_code: 'outsource:send', perm_name: '登记发出', perm_type: 2, parent_code: 'outsource', sort: 3 },
+  { perm_code: 'outsource:return', perm_name: '回货登记', perm_type: 2, parent_code: 'outsource', sort: 4 },
+  { perm_code: 'outsource:return-cancel', perm_name: '撤销回货登记', perm_type: 2, parent_code: 'outsource', sort: 5 },
+  { perm_code: 'outsource:close', perm_name: '关闭发坯单', perm_type: 2, parent_code: 'outsource', sort: 6 },
+  { perm_code: 'outsource:cancel', perm_name: '作废发坯单', perm_type: 2, parent_code: 'outsource', sort: 7 },
+  { perm_code: 'outsource:print', perm_name: '打印发坯单', perm_type: 2, parent_code: 'outsource', sort: 8 },
+
   // ===== 工艺管理 =====
   { perm_code: 'process', perm_name: '工艺管理', perm_type: 1, menu_path: '/process', icon: 'SetUp', sort: 6 },
 

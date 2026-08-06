@@ -11,6 +11,7 @@ import { SystemModule } from './modules/system/system.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
+import { OutsourceModule } from './modules/outsource/outsource.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -59,6 +60,7 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     CustomerModule,
     ProcessInfoModule,
     OrderModule,
+    OutsourceModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

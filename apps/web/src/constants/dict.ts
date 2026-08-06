@@ -26,6 +26,10 @@ export {
   // 外发
   OUTSOURCE_STATUS_OPTIONS as OUTSOURCE_STATUS,
   OUTSOURCE_STATUS as OUTSOURCE_STATUS_VALUE,
+  formatBlankNo,
+  qtyFromWeight,
+  isItemFullyReturned,
+  deriveOutsourceStatus,
   // 装配
   ASSEMBLY_STATUS_OPTIONS as ASSEMBLY_STATUS,
   ASSEMBLY_STATUS as ASSEMBLY_STATUS_VALUE,
