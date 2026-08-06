@@ -262,18 +262,19 @@ export default { name: 'BasicDept' };
 <style scoped lang="scss">
 .toolbar { margin-bottom: 12px; }
 
-/* 树形表格展开/折叠图标：把 EP 默认箭头替换为文件夹图标
- * 折叠态 = 关闭文件夹；展开态 = 打开文件夹。
- * 叶子节点（无 children）EP 不渲染 expand-icon，故无需处理。 */
+/* 树形表格展开/折叠图标：用 EP 图标 FolderRemove / FolderOpened（黄色 #E6A23C）
+ * 折叠态 = FolderRemove；展开态 = FolderOpened。
+ * 叶子节点（无 children）EP 不渲染 expand-icon，故无需处理。
+ * SVG path 取自 @element-plus/icons-vue（folder-remove.vue / folder-opened.vue）。 */
 :deep(.el-table__expand-icon) {
   svg { display: none; }
   width: 16px;
   height: 16px;
   margin-right: 4px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23606266' d='M880 298.4H521L405.6 186.4a8 8 0 0 0-5.6-2.4H144c-17.7 0-32 14.3-32 32v592c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V330.4c0-17.7-14.3-32-32-32z'/%3E%3C/svg%3E") center / contain no-repeat;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23E6A23C' d='M128 192v640h768V320H485.76L357.504 192zm-32-64h287.872l128.384 128H928a32 32 0 0 1 32 32v576a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32m256 416h320v64H352z'/%3E%3C/svg%3E") center / contain no-repeat;
 
   &.el-table__expand-icon--expanded {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23606266' d='M928 444H820V330.4c0-17.7-14.3-32-32-32H521L405.6 186.4a8 8 0 0 0-5.6-2.4H144c-17.7 0-32 14.3-32 32v592c0 17.7 14.3 32 32 32h696c12.3 0 23.5-7 28.6-18.2l96-209.2c3.4-7.4 3.4-15.9 0-23.3-5-11.2-16.3-18.3-28.6-18.3z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23E6A23C' d='M878.08 448H241.92l-96 384h636.16zM832 384v-64H485.76L357.504 192H128v448l57.92-231.744A32 32 0 0 1 216.96 384zm-24.96 512H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32h287.872l128.384 128H864a32 32 0 0 1 32 32v96h23.04a32 32 0 0 1 31.04 39.744l-112 448A32 32 0 0 1 807.04 896'/%3E%3C/svg%3E");
     /* 展开态不再旋转 */
     transform: none;
   }
