@@ -30,6 +30,12 @@ export interface PartGroupSnapshot {
   surfaceType: string | null;
   /** 产品类型多选组合串（判断是否含卡口用） */
   productType: string | null;
+  /** 轨道节数：two_section / three_section */
+  railSection: string | null;
+  /** 规格（mm 统一口径，属性匹配用） */
+  dimensionMm: number | null;
+  /** 颜色 */
+  color: string | null;
   /** 部件组类型：whole/outer_middle/inner… */
   groupType: string | null;
   /** 组支数口径（支） */
@@ -84,6 +90,8 @@ export class PartGroupSnapshotService {
               p.item_no           AS item_no,
               p.material_code     AS material_code,
               p.product_type      AS product_type,
+              p.rail_section      AS rail_section,
+              p.color             AS color,
               p.surface_type      AS surface_type,
               p.assembly_workshop AS assembly_workshop,
               p.delivery_date     AS delivery_date,
@@ -114,6 +122,9 @@ export class PartGroupSnapshotService {
         cycleCode: r.cycle_code ?? null,
         surfaceType: r.surface_type ?? null,
         productType: r.product_type ?? null,
+        railSection: r.rail_section ?? null,
+        dimensionMm: r.dimension_mm == null ? null : Number(r.dimension_mm),
+        color: r.color ?? null,
         groupType: r.group_type ?? null,
         qtyPcs: Number(r.qty_pcs) || 0,
         assemblyWorkshop: r.assembly_workshop ?? null,

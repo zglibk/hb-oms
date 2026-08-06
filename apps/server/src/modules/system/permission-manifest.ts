@@ -50,6 +50,15 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'assembly:update', perm_name: '编辑装配批次', perm_type: 2, parent_code: 'assembly', sort: 2 },
   { perm_code: 'assembly:delete', perm_name: '删除装配批次', perm_type: 2, parent_code: 'assembly', sort: 3 },
 
+  { perm_code: 'finished-stock', perm_name: '成品出入库', perm_type: 1, parent_code: 'production', menu_path: '/finished-stock', component: 'finished-stock/index', icon: 'Box', sort: 4 },
+  { perm_code: 'finished-stock:create', perm_name: '新增出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 1 },
+  { perm_code: 'finished-stock:update', perm_name: '编辑出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 2 },
+  { perm_code: 'finished-stock:confirm', perm_name: '确认出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 3 },
+  { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
+  { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
+
+  { perm_code: 'stock-balance', perm_name: '库存查询', perm_type: 1, parent_code: 'production', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Coin', sort: 5 },
+
   // ===== 工艺管理 =====
   { perm_code: 'process', perm_name: '工艺管理', perm_type: 1, menu_path: '/process', icon: 'SetUp', sort: 6 },
 

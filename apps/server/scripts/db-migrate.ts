@@ -42,6 +42,7 @@ const MIGRATIONS: string[] = [
   'migration-outsource-tables.sql',
   'migration-assembly-batch.sql',
   'migration-assembly-plan-start.sql',
+  'migration-finished-stock.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -91,6 +92,20 @@ const expectedColumns = [
   't_assembly_batch.actual_date',
   't_assembly_batch.qty',
   't_assembly_batch.status',
+  // M4 成品出入库
+  't_finished_doc.doc_no',
+  't_finished_doc.biz_type',
+  't_finished_doc.direction',
+  't_finished_doc.origin_doc_id',
+  't_finished_doc.status',
+  't_finished_item.order_part_group_id',
+  't_finished_item.side',
+  't_finished_item.quantity',
+  't_finished_item.origin_item_id',
+  't_finished_balance.order_part_group_id',
+  't_finished_balance.side',
+  't_finished_balance.attr_key',
+  't_finished_balance.quantity',
 ];
 
 async function main() {

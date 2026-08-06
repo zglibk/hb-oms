@@ -13,6 +13,7 @@ import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
 import { OutsourceModule } from './modules/outsource/outsource.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
+import { FinishedStockModule } from './modules/finished-stock/finished-stock.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -63,6 +64,7 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     OrderModule,
     OutsourceModule,
     AssemblyModule,
+    FinishedStockModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

@@ -437,6 +437,89 @@ CREATE TABLE IF NOT EXISTS t_assembly_batch (
   KEY idx_actual_date (actual_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装配批次（锚定订单部件组+边别，一组可多批；已完成批次数量参与成品入库闸门）';
 
+-- 成品出入库（设计文档 §3.3 / §4.5）：单据头 → 明细 → 余额 三表 + 红字冲销
+-- 明细/余额锚定订单部件组 + 边别；余额只由单据确认与红字冲销驱动，禁止直接改数
+CREATE TABLE IF NOT EXISTS t_finished_doc (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  doc_no         VARCHAR(32)  NOT NULL COMMENT '单号：FGI入库 / FGO出库（含期初） / FGR红字冲销，经 NumberGeneratorService 采番',
+  biz_type       VARCHAR(32)  NOT NULL COMMENT '业务类型：inbound生产入库 opening_balance期初 sale_outbound销售出库 reversal红字冲销',
+  direction      TINYINT      NOT NULL COMMENT '方向：1入库 -1出库；红字单方向与被冲原单相反，聚合时按 direction×quantity 自然抵扣',
+  doc_date       DATE         NOT NULL COMMENT '单据日期',
+  work_team      VARCHAR(64)  NULL COMMENT '班组（入库单可选，供追溯）',
+  machine_no     VARCHAR(64)  NULL COMMENT '机台号（入库单可选，供追溯）',
+  origin_doc_id  INT          NULL COMMENT '红字冲销单指向被冲原单ID；非红字单为 NULL',
+  status         TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1草稿 2已确认 9已作废（仅草稿可作废；已确认只可红字冲销，禁改禁删）',
+  remark         VARCHAR(255) NULL COMMENT '备注',
+  creator_id     INT          NULL COMMENT '创建人ID',
+  creator_name   VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by     INT          NULL COMMENT '最后更新人ID',
+  updater_name   VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_doc_no (doc_no),
+  KEY idx_biz_type (biz_type),
+  KEY idx_status (status),
+  KEY idx_doc_date (doc_date),
+  KEY idx_origin_doc (origin_doc_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成品出入库单据头（含红字冲销）';
+
+CREATE TABLE IF NOT EXISTS t_finished_item (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  doc_id              INT           NOT NULL COMMENT '所属单据',
+  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID（订单下游引用探测按此列）；0=不挂订单的纯属性期初行',
+  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '冗余订单产品行ID；0=纯属性期初行',
+  order_part_group_id INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单部件组（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
+  order_no            VARCHAR(32)   NULL COMMENT '订单号快照',
+  customer_name       VARCHAR(128)  NULL COMMENT '客户名称快照',
+  production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自产品行；台账「订单编号」口径）',
+  item_no             VARCHAR(64)   NULL COMMENT '货号快照（如 53#）',
+  product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
+  product_type        VARCHAR(128)  NULL COMMENT '产品类型多选组合串快照（字典序逗号拼接，如 standard,self_lock）',
+  group_type          VARCHAR(32)   NULL COMMENT '部件组类型快照：whole整品 outer_middle外中轨 inner内轨…',
+  rail_section        VARCHAR(32)   NULL COMMENT '轨道节数快照：two_section二节轨 three_section三节轨',
+  dimension_text      VARCHAR(64)   NULL COMMENT '规格展示快照（如 350mm）',
+  dimension_mm        INT           NULL COMMENT '规格快照（mm 统一口径，匹配纯属性行用）',
+  surface_type        VARCHAR(32)   NULL COMMENT '表面处理快照（字典 surface_type）',
+  color               VARCHAR(64)   NULL COMMENT '颜色快照',
+  side                VARCHAR(16)   NOT NULL DEFAULT '' COMMENT '边别：含卡口组合 left左 right右，其余空串；卡口产品按左右分行，左右不串量',
+  batch_no            VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '批次号（预留，默认空串）',
+  quantity            INT           NOT NULL DEFAULT 0 COMMENT '数量（支），**恒为正**；出入方向由单头 direction 表达',
+  origin_item_id      INT           NULL COMMENT '红字明细指向被冲原明细行ID；非红字为 NULL',
+  remark              VARCHAR(255)  NULL COMMENT '备注',
+  sort                INT           NOT NULL DEFAULT 0 COMMENT '行序',
+  created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_doc (doc_id),
+  KEY idx_order (order_id),
+  KEY idx_part_group (order_part_group_id),
+  KEY idx_origin_item (origin_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成品出入库明细（锚定订单部件组+边别；数量恒正，方向看单头）';
+
+CREATE TABLE IF NOT EXISTS t_finished_balance (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID；0=不挂订单的纯属性期初行',
+  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '冗余订单产品行ID；0=纯属性期初行',
+  order_part_group_id INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单部件组；0=纯属性期初行（只计库存数，不参与任何订单欠数）',
+  item_no             VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '货号（属性快照，纯属性行的匹配依据）',
+  product_model       VARCHAR(128)  NOT NULL DEFAULT '' COMMENT '产品型号（展示快照）',
+  product_type        VARCHAR(128)  NOT NULL DEFAULT '' COMMENT '产品类型多选组合串（属性快照）',
+  group_type          VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '部件组类型（属性快照）',
+  rail_section        VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '轨道节数（属性快照）',
+  dimension_mm        INT           NOT NULL DEFAULT 0 COMMENT '规格 mm（属性快照）',
+  dimension_text      VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '规格展示文本（展示快照）',
+  surface_type        VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '表面处理（属性快照，字典 surface_type）',
+  color               VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '颜色（属性快照）',
+  side                VARCHAR(16)   NOT NULL DEFAULT '' COMMENT '边别：含卡口 left/right，其余空串',
+  batch_no            VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '批次号（预留，默认空串）',
+  attr_key            VARCHAR(255)  NOT NULL DEFAULT '' COMMENT '纯属性行的属性指纹（货号|类型|组类型|节数|规格|表面处理|颜色），挂订单的行恒为空串；与锚点列一起参与唯一键，把「纯属性行逻辑唯一」下沉到数据库而非依赖应用层自觉',
+  quantity            INT           NOT NULL DEFAULT 0 COMMENT '当前结存（支）；只由单据确认与红字冲销驱动，禁止直接改数',
+  created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_balance (order_part_group_id, side, batch_no, attr_key),
+  KEY idx_order (order_id),
+  KEY idx_item_no (item_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成品库存余额（锚点+边别+批次唯一；纯属性行以 attr_key 兜底唯一）';
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =============================================================
