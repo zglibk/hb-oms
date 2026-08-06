@@ -104,7 +104,7 @@
             </tr>
             <tr>
               <td class="pg-part">中轨</td>
-              <td><el-input v-model="form.drawingVersionMiddle" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionMiddle')" /></td>
+              <td><el-input v-model="form.drawingVersionMiddle" placeholder="如 1.0" @blur="onVersionBlur('drawingVersionMiddle')" /></td>
               <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
               <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
@@ -153,7 +153,7 @@
           </el-col>
         </el-row>
 
-        <div class="section-title">审核（产品级，不随 Excel 导入导出）</div>
+        <div class="section-title">审核</div>
         <el-row :gutter="16">
           <el-col :xs="24" :md="12">
             <el-form-item label="审核意见">

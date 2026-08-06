@@ -4,9 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import { promises as fs } from 'fs';
+import { extname, isAbsolute, join } from 'path';
 import { ProcessInfo } from './entities/process-info.entity';
 import { ProcessInfoHistory } from './entities/process-info-history.entity';
 import {
@@ -22,6 +25,8 @@ import { normalizeDimensionText, normalizeVersion } from '@hb-oms/shared';
  * 导入/导出表格采用**手工工艺表格式**：一个图号一组、外/中/内轨各一行，
  * 图号/版本/客户/产品名称/生产机台/工艺更新说明/备注为组级列（Excel 中合并单元格或留空下沿），
  * 部件/长度要求/特殊要求/模具编号为行级列。工艺附图不支持 Excel 导入导出。
+ * 审核意见/意见截图（产品级）**仅随导出**追加在末尾两列（截图内嵌图片）；
+ * 导入按表头名取列，这两列回导时自动忽略，模板不含。
  */
 const SHEET_HEADERS = [
   '图号',
@@ -41,6 +46,15 @@ const SHEET_HEADERS = [
 
 const SHEET_WIDTHS = [18, 14, 18, 10, 12, 8, 9, 24, 40, 18, 14, 20, 16];
 
+/** 导出附加列（审核，产品级；模板/导入不含）：表头、列宽、起始列号 */
+const EXPORT_REVIEW_HEADERS = ['审核意见', '意见截图'] as const;
+const EXPORT_REVIEW_WIDTHS = [26, 36];
+const REVIEW_OPINION_COL = SHEET_HEADERS.length + 1; // 14
+const REVIEW_IMAGE_COL = SHEET_HEADERS.length + 2; // 15
+/** 意见截图缩略图尺寸（px）与截图列近似像素宽（Excel 字符宽 36 ≈ 36*7 px），用于横向排布 */
+const REVIEW_IMG_SIZE = 64;
+const REVIEW_IMG_COL_PX = EXPORT_REVIEW_WIDTHS[1] * 7;
+
 /** 表格样式：等宽字体、浅灰表头、隔组变色（更浅灰）、细边框 */
 const SHEET_FONT = 'Consolas';
 const HEADER_FILL = 'FFE9EBEF';
@@ -53,7 +67,7 @@ const CELL_BORDER: Partial<ExcelJS.Borders> = {
 };
 
 /** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明/备注。
- * 审核意见/审核人/审核日期/审核截图不进 Excel（仅表单维护）。 */
+ * 审核人/审核日期不进 Excel（仅表单维护）；审核意见/意见截图仅随导出（见 EXPORT_REVIEW_HEADERS）。 */
 const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 12, 13];
 
 /** 组级列 → 实体字段（组内取首个非空值） */
@@ -249,7 +263,21 @@ export class ProcessInfoService {
     @InjectRepository(ProcessInfoHistory)
     private readonly historyRepo: Repository<ProcessInfoHistory>,
     private readonly dataSource: DataSource,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * 审核截图 URL → 本地磁盘路径。库中存的是前端访问 URL（如 /oms/uploads/2026/08/06/x.png
+   * 或 /uploads/...），截取 uploads/ 段拼到 UPLOAD_DIR（口径与 file.service 一致）；
+   * 非本站 uploads 的 URL 返回 null（不内嵌）。
+   */
+  private resolveUploadPath(url: string): string | null {
+    const m = String(url).replace(/\\/g, '/').match(/(?:^|\/)uploads\/(.+)$/i);
+    if (!m) return null;
+    const uploadDirCfg = this.config.get<string>('UPLOAD_DIR') || 'uploads';
+    const root = isAbsolute(uploadDirCfg) ? uploadDirCfg : join(process.cwd(), uploadDirCfg);
+    return join(root, m[1]);
+  }
 
   /** 写一条履历（changes 为空数组时不写） */
   private buildHistoryRow(
@@ -415,11 +443,13 @@ export class ProcessInfoService {
     return map;
   }
 
-  /** 工作表通用装饰：表头加粗 + 列宽 + 全边框 */
-  private decorateSheet(ws: ExcelJS.Worksheet) {
-    ws.columns = SHEET_HEADERS.map((h, i) => ({
+  /** 工作表通用装饰：表头加粗 + 列宽 + 全边框；withReview=true 时追加审核意见/意见截图两列（仅导出） */
+  private decorateSheet(ws: ExcelJS.Worksheet, withReview = false) {
+    const headers = withReview ? [...SHEET_HEADERS, ...EXPORT_REVIEW_HEADERS] : [...SHEET_HEADERS];
+    const widths = withReview ? [...SHEET_WIDTHS, ...EXPORT_REVIEW_WIDTHS] : SHEET_WIDTHS;
+    ws.columns = headers.map((h, i) => ({
       header: h === '图号' ? `*${h}` : h,
-      width: SHEET_WIDTHS[i],
+      width: widths[i],
     }));
     const header = ws.getRow(1);
     header.height = 22;
@@ -436,8 +466,15 @@ export class ProcessInfoService {
    * 追加一条开单信息记录：有内容的部件各一行（三节轨 3 行、二节轨 2 行——中轨列全空即不出行），
    * 全空时兜底一行承载组级信息；组级列纵向合并。
    * groupIndex 用于按图号组隔组变色（奇数组浅灰底）。
+   * withReview=true 时追加审核意见/意见截图两列（截图列留空，图片由 exportExcel 内嵌）。
+   * @returns 本组数据行区间 { start, end }（供图片锚定）
    */
-  private appendRecordRows(ws: ExcelJS.Worksheet, p: Partial<ProcessInfo>, groupIndex = 0) {
+  private appendRecordRows(
+    ws: ExcelJS.Worksheet,
+    p: Partial<ProcessInfo>,
+    groupIndex = 0,
+    withReview = false,
+  ): { start: number; end: number } {
     const start = ws.rowCount + 1;
     const parts = PART_ORDER.filter((part) => {
       const f = PART_ROW_FIELDS[part.key];
@@ -460,14 +497,19 @@ export class ProcessInfoService {
         f ? ((p as any)[f.mold] ?? '') : '',
         p.processUpdateNote ?? '',
         p.remark ?? '',
+        ...(withReview ? [p.reviewOpinion ?? '', ''] : []),
       ]);
     }
     const end = ws.rowCount;
+    const colCount = SHEET_HEADERS.length + (withReview ? EXPORT_REVIEW_HEADERS.length : 0);
+    const mergeCols = withReview
+      ? [...GROUP_MERGE_COLS, REVIEW_OPINION_COL, REVIEW_IMAGE_COL]
+      : GROUP_MERGE_COLS;
 
     // 数据区统一样式：等宽字体、全边框、隔组变色（按首列图号组）；版本列文本格式防 Excel 转数值
     const banded = groupIndex % 2 === 1;
     for (let r = start; r <= end; r++) {
-      for (let c = 1; c <= SHEET_HEADERS.length; c++) {
+      for (let c = 1; c <= colCount; c++) {
         const cell = ws.getCell(r, c);
         cell.font = { name: SHEET_FONT, size: 10 };
         cell.border = CELL_BORDER;
@@ -481,16 +523,21 @@ export class ProcessInfoService {
       ws.getCell(r, 10).alignment = { vertical: 'middle', wrapText: true };
     }
     if (end > start) {
-      // 组级列合并（图号~生产机台、工艺更新说明/备注）
-      for (const col of GROUP_MERGE_COLS) {
+      // 组级列合并（图号~生产机台、工艺更新说明/备注、导出附加的审核两列）
+      for (const col of mergeCols) {
         ws.mergeCells(start, col, end, col);
         ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       }
     } else {
-      for (const col of [...GROUP_MERGE_COLS, 6]) {
+      for (const col of [...mergeCols, 6]) {
         ws.getCell(start, col).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       }
     }
+    if (withReview) {
+      // 审核意见长文本左对齐更易读
+      ws.getCell(start, REVIEW_OPINION_COL).alignment = { vertical: 'middle', wrapText: true };
+    }
+    return { start, end };
   }
 
   /** 生成导入模板（手工工艺表格式：一图号三行 + 合并单元格示例） */
@@ -533,7 +580,8 @@ export class ProcessInfoService {
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
-  /** 导出（手工工艺表格式，与导入模板同构；按查询条件全量导出，不分页） */
+  /** 导出（手工工艺表格式，与导入模板同构 + 末尾追加审核意见/意见截图两列，截图内嵌图片；
+   * 按查询条件全量导出，不分页；回导时附加两列被导入解析按表头名忽略） */
   async exportExcel(query: QueryProcessInfoDto): Promise<Buffer> {
     const qb = this.repo.createQueryBuilder('p');
     if (query.keyword) {
@@ -550,9 +598,70 @@ export class ProcessInfoService {
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('开单信息');
-    this.decorateSheet(ws);
-    items.forEach((p, i) => this.appendRecordRows(ws, p, i));
+    this.decorateSheet(ws, true);
+    for (const [i, p] of items.entries()) {
+      const { start, end } = this.appendRecordRows(ws, p, i, true);
+      await this.embedReviewImages(wb, ws, p, start, end);
+    }
     return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  /** 把一条记录的审核截图内嵌到意见截图列（横向排布缩略图；文件缺失/非本站 URL 跳过） */
+  private async embedReviewImages(
+    wb: ExcelJS.Workbook,
+    ws: ExcelJS.Worksheet,
+    p: ProcessInfo,
+    start: number,
+    end: number,
+  ) {
+    let urls: string[] = [];
+    try {
+      const arr = JSON.parse(p.reviewImages || '[]');
+      if (Array.isArray(arr)) urls = arr.filter((u) => typeof u === 'string' && u);
+    } catch {
+      /* 非法 JSON 视为无截图 */
+    }
+    if (!urls.length) return;
+
+    const EXT_MAP: Record<string, 'png' | 'jpeg' | 'gif'> = {
+      '.png': 'png',
+      '.jpg': 'jpeg',
+      '.jpeg': 'jpeg',
+      '.gif': 'gif',
+    };
+    let placed = 0;
+    for (const url of urls) {
+      const filePath = this.resolveUploadPath(url);
+      const extension = filePath ? EXT_MAP[extname(filePath).toLowerCase()] : undefined;
+      if (!filePath || !extension) continue;
+      let buffer: Buffer;
+      try {
+        buffer = await fs.readFile(filePath);
+      } catch {
+        continue; // 文件已被清理等场景：跳过该图，不影响导出
+      }
+      const imageId = wb.addImage({ buffer: buffer as unknown as ExcelJS.Buffer, extension });
+      // tl 列偏移按截图列像素宽折算，缩略图横向依次排布（0-based 列号 = REVIEW_IMAGE_COL-1）
+      ws.addImage(imageId, {
+        tl: {
+          col: REVIEW_IMAGE_COL - 1 + (placed * (REVIEW_IMG_SIZE + 6)) / REVIEW_IMG_COL_PX,
+          row: start - 1 + 0.05,
+        } as ExcelJS.Anchor,
+        ext: { width: REVIEW_IMG_SIZE, height: REVIEW_IMG_SIZE },
+        editAs: 'oneCell',
+      });
+      placed++;
+    }
+    if (!placed) return;
+
+    // 保证组行总高能容纳缩略图（Excel 行高单位 pt，1pt≈1.33px；默认行高约 15pt）
+    const neededPt = (REVIEW_IMG_SIZE + 10) / 1.33;
+    const rowCount = end - start + 1;
+    const perRowPt = neededPt / rowCount;
+    for (let r = start; r <= end; r++) {
+      const row = ws.getRow(r);
+      if (!row.height || row.height < perRowPt) row.height = perRowPt;
+    }
   }
 
   /**
