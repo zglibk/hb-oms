@@ -45,6 +45,11 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'outsource:cancel', perm_name: '作废发坯单', perm_type: 2, parent_code: 'outsource', sort: 7 },
   { perm_code: 'outsource:print', perm_name: '打印发坯单', perm_type: 2, parent_code: 'outsource', sort: 8 },
 
+  { perm_code: 'assembly', perm_name: '装配管理', perm_type: 1, parent_code: 'production', menu_path: '/assembly', component: 'assembly/index', icon: 'Tools', sort: 3 },
+  { perm_code: 'assembly:create', perm_name: '新增装配批次', perm_type: 2, parent_code: 'assembly', sort: 1 },
+  { perm_code: 'assembly:update', perm_name: '编辑装配批次', perm_type: 2, parent_code: 'assembly', sort: 2 },
+  { perm_code: 'assembly:delete', perm_name: '删除装配批次', perm_type: 2, parent_code: 'assembly', sort: 3 },
+
   // ===== 工艺管理 =====
   { perm_code: 'process', perm_name: '工艺管理', perm_type: 1, menu_path: '/process', icon: 'SetUp', sort: 6 },
 

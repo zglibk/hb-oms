@@ -1,0 +1,379 @@
+<template>
+  <el-dialog
+    :model-value="modelValue"
+    title="装配批次"
+    width="1040px"
+    top="6vh"
+    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @open="load"
+  >
+    <div v-loading="loading" class="bd-body">
+      <div v-if="data?.group" class="bd-head">
+        <span class="bd-model">{{ data.group.productModel || '—' }}</span>
+        <span class="bd-meta">{{ data.group.orderNo || '—' }}</span>
+        <span class="bd-meta">生产单号 {{ data.group.productionNo || '—' }}</span>
+        <span class="bd-meta">{{ data.group.customerName || '—' }}</span>
+        <span class="bd-meta">规格 {{ data.group.dimensionText || '—' }}</span>
+        <span class="bd-meta">组支数 <b>{{ data.group.qtyPcs }}</b> 支</span>
+        <el-tag v-if="data.group.socket" size="small" type="warning">含卡口 · 左右分开核算</el-tag>
+      </div>
+
+      <!-- 分边别小计：已完成装配 / 已入库 / 可入库量 -->
+      <div v-if="data?.sides?.length" class="bd-sides">
+        <div v-for="s in data.sides" :key="s.side || 'none'" class="bd-side-card">
+          <div class="bd-side-title">
+            {{ s.sideLabel ? `${s.sideLabel}边` : '整组' }}
+          </div>
+          <div class="bd-side-nums">
+            <span>已录 <b>{{ s.plannedQty }}</b></span>
+            <span>已完成 <b class="ok">{{ s.assembledQty }}</b></span>
+            <span>已入库 <b>{{ s.inboundQty }}</b></span>
+            <span>
+              可入库
+              <b :class="s.quota < 0 ? 'bad' : 'quota'">{{ s.quota }}</b>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 批次列表 -->
+      <el-table :data="data?.list ?? []" border stripe size="small" empty-text="暂无装配批次，请在下方录入">
+        <el-table-column type="index" label="#" width="46" align="center" />
+        <el-table-column v-if="socket" label="边别" width="70" align="center">
+          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="装配车间" width="100" align="center">
+          <template #default="{ row }">{{ dictLabel(workshopDict, row.workshop) }}</template>
+        </el-table-column>
+        <el-table-column label="计划完成" width="115" align="center">
+          <template #default="{ row }">{{ dateText(row.planDate) }}</template>
+        </el-table-column>
+        <el-table-column label="实际完成" width="115" align="center">
+          <template #default="{ row }">{{ dateText(row.actualDate) }}</template>
+        </el-table-column>
+        <el-table-column label="装配数量(支)" width="110" align="center" prop="qty" />
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="tagTypeOf(ASSEMBLY_STATUS, row.status)">
+              {{ labelOf(ASSEMBLY_STATUS, row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="130" align="center" fixed="right">
+          <template #default="{ row }">
+            <app-actions>
+              <el-button
+                size="small" v-permission.disable="'assembly:update'" link type="primary" :icon="Edit"
+                @click="startEdit(row)"
+              >编辑</el-button>
+              <el-button
+                size="small" v-permission.disable="'assembly:delete'" link type="danger" :icon="Delete"
+                :loading="removingId === row.id" @click="onRemove(row)"
+              >删除</el-button>
+            </app-actions>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 录入 / 编辑批次 -->
+      <div class="bd-form">
+        <div class="bd-form-title">
+          {{ editingId ? `编辑第 ${editingIndex} 批` : '录入新批次' }}
+          <el-button v-if="editingId" size="small" link type="info" @click="resetDraft">取消编辑</el-button>
+        </div>
+        <el-form :inline="true" size="small" @submit.prevent>
+          <el-form-item v-if="socket" label="边别" required>
+            <el-select v-model="draft.side" :disabled="!!editingId" style="width: 90px" placeholder="选择">
+              <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="装配车间">
+            <el-select v-model="draft.workshop" clearable style="width: 120px" placeholder="继承产品行">
+              <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="计划完成">
+            <el-date-picker v-model="draft.planDate" type="date" value-format="YYYY-MM-DD" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="实际完成">
+            <el-date-picker
+              v-model="draft.actualDate" type="date" value-format="YYYY-MM-DD" clearable
+              style="width: 140px" placeholder="留空=计划中"
+            />
+          </el-form-item>
+          <el-form-item label="装配数量">
+            <el-input-number v-model="draft.qty" :min="1" :precision="0" :step="1" style="width: 120px" />
+            <span class="bd-unit">支</span>
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="draft.remark" style="width: 140px" />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              size="small" type="primary"
+              v-permission.disable="editingId ? 'assembly:update' : 'assembly:create'"
+              :loading="submitting" @click="onSubmit"
+            >{{ editingId ? '保存修改' : '录入批次' }}</el-button>
+          </el-form-item>
+        </el-form>
+        <div v-if="draft.actualDate" class="bd-hint ok">
+          <el-icon><CircleCheck /></el-icon>
+          已填实际完成时间 = 该批已完成，{{ draft.qty || 0 }} 支将计入可入库量
+        </div>
+        <div v-else class="bd-hint">
+          <el-icon><Clock /></el-icon>
+          未填实际完成时间 = 该批仍为「计划中」，不计入可入库量
+        </div>
+        <div v-if="overAssembled" class="bd-hint warn">
+          <el-icon><WarningFilled /></el-icon>
+          本批录入后该{{ socket ? '边别' : '组' }}已录装配量将超过组支数（超装配属正常，可继续提交）
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <el-button size="small" @click="emit('update:modelValue', false)">关闭</el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Delete, Edit, CircleCheck, Clock, WarningFilled } from '@element-plus/icons-vue';
+import {
+  getAssemblyBatches,
+  createAssemblyBatch,
+  updateAssemblyBatch,
+  removeAssemblyBatch,
+  type AssemblyBatchRow,
+  type AssemblyBatchesResult,
+} from '@/api/assembly';
+import { ASSEMBLY_STATUS, SIDE_OPTIONS, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
+import { loadDict } from '@/composables/useDict';
+import AppActions from '@/components/AppActions.vue';
+
+const props = defineProps<{ modelValue: boolean; orderPartGroupId: number | null }>();
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: boolean): void;
+  (e: 'changed'): void;
+}>();
+
+const loading = ref(false);
+const submitting = ref(false);
+const removingId = ref<number | null>(null);
+const data = ref<AssemblyBatchesResult | null>(null);
+
+const socket = computed(() => !!data.value?.group?.socket);
+
+const workshopDict = ref<Array<{ label: string; value: string }>>([]);
+loadDict('assembly_workshop').then((rows: any[]) => {
+  workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+});
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+interface BatchDraft {
+  side: string;
+  workshop: string;
+  planDate: string | null;
+  actualDate: string | null;
+  qty: number;
+  remark: string;
+}
+const draft = reactive<BatchDraft>({
+  side: '',
+  workshop: '',
+  planDate: today(),
+  actualDate: null,
+  qty: 1,
+  remark: '',
+});
+const editingId = ref<number | null>(null);
+const editingIndex = ref(0);
+
+function resetDraft() {
+  editingId.value = null;
+  editingIndex.value = 0;
+  draft.side = socket.value ? 'left' : '';
+  draft.workshop = data.value?.group?.assemblyWorkshop ?? '';
+  draft.planDate = today();
+  draft.actualDate = null;
+  draft.qty = defaultQty();
+  draft.remark = '';
+}
+
+/** 默认数量 = 该边别未装配量（不足则 1），减少计划员手工输入 */
+function defaultQty(): number {
+  const g = data.value?.group;
+  if (!g) return 1;
+  const s = data.value?.sides.find((x) => x.side === draft.side);
+  const done = s?.plannedQty ?? 0;
+  const target = socket.value ? Math.ceil(g.qtyPcs / 2) : g.qtyPcs;
+  return Math.max(target - done, 1);
+}
+
+async function load() {
+  if (!props.orderPartGroupId) return;
+  loading.value = true;
+  try {
+    data.value = await getAssemblyBatches({ orderPartGroupId: props.orderPartGroupId });
+    resetDraft();
+  } finally {
+    loading.value = false;
+  }
+}
+watch(
+  () => props.orderPartGroupId,
+  () => {
+    if (props.modelValue) load();
+  },
+);
+watch(
+  () => draft.side,
+  () => {
+    if (!editingId.value) draft.qty = defaultQty();
+  },
+);
+
+/** 本批录入后该边别已录量是否超过组支数（超装配允许，仅提示） */
+const overAssembled = computed(() => {
+  const g = data.value?.group;
+  if (!g || !draft.qty) return false;
+  const s = data.value?.sides.find((x) => x.side === draft.side);
+  const already = (s?.plannedQty ?? 0) - (editingId.value ? originalQty.value : 0);
+  const target = socket.value ? Math.ceil(g.qtyPcs / 2) : g.qtyPcs;
+  return already + draft.qty > target;
+});
+const originalQty = ref(0);
+
+function startEdit(row: AssemblyBatchRow) {
+  editingId.value = row.id;
+  editingIndex.value = (data.value?.list ?? []).findIndex((b) => b.id === row.id) + 1;
+  originalQty.value = row.qty;
+  draft.side = row.side;
+  draft.workshop = row.workshop ?? '';
+  draft.planDate = row.planDate ? String(row.planDate).slice(0, 10) : null;
+  draft.actualDate = row.actualDate ? String(row.actualDate).slice(0, 10) : null;
+  draft.qty = row.qty;
+  draft.remark = row.remark ?? '';
+}
+
+async function onSubmit() {
+  if (!props.orderPartGroupId) return;
+  if (socket.value && !draft.side) {
+    ElMessage.warning('该产品含卡口，请选择左/右边别');
+    return;
+  }
+  if (!draft.planDate && !draft.actualDate) {
+    ElMessage.warning('计划完成时间与实际完成时间至少填写一个');
+    return;
+  }
+  if (!draft.qty || draft.qty <= 0) {
+    ElMessage.warning('装配数量必须大于 0');
+    return;
+  }
+  submitting.value = true;
+  try {
+    const body = {
+      workshop: draft.workshop || undefined,
+      planDate: draft.planDate || null,
+      actualDate: draft.actualDate || null,
+      qty: draft.qty,
+      remark: draft.remark || undefined,
+    };
+    if (editingId.value) {
+      await updateAssemblyBatch(editingId.value, body);
+      ElMessage.success('批次已更新');
+    } else {
+      await createAssemblyBatch({
+        orderPartGroupId: props.orderPartGroupId,
+        side: socket.value ? draft.side : '',
+        ...body,
+      });
+      ElMessage.success('批次已录入');
+    }
+    await load();
+    emit('changed');
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function onRemove(row: AssemblyBatchRow) {
+  await ElMessageBox.confirm(
+    row.actualDate
+      ? '该批次已完成，删除后其装配量将从可入库量中扣除；若已有成品入库消耗，删除会被拒绝。确定删除吗？'
+      : '确定删除这条装配批次吗？',
+    '删除装配批次',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
+  );
+  removingId.value = row.id;
+  try {
+    await removeAssemblyBatch(row.id);
+    ElMessage.success('已删除');
+    if (editingId.value === row.id) resetDraft();
+    await load();
+    emit('changed');
+  } finally {
+    removingId.value = null;
+  }
+}
+
+function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
+  if (!v) return '—';
+  return opts.find((o) => o.value === v)?.label ?? v;
+}
+function dateText(v: string | null): string {
+  return v ? String(v).slice(0, 10) : '—';
+}
+</script>
+
+<script lang="ts">
+export default { name: 'AssemblyBatchDialog' };
+</script>
+
+<style scoped lang="scss">
+.bd-body { max-height: 72vh; overflow-y: auto; }
+.bd-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 10px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  .bd-model { font-size: 15px; font-weight: 600; }
+  .bd-meta { color: var(--el-text-color-secondary); font-size: 13px; }
+}
+.bd-sides {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+  .bd-side-card {
+    flex: 1 1 240px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px;
+    padding: 8px 12px; background: var(--el-fill-color-lighter);
+  }
+  .bd-side-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .bd-side-nums {
+    display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px;
+    color: var(--el-text-color-secondary);
+    b { color: var(--el-text-color-primary); font-size: 13px; }
+    b.ok { color: var(--el-color-success); }
+    b.quota { color: var(--el-color-primary); }
+    b.bad { color: var(--el-color-danger); }
+  }
+}
+.bd-form {
+  margin-top: 12px; background: var(--el-fill-color-lighter);
+  border-radius: 6px; padding: 10px 12px 4px;
+  .bd-form-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 600; margin-bottom: 8px;
+  }
+  .bd-unit { margin-left: 4px; color: var(--el-text-color-secondary); font-size: 12px; }
+}
+.bd-hint {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--el-text-color-secondary); padding: 0 0 8px 2px;
+  &.ok { color: var(--el-color-success); }
+  &.warn { color: var(--el-color-warning); }
+}
+</style>

@@ -12,6 +12,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
 import { OutsourceModule } from './modules/outsource/outsource.module';
+import { AssemblyModule } from './modules/assembly/assembly.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -61,6 +62,7 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     ProcessInfoModule,
     OrderModule,
     OutsourceModule,
+    AssemblyModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

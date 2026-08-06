@@ -40,6 +40,7 @@ const MIGRATIONS: string[] = [
   'migration-part-info-fields.sql',
   'migration-billing-info-rev.sql',
   'migration-outsource-tables.sql',
+  'migration-assembly-batch.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -80,6 +81,14 @@ const expectedColumns = [
   't_outsource_item.returned_qty',
   't_outsource_return.item_id',
   't_outsource_return.return_qty',
+  // M3.5 装配批次
+  't_assembly_batch.order_part_group_id',
+  't_assembly_batch.side',
+  't_assembly_batch.workshop',
+  't_assembly_batch.plan_date',
+  't_assembly_batch.actual_date',
+  't_assembly_batch.qty',
+  't_assembly_batch.status',
 ];
 
 async function main() {

@@ -33,6 +33,11 @@ export {
   // 装配
   ASSEMBLY_STATUS_OPTIONS as ASSEMBLY_STATUS,
   ASSEMBLY_STATUS as ASSEMBLY_STATUS_VALUE,
+  isAssemblyCompleted,
+  deriveAssemblyStatus,
+  calcInboundQuota,
+  isValidSide,
+  assemblySides,
   // 成品出入库
   FINISHED_DOC_STATUS_OPTIONS as FINISHED_DOC_STATUS,
   FINISHED_DOC_STATUS as FINISHED_DOC_STATUS_VALUE,

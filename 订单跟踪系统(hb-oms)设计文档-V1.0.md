@@ -341,12 +341,15 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | plan_date | date | 计划完成时间（计划员录入） |
 | actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
 | qty | int | 装配数量（支） |
-| status | tinyint | 状态派生值：1计划中 2已完成（按 actual_date 是否为空计算，不落库或落库均可，落库时须与 actual_date 保持一致） |
+| status | tinyint | 状态派生值：1计划中 2已完成。**落库**（便于按状态走索引筛选），但只能由共享包 `deriveAssemblyStatus(actual_date)` 赋值；聚合已完成装配量时一律按 `actual_date IS NOT NULL` 判定，不依赖本列 |
+| order_no / customer_name / production_no / product_model / dimension_text | varchar | 订单侧展示快照（与外发明细同口径，由服务端经 `PartGroupSnapshotService` 读取落库，不采信客户端传值） |
 | remark | varchar(255) | 备注 |
 | （审计字段） | | creator/updater/create_time/update_time |
 
-- **索引**：`idx(order_part_group_id, side)`，供闸门与台账按部件组聚合。
-- **闸门口径（唯一实现，入库侧复用）**：`可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)`。
+- **索引**：`idx(order_part_group_id, side)` 供闸门与台账按部件组聚合；另有 `idx_order`（订单下游引用探测）、`idx_status`、`idx_plan_date`、`idx_actual_date`（逾期与进度查询）。
+- **约束**：`plan_date` 与 `actual_date` 至少填一个；含卡口组合的 `side` 必须为 left/right，非卡口必须为空串。
+- **闸门口径（唯一实现 `assembly-quota.util.ts`，入库侧复用）**：`可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)`。
+  其中「已入库量」**只统计入库方向的已确认单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单计负；**期初（opening_balance）与销售出库（sale_outbound）都不参与**——期初无装配过程且 §4.5 已明文豁免闸门，若计入会让该组额度永久为负、挡死后续正常入库；出库若参与（direction=-1）反而会凭空放大额度。冲销期初的红字单按 `origin_doc_id` 回查原单 biz_type 一并排除。
 - 批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 < 已入库量（§7）。
 
 ### 4.5 成品出入库：`t_finished_doc` + `t_finished_item` + `t_finished_balance`
@@ -514,7 +517,9 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
 | outsource | `GET /outsource/print/:id` | 发坯单打印数据（后续可加 Excel 导出） |
-| assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id`、`GET /assembly?orderPartGroupId=` | 装配批次增删改查（按部件组，一组多批）；删/改受 §7 闸门约束 |
+| assembly | `GET /assembly` | **装配管理列表**：按部件组一行，聚合批次数/已录量/已完成量/最早未完成计划日/逾期标记；筛选关键字、装配车间、交期区间、只看未装完、只看逾期 |
+| assembly | `GET /assembly/batch?orderPartGroupId=&side=` | 某组的批次明细 + 分边别小计（已录/已完成/已入库/可入库） |
+| assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id` | 装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束 |
 | assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
 | finished-stock | `POST /finished-stock`（建单含明细）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/balance` | confirm 入库时校验装配闸门（§4.5）；reverse=生成红字单并自动确认；balance=库存查询 |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |

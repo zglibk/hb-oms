@@ -54,8 +54,9 @@ pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已�
 - 全局守卫：先 `JwtAuthGuard` 后 `PermissionGuard`；开放接口用 `@Public()` 装饰器。
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
-- `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级）、outsource（外发发坯单）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、`PartGroupSnapshotService`（订单部件组快照，外发/装配/成品出入库统一从它读订单侧展示字段，禁止各模块再写一份 SQL）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级）、outsource（外发发坯单）、assembly（装配批次）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
 
@@ -93,7 +94,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 3. 同步更新 `apps/server/scripts/sql/01-schema.sql`（供全新安装 `db:init` 使用），列定义必须与迁移 SQL **完全一致**。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（截至 M3 共 12 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（截至 M3.5 共 13 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 ---
 
@@ -118,7 +119,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **新增/修改状态只改共享包一处**。凡前后端都要用、且必须口径一致的纯常量/纯函数一律进共享包，禁止两端各写一份；依赖 NestJS/Vue/Element Plus 的代码不得进共享包。
 - **禁止在 service SQL、前端模板中出现裸的状态数字**（如 `status = 2`、`row.status === 1`），一律引用命名常量。注意跨表状态不可混用（订单状态用 `ORDER_STATUS`、外发状态用 `OUTSOURCE_STATUS`，即便数值恰好相同）。
 
-共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（发坯单号宽度与 `formatBlankNo`、重量→数量折算 `qtyFromWeight`、回齐判定、单头状态派生 `deriveOutsourceStatus`）。
+共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（发坯单号宽度与 `formatBlankNo`、重量→数量折算 `qtyFromWeight`、回齐判定、单头状态派生 `deriveOutsourceStatus`）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）。
 
 ### 4.2 数据库字段注释强制
 
@@ -222,6 +223,21 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **回货允许超过发出数**（重量折算误差）：后端不拦截，前端黄色提示；撤销回货后累计数与状态**自动回退**，回退到零时清除手工关闭原因。
 - 回货登记、数量修正均在事务内对明细行加**悲观锁**后汇总重算，防并发错乱。
 - 重量→数量折算：`数量 = 重量 ÷ 单重` 四舍五入（共享包 `qtyFromWeight`），仅作默认值，允许人工微调。
+- 明细快照经 `PartGroupSnapshotService` 统一读取；详情接口附带 `qtyPcs`（组需求）与 `sentQty`（**他单**已发，已排除本单），供编辑表单对照超发。
+
+**装配批次（M3.5）**
+
+- 锚点是**部件组 + 边别**（`order_part_group_id` + `side`）：含卡口组合必须落 `left`/`right`，非卡口必须为空串；闸门按 side 分别核算，**左右不串量**（§7.15）。建单时由服务端按 `hasSocket(产品类型)` 硬校验，填错直接拒绝。
+- 一组可多批；`plan_date` 与 `actual_date` **至少填一个**（两个都空的批次没有跟踪意义）。
+- 状态 `status` 落库但为**派生值**，只能由共享包 `deriveAssemblyStatus(actualDate)` 赋值：`actual_date` 空=1计划中、非空=2已完成。聚合已完成装配量时一律按 `actual_date IS NOT NULL` 判定，**不依赖 status 列**（防历史脏数据让闸门失准）。
+- 车间默认继承产品行 `assembly_workshop`，可覆写为实际装配车间；筛选时两者命中其一即算该车间的活。
+- **入库闸门口径的唯一实现在 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)，M4 成品入库确认必须复用，禁止另写第二份 SQL**：
+  `可入库量(部件组, side) = Σ已完成装配量 − Σ已入库量`。
+  已入库量只统计**已确认的入库方向单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单按 direction 计负；**期初 `opening_balance` 与销售出库 `sale_outbound` 均不参与**（期初无装配过程、§4.5 明文豁免闸门，若计入会让该组额度永久为负而挡死后续入库；出库参与则会凭空放大额度），冲销期初的红字单同理排除。成品三表在 M4 才建，表不存在时已入库量按 0 计，建表后自动生效。
+- **不得使可入库量为负**（§7.14）：删除批次、下调 qty、退回「计划中」三条路径改完都要复核，为负则**整笔事务回滚**并提示先红字冲销对应入库单。锁顺序统一为「先锁该部件组全部批次行（`FOR UPDATE`）→ 再改本行 → 复核」，与 M4 入库确认保持一致，避免交叉等待死锁。
+- 编辑接口**不含锚点**：部件组与边别不可改（改锚点等于换组，会把原组额度静默抽走），要换组只能删除后重录。
+- 超装配（Σ装配量 > 组支数）**允许**，前端黄色提示不拦截；台账「装配未完成量」可为负。
+- 批次是轻量记账行，**不采番、无单据号**（§5.4）。
 
 ---
 
@@ -232,8 +248,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | M1 骨架 | monorepo、登录/权限/菜单、基础数据（客户资料含批量导入、开单信息、部件信息、字典）、共享包 | ✅ 已完成 |
 | M2 订单 | 订单四级 CRUD、附件、组按类型自动展开部件、图号带入工艺、状态机 | ✅ 已完成 |
 | M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、数量修正、打印 | ✅ 已完成 |
-| M3.5 装配 | 装配批次 CRUD（一组多批、计划/实际完成时间+数量）、装配管理页、可入库量接口 | ⬜ 待开发（下一步） |
-| M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**、balance、**订单跟踪台账** | ⬜ 待开发 |
+| M3.5 装配 | 装配批次 CRUD（一组多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
+| M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**（直接复用 `assembly-quota.util.ts`）、balance、**订单跟踪台账** | ⬜ 待开发（下一步） |
 | M5 期初+看板 | 补录订单、成品/部件期初、首页看板、Excel 导出 | ⬜ 待开发 |
 
 期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉。
@@ -288,7 +304,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 
 | # | 事项 | 说明 | 状态 |
 |---|---|---|---|
-| 1 | M3.5 装配模块 | 设计文档 §4.4 已定义 `t_assembly_batch`（锚定部件组 + side、计划/实际完成时间、可入库量口径）；闸门口径将被 M4 入库复用，**必须做成唯一实现** | ⬜ 下一步 |
+| 1 | M3.5 装配模块 | 闸门口径已做成唯一实现 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)；**M4 入库确认必须 import 复用，禁止另写 SQL**。已用临时建表的方式提前验证过闸门口径（含期初/出库不参与、红字回补、左右隔离、三条守卫回滚），M4 建表后自动生效 | ✅ 已完成 |
 | 2 | 订单跟踪台账 | M4 核心页面，按部件组一行对齐手工台账粒度；四数口径必须与手工核算一致，需专门的口径核算验证 | ⬜ 待 M4 |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |

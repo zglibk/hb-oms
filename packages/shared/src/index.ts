@@ -13,3 +13,4 @@ export * from './product-type';
 export * from './rail';
 export * from './version';
 export * from './outsource';
+export * from './assembly';
