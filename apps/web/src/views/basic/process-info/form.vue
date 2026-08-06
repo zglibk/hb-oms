@@ -96,7 +96,7 @@
           <tbody>
             <tr>
               <td class="pg-part">外轨</td>
-              <td><el-input v-model="form.drawingVersionOuter" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionOuter')" /></td>
+              <td><el-input v-model="form.drawingVersionOuter" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionOuter')" /></td>
               <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
               <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="开单时需注明的事项" /></td>
@@ -104,7 +104,7 @@
             </tr>
             <tr>
               <td class="pg-part">中轨</td>
-              <td><el-input v-model="form.drawingVersionMiddle" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionMiddle')" /></td>
+              <td><el-input v-model="form.drawingVersionMiddle" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionMiddle')" /></td>
               <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
               <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
@@ -112,7 +112,7 @@
             </tr>
             <tr>
               <td class="pg-part">内轨</td>
-              <td><el-input v-model="form.drawingVersionInner" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionInner')" /></td>
+              <td><el-input v-model="form.drawingVersionInner" placeholder="如 1.0 自动补「版本」" @blur="onVersionBlur('drawingVersionInner')" /></td>
               <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
               <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
@@ -220,15 +220,19 @@ const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null
 /* 输入自动大写：生产图号、模具编号等含字母字段统一调用 */
 const upperFmt = (v: string) => (v ?? '').toUpperCase();
 
-/* 版本（部件级：外/中/内轨）：失焦时若为纯小数（如 1.01、2.0）自动加 "Ver " 前缀；
- * 已带前缀（不区分大小写）则规范化为 "Ver "。非小数格式保持原值。 */
+/* 版本（部件级：外/中/内轨）：失焦时数字自动加「版本」后缀——
+ * 纯小数 1.01 → 1.01版本；纯整数 4 → 4.0版本；
+ * 旧写法 "Ver x" / 已带「版本」后缀的先剥离再规范化；非数字格式保持原值。 */
 type VersionField = 'drawingVersionOuter' | 'drawingVersionMiddle' | 'drawingVersionInner';
 function onVersionBlur(field: VersionField) {
   let v = (form[field] || '').trim();
   if (!v) return;
-  const m = /^ver\s*/i.exec(v);
-  if (m) v = v.slice(m[0].length).trim();
-  form[field] = /^\d+\.\d+$/.test(v) ? `Ver ${v}` : v;
+  const prefix = /^ver\s*/i.exec(v);
+  if (prefix) v = v.slice(prefix[0].length).trim();
+  v = v.replace(/版本$/, '').trim();
+  if (/^\d+$/.test(v)) form[field] = `${v}.0版本`;
+  else if (/^\d+\.\d+$/.test(v)) form[field] = `${v}版本`;
+  else form[field] = v || '';
 }
 
 /* 规格（产品级）：失焦自动换算——寸→mm（1寸=25mm），纯数字补 mm */
