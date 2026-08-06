@@ -40,24 +40,25 @@ const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/redirect/index.vue'),
         meta: { title: '重定向' },
       },
-      /* 非菜单子页面（菜单页内跳转进入，不出现在侧栏；权限由入口按钮控制） */
+      /* 非菜单子页面（菜单页内跳转进入，不出现在侧栏；权限由入口按钮控制）。
+         meta.activeMenu 指定该子页面应高亮的侧栏菜单项（精确匹配 el-menu-item index）。 */
       {
         path: 'basic/process-info/form',
         name: 'ProcessInfoForm',
         component: () => import('@/views/basic/process-info/form.vue'),
-        meta: { title: '工艺录入' },
+        meta: { title: '工艺录入', activeMenu: '/basic/process-info' },
       },
       {
         path: 'basic/process-info/history',
         name: 'ProcessInfoHistory',
         component: () => import('@/views/basic/process-info/history.vue'),
-        meta: { title: '工艺修改履历' },
+        meta: { title: '工艺修改履历', activeMenu: '/basic/process-info' },
       },
       {
         path: 'order/form',
         name: 'OrderForm',
         component: () => import('@/views/order/form.vue'),
-        meta: { title: '订单录入' },
+        meta: { title: '订单录入', activeMenu: '/order' },
       },
     ],
   },

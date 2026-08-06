@@ -33,6 +33,7 @@
       </div>
       <el-scrollbar>
         <el-menu
+          ref="menuRef"
           :default-active="activeMenu"
           :collapse="collapsed"
           :collapse-transition="false"
@@ -259,6 +260,7 @@ import { useTagsStore } from '@/stores/tags';
 import { useThemeStore } from '@/stores/theme';
 import { useResponsive } from '@/composables/useResponsive';
 import { useTour } from '@/composables/useTour';
+import type { MenuNode } from '@/api/auth';
 import SidebarItem from './SidebarItem.vue';
 import ThemePicker from '@/components/ThemePicker.vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -283,7 +285,53 @@ const asideWidth = computed(() => {
 });
 const userPopoverVisible = ref(false);
 const menus = computed(() => userStore.menus);
-const activeMenu = computed(() => route.path);
+/** el-menu 实例引用：用于路由切换时显式调用 open 展开父级 sub-menu */
+const menuRef = ref<any>();
+/** 侧栏高亮菜单：优先读路由 meta.activeMenu（非菜单子页指定其所属菜单项），
+ *  无则回退到当前路径，使菜单叶子页自身高亮。 */
+const activeMenu = computed(() => (route.meta.activeMenu as string) || route.path);
+
+/**
+ * 在菜单树中查找指定 path 的祖先 sub-menu id 链（从根到直接父级）。
+ *
+ * 背景：EP el-menu 的 initMenu 仅在菜单项挂载/卸载时触发（watch(items, initMenu)），
+ * 路由切换导致 default-active 变化时只走 updateActiveIndex（仅更新高亮），
+ * 不会自动展开父级。因此跨模块进入子页时需显式调用 open 展开父级。
+ *
+ * 约定（见 SidebarItem.vue）：el-sub-menu 的 index = String(menu.id)，
+ * el-menu-item 的 index = menu.path。故祖先链收集的是各级 sub-menu 的 id。
+ */
+const findAncestorMenuIds = (
+  nodes: MenuNode[],
+  targetPath: string,
+): number[] => {
+  const dfs = (list: MenuNode[], path: number[]): number[] | null => {
+    for (const node of list) {
+      if (node.path === targetPath) return path;
+      if (node.children?.length) {
+        const found = dfs(node.children, [...path, node.id]);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  return dfs(nodes, []) ?? [];
+};
+
+/**
+ * 路由切换时显式展开父级菜单。
+ * - 跨模块进入子页（如 /home → /order/form）：default-active 变化，el-menu 不会
+ *   自动展开父级，此处调用 open 补齐。
+ * - 同模块内切换（如 /order → /order/form）：default-active 不变（均为 /order），
+ *   watch 不触发，父级维持原展开状态。
+ * - 收起态/菜单未就绪时跳过：收起态下 el-menu 的 openedMenus 会被清空，展开无意义。
+ */
+watch(activeMenu, (val) => {
+  if (!val || !menuRef.value || collapsed.value) return;
+  findAncestorMenuIds(menus.value, val).forEach((id) =>
+    menuRef.value?.open(String(id)),
+  );
+});
 const avatarText = computed(
   () => (userStore.userInfo?.realName || '?').charAt(0),
 );
