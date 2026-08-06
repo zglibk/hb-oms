@@ -4,8 +4,9 @@ import { ElTable, ElTableColumn, type TableInstance } from 'element-plus';
 
 /**
  * 列表统一封装：
- * 1. 首列自动追加「序号」列；若存在复选框列（type="selection"），
- *    序号列排在复选框列之后，保证复选框始终位于首列；
+ * 1. 首列自动追加「序号」列；若存在功能列（type="selection" 复选框 /
+ *    type="expand" 行展开，可同时存在），序号列排在最后一个功能列之后，
+ *    保证展开箭头/复选框始终位于最左侧；
  * 2. 带子项的记录行（tree / type="expand"）做手风琴：同层级最多展开一组。
  * 用法与 el-table 完全一致，额外属性/事件/列均原样透传。
  */
@@ -87,9 +88,11 @@ export default defineComponent({
 
     expose({ tableRef });
 
-    /** 判断某个 vnode 是否复选框列 */
-    const isSelectionColumn = (v: VNode) =>
-      !!v && !!(v as any).props && (v as any).props.type === 'selection';
+    /** 判断某个 vnode 是否功能列（复选框/行展开），序号列须排其后 */
+    const isFunctionalColumn = (v: VNode) => {
+      const t = (v as any)?.props?.type;
+      return t === 'selection' || t === 'expand';
+    };
 
     /** 判断某个 vnode 是否左固定列 */
     const isFixedLeftColumn = (v: VNode) => {
@@ -114,9 +117,13 @@ export default defineComponent({
           align: 'center',
           ...(hasFixedLeft ? { fixed: 'left' } : {}),
         });
-        // 若存在复选框列，则序号列插在其后；否则置于首列
-        const selIdx = cols.findIndex(isSelectionColumn);
-        if (selIdx >= 0) cols.splice(selIdx + 1, 0, indexCol);
+        // 若存在功能列（行展开/复选框，可能同时存在），序号列插在最后一个功能列之后；
+        // 否则置于首列——保证展开箭头/复选框始终占据最左侧
+        let lastFnIdx = -1;
+        cols.forEach((c, i) => {
+          if (isFunctionalColumn(c)) lastFnIdx = i;
+        });
+        if (lastFnIdx >= 0) cols.splice(lastFnIdx + 1, 0, indexCol);
         else cols.unshift(indexCol);
       }
 

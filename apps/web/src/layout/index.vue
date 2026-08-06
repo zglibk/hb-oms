@@ -443,6 +443,8 @@ function openManual() {
     font-size: var(--hb-font-size-medium);
     font-weight: bold;
     background: var(--sidebar-logo-bg);
+    /* 标题行与菜单区的分隔线（业务指定色值） */
+    border-bottom: 1px solid #334155;
     transition: background 0.3s;
     overflow: hidden;
 
