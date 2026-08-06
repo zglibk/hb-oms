@@ -45,10 +45,10 @@ export const ORDER_TYPE_OPTIONS: StatusOption[] = [
 
 /** 下单来源（t_order.order_source，字符串枚举） */
 export const ORDER_SOURCE_OPTIONS: Array<{ label: string; value: string }> = [
-  { label: '官方订单文件', value: 'official_doc' },
+  { label: '订单文件', value: 'official_doc' },
   { label: '口头', value: 'verbal' },
   { label: '电话', value: 'phone' },
-  { label: '社交软件', value: 'social' },
+  { label: '微信/QQ', value: 'social' },
 ];
 
 /* ===================== 表面处理 ===================== */

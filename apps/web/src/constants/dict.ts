@@ -1,3 +1,7 @@
+import i18nIsoCountries from 'i18n-iso-countries';
+import zhLocale from 'i18n-iso-countries/langs/zh.json';
+import enLocale from 'i18n-iso-countries/langs/en.json';
+
 /**
  * 前端枚举常量统一引用入口。
  *
@@ -96,3 +100,20 @@ export function tagTypeOf(
 ): string {
   return list.find((i) => i.value === value)?.type ?? 'info';
 }
+
+/* ===== 出口国家（沿袭 hb-mes：i18n-iso-countries 全量列表 + flag-icons 国旗） ===== */
+i18nIsoCountries.registerLocale(zhLocale as never);
+i18nIsoCountries.registerLocale(enLocale as never);
+
+export interface CountryOption {
+  /** alpha-2 代码（如 CN/US），flag-icons 国旗类名用 */
+  code: string;
+  /** 中文国家名（落库值） */
+  name: string;
+  /** 英文全称 */
+  englishName: string;
+}
+const COUNTRY_EN_NAMES = i18nIsoCountries.getNames('en');
+export const COUNTRY_OPTIONS: CountryOption[] = Object.entries(
+  i18nIsoCountries.getNames('zh'),
+).map(([code, name]) => ({ code, name, englishName: COUNTRY_EN_NAMES[code] || code }));

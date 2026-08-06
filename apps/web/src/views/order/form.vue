@@ -40,7 +40,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="PO#">
-              <el-input v-model="form.poNo" placeholder="客户单号/合同号" />
+              <el-input v-model="form.poNo" placeholder="客户单号/合同号" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -114,7 +114,7 @@
           <el-row :gutter="12">
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="生产单号" label-width="80px">
-                <el-input v-model="p.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" />
+                <el-input v-model="p.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -174,7 +174,7 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="材质" label-width="80px">
-                <el-input v-model="p.sheetMaterial" placeholder="如 Q235" />
+                <el-input v-model="p.sheetMaterial" placeholder="如 Q235" :formatter="upperFmt" :parser="upperFmt" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -204,7 +204,24 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="是否出口" label-width="80px">
                 <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
-                <el-input v-if="p.isExport" v-model="p.exportCountry" placeholder="出口国家" style="width: 130px; margin-left: 8px" />
+                <el-select
+                  v-if="p.isExport"
+                  v-model="p.exportCountry"
+                  filterable
+                  clearable
+                  placeholder="出口国家"
+                  popper-class="country-popper"
+                  style="width: 150px; margin-left: 8px"
+                >
+                  <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
+                    <div class="country-option">
+                      <span class="country-left">
+                        <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
+                      </span>
+                      <span class="country-en">{{ c.englishName }}</span>
+                    </div>
+                  </el-option>
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -245,7 +262,7 @@
                   </el-select>
                 </td>
                 <td>
-                  <el-input v-model="g.drawingNo" placeholder="输入后自动带出工艺" :spellcheck="false" @change="onDrawingChange(p, g)" />
+                  <el-input v-model="g.drawingNo" placeholder="输入后自动带出工艺" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" @change="onDrawingChange(p, g)" />
                 </td>
                 <td><el-input v-model="g.drawingVersion" placeholder="如 1.1" @change="g.drawingVersion = normalizeVersion(g.drawingVersion) ?? ''" /></td>
                 <td><el-input v-model="g.materialThickness" :placeholder="thicknessPlaceholder(g.groupType)" /></td>
@@ -300,8 +317,12 @@ import {
   sideLabel,
   toMm,
   toPieces,
+  COUNTRY_OPTIONS,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+
+/* 输入自动大写：PO#/生产单号/材质/生产图号统一调用 */
+const upperFmt = (v: string) => (v ?? '').toUpperCase();
 
 const route = useRoute();
 const router = useRouter();
@@ -741,6 +762,16 @@ export default { name: 'OrderForm' };
 </style>
 
 <style lang="scss">
+/* 出口国家下拉：国旗+中文名 左侧，英文全称 右侧（沿袭 hb-mes） */
+.country-popper .country-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+  .country-left { display: flex; align-items: center; gap: 8px; min-width: 0;
+    .fi { font-size: 16px; line-height: 1; box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08); border-radius: 2px; overflow: hidden; }
+    .country-zh { font-size: 13px; font-weight: 500; }
+  }
+  .country-en { color: var(--el-text-color-placeholder); font-size: 12px; flex-shrink: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 .customer-2col-popper {
   .el-select-dropdown__item {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
