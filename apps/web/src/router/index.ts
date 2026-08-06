@@ -127,4 +127,52 @@ router.beforeEach(async (to, _from, next) => {
   next();
 });
 
+/**
+ * 懒加载 chunk 失效兜底（发版后必现的老页面卡死）。
+ *
+ * 现象：页面在发版前打开，路由组件是内容哈希命名的懒加载 chunk；部署脚本会
+ * `rm -rf web-dist/assets` 再解包新产物，老哈希文件名全部消失。此时点任何
+ * 尚未加载过的页面（退出→登录页、订单表单、打印页…），浏览器请求老 chunk
+ * 被 Nginx 的 SPA 规则**回吐 index.html（Content-Type: text/html）**，
+ * 动态 import 因 MIME 不符而 reject → vue-router 中止导航 → 页面原地不动，
+ * 用户只能手动刷新。（2026-08-06 M3.5 发版后实测复现）
+ *
+ * 处理：识别到 chunk 加载失败就带着目标路径**硬跳转**一次，让浏览器重新拉
+ * 新的 index.html 与新 chunk；用 sessionStorage 打标，同一目标只跳一次，
+ * 避免新版本本身有问题时陷入刷新死循环。
+ */
+const CHUNK_RELOAD_PREFIX = 'hb_oms_chunk_reload:';
+const CHUNK_ERROR_RE =
+  /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Loading chunk .* failed|Unable to preload CSS/i;
+
+function markedReloaded(key: string): boolean {
+  try {
+    if (sessionStorage.getItem(key)) return true;
+    sessionStorage.setItem(key, '1');
+    return false;
+  } catch {
+    // 隐私模式禁用 sessionStorage：放弃防重入，至少保证能跳一次
+    return false;
+  }
+}
+
+router.onError((error, to) => {
+  if (!CHUNK_ERROR_RE.test(String((error as Error)?.message ?? error))) return;
+  const key = `${CHUNK_RELOAD_PREFIX}${to.fullPath}`;
+  if (markedReloaded(key)) return;
+  // BASE_URL 生产为 '/oms/admin/'，去掉尾斜杠再拼 fullPath，避免出现双斜杠
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  window.location.assign(`${base}${to.fullPath}`);
+});
+
+// 导航成功即说明当前版本的 chunk 可用，清掉标记，
+// 使下一次真正的发版失效仍能触发硬跳转（否则同一目标一辈子只救一次）。
+router.afterEach((to) => {
+  try {
+    sessionStorage.removeItem(`${CHUNK_RELOAD_PREFIX}${to.fullPath}`);
+  } catch {
+    /* ignore */
+  }
+});
+
 export default router;

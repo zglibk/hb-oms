@@ -65,6 +65,7 @@ pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已�
 - HTTP 封装在 `utils/request.ts`：自动附带 Bearer token、401 自动刷新、统一解包 `ApiResult`；API 定义按模块放 `src/api/`。
 - 开发期 Vite proxy 将 `/api`、`/uploads` 代理到 `localhost:8100`；`@` 别名指向 `src/`。生产构建 `base = '/oms/admin/'`。
 - 状态用 Pinia（`stores/user.ts` 含 token/权限/菜单）。
+- **懒加载 chunk 失效兜底**（`router/index.ts` 的 `router.onError`）：部署脚本会 `rm -rf web-dist/assets` 再解包新产物，**发版前打开的页面**持有的旧哈希 chunk 全部消失；此时请求老 chunk 会被 Nginx 的 SPA 规则回吐 `index.html`（`Content-Type: text/html`），动态 import 因 MIME 不符而 reject，vue-router **中止导航、页面原地不动**，用户以为按钮失灵（2026-08-06 发版后实测复现，退出按钮首当其冲）。兜底逻辑识别到 chunk 加载失败即带目标路径硬跳转一次，sessionStorage 打标防死循环，导航成功后清标。**新增懒加载路由无需额外处理；但不要删掉这段 onError**。
 - 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
 - `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
 - 主题：侧栏固定深色（底 `#1E293B`、logo 区 `#16202E`、子菜单 `#192433`、hover `#263349`、激活 `#1C3462` + 左侧 4.5px `#165DFF` 竖条），标题行下分隔线 `#334155`；「更换主题」只影响 Element 主色，不改侧栏配色。
