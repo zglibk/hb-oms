@@ -1,0 +1,298 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+> **本文件是 hb-oms 项目唯一权威规范文件。** 项目由多个 AI 模型交替开发，任何代码修改、功能开发前必须先通读本文件；实现方案与本文件冲突时，以本文件为准。
+>
+> 与姊妹项目 hb-mes 的关系：hb-oms 的架构范式**照搬** `D:\Project\hb-mes\CLAUDE.md`（同一套 monorepo/NestJS/Vue3/共享包/迁移/权限体系），但**业务完全独立、数据库独立、代码不共用**。两份文件冲突时，改 hb-oms 代码以本文件为准；本文件未覆盖的通用工程约定，回查 hb-mes CLAUDE.md。
+>
+> 结构分层：技术架构规范 → 权限体系 → 数据库迁移规范 → 统一开发强制约束 → OMS 业务规范 → 里程碑进度 → 跨会话协作约定 → 部署运维 → 待办与风险清单。
+
+## 项目概述
+
+海宝五金**订单跟踪系统**（hb-oms）：订单 → 外发表面处理（可选）→ 装配 → 成品入库 → 出库的全链路台账系统，核心产出是四个数——**订单数 / 完成数 / 库存数 / 双欠数**（生产欠数 = 订单数 − 累计入库；发货欠数 = 订单数 − 累计出库），替代车间现行的手工 Excel 跟踪台账。
+
+**与 hb-mes 的定位差异（关键，决定什么该做什么不该做）**：hb-mes 是带排产与多级审核的 MES；hb-oms **彻底不做排产、不做审核流、不做报工**（设计文档决策 #2）。凡涉及"排产单/审核/报工/审批开关/大屏"的需求，一律不在本项目实现。
+
+pnpm + turbo monorepo：
+
+- `apps/server` —— NestJS + TypeORM + MySQL 模块化单体（`@hb-oms/server`，端口 **8100**，库 **haibao_oms**）
+- `apps/web` —— Vue 3 + Element Plus + Vite（`@hb-oms/web`，dev 端口 **5174**，生产 base `/oms/admin/`）
+- `packages/shared` —— 前后端共享常量与纯函数（`@hb-oms/shared`）：业务状态枚举、单位换算、产品类型组合、部件展开蓝图、外发折算的**双端唯一事实源**。双格式产物（CJS 给 Node / ESM 给 Vite）
+- `site/` —— 前台静态站（Nginx `/oms/` 部署根：首页 + 设计文档评审页），无需权限
+- `docs/` —— 文档站构建器（`pnpm docs:build` 把根目录设计文档 md 渲染成 HTML 挂到前台站）
+- `deploy/` —— 生产部署脚本
+
+代码注释、提交信息、UI 文案均为中文；提交信息遵循 conventional commits（如 `feat(outsource): ...`）。根目录 [订单跟踪系统(hb-oms)设计文档-V1.0.md](./订单跟踪系统(hb-oms)设计文档-V1.0.md) 是**业务口径的权威来源**，本文件是**工程规范的权威来源**，二者互补。
+
+> 设计文档维护约定：保持**单一首版 V1.0**，需求变化直接整合进正文，**不留修订记录、不写"原方案 X 现改为 Y"**。
+
+## 常用命令
+
+```bash
+pnpm dev                          # 前后端并行启动（server:8100, web:5174）
+pnpm dev:server / pnpm dev:web    # 单独启动（已前置构建 shared，但只构建一次不 watch）
+pnpm build                        # turbo 全量构建（web 构建含 vue-tsc --noEmit 类型检查）
+pnpm lint                         # eslint（server: ts；web: ts+vue）
+pnpm --filter @hb-oms/shared build  # 单独构建共享包
+
+pnpm db:migrate                   # 存量库增量迁移（幂等，可重复执行）
+pnpm db:init                      # 全新建库 + 建表 + 种子（勿对已有数据库执行）
+```
+
+共享包构建时机（易踩坑）：`pnpm dev`（根）会先构建再以 `tsc -b --watch` 跟随改动；`pnpm dev:server` / `pnpm dev:web` 只构建一次，**会话中改了共享包必须重新执行**；裸执行 `pnpm --filter @hb-oms/web dev` **不会**自动构建共享包，须先手动构建。
+
+后端 `.env` 位于 `apps/server/.env`（模板 `.env.example`）。
+
+---
+
+## 一、技术架构规范
+
+### 后端架构
+
+- 全局路由前缀 `/api`，全局 ValidationPipe（`transform + whitelist`）。
+- 全局守卫：先 `JwtAuthGuard` 后 `PermissionGuard`；开放接口用 `@Public()` 装饰器。
+- 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
+- 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
+- `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级）、outsource（外发发坯单）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+
+### 前端架构
+
+- 路由为**后端菜单驱动的动态路由**：登录后由 `router/dynamic.ts` 将菜单树注册到 Layout 下，权限清单里的 `component` 字段（如 `'outsource/index'`）映射 `src/views/**/*.vue`。
+- **非菜单子页面**（表单页/打印页/履历页）在 `router/index.ts` 的 `constantRoutes` 里静态注册，必须带 `meta.activeMenu` 指向其所属菜单路径，侧栏才会正确高亮并自动展开父级菜单（layout 已实现祖先链展开）。
+- HTTP 封装在 `utils/request.ts`：自动附带 Bearer token、401 自动刷新、统一解包 `ApiResult`；API 定义按模块放 `src/api/`。
+- 开发期 Vite proxy 将 `/api`、`/uploads` 代理到 `localhost:8100`；`@` 别名指向 `src/`。生产构建 `base = '/oms/admin/'`。
+- 状态用 Pinia（`stores/user.ts` 含 token/权限/菜单）。
+- 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
+- `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
+- 主题：侧栏固定深色（底 `#1E293B`、logo 区 `#16202E`、子菜单 `#192433`、hover `#263349`、激活 `#1C3462` + 左侧 4.5px `#165DFF` 竖条），标题行下分隔线 `#334155`；「更换主题」只影响 Element 主色，不改侧栏配色。
+
+---
+
+## 二、权限体系（唯一事实源）
+
+`apps/server/src/modules/system/permission-manifest.ts` 是全部权限点（菜单/按钮）的 SSOT：
+
+- 应用启动时自动 upsert 到 `t_permission`、回填 parentId、并补授 admin，**新增权限点/改名/改父级都无需写迁移 SQL**（但授予非 admin 角色仍需迁移 SQL）。
+- 后端新增 `@RequirePermissions('xxx')` 或前端 `v-permission="'xxx'"` 时，必须在该清单登记。
+- `perm_type`：1=菜单 2=按钮；菜单节点的 `component` 对应前端 `src/views/` 下的组件路径。
+- 现有一级菜单（sort）：生产管理(5) / 工艺管理(6) / 物料管理(7) / 设备管理(8) / 基础数据(10) / 系统管理(90)。二级页面：订单管理、外发管理、开单信息、部件信息、设备信息、客户资料、部门信息、用户管理、角色管理、菜单权限、数据字典、操作日志、更新日志、系统配置。
+- 权限变更后，相关用户需**重新登录**刷新 JWT 权限。
+
+> **命名稳定性约定**：业务侧改展示名（如「物料信息」→「部件信息」、「工艺信息」→「开单信息」）时，**只改 perm_name / 菜单文案 / 页面标题 / 表注释**；内部标识（表名 `t_material` / `t_process_info`、权限码 `material:*` / `process-info:*`、路由路径、组件路径）保持不变，避免连锁改动与历史数据割裂。
+
+---
+
+## 三、数据库迁移规范（重要）
+
+TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移**，流程：
+
+1. 在 `apps/server/scripts/sql/` 新建幂等的 `migration-*.sql`（可重复执行不报错，建表用 `CREATE TABLE IF NOT EXISTS`，加列/加索引用存在性判断）。
+2. 在 `apps/server/scripts/db-migrate.ts` 的 `MIGRATIONS` 数组**末尾**登记（顺序即执行顺序），并在结构验证段 `expectedColumns` 为新表/关键新列补充校验项。
+3. 同步更新 `apps/server/scripts/sql/01-schema.sql`（供全新安装 `db:init` 使用），列定义必须与迁移 SQL **完全一致**。
+4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
+
+现有迁移清单见 `db-migrate.ts`（截至 M3 共 12 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+
+---
+
+## 四、统一开发强制约束
+
+### 4.1 命名与定义方式全程统一
+
+| 对象 | 规范 |
+|---|---|
+| 数据表 | `t_` 前缀 + snake_case（如 `t_outsource_doc`） |
+| 实体类 | PascalCase，文件 `xxx.entity.ts`，放模块 `entities/` 下 |
+| DTO | `CreateXxxDto` / `UpdateXxxDto` / `QueryXxxDto`，放模块 `dto/` 下，禁止 `XxxCreateDto` 等倒装 |
+| 接口路由 | kebab-case（如 `/api/outsource/part-group-options`），controller 按模块单文件 |
+| 前端 API | 按模块放 `src/api/xxx.ts`，函数名与后端接口语义一致 |
+| 分页入参 | 统一 `page` / `pageSize`（默认 1 / 20），禁止 `pageNum` / `limit` / `offset` |
+| 分页返回 | 统一 `{ list, total, page, pageSize }`，禁止 `records` / `items` / `rows` |
+
+**状态/枚举常量**（唯一事实源：`packages/shared/src/`）：
+
+- 业务状态枚举定义在 `business-status.ts`：`XXX_STATUS` 为 `as const` 数值对象（逻辑判断），`XXX_STATUS_OPTIONS` 为 `{ label, value, type }` 展示映射（type 为 el-tag 颜色），二者同文件同步维护。
+- 后端直接从 `@hb-oms/shared` import；前端经 `constants/dict.ts` re-export（展示数组沿用 `XXX_STATUS` 名，数值对象别名为 `XXX_STATUS_VALUE`），配合 `labelOf` / `tagTypeOf`。
+- **新增/修改状态只改共享包一处**。凡前后端都要用、且必须口径一致的纯常量/纯函数一律进共享包，禁止两端各写一份；依赖 NestJS/Vue/Element Plus 的代码不得进共享包。
+- **禁止在 service SQL、前端模板中出现裸的状态数字**（如 `status = 2`、`row.status === 1`），一律引用命名常量。注意跨表状态不可混用（订单状态用 `ORDER_STATUS`、外发状态用 `OUTSOURCE_STATUS`，即便数值恰好相同）。
+
+共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（发坯单号宽度与 `formatBlankNo`、重量→数量折算 `qtyFromWeight`、回齐判定、单头状态派生 `deriveOutsourceStatus`）。
+
+### 4.2 数据库字段注释强制
+
+- 所有新增字段必须带 `COMMENT`（迁移 SQL 与 `01-schema.sql` 双处），实体 `@Column` 的 `comment` 文案同步一致；枚举型字段的 COMMENT 必须列全枚举值及中文含义（如 `状态：1待发出 2已发出 3部分回货 4已回齐 9已作废`）。
+- 禁止含义模糊、无注释字段；口径类字段（数量单位、快照/实时、支/套）必须在注释中写明口径。
+
+### 4.3 业务接口四要素
+
+每个业务接口必须明确以下四项：
+
+1. **入参校验**：DTO + class-validator 装饰器，依赖全局 ValidationPipe；禁止在 service 里手工解析未经校验的 body。
+2. **异常抛出**：业务错误一律抛 Nest `HttpException` 家族（`BadRequestException` / `NotFoundException` / `ForbiddenException`），message 为面向用户的中文；**禁止 `throw new Error()`**。
+3. **返回结构**：交给 `TransformInterceptor` 统一包装，service 返回纯数据；文件流用 `@SkipTransform()`。
+4. **操作日志**：所有**增/删/改/确认/登记/导入**接口必须标注 `@OperationLog(...)`；只读查询不标。豁免须在接口处注释说明理由。
+
+同类业务复用统一封装：单号走 `NumberGeneratorService`、Excel 导入导出走既有模式、前端表格分页走 `AppTable`/`AppPagination`。**发现第二处相似实现时，先抽公共封装再继续**。
+
+### 4.4 先设计后编码
+
+任何新增功能，动手写代码前必须先梳理并确认三件事：
+
+1. **数据模型**：涉及哪些表、新增哪些字段、快照还是关联、索引与唯一约束；
+2. **业务流程**：状态机流转图（谁触发、从什么状态到什么状态、逆向操作是什么）；
+3. **边界场景**：并发重复提交、数量超限/为零、跨订单、单据被下游引用后的修改与作废。
+
+较大功能先补进设计文档再实现。禁止直接上手编码。
+
+### 4.5 验收方式（无单元测试框架）
+
+本项目**没有单元测试框架**，功能验收靠**API 级 E2E 脚本**：Node 原生 `fetch` 直连后端，走真实滑块验证码登录（解析 PNG 定位缺口）→ 拿 token → 串起业务流程逐条断言。约定：
+
+- 脚本写在会话 scratchpad 目录，不进仓库；登录 helper 可复用既有 `oms-api.mjs`（导出 `api / login / ok / results`）。
+- 每个里程碑或较大功能完成后必须跑一轮 E2E，**覆盖正常流程 + 全部守卫（拒绝路径）+ 状态机每一条边**，并在结束后**清理测试数据**。
+- 构建校验必须取**真实退出码**（`pnpm ... build > log 2>&1; echo "EXIT=$?"`）。历史教训：`pnpm build | grep error | head; echo $?` 检查的是 `echo` 的退出码恒为 0，曾导致带类型错误的代码被推上生产。
+
+---
+
+## 五、OMS 订单跟踪业务规范
+
+业务细则以设计文档为准，本节只固化**最易出错、必须全局一致**的口径。
+
+### 5.1 业务主线
+
+```
+销售订单(order) → 外发表面处理(outsource，可选) → 装配(assembly) → 成品入库 → 成品出库
+                                                          ↘ 部件台账(part-stock，V1 仅参考台账)
+```
+
+### 5.2 订单四级结构与跟踪锚点
+
+`t_order`（订单）→ `t_order_product`（产品行）→ **`t_order_part_group`（部件组 = 跟踪/台账锚点）** → `t_order_part`（部件行）。
+
+- **部件组是一切下游单据的锚点**：外发明细、装配批次、成品出入库明细、台账行一律锚定 `order_part_group_id`。
+- 默认一产品一组（`whole` 整品）；缓冲类可拆「外中轨」「内轨」等多组，各组独立图号/版本/料厚；**组不拆数量**，各组支数默认 = 产品支数。同产品行内 `group_type` 唯一。
+- 部件行由服务端按 `expandPartRows(组类型, 节数, 是否卡口, 组支数)` **蓝图展开**（三节轨 3 行 / 二节轨 2 行无中轨；含卡口再按左右分列，奇数支左边多一支），客户端只能微调追溯码/备注。
+
+### 5.3 全局数量与规格口径
+
+- **数量**：台账、库存、外发一律以「支」为准；订单单位仅 `set`(套) / `piece`(支) **两种**，1 套 = 2 支。
+- **规格**：英寸/mm 双单位录入，换算**固定 1 英寸 = 25mm**（我司口径，非国标 25.4）；存 mm 数值 + 保留原始录入值与单位用于回显。
+- **产品类型多选**：按固定字典顺序排序后逗号拼接存储（如 `standard,self_lock`），必须经共享包函数处理，禁止两端手工拆串；组合**含「卡口」即触发全部卡口规则**（左右分列、部件/库存分边别）。
+- **产品型号**：`货号 + 产品类型中文组合 + 部件组后缀`（如 `53#普通滑轨`、`45#缓冲外中轨`），共享包 `formatProductModel` 拼接，作为部件组快照与下游单据展示值。
+- **表面处理**：字典驱动（`surface_type`），`none`（无）是**代码保留值**——控制"是否需要外发"的判断依据，字典管理界面禁止删除/改值该项。
+
+### 5.4 单据编码规则
+
+所有单号**必须**经 `NumberGeneratorService` 采番（MySQL 计数表 + LAST_INSERT_ID 原子自增，业务表单号列唯一索引兜底），**禁止自行拼接**；事务内采番必须把事务 `manager` 传入。
+
+| 前缀 | 单据 | 格式 | 采番位置 |
+|---|---|---|---|
+| ORD | 销售订单 | `ORD + yymmdd + '-' + 4位当日序号` | order.service |
+| （无前缀） | **发坯单**（外发） | 7 位定长纯数字全局序号，展示层拼 `No.` | outsource.service（`generatePaddedSequence`，key `BLANK_NO`，宽度取共享包 `BLANK_NO_WIDTH`） |
+| FGI | 成品入库单 | 同 ORD | 待 M4 |
+| FGO | 成品出库单（含期初 `opening_balance`） | 同 ORD | 待 M4 |
+| FGR | 成品红字冲销单 | 同 ORD | 待 M4 |
+| FILE | 文件上传 | 同 ORD | file.service |
+
+**不采番的业务行**：装配批次、部件调整流水属轻量记账行，无单据号（主键 id 即可）。
+
+### 5.5 基础数据 vs 业务流水
+
+- **基础数据**（客户资料、开单信息、部件信息、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
+- **业务流水**（订单、外发单、装配批次、出入库单）：创建时**快照冗余**基础数据关键字段（客户名、生产单号、产品型号、规格、周期码等），基础数据后续变更**不回写**历史单据；审计字段齐全；确认后的单据只能冲销不能改。
+- 快照字段一律**由服务端从上游表读取落库**，不采信客户端传值（防伪造）。
+
+### 5.6 已落地业务模块的关键不变式
+
+**订单（M2）**
+
+- 更新 = 同结构整体重建（删旧产品/组/部件行后重写）。
+- 部件组被外发/装配/出入库引用后，禁止编辑与作废订单（`assertNoDownstreamRefs` 按 `order_id` 探测下游表，表未建时视为无引用）。
+- 出口订单必填出口国家；表单 PO#/生产单号/材质/生产图号**自动转大写**。
+
+**外发发坯单（M3）**
+
+- 状态机：`1待发出 --登记实际发外日期--> 2已发出 --有回货--> 3部分回货 --全部行回齐/手工关闭--> 4已回齐`；`9已作废`仅从待发出进入。
+- 单头状态**一律由共享包 `deriveOutsourceStatus` 派生**（前后端同口径），不在业务代码里散写判断。
+- 明细锚定部件组，**同一张单内同一部件组不可重复添加**；表面处理为 `none` 的产品不可入明细；单头表面处理不可为 `none`。
+- **仅待发出可整单编辑**；已发出后如需纠正数量，走「发出明细数量修正」接口（只改重量/单重/数量/备注，不动锚点、不增删行），改完**自动双向重算回齐状态**。
+- **有回货登记禁作废**；已发出禁作废（尾数不回走「关闭」，须填原因）。
+- **回货允许超过发出数**（重量折算误差）：后端不拦截，前端黄色提示；撤销回货后累计数与状态**自动回退**，回退到零时清除手工关闭原因。
+- 回货登记、数量修正均在事务内对明细行加**悲观锁**后汇总重算，防并发错乱。
+- 重量→数量折算：`数量 = 重量 ÷ 单重` 四舍五入（共享包 `qtyFromWeight`），仅作默认值，允许人工微调。
+
+---
+
+## 六、里程碑进度
+
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| M1 骨架 | monorepo、登录/权限/菜单、基础数据（客户资料含批量导入、开单信息、部件信息、字典）、共享包 | ✅ 已完成 |
+| M2 订单 | 订单四级 CRUD、附件、组按类型自动展开部件、图号带入工艺、状态机 | ✅ 已完成 |
+| M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、数量修正、打印 | ✅ 已完成 |
+| M3.5 装配 | 装配批次 CRUD（一组多批、计划/实际完成时间+数量）、装配管理页、可入库量接口 | ⬜ 待开发（下一步） |
+| M4 出入库+台账 | 出入库单、确认/红字冲销、**装配入库闸门**、balance、**订单跟踪台账** | ⬜ 待开发 |
+| M5 期初+看板 | 补录订单、成品/部件期初、首页看板、Excel 导出 | ⬜ 待开发 |
+
+期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉。
+
+---
+
+## 七、跨会话开发协作约定（多 AI 模型协作）
+
+1. **本文件是唯一权威工程规范，设计文档是唯一权威业务口径**。每次会话开始处理代码任务前先读这两份；与之冲突的旧代码写法不作为效仿依据。
+2. **同步更新义务**：新增功能、调整架构、新增单号前缀/权限点/状态枚举/迁移脚本后，必须在同一次会话内更新本文件对应章节（尤其 §5.4 单号表、§5.6 不变式、§六 里程碑进度）。
+3. **多方案冲突处理**：同类功能存在多种实现时，以本文件规定为准写新代码；旧代码是否重构按「工作量 × 复杂度 × 重要性」评估后列入 §九 风险清单逐步处理，**禁止顺手大范围重构**。
+4. **提交与部署节奏**：用户明确说"提交部署/推送部署"才推送并上线；说"先提交本地/暂不推送"则只本地提交。改动多主题时**拆分提交**，不要把无关改动混进一个 commit。
+5. **会话结束快照**：每次会话结束前输出简短【变更快照】：改动文件清单、新增迁移/权限点、口径变化、遗留待办。
+
+---
+
+## 八、部署与运维
+
+生产环境为阿里云 ECS `120.79.138.198`（Ubuntu + PM2 + Nginx + MySQL），与 hb-mes、QMS **同机共存**，hb-oms 全部挂 `/oms/` 路径前缀。完整运维手册见 [README.md](./README.md)。关键事实：
+
+| 项 | 路径/配置 |
+|---|---|
+| 代码目录 | `/var/www/hb-oms/app`（`git archive main \| ssh ... tar -x -C` 同步） |
+| **后台前端产物** | **`/var/www/hb-oms/web-dist`** → `location /oms/admin/` |
+| 前台静态站 | `/var/www/hb-oms/site` → `location /oms/` |
+| 后端进程 | PM2 `hb-oms-server`，`127.0.0.1:8100` → `location /oms/api/` |
+| 上传文件 | `/var/www/hb-oms/app/apps/server/uploads` → `location /oms/uploads/` |
+| Nginx 配置 | `/etc/nginx/conf.d/hb-mes.conf`（与 hb-mes/QMS 共用 server 块） |
+| 部署脚本 | `deploy/deploy-oms-app.sh`（幂等：生成 .env → install+build → db:init/db:migrate → PM2 → Nginx location 只增不改） |
+
+**部署三条铁律**：
+
+1. **前端 dist 必须上传到 `/var/www/hb-oms/web-dist/`**，不是代码目录下的 `app/apps/web/dist/`——传错位置会出现"部署脚本成功但线上不生效"的假象（已踩过）。部署后必须 `curl` 线上 `index.html` 比对入口 JS 哈希确认生效。
+2. **前端只在本地构建**：服务器同时跑 MySQL / hb-mes / QMS / OnlyOffice，内存紧张，`vite build` 压缩阶段易 OOM 卡死。禁止在服务器上跑 web 构建。
+3. **修改 Nginx 严禁影响 hb-mes 与 QMS 的既有 location**；只增不改，改前备份 + `nginx -t`。
+
+标准部署链：
+
+```bash
+pnpm --filter @hb-oms/web build
+git push origin main
+git archive main | ssh root@120.79.138.198 "tar -x -C /var/www/hb-oms/app"
+tar -C apps/web/dist -czf - . | ssh root@120.79.138.198 "rm -rf /var/www/hb-oms/web-dist/assets && tar -xzf - -C /var/www/hb-oms/web-dist"
+ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
+```
+
+代码仓库：https://gitee.com/lbk168/hb-oms.git（推送依赖本机凭据管理器，**任何情况下都不要在命令或文件中拼接明文密码**）。
+
+---
+
+## 九、待办与风险清单
+
+| # | 事项 | 说明 | 状态 |
+|---|---|---|---|
+| 1 | M3.5 装配模块 | 设计文档 §4.4 已定义 `t_assembly_batch`（锚定部件组 + side、计划/实际完成时间、可入库量口径）；闸门口径将被 M4 入库复用，**必须做成唯一实现** | ⬜ 下一步 |
+| 2 | 订单跟踪台账 | M4 核心页面，按部件组一行对齐手工台账粒度；四数口径必须与手工核算一致，需专门的口径核算验证 | ⬜ 待 M4 |
+| 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
+| 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |
+| 5 | 外发回货验收(FQC) | V1 仅用备注承载，不独立建模 | 📘 V1 不做 |
+| 6 | 外购零配件台账 | V1 不涉及（不建台账、不做出入库） | 📘 V1 不做 |
+| 7 | 事务写法约定 | 默认 `dataSource.transaction(mgr => ...)`；仅需悲观锁/手动控制提交时用 QueryRunner，并注释说明原因 | 📘 已定约定 |
+| 8 | 前端大 chunk 告警 | vite build 提示主包 > 500KB，暂未做代码分割；影响首屏但不影响功能，需要时再治理 | ⬜ 低优先级 |
