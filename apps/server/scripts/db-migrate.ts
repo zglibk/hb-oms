@@ -37,6 +37,8 @@ const MIGRATIONS: string[] = [
   'migration-equipment-info.sql',
   'migration-dept-leader-phone.sql',
   'migration-changelog-systemconfig.sql',
+  'migration-part-info-fields.sql',
+  'migration-billing-info-rev.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -65,6 +67,9 @@ const expectedColumns = [
   't_department.leader',
   't_changelog.version',
   't_system_config.system_name',
+  't_material.unit_weight',
+  't_process_info.dimension',
+  't_process_info.drawing_version_outer',
 ];
 
 async function main() {

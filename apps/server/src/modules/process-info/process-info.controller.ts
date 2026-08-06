@@ -54,7 +54,7 @@ export class ProcessInfoController {
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent('工艺信息.xlsx')}"`,
+      `attachment; filename="${encodeURIComponent('开单信息.xlsx')}"`,
     );
     res.send(buf);
   }
@@ -70,7 +70,7 @@ export class ProcessInfoController {
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodeURIComponent('工艺信息导入模板.xlsx')}"`,
+      `attachment; filename="${encodeURIComponent('开单信息导入模板.xlsx')}"`,
     );
     res.send(buf);
   }
@@ -88,7 +88,7 @@ export class ProcessInfoController {
 
   @Post()
   @RequirePermissions('process-info:create')
-  @OperationLog('工艺信息', '新增工艺')
+  @OperationLog('开单信息', '新增开单信息')
   async create(@Body() dto: CreateProcessInfoDto, @CurrentUser() user: CurrentUserPayload) {
     return this.service.create(dto, user);
   }
@@ -96,7 +96,7 @@ export class ProcessInfoController {
   /** Excel 批量导入（整批校验、逐行错误；overwrite=1 按生产图号覆盖更新） */
   @Post('import')
   @RequirePermissions('process-info:import')
-  @OperationLog('工艺信息', '批量导入工艺')
+  @OperationLog('开单信息', '批量导入开单信息')
   @UseInterceptors(FileInterceptor('file'))
   async importExcel(
     @UploadedFile() file: Express.Multer.File,
@@ -114,14 +114,14 @@ export class ProcessInfoController {
   /** 批量删除（整批校验：任一图号被订单部件组引用则整批拒绝；权限复用单删） */
   @Post('batch-delete')
   @RequirePermissions('process-info:delete')
-  @OperationLog('工艺信息', '批量删除工艺')
+  @OperationLog('开单信息', '批量删除开单信息')
   async batchRemove(@Body() dto: BatchDeleteProcessInfoDto) {
     return this.service.batchRemove(dto.ids);
   }
 
   @Put(':id')
   @RequirePermissions('process-info:update')
-  @OperationLog('工艺信息', '编辑工艺')
+  @OperationLog('开单信息', '编辑开单信息')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProcessInfoDto,
@@ -132,7 +132,7 @@ export class ProcessInfoController {
 
   @Delete(':id')
   @RequirePermissions('process-info:delete')
-  @OperationLog('工艺信息', '删除工艺')
+  @OperationLog('开单信息', '删除开单信息')
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
   }

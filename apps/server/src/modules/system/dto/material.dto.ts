@@ -7,7 +7,7 @@ import {
 } from 'class-validator';
 
 export class CreateMaterialDto {
-  @IsNotEmpty({ message: '物料代码必填' })
+  @IsNotEmpty({ message: '部件代码必填' })
   @IsString()
   @MaxLength(64)
   materialCode: string;
@@ -20,6 +20,9 @@ export class CreateMaterialDto {
   @IsOptional() @IsString() partType?: string;
   @IsOptional() @IsString() drawingNo?: string;
   @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsString() @MaxLength(64) sheetMaterial?: string;
+  @IsOptional() @IsString() @MaxLength(32) materialThickness?: string;
+  @IsOptional() @IsString() @MaxLength(16) unitWeight?: string;
   @IsOptional() @IsString() remark?: string;
 }
 
@@ -32,6 +35,9 @@ export class UpdateMaterialDto {
   @IsOptional() @IsString() partType?: string;
   @IsOptional() @IsString() drawingNo?: string;
   @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsString() @MaxLength(64) sheetMaterial?: string;
+  @IsOptional() @IsString() @MaxLength(32) materialThickness?: string;
+  @IsOptional() @IsString() @MaxLength(16) unitWeight?: string;
   @IsOptional() @IsString() remark?: string;
   @IsOptional() @IsInt() status?: number;
 }

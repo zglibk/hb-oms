@@ -4,7 +4,10 @@ import type { PageResult } from './customer';
 export interface ProcessInfoItem {
   id: number;
   drawingNo: string;
-  drawingVersion: string | null;
+  drawingVersionOuter: string | null;
+  drawingVersionMiddle: string | null;
+  drawingVersionInner: string | null;
+  dimension: string | null;
   customerId: number | null;
   customerName: string | null;
   productName: string | null;

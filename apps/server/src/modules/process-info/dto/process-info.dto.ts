@@ -24,10 +24,13 @@ export class CreateProcessInfoDto {
   @MaxLength(128, { message: '生产图号不能超过128字符' })
   drawingNo: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  drawingVersion?: string;
+  /** 版本（部件级：外/中/内轨，文本型小数） */
+  @IsOptional() @IsString() @MaxLength(32) drawingVersionOuter?: string;
+  @IsOptional() @IsString() @MaxLength(32) drawingVersionMiddle?: string;
+  @IsOptional() @IsString() @MaxLength(32) drawingVersionInner?: string;
+
+  /** 规格（产品级；寸自动换算 mm） */
+  @IsOptional() @IsString() @MaxLength(32) dimension?: string;
 
   @IsOptional()
   @Type(() => Number)

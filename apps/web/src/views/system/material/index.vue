@@ -20,7 +20,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="关键字">
-              <el-input v-model="query.keyword" placeholder="物料代码/产品名称/货号" clearable name="keyword" autocomplete="off" @keyup.enter="load" @clear="load" @blur="onKeywordBlur" />
+              <el-input v-model="query.keyword" placeholder="部件代码/产品名称/货号" clearable name="keyword" autocomplete="off" @keyup.enter="load" @clear="load" @blur="onKeywordBlur" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
@@ -35,14 +35,14 @@
 
     <el-card shadow="never">
       <div class="toolbar">
-        <el-button size="small" link v-permission="'material:create'" type="primary" :icon="Plus" @click="openCreate">新增物料</el-button>
+        <el-button size="small" link v-permission="'material:create'" type="primary" :icon="Plus" @click="openCreate">新增部件</el-button>
         <el-button type="primary" plain size="small" v-permission="'material:export'" :icon="Download" :loading="exporting" @click="onExport">导出到Excel</el-button>
         <el-button type="primary" plain size="small" v-permission="'material:import'" :icon="Upload" @click="openImport">批量导入</el-button>
       </div>
       <el-table v-loading="loading" :data="list" border stripe @selection-change="onSelectionChange">
         <el-table-column type="selection" width="45" align="center" />
         <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" class-name="col-num" />
-        <el-table-column label="物料代码" prop="materialCode" width="150" />
+        <el-table-column label="部件代码" prop="materialCode" width="150" />
         <el-table-column label="货号" prop="itemNo" width="130" />
         <el-table-column label="产品名称" prop="productName" min-width="90" />
         <el-table-column label="规格" prop="spec" width="90" />
@@ -62,10 +62,14 @@
           </template>
         </el-table-column>
         <el-table-column label="图号" prop="drawingNo" width="180" />
-        <el-table-column label="单位" width="70">
-          <template #default="{ row }">
-            {{ labelFromDict(orderUnits, row.unit) || row.unit || '' }}
-          </template>
+        <el-table-column label="材质" width="90">
+          <template #default="{ row }">{{ row.sheetMaterial || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="料厚" width="100">
+          <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="单重(kg)" width="90">
+          <template #default="{ row }">{{ row.unitWeight || '—' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
@@ -95,9 +99,9 @@
     </el-card>
 
     <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="formVisible" :title="editId ? '编辑物料' : '新增物料'" width="520px">
+    <el-dialog v-model="formVisible" :title="editId ? '编辑部件' : '新增部件'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="物料代码" prop="materialCode">
+        <el-form-item label="部件代码" prop="materialCode">
           <el-input v-model="form.materialCode" :disabled="!!editId" placeholder="如 WG03000019" name="materialCode" autocomplete="off" :spellcheck="false" />
         </el-form-item>
         <el-form-item label="货号" prop="itemNo">
@@ -113,10 +117,18 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="单位">
-              <el-select v-model="form.unit" clearable style="width:100%">
-                <el-option v-for="d in orderUnits" :key="d.value" :label="d.label" :value="d.value" />
-              </el-select>
+            <el-form-item label="材质">
+              <el-input v-model="form.sheetMaterial" placeholder="如 Q235" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="料厚">
+              <el-input v-model="form.materialThickness" placeholder="如 1.2 / 1.2×1.0×1.2" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="单重(kg)">
+              <el-input v-model="form.unitWeight" placeholder="如 0.35" inputmode="decimal" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -165,13 +177,15 @@
     </el-dialog>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="detailVisible" title="物料详情" width="560px">
+    <el-dialog v-model="detailVisible" title="部件详情" width="560px">
       <el-descriptions v-if="detailRow" :column="2" border size="small">
-        <el-descriptions-item label="物料代码">{{ detailRow.materialCode || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="部件代码">{{ detailRow.materialCode || '—' }}</el-descriptions-item>
         <el-descriptions-item label="货号">{{ detailRow.itemNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品名称" :span="2">{{ detailRow.productName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="规格">{{ detailRow.spec || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="单位">{{ labelFromDict(orderUnits, detailRow.unit) || detailRow.unit || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="材质">{{ detailRow.sheetMaterial || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="料厚">{{ detailRow.materialThickness || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="单重(kg)">{{ detailRow.unitWeight || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品类型">{{ labelFromDict(productTypes, detailRow.productType) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="默认产品类别">{{ labelFromDict(railSections, detailRow.railSection) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="部件">{{ labelFromDict(partTypes, detailRow.partType) || '—' }}</el-descriptions-item>
@@ -190,7 +204,7 @@
     </el-dialog>
 
     <!-- 批量导入：拖拽上传 -->
-    <el-dialog v-model="importVisible" title="批量导入物料" width="520px" :close-on-click-modal="false" :close-on-press-escape="!importing" :show-close="!importing">
+    <el-dialog v-model="importVisible" title="批量导入部件" width="520px" :close-on-click-modal="false" :close-on-press-escape="!importing" :show-close="!importing">
       <div v-loading="importing" element-loading-text="正在解析、校验并导入，请稍候…" aria-live="polite">
         <el-upload
           drag
@@ -233,7 +247,7 @@
         style="margin-top: 12px"
       >
         <el-table-column label="行号" prop="row" width="80" class-name="col-num" />
-        <el-table-column label="物料代码" prop="materialCode" width="170" />
+        <el-table-column label="部件代码" prop="materialCode" width="170" />
         <el-table-column label="原因" prop="message" min-width="220" />
       </el-table>
       <template #footer>
@@ -299,10 +313,10 @@ const saving = ref(false);
 const deletingId = ref<number | null>(null);
 const form = reactive<any>({
   materialCode: '', itemNo: '', productName: '', spec: '',
-  productType: '', railSection: '', partType: '', drawingNo: '', unit: '', remark: '', status: 1,
+  productType: '', railSection: '', partType: '', drawingNo: '', unit: '', sheetMaterial: '', materialThickness: '', unitWeight: '', remark: '', status: 1,
 });
 const rules: FormRules = {
-  materialCode: [{ required: true, message: '物料代码必填', trigger: 'blur' }],
+  materialCode: [{ required: true, message: '部件代码必填', trigger: 'blur' }],
   itemNo:       [{ required: true, message: '货号必填', trigger: 'blur' }],
 };
 
@@ -341,7 +355,7 @@ function openCreate() {
   editId.value = null;
   Object.assign(form, {
     materialCode: '', itemNo: '', productName: '', spec: '',
-    productType: '', railSection: '', partType: '', drawingNo: '', unit: '', remark: '', status: 1,
+    productType: '', railSection: '', partType: '', drawingNo: '', unit: '', sheetMaterial: '', materialThickness: '', unitWeight: '', remark: '', status: 1,
   });
   formVisible.value = true;
 }
@@ -386,7 +400,7 @@ async function onExport() {
     }
     try {
       await ElMessageBox.confirm(
-        `确认按当前筛选条件导出全部物料清单到 Excel？<br/>共 <strong style="color:var(--el-color-danger);">${total.value}</strong> 条记录。`,
+        `确认按当前筛选条件导出全部部件清单到 Excel？<br/>共 <strong style="color:var(--el-color-danger);">${total.value}</strong> 条记录。`,
         '导出确认',
         {
           type: 'info',
@@ -447,7 +461,7 @@ async function onFileChange(uploadFile: any) {
     importVisible.value = false;
     resultVisible.value = true;
     if (res.success > 0) {
-      ElMessage.success(`成功导入 ${res.success} 条物料`);
+      ElMessage.success(`成功导入 ${res.success} 条部件`);
       await Promise.all([load(), loadCategories()]);
     }
   } catch {
@@ -477,7 +491,7 @@ async function onSave() {
 
 async function onDelete(row: any) {
   await ElMessageBox.confirm(
-    `确认删除物料「${row.materialCode}」？`, '提示', { type: 'warning' },
+    `确认删除部件「${row.materialCode}」？`, '提示', { type: 'warning' },
   );
   // 记录当前行 id 用于按钮 loading
   deletingId.value = row.id;
@@ -506,7 +520,7 @@ onMounted(async () => {
   await Promise.all([load(), loadCategories()]);
 });
 
-// keep-alive 缓存页：切回时刷新物料列表（他处可能已新增/导入物料）
+// keep-alive 缓存页：切回时刷新部件列表（他处可能已新增/导入部件）
 let materialActivated = false;
 onActivated(() => {
   if (!materialActivated) { materialActivated = true; return; }

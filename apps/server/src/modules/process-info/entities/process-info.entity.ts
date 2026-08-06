@@ -22,8 +22,14 @@ export class ProcessInfo {
   drawingNo: string;
 
   /** 版本号 */
-  @Column({ name: 'drawing_version', type: 'varchar', length: 32, nullable: true, comment: '版本号' })
-  drawingVersion: string | null;
+  @Column({ name: 'drawing_version_outer', type: 'varchar', length: 32, nullable: true, comment: '版本-外轨（文本型小数）' })
+  drawingVersionOuter: string | null;
+
+  @Column({ name: 'drawing_version_middle', type: 'varchar', length: 32, nullable: true, comment: '版本-中轨（文本型小数）' })
+  drawingVersionMiddle: string | null;
+
+  @Column({ name: 'drawing_version_inner', type: 'varchar', length: 32, nullable: true, comment: '版本-内轨（文本型小数）' })
+  drawingVersionInner: string | null;
 
   @Column({ name: 'customer_id', type: 'int', nullable: true, comment: '客户ID' })
   customerId: number | null;
@@ -34,6 +40,9 @@ export class ProcessInfo {
   /** 产品名称 */
   @Column({ name: 'product_name', type: 'varchar', length: 128, nullable: true, comment: '产品名称' })
   productName: string | null;
+
+  @Column({ type: 'varchar', length: 32, nullable: true, comment: '规格（产品级，统一 mm 文本，如 250mm；1寸=25mm）' })
+  dimension: string | null;
 
   /** 生产机台（多值逗号存储，展示 89/90/91） */
   @Column({ type: 'varchar', length: 128, nullable: true, comment: '生产机台-薄料/通用（多值逗号存储，如 362,363,364；无厚薄之分时填此列）' })

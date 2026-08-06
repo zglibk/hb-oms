@@ -66,6 +66,25 @@ export function toMm(value: number | null | undefined, unit?: string | null): nu
  * 规格展示：mm 录入 → `350mm`；英寸录入 → `14"（350mm）`。
  * raw 为原始录入值（保留小数），mm 为统一口径值。
  */
+/**
+ * 规格文本归一化（开单信息「规格」字段，1寸=25mm 我司口径）：
+ * - "10寸" / "10 寸" / "10\"" → "250mm"（数值×25）；
+ * - 纯数字 "250" → "250mm"；
+ * - 已带 mm 或其它写法原样保留（trim 后）。
+ */
+export function normalizeDimensionText(s?: string | null): string {
+  if (s === undefined || s === null) return '';
+  const t = String(s).trim();
+  if (!t) return '';
+  const cun = t.match(/^([\d.]+)\s*[寸"]$/);
+  if (cun) {
+    const n = Number(cun[1]);
+    if (!Number.isNaN(n)) return `${Math.round(n * INCH_TO_MM * 100) / 100}mm`;
+  }
+  if (/^[\d.]+$/.test(t)) return `${t}mm`;
+  return t;
+}
+
 export function formatDimension(
   raw: number | string | null | undefined,
   unit: string | null | undefined,

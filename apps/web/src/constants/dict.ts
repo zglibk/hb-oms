@@ -45,6 +45,7 @@ export {
   DIMENSION_UNIT,
   DIMENSION_UNIT_OPTIONS,
   toMm,
+  normalizeDimensionText,
   formatDimension,
   // 产品类型多选组合
   PRODUCT_TYPE_OPTIONS,

@@ -41,14 +41,16 @@ interface ImportRow {
 }
 
 const IMPORT_COLUMNS: ImportColumn[] = [
-  { header: '物料代码', field: 'materialCode', required: true, width: 18 },
+  { header: '部件代码', field: 'materialCode', required: true, width: 18 },
   { header: '货号', field: 'itemNo', required: true, width: 14 },
   { header: '产品名称', field: 'productName', required: false, width: 22 },
   { header: '规格', field: 'spec', required: false, width: 14 },
   { header: '产品类型', field: 'productType', required: false, width: 12, dict: 'product_type' },
   { header: '默认产品类别', field: 'railSection', required: false, width: 12, dict: 'rail_section' },
   { header: '部件', field: 'partType', required: false, width: 12, dict: 'part_type' },
-  { header: '单位', field: 'unit', required: false, width: 10, dict: 'order_unit' },
+  { header: '材质', field: 'sheetMaterial', required: false, width: 12 },
+  { header: '料厚', field: 'materialThickness', required: false, width: 12 },
+  { header: '单重(kg)', field: 'unitWeight', required: false, width: 10 },
   { header: '图号', field: 'drawingNo', required: false, width: 16 },
   { header: '备注', field: 'remark', required: false, width: 20 },
 ];
@@ -93,7 +95,7 @@ export class MaterialService {
     private readonly dataSource: DataSource,
   ) {}
 
-  /** 按物料代码精确查询（供订单录入带出） */
+  /** 按部件代码精确查询（供订单录入带出） */
   async findByCode(materialCode: string) {
     return this.repo.findOne({ where: { materialCode, status: 1 } });
   }
@@ -130,7 +132,7 @@ export class MaterialService {
 
   async create(dto: CreateMaterialDto, user: CurrentUserPayload) {
     const exists = await this.repo.findOne({ where: { materialCode: dto.materialCode } });
-    if (exists) throw new ConflictException(`物料代码 ${dto.materialCode} 已存在`);
+    if (exists) throw new ConflictException(`部件代码 ${dto.materialCode} 已存在`);
     const saved = await this.repo.save(
       this.repo.create({ ...dto, ...auditOnCreate(user) }),
     );
@@ -139,16 +141,16 @@ export class MaterialService {
 
   async update(id: number, dto: UpdateMaterialDto, user: CurrentUserPayload) {
     const item = await this.repo.findOne({ where: { id } });
-    if (!item) throw new NotFoundException('物料不存在');
+    if (!item) throw new NotFoundException('部件不存在');
     await this.repo.update(id, { ...dto, ...auditOnUpdate(user) });
     return { id };
   }
 
   async remove(id: number) {
     const material = await this.repo.findOne({ where: { id } });
-    if (!material) throw new NotFoundException('物料不存在');
+    if (!material) throw new NotFoundException('部件不存在');
 
-    // 引用完整性校验：物料被订单产品引用时禁止删除，建议停用。
+    // 引用完整性校验：部件被订单产品引用时禁止删除，建议停用。
     // 订单模块（t_order_product）在 M2 里程碑落地，此处用原生 SQL 探测，表尚未建时视为无引用。
     let refCount = 0;
     try {
@@ -162,7 +164,7 @@ export class MaterialService {
     }
     if (refCount > 0) {
       throw new BadRequestException(
-        `该物料已被 ${refCount} 条订单产品引用，无法删除，建议改为「停用」`,
+        `该部件已被 ${refCount} 条订单产品引用，无法删除，建议改为「停用」`,
       );
     }
 
@@ -207,7 +209,7 @@ export class MaterialService {
     wb.creator = '海宝五金 PMC/MES';
     wb.created = new Date();
 
-    const ws = wb.addWorksheet('物料导入', {
+    const ws = wb.addWorksheet('部件导入', {
       views: [{ showGridLines: false, state: 'frozen', ySplit: 3 }],
     });
     ws.columns = cols.map((c) => ({ key: c.field as string, width: c.width }));
@@ -222,7 +224,7 @@ export class MaterialService {
     // 第 1 行：标题
     ws.mergeCells(1, 1, 1, colCount);
     const titleCell = ws.getCell(1, 1);
-    titleCell.value = '物料信息批量导入模板';
+    titleCell.value = '部件信息批量导入模板';
     titleCell.font = { name: '微软雅黑', bold: true, size: 15, color: { argb: 'FFFFFFFF' } };
     titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
@@ -232,7 +234,7 @@ export class MaterialService {
     ws.mergeCells(2, 1, 2, colCount);
     const noteCell = ws.getCell(2, 1);
     noteCell.value =
-      '填写说明：① 表头带 * 为必填；② 物料代码需全局唯一，与系统已有或本表内重复的行将被跳过；' +
+      '填写说明：① 表头带 * 为必填；② 部件代码需全局唯一，与系统已有或本表内重复的行将被跳过；' +
       '③「产品类型/默认产品类别/部件/单位」请点击单元格从下拉选择；④ 默认产品类别为二节轨/三节轨，订单录入时可自动带出；⑤ 请从第 4 行开始逐行填写，请勿修改或删除表头。';
     noteCell.font = { name: '微软雅黑', size: 10, color: { argb: 'FFB45309' } };
     noteCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
@@ -344,13 +346,13 @@ export class MaterialService {
     const ws = wb.worksheets[0];
     if (!ws) throw new BadRequestException('Excel 中未找到工作表');
 
-    // 定位表头行（前 10 行内查找含「物料代码」的行）
+    // 定位表头行（前 10 行内查找含「部件代码」的行）
     let headerRowNo = -1;
     const maxScan = Math.min(ws.rowCount, 10);
     for (let r = 1; r <= maxScan; r++) {
       let found = false;
       ws.getRow(r).eachCell({ includeEmpty: false }, (cell) => {
-        if (normalizeHeader(cellText(cell.value)) === '物料代码') found = true;
+        if (normalizeHeader(cellText(cell.value)) === '部件代码') found = true;
       });
       if (found) {
         headerRowNo = r;
@@ -358,7 +360,7 @@ export class MaterialService {
       }
     }
     if (headerRowNo === -1) {
-      throw new BadRequestException('未找到表头（缺少「物料代码」列），请使用下载的模板填写');
+      throw new BadRequestException('未找到表头（缺少「部件代码」列），请使用下载的模板填写');
     }
 
     // 建立 表头字段 → 列号 映射（兼容旧表头「默认节数」「产品类别」）
@@ -415,12 +417,12 @@ export class MaterialService {
       const materialCode = get('materialCode');
       const itemNo = get('itemNo');
       const rowErrors: string[] = [];
-      if (!materialCode) rowErrors.push('物料代码必填');
+      if (!materialCode) rowErrors.push('部件代码必填');
       if (!itemNo) rowErrors.push('货号必填');
 
       if (materialCode) {
         const first = seenCodes.get(materialCode);
-        if (first) rowErrors.push(`物料代码与第 ${first} 行重复`);
+        if (first) rowErrors.push(`部件代码与第 ${first} 行重复`);
         else seenCodes.set(materialCode, r);
       }
 
@@ -457,7 +459,7 @@ export class MaterialService {
       });
     }
 
-    // 与库内已有物料代码比对（一次 IN 查询）
+    // 与库内已有部件代码比对（一次 IN 查询）
     let existingSet = new Set<string>();
     const codes = candidates.map((c) => c.data.materialCode as string);
     if (codes.length) {
@@ -475,7 +477,7 @@ export class MaterialService {
         errors.push({
           row: c.rowNo,
           materialCode: c.data.materialCode as string,
-          message: '物料代码已存在，已跳过',
+          message: '部件代码已存在，已跳过',
         });
       } else {
         toInsert.push({ ...c.data, ...audit });
@@ -499,7 +501,7 @@ export class MaterialService {
 
   // ===================== 导出 Excel =====================
 
-  /** 导出物料清单（不分页；有 ids 时仅导出指定记录，否则按筛选条件导出全部匹配行） */
+  /** 导出部件清单（不分页；有 ids 时仅导出指定记录，否则按筛选条件导出全部匹配行） */
   async exportList(query: QueryMaterialDto, ids?: number[]): Promise<Buffer> {
     const qb = this.repo.createQueryBuilder('m');
     if (ids && ids.length) {
@@ -524,14 +526,16 @@ export class MaterialService {
     };
 
     const cols: { header: string; get: (m: Material) => any }[] = [
-      { header: '物料代码', get: (m) => m.materialCode ?? '' },
+      { header: '部件代码', get: (m) => m.materialCode ?? '' },
       { header: '货号', get: (m) => m.itemNo ?? '' },
       { header: '产品名称', get: (m) => m.productName ?? '' },
       { header: '规格', get: (m) => m.spec ?? '' },
       { header: '产品类型', get: (m) => toLabel('product_type', m.productType) },
       { header: '默认产品类别', get: (m) => toLabel('rail_section', m.railSection) },
       { header: '部件', get: (m) => toLabel('part_type', m.partType) },
-      { header: '单位', get: (m) => toLabel('order_unit', m.unit) },
+      { header: '材质', get: (m) => m.sheetMaterial ?? '' },
+      { header: '料厚', get: (m) => m.materialThickness ?? '' },
+      { header: '单重(kg)', get: (m) => m.unitWeight ?? '' },
       { header: '图号', get: (m) => m.drawingNo ?? '' },
       { header: '备注', get: (m) => m.remark ?? '' },
     ];
@@ -563,7 +567,7 @@ export class MaterialService {
     const wb = new ExcelJS.Workbook();
     wb.creator = '海宝五金 PMC/MES';
     wb.created = new Date();
-    const ws = wb.addWorksheet('物料清单', {
+    const ws = wb.addWorksheet('部件清单', {
       views: [{ showGridLines: false }], // 取消表格网格线显示
     });
     ws.columns = colWidths.map((w) => ({ width: w }));

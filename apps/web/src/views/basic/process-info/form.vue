@@ -4,7 +4,7 @@
       <div class="form-header">
         <div class="form-title">
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
-          <span class="title-text">{{ editId ? '编辑工艺' : '新增工艺' }}</span>
+          <span class="title-text">{{ editId ? '编辑开单信息' : '新增开单信息' }}</span>
           <span v-if="form.drawingNo" class="title-sub">{{ form.drawingNo }}</span>
         </div>
         <div>
@@ -22,8 +22,8 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
-            <el-form-item label="版本号">
-              <el-input v-model="form.drawingVersion" placeholder="如 1.01、2.0、1.5" @blur="onVersionBlur" />
+            <el-form-item label="规格">
+              <el-input v-model="form.dimension" placeholder="如 10寸 自动换算为 250mm" @blur="onDimensionBlur" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -86,6 +86,7 @@
           <thead>
             <tr>
               <th class="pg-part">部件</th>
+              <th class="pg-ver">版本</th>
               <th>长度要求</th>
               <th>特殊要求</th>
               <th>开单注明</th>
@@ -95,6 +96,7 @@
           <tbody>
             <tr>
               <td class="pg-part">外轨</td>
+              <td><el-input v-model="form.drawingVersionOuter" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionOuter')" /></td>
               <td><el-input v-model="form.lengthReqOuter" placeholder="如 正常长度（不变）" /></td>
               <td><el-input v-model="form.specialReqOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteOuter" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" placeholder="开单时需注明的事项" /></td>
@@ -102,6 +104,7 @@
             </tr>
             <tr>
               <td class="pg-part">中轨</td>
+              <td><el-input v-model="form.drawingVersionMiddle" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionMiddle')" /></td>
               <td><el-input v-model="form.lengthReqMiddle" placeholder="如 外轨正常长度-17MM；二节轨产品此行留空" /></td>
               <td><el-input v-model="form.specialReqMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteMiddle" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
@@ -109,6 +112,7 @@
             </tr>
             <tr>
               <td class="pg-part">内轨</td>
+              <td><el-input v-model="form.drawingVersionInner" placeholder="如 1.01" @blur="onVersionBlur('drawingVersionInner')" /></td>
               <td><el-input v-model="form.lengthReqInner" placeholder="如 外轨正常长度-2MM" /></td>
               <td><el-input v-model="form.specialReqInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
               <td><el-input v-model="form.billingNoteInner" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" /></td>
@@ -207,6 +211,7 @@ import {
 } from '@/api/process-info';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { uploadFile } from '@/api/file';
+import { normalizeDimensionText } from '@/constants/dict';
 
 const route = useRoute();
 const router = useRouter();
@@ -215,20 +220,20 @@ const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null
 /* 输入自动大写：生产图号、模具编号等含字母字段统一调用 */
 const upperFmt = (v: string) => (v ?? '').toUpperCase();
 
-/* 版本号：失焦时若为纯小数（如 1.01、2.0、1.5、2.2）自动加 "Ver " 前缀；
+/* 版本（部件级：外/中/内轨）：失焦时若为纯小数（如 1.01、2.0）自动加 "Ver " 前缀；
  * 已带前缀（不区分大小写）则规范化为 "Ver "。非小数格式保持原值。 */
-function onVersionBlur() {
-  let v = (form.drawingVersion || '').trim();
+type VersionField = 'drawingVersionOuter' | 'drawingVersionMiddle' | 'drawingVersionInner';
+function onVersionBlur(field: VersionField) {
+  let v = (form[field] || '').trim();
   if (!v) return;
   const m = /^ver\s*/i.exec(v);
   if (m) v = v.slice(m[0].length).trim();
-  if (/^\d+\.\d+$/.test(v)) {
-    form.drawingVersion = `Ver ${v}`;
-  } else if (v) {
-    form.drawingVersion = v;
-  } else {
-    form.drawingVersion = '';
-  }
+  form[field] = /^\d+\.\d+$/.test(v) ? `Ver ${v}` : v;
+}
+
+/* 规格（产品级）：失焦自动换算——寸→mm（1寸=25mm），纯数字补 mm */
+function onDimensionBlur() {
+  form.dimension = normalizeDimensionText(form.dimension);
 }
 
 const pageLoading = ref(false);
@@ -242,7 +247,8 @@ const reviewImgs = ref<string[]>([]);
 
 const form = reactive({
   drawingNo: '',
-  drawingVersion: '',
+  drawingVersionOuter: '', drawingVersionMiddle: '', drawingVersionInner: '',
+  dimension: '',
   customerId: undefined as number | undefined,
   customerName: '',
   productName: '',
@@ -300,7 +306,8 @@ async function init() {
       const row = await getProcessInfoDetail(editId.value);
       Object.assign(form, {
         drawingNo: row.drawingNo,
-        drawingVersion: row.drawingVersion ?? '',
+        drawingVersionOuter: row.drawingVersionOuter ?? '', drawingVersionMiddle: row.drawingVersionMiddle ?? '', drawingVersionInner: row.drawingVersionInner ?? '',
+        dimension: row.dimension ?? '',
         customerId: row.customerId ?? undefined,
         customerName: row.customerName ?? '',
         productName: row.productName ?? '',
@@ -416,6 +423,7 @@ export default { name: 'ProcessInfoForm' };
   td { padding: 3px 4px; }
   .pg-part { width: 64px; text-align: center; font-size: 13px; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
   .pg-mold { width: 150px; }
+  .pg-ver { width: 100px; }
   :deep(.el-input__wrapper), :deep(.el-textarea__inner) { box-shadow: none; background: transparent; }
 }
 .img-list {

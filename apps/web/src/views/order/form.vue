@@ -291,6 +291,7 @@ import {
   UNIT_OPTIONS,
   DIMENSION_UNIT_OPTIONS,
   expandPartRows,
+  partGroupParts,
   formatProductModel,
   hasSocket,
   normalizeVersion,
@@ -666,7 +667,12 @@ async function onDrawingChange(p: ProductRow, g: GroupRow) {
   if (!dn) return;
   const info = await getProcessInfoByDrawing(dn);
   if (!info) return;
-  if (info.drawingVersion && !g.drawingVersion) g.drawingVersion = info.drawingVersion;
+  // 开单信息版本为部件级：按组类型取首部件的版本（outer_middle→外轨、inner→内轨…）
+  const firstPart = partGroupParts(g.groupType)[0];
+  const ver =
+    firstPart === 'inner' ? info.drawingVersionInner :
+    firstPart === 'middle' ? info.drawingVersionMiddle : info.drawingVersionOuter;
+  if (ver && !g.drawingVersion) g.drawingVersion = ver;
   if (info.productName && !p.productName) p.productName = info.productName;
   if (info.customerName && !form.customerName) {
     form.customerName = info.customerName;

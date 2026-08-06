@@ -16,7 +16,7 @@ import {
 } from './dto/process-info.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
-import { normalizeVersion } from '@hb-oms/shared';
+import { normalizeDimensionText, normalizeVersion } from '@hb-oms/shared';
 
 /**
  * 导入/导出表格采用**手工工艺表格式**：一个图号一组、外/中/内轨各一行，
@@ -25,11 +25,12 @@ import { normalizeVersion } from '@hb-oms/shared';
  */
 const SHEET_HEADERS = [
   '图号',
-  '版本',
   '客户',
   '产品名称',
+  '规格',
   '生产机台',
   '部件',
+  '版本',
   '长度要求',
   '特殊要求',
   '开单注明',
@@ -38,7 +39,7 @@ const SHEET_HEADERS = [
   '备注',
 ] as const;
 
-const SHEET_WIDTHS = [18, 8, 14, 18, 12, 8, 24, 40, 18, 14, 20, 16];
+const SHEET_WIDTHS = [18, 14, 18, 10, 12, 8, 9, 24, 40, 18, 14, 20, 16];
 
 /** 表格样式：等宽字体、浅灰表头、隔组变色（更浅灰）、细边框 */
 const SHEET_FONT = 'Consolas';
@@ -53,14 +54,14 @@ const CELL_BORDER: Partial<ExcelJS.Borders> = {
 
 /** 组级列（Excel 合并单元格）列号清单：图号~生产机台 + 工艺更新说明/备注。
  * 审核意见/审核人/审核日期/审核截图不进 Excel（仅表单维护）。 */
-const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 11, 12];
+const GROUP_MERGE_COLS = [1, 2, 3, 4, 5, 12, 13];
 
 /** 组级列 → 实体字段（组内取首个非空值） */
 const GROUP_FIELDS: Array<{ header: string; field: keyof CreateProcessInfoDto }> = [
   { header: '图号', field: 'drawingNo' },
-  { header: '版本', field: 'drawingVersion' },
   { header: '客户', field: 'customerName' },
   { header: '产品名称', field: 'productName' },
+  { header: '规格', field: 'dimension' },
   { header: '生产机台', field: 'machines' },
   { header: '工艺更新说明', field: 'processUpdateNote' },
   { header: '备注', field: 'remark' },
@@ -77,9 +78,9 @@ const FIELD_META: Array<{
   isImages?: boolean;
 }> = [
   { field: 'drawingNo', label: '生产图号', scope: 'product' },
-  { field: 'drawingVersion', label: '版本号', scope: 'product' },
   { field: 'customerName', label: '客户名称', scope: 'product' },
   { field: 'productName', label: '产品名称', scope: 'product' },
+  { field: 'dimension', label: '规格', scope: 'product' },
   { field: 'machines', label: '机台(薄料)', scope: 'product' },
   { field: 'machinesThick', label: '机台(厚料)', scope: 'product' },
   { field: 'processUpdateNote', label: '工艺更新说明', scope: 'product' },
@@ -89,14 +90,17 @@ const FIELD_META: Array<{
   { field: 'reviewer', label: '审核人', scope: 'product' },
   { field: 'reviewDate', label: '审核日期', scope: 'product' },
   { field: 'remark', label: '备注', scope: 'product' },
+  { field: 'drawingVersionOuter', label: '版本', scope: 'outer' },
   { field: 'lengthReqOuter', label: '长度要求', scope: 'outer' },
   { field: 'specialReqOuter', label: '特殊要求', scope: 'outer' },
   { field: 'billingNoteOuter', label: '开单注明', scope: 'outer' },
   { field: 'moldNoOuter', label: '模具编号', scope: 'outer' },
+  { field: 'drawingVersionMiddle', label: '版本', scope: 'middle' },
   { field: 'lengthReqMiddle', label: '长度要求', scope: 'middle' },
   { field: 'specialReqMiddle', label: '特殊要求', scope: 'middle' },
   { field: 'billingNoteMiddle', label: '开单注明', scope: 'middle' },
   { field: 'moldNoMiddle', label: '模具编号', scope: 'middle' },
+  { field: 'drawingVersionInner', label: '版本', scope: 'inner' },
   { field: 'lengthReqInner', label: '长度要求', scope: 'inner' },
   { field: 'specialReqInner', label: '特殊要求', scope: 'inner' },
   { field: 'billingNoteInner', label: '开单注明', scope: 'inner' },
@@ -144,14 +148,15 @@ function normalizeDate(s?: string): string | undefined {
 
 /** 部件行 → 四列字段映射（长度/特殊/开单注明/模具；含常见简写别名） */
 type PartFieldMap = {
+  version: keyof CreateProcessInfoDto;
   length: keyof CreateProcessInfoDto;
   special: keyof CreateProcessInfoDto;
   billing: keyof CreateProcessInfoDto;
   mold: keyof CreateProcessInfoDto;
 };
-const OUTER_FIELDS: PartFieldMap = { length: 'lengthReqOuter', special: 'specialReqOuter', billing: 'billingNoteOuter', mold: 'moldNoOuter' };
-const MIDDLE_FIELDS: PartFieldMap = { length: 'lengthReqMiddle', special: 'specialReqMiddle', billing: 'billingNoteMiddle', mold: 'moldNoMiddle' };
-const INNER_FIELDS: PartFieldMap = { length: 'lengthReqInner', special: 'specialReqInner', billing: 'billingNoteInner', mold: 'moldNoInner' };
+const OUTER_FIELDS: PartFieldMap = { version: 'drawingVersionOuter', length: 'lengthReqOuter', special: 'specialReqOuter', billing: 'billingNoteOuter', mold: 'moldNoOuter' };
+const MIDDLE_FIELDS: PartFieldMap = { version: 'drawingVersionMiddle', length: 'lengthReqMiddle', special: 'specialReqMiddle', billing: 'billingNoteMiddle', mold: 'moldNoMiddle' };
+const INNER_FIELDS: PartFieldMap = { version: 'drawingVersionInner', length: 'lengthReqInner', special: 'specialReqInner', billing: 'billingNoteInner', mold: 'moldNoInner' };
 const PART_ROW_FIELDS: Record<string, PartFieldMap> = {
   外轨: OUTER_FIELDS,
   中轨: MIDDLE_FIELDS,
@@ -171,6 +176,7 @@ const PART_ORDER: Array<{ label: string; key: '外轨' | '中轨' | '内轨' }> 
 const IMPORTABLE_FIELDS: Array<keyof CreateProcessInfoDto> = [
   ...GROUP_FIELDS.map((g) => g.field),
   'machinesThick',
+  'drawingVersionOuter', 'drawingVersionMiddle', 'drawingVersionInner',
   'lengthReqOuter', 'lengthReqMiddle', 'lengthReqInner',
   'specialReqOuter', 'specialReqMiddle', 'specialReqInner',
   'billingNoteOuter', 'billingNoteMiddle', 'billingNoteInner',
@@ -263,6 +269,14 @@ export class ProcessInfoService {
     };
   }
 
+  /** 三个部件级版本 + 产品级规格 归一化（新增/编辑共用） */
+  private normalizeDto(dto: Partial<CreateProcessInfoDto>) {
+    if (dto.drawingVersionOuter !== undefined) dto.drawingVersionOuter = normalizeVersion(dto.drawingVersionOuter);
+    if (dto.drawingVersionMiddle !== undefined) dto.drawingVersionMiddle = normalizeVersion(dto.drawingVersionMiddle);
+    if (dto.drawingVersionInner !== undefined) dto.drawingVersionInner = normalizeVersion(dto.drawingVersionInner);
+    if (dto.dimension !== undefined) dto.dimension = normalizeDimensionText(dto.dimension);
+  }
+
   /** 修改履历（含新增/修改/导入更新；按时间倒序） */
   async findHistory(id: number) {
     await this.findOne(id);
@@ -304,15 +318,15 @@ export class ProcessInfoService {
 
   async findOne(id: number) {
     const item = await this.repo.findOne({ where: { id } });
-    if (!item) throw new NotFoundException('工艺信息不存在');
+    if (!item) throw new NotFoundException('开单信息不存在');
     return item;
   }
 
   async create(dto: CreateProcessInfoDto, user: CurrentUserPayload) {
     const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
-    if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
+    if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在开单信息记录`);
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
-    if (dto.drawingVersion !== undefined) dto.drawingVersion = normalizeVersion(dto.drawingVersion);
+    this.normalizeDto(dto);
     const saved = await this.repo.save(this.repo.create({ ...dto, ...auditOnCreate(user) }));
     const hist = this.buildHistoryRow(saved, 'create', buildDiff(null, saved), user);
     if (hist) await this.historyRepo.save(this.historyRepo.create(hist));
@@ -321,13 +335,13 @@ export class ProcessInfoService {
 
   async update(id: number, dto: UpdateProcessInfoDto, user: CurrentUserPayload) {
     const item = await this.repo.findOne({ where: { id } });
-    if (!item) throw new NotFoundException('工艺信息不存在');
+    if (!item) throw new NotFoundException('开单信息不存在');
     if (dto.drawingNo && dto.drawingNo !== item.drawingNo) {
       const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
-      if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在工艺记录`);
+      if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在开单信息记录`);
     }
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
-    if (dto.drawingVersion !== undefined) dto.drawingVersion = normalizeVersion(dto.drawingVersion);
+    this.normalizeDto(dto);
     const changes = buildDiff(item, { ...item, ...dto });
     await this.repo.update(id, { ...dto, ...auditOnUpdate(user) });
     const hist = this.buildHistoryRow(
@@ -342,7 +356,7 @@ export class ProcessInfoService {
 
   async remove(id: number) {
     const item = await this.repo.findOne({ where: { id } });
-    if (!item) throw new NotFoundException('工艺信息不存在');
+    if (!item) throw new NotFoundException('开单信息不存在');
 
     // 订单引用的是图号快照，删除工艺不影响历史订单；仅提示性校验是否仍有订单部件组引用该图号。
     // t_order_part_group（图号锚点，设计文档 §4.2）在 M2 里程碑落地，表尚未建时视为无引用。
@@ -365,7 +379,7 @@ export class ProcessInfoService {
   async batchRemove(ids: number[]) {
     const uniqIds = [...new Set(ids)];
     const items = await this.repo.find({ where: { id: In(uniqIds) } });
-    if (!items.length) throw new NotFoundException('所选工艺记录均不存在（可能已被删除），请刷新列表');
+    if (!items.length) throw new NotFoundException('所选开单信息记录均不存在（可能已被删除），请刷新列表');
 
     const refMap = await this.countDrawingRefs(items.map((i) => i.drawingNo));
     const blocked = items.filter((i) => (refMap.get(i.drawingNo) ?? 0) > 0);
@@ -419,7 +433,7 @@ export class ProcessInfoService {
   }
 
   /**
-   * 追加一条工艺记录：有内容的部件各一行（三节轨 3 行、二节轨 2 行——中轨列全空即不出行），
+   * 追加一条开单信息记录：有内容的部件各一行（三节轨 3 行、二节轨 2 行——中轨列全空即不出行），
    * 全空时兜底一行承载组级信息；组级列纵向合并。
    * groupIndex 用于按图号组隔组变色（奇数组浅灰底）。
    */
@@ -434,11 +448,12 @@ export class ProcessInfoService {
       const f = part ? PART_ROW_FIELDS[part.key] : null;
       ws.addRow([
         p.drawingNo ?? '',
-        p.drawingVersion ?? '',
         p.customerName ?? '',
         p.productName ?? '',
+        p.dimension ?? '',
         formatMachinesCell(p.machines, p.machinesThick),
         part?.label ?? '',
+        f ? ((p as any)[f.version] ?? '') : '',
         f ? ((p as any)[f.length] ?? '') : '',
         f ? ((p as any)[f.special] ?? '') : '',
         f ? ((p as any)[f.billing] ?? '') : '',
@@ -457,12 +472,13 @@ export class ProcessInfoService {
         cell.font = { name: SHEET_FONT, size: 10 };
         cell.border = CELL_BORDER;
         if (banded) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BAND_FILL } };
-        if (c === 2) cell.numFmt = '@';
+        if (c === 7) cell.numFmt = '@'; // 版本列文本格式，防 Excel 转数值丢尾零
       }
       ws.getCell(r, 6).alignment = { horizontal: 'center', vertical: 'middle' };
-      ws.getCell(r, 7).alignment = { vertical: 'middle', wrapText: true };
+      ws.getCell(r, 7).alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getCell(r, 8).alignment = { vertical: 'middle', wrapText: true };
       ws.getCell(r, 9).alignment = { vertical: 'middle', wrapText: true };
+      ws.getCell(r, 10).alignment = { vertical: 'middle', wrapText: true };
     }
     if (end > start) {
       // 组级列合并（图号~生产机台、工艺更新说明/备注）
@@ -480,11 +496,14 @@ export class ProcessInfoService {
   /** 生成导入模板（手工工艺表格式：一图号三行 + 合并单元格示例） */
   async buildImportTemplate(): Promise<Buffer> {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('工艺信息导入模板');
+    const ws = wb.addWorksheet('开单信息导入模板');
     this.decorateSheet(ws);
     this.appendRecordRows(ws, {
       drawingNo: 'HH-4502B-2',
-      drawingVersion: '1.1',
+      drawingVersionOuter: '1.1',
+      drawingVersionMiddle: '1.1',
+      drawingVersionInner: '1.2',
+      dimension: '250mm',
       customerName: '示例客户',
       productName: '45#普通滑轨',
       machines: '16,15,5',
@@ -500,7 +519,9 @@ export class ProcessInfoService {
     } as Partial<ProcessInfo>, 0);
     this.appendRecordRows(ws, {
       drawingNo: 'HH-2601A',
-      drawingVersion: '1.0',
+      drawingVersionOuter: '1.0',
+      drawingVersionInner: '1.0',
+      dimension: '450mm',
       customerName: '示例客户',
       productName: '26#二节轨滑轨',
       machines: '362,363,364',
@@ -524,11 +545,11 @@ export class ProcessInfoService {
     qb.orderBy('p.updatedAt', 'DESC');
     const items = await qb.getMany();
     if (!items.length) {
-      throw new BadRequestException('当前筛选条件下没有工艺记录，未生成导出文件');
+      throw new BadRequestException('当前筛选条件下没有开单信息记录，未生成导出文件');
     }
 
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('工艺信息');
+    const ws = wb.addWorksheet('开单信息');
     this.decorateSheet(ws);
     items.forEach((p, i) => this.appendRecordRows(ws, p, i));
     return Buffer.from(await wb.xlsx.writeBuffer());
@@ -582,13 +603,14 @@ export class ProcessInfoService {
       };
       const drawingNo = get('图号');
       const partRaw = get('部件');
+      const partVersion = get('版本');
       const lengthReq = get('长度要求');
       const specialReq = get('特殊要求');
       const billingNote = get('开单注明');
       const moldNo = get('模具编号');
       const groupCells = GROUP_FIELDS.map((g) => ({ g, v: get(g.header) }));
       // 全空行跳过
-      if (!drawingNo && !partRaw && !lengthReq && !specialReq && !billingNote && !moldNo && groupCells.every((x) => !x.v)) return;
+      if (!drawingNo && !partRaw && !partVersion && !lengthReq && !specialReq && !billingNote && !moldNo && groupCells.every((x) => !x.v)) return;
 
       if (drawingNo && (!current || drawingNo !== current.drawingNo)) {
         current = { _row: rowNumber, _parts: new Set(), drawingNo };
@@ -616,12 +638,13 @@ export class ProcessInfoService {
           return;
         }
         current._parts.add(partKey);
+        if (partVersion) (current as any)[f.version] = normalizeVersion(partVersion);
         if (lengthReq) (current as any)[f.length] = lengthReq;
         if (specialReq) (current as any)[f.special] = specialReq;
         if (billingNote) (current as any)[f.billing] = billingNote;
         if (moldNo) (current as any)[f.mold] = moldNo;
-      } else if (lengthReq || specialReq || billingNote || moldNo) {
-        errors.push(`第 ${rowNumber} 行：填写了长度/特殊要求/开单注明/模具编号但「部件」列为空`);
+      } else if (partVersion || lengthReq || specialReq || billingNote || moldNo) {
+        errors.push(`第 ${rowNumber} 行：填写了版本/长度/特殊要求/开单注明/模具编号但「部件」列为空`);
       }
     });
 
@@ -629,7 +652,7 @@ export class ProcessInfoService {
       const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
       r.machines = thin;
       (r as any).machinesThick = thick;
-      if (r.drawingVersion !== undefined) r.drawingVersion = normalizeVersion(r.drawingVersion);
+      if (r.dimension !== undefined) r.dimension = normalizeDimensionText(r.dimension);
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');

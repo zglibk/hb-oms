@@ -36,8 +36,18 @@ export class Material {
   @Column({ name: 'drawing_no', type: 'varchar', nullable: true })
   drawingNo: string | null;
 
+  /** 单位列保留存量数据；表单已不再录入（2026-08 部件信息改版） */
   @Column({ type: 'varchar', nullable: true })
   unit: string | null;
+
+  @Column({ name: 'sheet_material', type: 'varchar', length: 64, nullable: true, comment: '材质（如 Q235）' })
+  sheetMaterial: string | null;
+
+  @Column({ name: 'material_thickness', type: 'varchar', length: 32, nullable: true, comment: '料厚（如 1.2 / 1.2×1.0×1.2）' })
+  materialThickness: string | null;
+
+  @Column({ name: 'unit_weight', type: 'decimal', precision: 10, scale: 4, nullable: true, comment: '单重(kg/支)' })
+  unitWeight: string | null;
 
   @Column({ type: 'text', nullable: true })
   remark: string | null;

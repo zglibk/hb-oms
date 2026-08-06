@@ -376,8 +376,8 @@ export class SystemController {
     return this.logService.removeMany(ids, user);
   }
 
-  // ===== 物料主数据 =====
-  /** 按物料代码精确查询（订单录入自动带出用） */
+  // ===== 部件主数据 =====
+  /** 按部件代码精确查询（订单录入自动带出用） */
   @Get('material/by-code')
   getMaterialByCode(@Query('code') code: string) {
     return this.materialService.findByCode(code);
@@ -395,7 +395,7 @@ export class SystemController {
   @RequirePermissions('material:import')
   async materialTemplate(@Res() res: Response) {
     const buffer = await this.materialService.buildImportTemplate();
-    const filename = '物料导入模板.xlsx';
+    const filename = '部件导入模板.xlsx';
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -408,10 +408,10 @@ export class SystemController {
     res.end(buffer);
   }
 
-  /** 批量导入物料（上传 xlsx，返回逐行结果汇总） */
+  /** 批量导入部件（上传 xlsx，返回逐行结果汇总） */
   @Post('material/import')
   @RequirePermissions('material:import')
-  @OperationLog('系统管理', '批量导入物料')
+  @OperationLog('系统管理', '批量导入部件')
   @UseInterceptors(FileInterceptor('file'))
   async materialImport(
     @UploadedFile() file: Express.Multer.File,
@@ -425,15 +425,15 @@ export class SystemController {
     return this.materialService.importFromExcel(file.buffer, user);
   }
 
-  /** 导出物料清单为 Excel（遵循列表筛选不分页；有 ids 时仅导出勾选记录） */
+  /** 导出部件清单为 Excel（遵循列表筛选不分页；有 ids 时仅导出勾选记录） */
   @Get('material/export')
   @SkipTransform()
   @RequirePermissions('material:export')
-  @OperationLog('系统管理', '导出物料清单')
+  @OperationLog('系统管理', '导出部件清单')
   async materialExport(@Query() query: QueryMaterialDto, @Res() res: Response) {
     const ids = parseIdsQuery(query.ids);
     const buffer = await this.materialService.exportList(query, ids);
-    const filename = `物料清单_${new Date()
+    const filename = `部件清单_${new Date()
       .toISOString()
       .slice(0, 10)}.xlsx`;
     res.setHeader(
@@ -456,14 +456,14 @@ export class SystemController {
 
   @Post('material')
   @RequirePermissions('material:create')
-  @OperationLog('系统管理', '新增物料')
+  @OperationLog('系统管理', '新增部件')
   createMaterial(@Body() dto: CreateMaterialDto, @CurrentUser() user: CurrentUserPayload) {
     return this.materialService.create(dto, user);
   }
 
   @Put('material/:id')
   @RequirePermissions('material:update')
-  @OperationLog('系统管理', '修改物料')
+  @OperationLog('系统管理', '修改部件')
   updateMaterial(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateMaterialDto,
@@ -474,7 +474,7 @@ export class SystemController {
 
   @Delete('material/:id')
   @RequirePermissions('material:delete')
-  @OperationLog('系统管理', '删除物料')
+  @OperationLog('系统管理', '删除部件')
   removeMaterial(@Param('id', ParseIntPipe) id: number) {
     return this.materialService.remove(id);
   }

@@ -20,7 +20,7 @@
 
     <el-card shadow="never">
       <div class="toolbar">
-        <el-button size="small" v-permission="'process-info:create'" type="primary" :icon="Plus" @click="openCreate">新增工艺</el-button>
+        <el-button size="small" v-permission="'process-info:create'" type="primary" :icon="Plus" @click="openCreate">新增开单信息</el-button>
         <el-button size="small" v-permission="'process-info:import'" type="primary" plain :icon="Upload" @click="openImport">批量导入</el-button>
         <el-button size="small" v-permission="'process-info:export'" plain :icon="Download" :loading="exporting" @click="onExport">导出</el-button>
         <el-button
@@ -42,6 +42,7 @@
                 <thead>
                   <tr>
                     <th class="eg-part">部件</th>
+                    <th class="eg-ver">版本</th>
                     <th>长度要求</th>
                     <th>特殊要求</th>
                     <th>开单注明</th>
@@ -51,6 +52,7 @@
                 <tbody>
                   <tr v-for="p in partRows(row)" :key="p.label">
                     <td class="eg-part">{{ p.label }}</td>
+                    <td>{{ p.version || '—' }}</td>
                     <td>{{ p.length || '—' }}</td>
                     <td class="eg-pre">{{ p.special || '—' }}</td>
                     <td class="eg-pre">{{ p.billing || '—' }}</td>
@@ -63,7 +65,9 @@
         </el-table-column>
         <el-table-column type="selection" width="42" fixed="left" />
         <el-table-column label="生产图号" prop="drawingNo" width="120" fixed="left" />
-        <el-table-column label="版本号" prop="drawingVersion" width="80" />
+        <el-table-column label="规格" width="90">
+          <template #default="{ row }">{{ row.dimension || '—' }}</template>
+        </el-table-column>
         <el-table-column label="客户名称" prop="customerName" min-width="62" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="产品名称" prop="productName" min-width="70" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="生产机台" width="110">
@@ -72,16 +76,7 @@
         <el-table-column label="长度要求(外/中/内)" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ triple(row.lengthReqOuter, row.lengthReqMiddle, row.lengthReqInner) }}</template>
         </el-table-column>
-        <el-table-column label="审核人" prop="reviewer" width="80">
-          <template #default="{ row }">{{ row.reviewer || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="审核日期" width="100">
-          <template #default="{ row }">{{ row.reviewDate ? String(row.reviewDate).slice(0, 10) : '—' }}</template>
-        </el-table-column>
         <el-table-column label="更新人" prop="updaterName" width="90" />
-        <el-table-column label="更新日期" width="110">
-          <template #default="{ row }">{{ (row.updatedAt || '').slice(0, 10) }}</template>
-        </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <app-actions>
@@ -96,7 +91,7 @@
     </el-card>
 
     <!-- 批量导入 -->
-    <el-dialog v-model="importVisible" title="批量导入工艺信息" width="480px" @closed="resetImport">
+    <el-dialog v-model="importVisible" title="批量导入开单信息" width="480px" @closed="resetImport">
       <div class="import-tip">
         <p>1. 模板为<b>手工工艺表格式</b>：一个图号一组、外/中/内轨各一行；图号/版本/客户等组级列可合并单元格，或仅在首行填写（下方留空自动归组）；</p>
         <p>2. <b>图号、部件</b>为必填列；生产机台多个用 / 或逗号分隔（如 16/15/5）；工艺附图请在编辑页单独上传；</p>
@@ -192,16 +187,16 @@ function triple(a: string | null, b: string | null, c: string | null): string {
 /** 折叠行：部件级信息（外/中/内轨 × 长度要求/特殊要求/开单注明/模具编号） */
 function partRows(row: ProcessInfoItem) {
   return [
-    { label: '外轨', length: row.lengthReqOuter, special: row.specialReqOuter, billing: row.billingNoteOuter, mold: row.moldNoOuter },
-    { label: '中轨', length: row.lengthReqMiddle, special: row.specialReqMiddle, billing: row.billingNoteMiddle, mold: row.moldNoMiddle },
-    { label: '内轨', length: row.lengthReqInner, special: row.specialReqInner, billing: row.billingNoteInner, mold: row.moldNoInner },
+    { label: '外轨', version: row.drawingVersionOuter, length: row.lengthReqOuter, special: row.specialReqOuter, billing: row.billingNoteOuter, mold: row.moldNoOuter },
+    { label: '中轨', version: row.drawingVersionMiddle, length: row.lengthReqMiddle, special: row.specialReqMiddle, billing: row.billingNoteMiddle, mold: row.moldNoMiddle },
+    { label: '内轨', version: row.drawingVersionInner, length: row.lengthReqInner, special: row.specialReqInner, billing: row.billingNoteInner, mold: row.moldNoInner },
   ];
 }
 
 /* ===== 删除 ===== */
 const deletingId = ref<number | null>(null);
 async function onDelete(row: ProcessInfoItem) {
-  await ElMessageBox.confirm(`确定删除生产图号「${row.drawingNo}」的工艺记录吗？历史订单保留快照不受影响。`, '提示', { type: 'warning' });
+  await ElMessageBox.confirm(`确定删除生产图号「${row.drawingNo}」的开单信息记录吗？历史订单保留快照不受影响。`, '提示', { type: 'warning' });
   deletingId.value = row.id;
   try {
     await deleteProcessInfo(row.id);
@@ -221,14 +216,14 @@ function onSelectionChange(rows: ProcessInfoItem[]) {
 async function onBatchDelete() {
   if (!selection.value.length) return;
   await ElMessageBox.confirm(
-    `确定删除选中的 ${selection.value.length} 条工艺记录吗？任一图号被订单引用则整批不删除；历史订单保留快照不受影响。`,
+    `确定删除选中的 ${selection.value.length} 条开单信息记录吗？任一图号被订单引用则整批不删除；历史订单保留快照不受影响。`,
     '批量删除',
     { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
   );
   batchDeleting.value = true;
   try {
     const res = await batchDeleteProcessInfos(selection.value.map((r) => r.id));
-    ElMessage.success(`已删除 ${res.deleted} 条工艺${res.skipped ? `（${res.skipped} 条已不存在，自动跳过）` : ''}`);
+    ElMessage.success(`已删除 ${res.deleted} 条开单信息${res.skipped ? `（${res.skipped} 条已不存在，自动跳过）` : ''}`);
     selection.value = [];
     load();
   } catch (e: any) {
@@ -264,7 +259,7 @@ async function onExport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `工艺信息_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `开单信息_${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } finally {
@@ -296,7 +291,7 @@ async function onDownloadTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = '工艺信息导入模板.xlsx';
+  a.download = '开单信息导入模板.xlsx';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -343,6 +338,7 @@ async function onImport() {
   th { background: var(--el-fill-color-light); font-weight: 600; text-align: center; white-space: nowrap; }
   .eg-part { width: 56px; text-align: center; color: var(--el-text-color-regular); background: var(--el-fill-color-lighter); }
   .eg-mold { width: 130px; }
+  .eg-ver { width: 84px; }
   .eg-pre { white-space: pre-wrap; word-break: break-all; }
 }
 </style>
