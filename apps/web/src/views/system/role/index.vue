@@ -133,7 +133,7 @@ const router = useRouter();
 
 const loading = ref(false);
 const list = ref<any[]>([]);
-const { page, size, total, paged } = useClientPager(list);
+const { page, size, total, paged } = useClientPager(list, 20);
 
 const formVisible = ref(false);
 const editId = ref<number | null>(null);
