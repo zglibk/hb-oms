@@ -6,8 +6,10 @@ import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   STOCK_DIRECTION,
+  formatProductModel,
   hasSocket,
   isValidSide,
+  normalizeProductTypes,
   sideLabel,
 } from '@hb-oms/shared';
 import { FinishedDoc } from './entities/finished-doc.entity';
@@ -23,6 +25,8 @@ import {
 } from './dto/finished-stock.dto';
 import { loadInboundQuota, quotaKey } from '../assembly/assembly-quota.util';
 import { syncOrderFinishState } from '../order/order-owed.util';
+// 仅取类型：期初入参形状定义在 opening 模块，此处 import type 编译后即擦除，无运行时耦合
+import type { OpeningFinishedDto } from '../opening/dto/opening.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import {
@@ -303,6 +307,158 @@ export class FinishedStockService {
       );
       await this.writeItems(mgr, doc.id, dto.items);
       return { id: doc.id, docNo };
+    });
+  }
+
+  /**
+   * 成品期初录入（设计文档 §4.8，供 opening 模块调用——§6 要求「内部走 finished-stock 通道」）。
+   *
+   * 与普通建单的两点差异：
+   * 1. **建单后同事务立即确认并驱动余额**，不留草稿。期初录入页本身就是"确认"的语义，
+   *    让用户录完再去出入库列表点一次确认纯属多余；单据仍在成品出入库列表可见、
+   *    可红字冲销纠错，追溯性与纠错路径都没丢。
+   * 2. 明细支持**两种行**：
+   *    - 挂订单行（orderPartGroupId ≥ 1）：快照由服务端从订单侧读，参与该组的四数与欠数；
+   *    - 纯属性行（orderPartGroupId 省略）：已完结订单的剩余库存，锚点落 0、属性自带，
+   *      靠余额表 attr_key 指纹兜底唯一，**只进库存数、不参与任何订单欠数**（§7.9）。
+   *
+   * 期初豁免装配闸门（§4.5——期初是上线前存量，没有装配过程），但结存不得为负的
+   * 通用约束仍然生效（期初是入向，正常不会触发）。
+   */
+  async createOpeningBalance(dto: OpeningFinishedDto, user: CurrentUserPayload) {
+    if (!dto.items?.length) throw new BadRequestException('至少需要一条期初明细');
+    return this.dataSource.transaction(async (mgr) => {
+      const docNo = await this.numberGenerator.generate(
+        prefixOf(FINISHED_BIZ_TYPE.OPENING_BALANCE),
+        mgr,
+      );
+      const doc = await mgr.getRepository(FinishedDoc).save(
+        mgr.getRepository(FinishedDoc).create({
+          docNo,
+          bizType: FINISHED_BIZ_TYPE.OPENING_BALANCE,
+          direction: directionOf(FINISHED_BIZ_TYPE.OPENING_BALANCE),
+          docDate: dto.docDate,
+          workTeam: null,
+          machineNo: null,
+          originDocId: null,
+          // 期初直接生效，不经草稿
+          status: FINISHED_DOC_STATUS.CONFIRMED,
+          remark: dto.remark ?? '期初录入',
+          ...auditOnCreate(user),
+        }),
+      );
+
+      const rows = await this.buildOpeningItems(mgr, doc.id, dto.items);
+      const saved = await mgr.getRepository(FinishedItem).save(rows);
+      await this.applyItemsToBalance(mgr, doc, saved, user);
+
+      // 期初会抬高完成数，若某订单因此交清则自动完结（§3.1）
+      const sync = await syncOrderFinishState(mgr, this.orderIdsOf(saved), user);
+      return { id: doc.id, docNo, itemCount: saved.length, ...sync };
+    });
+  }
+
+  /** 期初明细落库：挂订单行取订单快照，纯属性行用客户端提供的属性 */
+  private async buildOpeningItems(
+    mgr: EntityManager,
+    docId: number,
+    items: OpeningFinishedDto['items'],
+  ): Promise<FinishedItem[]> {
+    const groupIds = items
+      .map((it) => Number(it.orderPartGroupId) || 0)
+      .filter((v) => v > 0);
+    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds, {
+      // 期初补录的历史订单可能已完结，但不会是作废；作废订单仍不允许挂
+      includeCancelledOrder: false,
+    });
+
+    const seen = new Set<string>();
+    return items.map((it, i) => {
+      const groupId = Number(it.orderPartGroupId) || 0;
+      const batchNo = (it.batchNo ?? '').trim();
+
+      if (groupId > 0) {
+        const snap = snapshots.get(groupId);
+        if (!snap) {
+          throw new BadRequestException(`第 ${i + 1} 行：订单部件组不存在或订单已作废`);
+        }
+        const side = this.assertSide(it.side, snap, i);
+        const key = `g${groupId}#${side}#${batchNo}`;
+        if (seen.has(key)) {
+          throw new BadRequestException(
+            `第 ${i + 1} 行：「${snap.productModel ?? ''}${side ? ` ${sideLabel(side)}边` : ''}」重复，请合并数量`,
+          );
+        }
+        seen.add(key);
+        return mgr.getRepository(FinishedItem).create({
+          docId,
+          orderId: snap.orderId,
+          orderProductId: snap.orderProductId,
+          orderPartGroupId: snap.orderPartGroupId,
+          orderNo: snap.orderNo,
+          customerName: snap.customerName,
+          productionNo: snap.productionNo,
+          itemNo: snap.itemNo,
+          productModel: snap.productModel,
+          productType: snap.productType,
+          groupType: snap.groupType,
+          railSection: snap.railSection,
+          dimensionText: snap.dimensionText,
+          dimensionMm: snap.dimensionMm,
+          surfaceType: snap.surfaceType,
+          color: snap.color,
+          side,
+          batchNo,
+          quantity: it.quantity,
+          originItemId: null,
+          remark: it.remark ?? null,
+          sort: i,
+        });
+      }
+
+      // ---- 纯属性行（不挂订单）----
+      const itemNo = (it.itemNo ?? '').trim();
+      if (!itemNo) {
+        throw new BadRequestException(
+          `第 ${i + 1} 行：不挂订单的期初行必须填货号（用于属性匹配与库存查询）`,
+        );
+      }
+      const side = (it.side ?? '').trim();
+      const productType = normalizeProductTypes(it.productType ?? '');
+      const key = `a${itemNo}#${productType}#${it.groupType ?? ''}#${it.railSection ?? ''}#${it.dimensionMm ?? 0}#${it.surfaceType ?? ''}#${it.color ?? ''}#${side}#${batchNo}`;
+      if (seen.has(key)) {
+        throw new BadRequestException(`第 ${i + 1} 行：同属性的纯属性期初行重复，请合并数量`);
+      }
+      seen.add(key);
+
+      return mgr.getRepository(FinishedItem).create({
+        docId,
+        orderId: 0,
+        orderProductId: 0,
+        orderPartGroupId: 0,
+        orderNo: null,
+        customerName: null,
+        productionNo: null,
+        itemNo,
+        // 型号未填时按「货号+类型组合+组后缀」拼，与挂订单行同一口径
+        productModel:
+          (it.productModel ?? '').trim() ||
+          formatProductModel(itemNo, productType, it.groupType ?? undefined),
+        productType,
+        groupType: (it.groupType ?? '').trim() || null,
+        railSection: (it.railSection ?? '').trim() || null,
+        dimensionText:
+          (it.dimensionText ?? '').trim() || (it.dimensionMm ? `${it.dimensionMm}mm` : null),
+        dimensionMm: Number(it.dimensionMm) || null,
+        surfaceType: (it.surfaceType ?? '').trim() || null,
+        color: (it.color ?? '').trim() || null,
+        side,
+        batchNo,
+        quantity: it.quantity,
+        originItemId: null,
+        remark: it.remark ?? null,
+        sort: i,
+      });
     });
   }
 

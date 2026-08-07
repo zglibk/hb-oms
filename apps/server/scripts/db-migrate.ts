@@ -43,6 +43,7 @@ const MIGRATIONS: string[] = [
   'migration-assembly-batch.sql',
   'migration-assembly-plan-start.sql',
   'migration-finished-stock.sql',
+  'migration-part-stock.sql',
   'migration-builtin-roles.sql',
 ];
 
@@ -107,6 +108,15 @@ const expectedColumns = [
   't_finished_balance.side',
   't_finished_balance.attr_key',
   't_finished_balance.quantity',
+  // M5 部件台账
+  't_part_balance.part_type',
+  't_part_balance.material_thickness',
+  't_part_balance.dimension_mm',
+  't_part_balance.quantity',
+  't_part_adjust.balance_id',
+  't_part_adjust.source',
+  't_part_adjust.delta',
+  't_part_adjust.reason',
 ];
 
 async function main() {

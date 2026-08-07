@@ -65,6 +65,17 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :xs="24" :sm="12" :md="8">
+            <el-form-item label="期初补录">
+              <el-switch v-model="isOpeningOrder" :active-value="1" :inactive-value="0" />
+              <el-tooltip
+                content="系统上线时补录的历史订单：免下单来源/附件等非关键必填校验；四数口径与正常订单完全一致。补录后到「期初录入」按部件组录已完成入库数量。"
+                placement="top"
+              >
+                <el-icon class="tip-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :md="16">
             <el-form-item label="订单附件">
               <el-upload
@@ -286,10 +297,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type UploadFile } from 'element-plus';
-import { Back, Plus, Delete, Upload, CopyDocument } from '@element-plus/icons-vue';
+import { Back, Plus, Delete, Upload, CopyDocument, QuestionFilled } from '@element-plus/icons-vue';
 import {
   createOrder,
   getOrderDetail,
@@ -417,8 +428,17 @@ const form = reactive({
   salesman: '',
   merchandiser: '',
   orderSource: '',
+  /** 期初补录标记：0正常 1期初补录（免非关键必填校验，四数口径不变，§4.8） */
+  isOpening: 0,
   remark: '',
   products: [emptyProduct()] as ProductRow[],
+});
+/** el-switch 需要独立的读写代理，直接绑 form.isOpening 在 reactive 上也可，此处保持显式 */
+const isOpeningOrder = computed({
+  get: () => form.isOpening,
+  set: (v: number) => {
+    form.isOpening = v;
+  },
 });
 const rules = {
   customerName: [{ required: true, message: '请选择或输入客户', trigger: 'change' }],
@@ -489,6 +509,7 @@ async function init() {
         salesman: row.salesman ?? '',
         merchandiser: row.merchandiser ?? '',
         orderSource: row.orderSource ?? '',
+        isOpening: row.isOpening ?? 0,
         remark: row.remark ?? '',
         products: row.products.map((p) => ({
           _key: nextKey(),

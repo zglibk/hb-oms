@@ -14,6 +14,8 @@ import { OrderModule } from './modules/order/order.module';
 import { OutsourceModule } from './modules/outsource/outsource.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
 import { FinishedStockModule } from './modules/finished-stock/finished-stock.module';
+import { PartStockModule } from './modules/part-stock/part-stock.module';
+import { OpeningModule } from './modules/opening/opening.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -65,6 +67,8 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     OutsourceModule,
     AssemblyModule,
     FinishedStockModule,
+    PartStockModule,
+    OpeningModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

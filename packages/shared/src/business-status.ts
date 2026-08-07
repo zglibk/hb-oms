@@ -142,6 +142,25 @@ export const FINISHED_BIZ_TYPE_OPTIONS: Array<{ label: string; value: string; ty
   { label: '红字冲销', value: FINISHED_BIZ_TYPE.REVERSAL, type: 'danger' },
 ];
 
+/* ===================== 部件台账 ===================== */
+
+/**
+ * 部件台账余量变动来源（t_part_adjust.source，设计文档 §4.6）。
+ * 台账「不直接改数无痕」：期初录入与手工调整都写同一张流水表，
+ * 靠本字段区分，任何一次余量变动都能追到人和原因。
+ */
+export const PART_ADJUST_SOURCE = {
+  /** 期初录入（系统上线补录存量） */
+  OPENING: 'opening',
+  /** 手工调整（盘盈盘亏、纠错） */
+  MANUAL: 'manual',
+} as const;
+
+export const PART_ADJUST_SOURCE_OPTIONS: Array<{ label: string; value: string; type: string }> = [
+  { label: '期初录入', value: PART_ADJUST_SOURCE.OPENING, type: 'info' },
+  { label: '手工调整', value: PART_ADJUST_SOURCE.MANUAL, type: 'warning' },
+];
+
 /* ===================== 通用启停 ===================== */
 
 /** 基础数据启停：1启用 0停用 */

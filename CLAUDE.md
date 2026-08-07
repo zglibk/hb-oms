@@ -85,7 +85,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
   - **订单跟踪台账(4)** —— 一级叶子菜单，系统核心产出
   - 生产管理(5)：订单管理、外发管理、装配管理
   - 工艺管理(6)：开单信息
-  - **物料管理(7)：成品出入库、库存查询** —— 成品库存口径（单据 + 结存）
+  - **物料管理(7)：成品出入库、库存查询、部件台账、期初录入** —— 成品库存口径（单据 + 结存）、部件半成品台账与上线期初
   - 设备管理(8)：设备信息
   - **基础数据(10)：客户资料、部门信息、部件信息** —— 部件信息属主数据，与出入库单据不同性质，故归此处
   - 系统管理(90)：用户/角色/菜单权限/数据字典/操作日志/更新日志/系统配置
@@ -111,7 +111,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 3. 同步更新 `apps/server/scripts/sql/01-schema.sql`（供全新安装 `db:init` 使用），列定义必须与迁移 SQL **完全一致**。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（截至 M4 共 15 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（截至内置角色统一共 19 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 ---
 
@@ -281,6 +281,26 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - 「完结」只是台账口径**不锁单据**，已完结订单仍可继续出入库，所以回正必须能自动重开，否则订单会被错误地挂在已完结上；
   - 作废订单（9）不参与，更新带 `status` 前置条件防并发覆盖；
   - 结果随接口回传（`finished` / `reopened` 订单号），前端 toast 提示——不提示的话用户会以为订单状态被人偷改了。
+**部件台账（M5，`t_part_balance` + `t_part_adjust`）**
+
+- **属性锚定、不挂订单**：部件在表面处理前是通用半成品，同属性不分订单，故用 **7 维唯一键**（部件/边别/货号/节数/产品类型组合/料厚/规格）而非订单锚点。
+- 7 维**全部 NOT NULL DEFAULT ''/0**：留 NULL 会让 MySQL 唯一键失效（多 NULL 不去重），同一档部件分裂成多行。归一集中在 service 的 `normalizeDimension`，**调用方禁止自行拼**；产品类型组合串必须经共享包 `normalizeProductTypes` 规范化，否则「普通,自锁」与「自锁,普通」会分裂成两行。
+- **余量只有一个写入口 `POST /part-stock/adjust`**：按 7 维定位（不存在则建行）累加 `delta` 并写一条 `t_part_adjust` 流水。**刻意不提供「直接设置余量」的接口**——§4.6 要求「不直接改数无痕」，一切变动必须带 delta + 原因，否则事后无法回答「这个数怎么来的」。期初录入与手工调整走同一入口，靠 `source`（opening/manual）区分，期初同样留痕。
+- 调整后余量不得为负；`delta` 不接受 0（无意义的空流水）；行锁后累加防并发丢失。
+- V1 是**独立参考台账**：不与外发/成品单据联动（§2.1，无报工则无采集点），联动列入 V2（§10）。
+- **必填字段的每个约束都要给中文 message**：字段缺省时多个约束同时失败，只要有一个没给 message，用户看到的就是「must be a string」这类英文（本模块已踩，E2E 抓出）。
+
+**期初录入（M5，opening 模块）**
+
+- **纯编排模块，不自己写库**：成品期初走 `FinishedStockService.createOpeningBalance`（§6 明确「内部走 finished-stock 通道」），部件期初走 `PartStockService.adjustInTx` 且 `source='opening'`。各自另写一套写库逻辑会立刻造成口径分叉，这是本模块存在的唯一理由。
+- 成品期初**建单后同事务立即确认**、不留草稿：录入页本身即「确认」语义。单据仍在成品出入库列表可见、可红字冲销纠错，追溯性没丢。
+- 成品期初支持两种行混录：
+  - **挂订单行**（`orderPartGroupId ≥ 1`）：快照由服务端读订单侧，计入台账「完成数」、参与生产欠数；
+  - **纯属性行**（省略锚点）：锚点落 0、属性自带，靠余额表 `attr_key` 指纹兜底唯一，**只进库存数、台账查不到**（§7.9，这是设计如此不是漏了）。
+- 期初豁免装配闸门（§4.5），但计入台账完成数 —— 与 §5.1 的「完成数含期初 / 闸门排除期初」一致。
+- **部件期初整批全有全无**（同一事务）：部件台账是**累加**语义，部分成功后用户改完坏行重提整批，已成功的行会被加第二次、直接把账做错。出错提示带行号，改完整批重提不会重复计数。这也与项目既有导入约定（客户导入「整批校验通过才落库」）一致。
+- 「期初补录」订单标记 `is_opening` 在订单表单上有开关；补录订单免非关键必填，但四数口径与正常订单完全一致（§7.7）。
+
 - 口径核算脚本 `pnpm --filter server verify:ledger`：**绕开业务代码**用最朴素 SQL 从原始单据重算四数再比对，两条独立路径算出同一个数才算数。改台账聚合后必须重跑。
 
 ---
@@ -351,8 +371,8 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 1 | M3.5 装配模块 | 闸门口径已做成唯一实现 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)；**M4 入库确认必须 import 复用，禁止另写 SQL**。已用临时建表的方式提前验证过闸门口径（含期初/出库不参与、红字回补、左右隔离、三条守卫回滚），M4 建表后自动生效 | ✅ 已完成 |
 | 2 | 订单跟踪台账 | 已上线，四数口径由 `verify:ledger` 独立重算核对 | ✅ 已完成 |
 | 2a | 订单自动完结/重开 | §3.1 状态机的自动边，出入库确认/冲销后同事务同步；口径与台账共用 order-owed.util | ✅ 已完成（2026-08-07） |
-| 2b | **部件台账 part-stock** | §4.6/§6 定义的 `t_part_balance`（7 维唯一键）+ `t_part_adjust`（调整流水）两表**均未建**，`GET /part-stock`、`POST /part-stock/adjust` 与前端页均未实现。M5 前置——部件期初依赖它 | ⬜ 待 M5 |
-| 2c | **期初录入 opening** | §4.8/§6 的 `POST /opening/finished`、`POST /opening/part` 未实现，无录入界面。成品期初（挂订单）机制已通（`opening_balance` 已验证豁免闸门、计入台账完成数）；**纯属性期初行还录不进去**——出入库 DTO 强制 `orderPartGroupId ≥ 1`，而余额表 `attr_key` 已为它预留 | ⬜ 待 M5 |
+| 2b | 部件台账 part-stock | 两表 + 模块 + 页面已落地；余量唯一写入口是 `POST /part-stock/adjust`（带 delta + 原因走流水），期初与手工调整共用并靠 `source` 区分。**M5 期初模块请复用该通道，勿另写余量写入** | ✅ 已完成（2026-08-07） |
+| 2c | 期初录入 opening | 三类期初（成品挂订单 / 成品纯属性 / 部件）+ 订单「期初补录」开关全部落地；纯属性行经 `createOpeningBalance` 走通，部件期初整批全有全无 | ✅ 已完成（2026-08-07） |
 | 2d | **首页看板 dashboard** | §5.2 的 `GET /dashboard/summary` 未实现；首页仍是占位卡片且**文案已过时**（还写着订单/外发/出入库/台账「将陆续上线」） | ⬜ 待 M5 |
 | 2e | **台账 Excel 导出** | §5.1 要求，未实现。`exceljs` 已在依赖、物料/字典/开单信息均已有导出可参照，主要工作是列序对齐手工台账 | ⬜ 待 M5 |
 | 2f | 台账行内展开 / 跨组合并单元格 | §5.1 要求可展开看该组出入库·外发·装配流水，且同产品行多组时产品级列跨行合并。均未做，属体验增强，不影响四数正确性 | ⬜ 低优先级 |

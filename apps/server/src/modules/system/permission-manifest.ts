@@ -76,6 +76,13 @@ export const PERMISSIONS: PermSeed[] = [
 
   { perm_code: 'stock-balance', perm_name: '库存查询', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
 
+  { perm_code: 'part-stock', perm_name: '部件台账', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/part-stock', component: 'part-stock/index', icon: 'Grid', sort: 3 },
+  { perm_code: 'part-stock:adjust', perm_name: '调整部件余量', perm_type: 2, parent_code: 'part-stock', sort: 1 },
+
+  { perm_code: 'opening', perm_name: '期初录入', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/opening', component: 'opening/index', icon: 'Upload', sort: 4 },
+  { perm_code: 'opening:finished', perm_name: '成品期初录入', perm_type: 2, parent_code: 'opening', sort: 1 },
+  { perm_code: 'opening:part', perm_name: '部件期初录入', perm_type: 2, parent_code: 'opening', sort: 2 },
+
   // ===== 设备管理 =====
   { perm_code: 'equipment', perm_name: '设备管理', perm_type: 1, menu_path: '/equipment', icon: 'Cpu', sort: 8 },
 
