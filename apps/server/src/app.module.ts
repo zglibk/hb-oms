@@ -16,6 +16,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
 import { FinishedStockModule } from './modules/finished-stock/finished-stock.module';
 import { PartStockModule } from './modules/part-stock/part-stock.module';
 import { OpeningModule } from './modules/opening/opening.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -69,6 +70,7 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     FinishedStockModule,
     PartStockModule,
     OpeningModule,
+    DashboardModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

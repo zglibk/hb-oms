@@ -48,69 +48,26 @@
       </el-form>
     </el-card>
 
-    <!-- 汇总卡：当前筛选口径的整体六数（不受分页影响）。
-         左图标(1) + 右上下(数字2/标签1)，数字与图标同色，各卡片色系区分。 -->
+    <!-- 汇总卡：当前筛选口径的整体六数（不受分页影响）。版式见 AppStatCard -->
     <div class="sum-bar">
-      <div class="sum-card sum-card--slate">
-        <div class="sum-card__icon"><el-icon><Document /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.rows }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">台账行数</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
-      <div class="sum-card sum-card--blue">
-        <div class="sum-card__icon"><el-icon><Goods /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.totalQty }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">订单数(支)</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
-      <div class="sum-card sum-card--green">
-        <div class="sum-card__icon"><el-icon><CircleCheckFilled /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.totalIn }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">完成数(支)</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
-      <div class="sum-card sum-card--teal">
-        <div class="sum-card__icon"><el-icon><Box /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.totalStock }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">库存数(支)</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
-      <div class="sum-card sum-card--amber">
-        <div class="sum-card__icon"><el-icon><Tools /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.totalProductionOwed }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">生产欠数(支)</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
-      <div class="sum-card sum-card--red">
-        <div class="sum-card__icon"><el-icon><Van /></el-icon></div>
-        <div class="sum-card__body">
-          <div class="sum-card__value">{{ summary.totalDeliveryOwed }}</div>
-          <div class="sum-card__label-row">
-            <span class="sum-card__label">发货欠数(支)</span>
-            <button class="sum-card__link" @click="goDetail">详情&gt;</button>
-          </div>
-        </div>
-      </div>
+      <app-stat-card color="slate" :value="summary.rows" label="台账行数" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><Document /></el-icon></template>
+      </app-stat-card>
+      <app-stat-card color="blue" :value="summary.totalQty" label="订单数(支)" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><Goods /></el-icon></template>
+      </app-stat-card>
+      <app-stat-card color="green" :value="summary.totalIn" label="完成数(支)" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><CircleCheckFilled /></el-icon></template>
+      </app-stat-card>
+      <app-stat-card color="teal" :value="summary.totalStock" label="库存数(支)" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><Box /></el-icon></template>
+      </app-stat-card>
+      <app-stat-card color="amber" :value="summary.totalProductionOwed" label="生产欠数(支)" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><Tools /></el-icon></template>
+      </app-stat-card>
+      <app-stat-card color="red" :value="summary.totalDeliveryOwed" label="发货欠数(支)" link-text="详情&gt;" @link="goDetail">
+        <template #icon><el-icon><Van /></el-icon></template>
+      </app-stat-card>
     </div>
 
     <el-card shadow="never">
@@ -212,6 +169,7 @@ import { PRODUCT_TYPE_OPTIONS, UNIT_OPTIONS } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
+import AppStatCard from '@/components/AppStatCard.vue';
 
 const router = useRouter();
 const loading = ref(false);
@@ -297,150 +255,12 @@ export default { name: 'OrderLedger' };
 </script>
 
 <style scoped lang="scss">
-/**
- * 汇总卡：左图标(宽1) + 右上下(高 数字2 / 标签1)，数字与图标同色。
- * 各卡片色系区分（slate/blue/green/teal/amber/red），半透明底+主色图标数字，
- * 深色模式下底色自动叠加变深，保持可读。
- */
+/* 卡片本体样式已下沉 AppStatCard（首页看板共用），此处只管排布 */
 .sum-bar {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
   margin: 4px 0;
-
-  .sum-card {
-    --card-color: #64748b;
-    --card-bg: rgba(100, 116, 139, 0.10);
-    --card-border: rgba(100, 116, 139, 0.25);
-    --card-icon-bg: rgba(100, 116, 139, 0.16);
-
-    flex: 1 1 150px;
-    min-width: 165px;
-    display: flex;
-    align-items: stretch;
-    gap: 12px;
-    padding: 20px 16px;
-    border-radius: 10px;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    transition: transform 0.15s, box-shadow 0.15s;
-
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-
-    /* 左侧图标区：正方形，固定尺寸不随容器拉伸 */
-    &__icon {
-      width: 48px;
-      height: 48px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: var(--card-color);
-      background: var(--card-icon-bg);
-      border-radius: 8px;
-    }
-
-    /* 右侧内容区：占满剩余空间，上下结构 */
-    &__body {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 2px;
-    }
-
-    /* 数字：高度占比 2，大字号突出 */
-    &__value {
-      flex: 2;
-      font-size: 24px;
-      font-weight: 700;
-      line-height: 1.1;
-      color: var(--card-color);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* 标签行：左标签 + 右「详情>」按钮，两端对齐 */
-    &__label-row {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      line-height: 1.2;
-    }
-
-    &__label {
-      font-size: 12px;
-      color: var(--el-text-color-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* 「详情>」文字按钮：跟随卡片色系，hover 加深 */
-    &__link {
-      flex-shrink: 0;
-      padding: 0;
-      border: none;
-      background: transparent;
-      font-size: 12px;
-      line-height: 1.2;
-      color: var(--card-color);
-      cursor: pointer;
-      opacity: 0.85;
-      transition: opacity 0.15s;
-
-      &:hover {
-        opacity: 1;
-        text-decoration: underline;
-      }
-    }
-
-    /* 六色系区分 */
-    &--slate {
-      --card-color: #64748b;
-      --card-bg: rgba(100, 116, 139, 0.10);
-      --card-border: rgba(100, 116, 139, 0.25);
-      --card-icon-bg: rgba(100, 116, 139, 0.16);
-    }
-    &--blue {
-      --card-color: var(--el-color-primary);
-      --card-bg: rgba(64, 158, 255, 0.10);
-      --card-border: rgba(64, 158, 255, 0.25);
-      --card-icon-bg: rgba(64, 158, 255, 0.16);
-    }
-    &--green {
-      --card-color: var(--el-color-success);
-      --card-bg: rgba(103, 194, 58, 0.10);
-      --card-border: rgba(103, 194, 58, 0.25);
-      --card-icon-bg: rgba(103, 194, 58, 0.16);
-    }
-    &--teal {
-      --card-color: #14b8a6;
-      --card-bg: rgba(20, 184, 166, 0.10);
-      --card-border: rgba(20, 184, 166, 0.25);
-      --card-icon-bg: rgba(20, 184, 166, 0.16);
-    }
-    &--amber {
-      --card-color: var(--el-color-warning);
-      --card-bg: rgba(230, 162, 60, 0.10);
-      --card-border: rgba(230, 162, 60, 0.25);
-      --card-icon-bg: rgba(230, 162, 60, 0.16);
-    }
-    &--red {
-      --card-color: var(--el-color-danger);
-      --card-bg: rgba(245, 108, 108, 0.10);
-      --card-border: rgba(245, 108, 108, 0.25);
-      --card-icon-bg: rgba(245, 108, 108, 0.16);
-    }
-  }
 }
 .pager { margin-top: 12px; }
 /* 四数列加浅底，从一堆属性列里凸显出来 */
