@@ -64,6 +64,7 @@
       <div class="brand"><span class="brand-mark">HB</span> 海宝五金 · 订单跟踪系统 <span class="brand-sub">hb-oms</span></div>
       <nav>
         <a href="index.html" class="">首页</a>
+        
         <a href="design-doc.html" class="active">技术文档</a>
         <a href="admin/" title="登录后台管理系统">后台管理</a>
       </nav>
@@ -275,11 +276,14 @@
 <li>沿用 hb-mes 模式：<strong>已确认单据禁止 UPDATE/DELETE</strong>，更正一律开红字单（<code>biz_type=&#39;reversal&#39;</code>，明细 <code>origin_item_id</code> 追溯原明细行）。</li>
 </ul>
 <h3 id="34-装配批次状态机">3.4 装配批次状态机<a class="anchor" href="#34-装配批次状态机" aria-hidden="true">#</a></h3>
-<pre><code>        1 计划中（仅填计划完成时间）
+<pre><code>        1 计划中（录预计装配区间：计划开始 ~ 计划完成）
              │ 填写实际完成时间
              ▼
         2 已完成（该批装配数量计入可入库量）
 </code></pre>
+<p>计划员按批次录<strong>预计的装配开始与完成时间</strong>（<code>plan_start_date</code> / <code>plan_date</code>）作为排程依据；
+两者都是纯计划属性，<strong>不参与入库闸门</strong>——闸门只认 <code>actual_date</code>（实际完成）。
+约束：计划开始不得晚于计划完成；计划完成与实际完成至少填一个（只有开始时点的批次无法跟踪完工）。</p>
 <ul>
 <li>状态为<strong>派生值</strong>：<code>actual_date IS NULL → 计划中</code>，<code>actual_date 非空 → 已完成</code>，无独立状态列（<code>t_assembly_batch.status</code> 由服务端按 actual_date 计算返回，或前端按字段派生）。</li>
 <li>已完成批次的数量参与入库闸门（§4.5）；批次<strong>被入库消耗后禁止删除或下调数量致可入库量为负</strong>（§7）。</li>
@@ -727,8 +731,8 @@
 </tr>
 </thead><tbody><tr>
 <td>blank_no</td>
-<td>varchar(7) UK</td>
-<td><strong>发坯单号</strong>：7 位定长纯数字序号（<code>generatePaddedSequence</code> 模式），库存数字、展示拼前缀 <code>No.</code>；即本单据号</td>
+<td>varchar(16) UK</td>
+<td><strong>发坯单号</strong>：7 位定长纯数字序号（<code>generatePaddedSequence</code> 模式，宽度取共享包 <code>BLANK_NO_WIDTH</code>），库存数字、展示拼前缀 <code>No.</code>；即本单据号。列宽留余量以备位数扩展</td>
 </tr>
 <tr>
 <td>processor_name</td>
@@ -793,6 +797,11 @@
 <td>锚点：<strong>部件组</strong>（订单/产品行为冗余列）</td>
 </tr>
 <tr>
+<td>order_no / customer_name</td>
+<td>varchar(32) / varchar(128)</td>
+<td>订单号、客户名称快照（列表与打印直接取用，免回联）</td>
+</tr>
+<tr>
 <td>production_no</td>
 <td>varchar(64)</td>
 <td>生产单号（自产品行快照）</td>
@@ -828,9 +837,14 @@
 <td>发出数量 = send_weight ÷ unit_weight 取整（前端自动算，可微调）</td>
 </tr>
 <tr>
-<td>remark</td>
-<td>varchar(255)</td>
-<td>备注</td>
+<td>returned_qty</td>
+<td>int</td>
+<td>累计回货数量（支）：由回货登记在同事务内按 <code>SUM(t_outsource_return.return_qty)</code> 重算回写，仅作行级回齐判定与列表展示的缓存列；台账「外发已回货数量」（§5.1）仍直接聚合 <code>t_outsource_return</code>，故不存在对账漂移</td>
+</tr>
+<tr>
+<td>remark / sort</td>
+<td>varchar(255) / int</td>
+<td>备注 / 行序</td>
 </tr>
 </tbody></table></div>
 <h4 id="toutsourcereturn回货登记一明细行可多条-=-分批回货">t_outsource_return（回货登记，一明细行可多条 = 分批回货）<a class="anchor" href="#toutsourcereturn回货登记一明细行可多条-=-分批回货" aria-hidden="true">#</a></h4>
@@ -871,6 +885,9 @@
 </tr>
 </tbody></table></div>
 <p>回齐判定（行级）：<code>Σreturn_qty ≥ send_qty</code>；全部明细行回齐 → 单头自动置 4 已回齐。回货数量允许超发出数量（重量折算误差），超出时界面黄色提示不拦截。</p>
+<blockquote>
+<p>审计字段例外：<code>t_outsource_return</code> 只有 <code>creator_id / creator_name / created_at</code>，<strong>不带更新人与 updated_at</strong>——回货登记只增不改（纠错走物理删除后重登），没有更新路径，留空字段反而误导。</p>
+</blockquote>
 <h3 id="44-装配批次tassemblybatch">4.4 装配批次：<code>t_assembly_batch</code><a class="anchor" href="#44-装配批次tassemblybatch" aria-hidden="true">#</a></h3>
 <p>计划员按<strong>部件组</strong>手工录入装配批次，一组可多批。<strong>轻量跟踪、不采番</strong>（批次行类比部件调整流水，不走 NumberGeneratorService）。已完成批次（实际完成时间已填）的数量参与成品入库闸门（§4.5）。</p>
 <h4 id="tassemblybatch装配批次">t_assembly_batch（装配批次）<a class="anchor" href="#tassemblybatch装配批次" aria-hidden="true">#</a></h4>
@@ -900,9 +917,14 @@
 <td>装配车间（字典 <code>assembly_workshop</code>）；默认继承产品行 assembly_workshop，可覆写（实际在哪装）</td>
 </tr>
 <tr>
+<td>plan_start_date</td>
+<td>date</td>
+<td>计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门）</td>
+</tr>
+<tr>
 <td>plan_date</td>
 <td>date</td>
-<td>计划完成时间（计划员录入）</td>
+<td>计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间）</td>
 </tr>
 <tr>
 <td>actual_date</td>
@@ -917,7 +939,12 @@
 <tr>
 <td>status</td>
 <td>tinyint</td>
-<td>状态派生值：1计划中 2已完成（按 actual_date 是否为空计算，不落库或落库均可，落库时须与 actual_date 保持一致）</td>
+<td>状态派生值：1计划中 2已完成。<strong>落库</strong>（便于按状态走索引筛选），但只能由共享包 <code>deriveAssemblyStatus(actual_date)</code> 赋值；聚合已完成装配量时一律按 <code>actual_date IS NOT NULL</code> 判定，不依赖本列</td>
+</tr>
+<tr>
+<td>order_no / customer_name / production_no / product_model / dimension_text</td>
+<td>varchar</td>
+<td>订单侧展示快照（与外发明细同口径，由服务端经 <code>PartGroupSnapshotService</code> 读取落库，不采信客户端传值）</td>
 </tr>
 <tr>
 <td>remark</td>
@@ -931,8 +958,10 @@
 </tr>
 </tbody></table></div>
 <ul>
-<li><strong>索引</strong>：<code>idx(order_part_group_id, side)</code>，供闸门与台账按部件组聚合。</li>
-<li><strong>闸门口径（唯一实现，入库侧复用）</strong>：<code>可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)</code>。</li>
+<li><strong>索引</strong>：<code>idx(order_part_group_id, side)</code> 供闸门与台账按部件组聚合；另有 <code>idx_order</code>（订单下游引用探测）、<code>idx_status</code>、<code>idx_plan_start_date</code>、<code>idx_plan_date</code>、<code>idx_actual_date</code>（逾期与进度查询）。</li>
+<li><strong>约束</strong>：<code>plan_date</code> 与 <code>actual_date</code> 至少填一个；<code>plan_start_date</code> 不得晚于 <code>plan_date</code>；含卡口组合的 <code>side</code> 必须为 left/right，非卡口必须为空串。</li>
+<li><strong>闸门口径（唯一实现 <code>assembly-quota.util.ts</code>，入库侧复用）</strong>：<code>可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)</code>。
+其中「已入库量」<strong>只统计入库方向的已确认单据</strong>：<code>biz_type=&#39;inbound&#39;</code> 计正、冲销 inbound 的红字单计负；<strong>期初（opening_balance）与销售出库（sale_outbound）都不参与</strong>——期初无装配过程且 §4.5 已明文豁免闸门，若计入会让该组额度永久为负、挡死后续正常入库；出库若参与（direction=-1）反而会凭空放大额度。冲销期初的红字单按 <code>origin_doc_id</code> 回查原单 biz_type 一并排除。</li>
 <li>批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 &lt; 已入库量（§7）。</li>
 </ul>
 <h3 id="45-成品出入库tfinisheddoc-+-tfinisheditem-+-tfinishedbalance">4.5 成品出入库：<code>t_finished_doc</code> + <code>t_finished_item</code> + <code>t_finished_balance</code><a class="anchor" href="#45-成品出入库tfinisheddoc-+-tfinisheditem-+-tfinishedbalance" aria-hidden="true">#</a></h3>
@@ -1064,7 +1093,12 @@
 </tr>
 </tbody></table></div>
 <ul>
-<li><strong>唯一键</strong>：<code>(order_part_group_id, side, batch_no)</code>，其中 order_part_group_id 为 NULL 的纯属性期初行以 <code>(item_no, product_type, group_type, rail_section, dimension_mm, surface_type, color, side, batch_no)</code> 逻辑唯一（应用层保证，维度空串兜底规避 MySQL 唯一键多 NULL 问题——参照 hb-mes 部件台账做法，锚点列用 0 代替 NULL 参与唯一键）。</li>
+<li><strong>唯一键</strong>：<code>(order_part_group_id, side, batch_no, attr_key)</code>，锚点列 <code>NOT NULL DEFAULT 0</code>（0 = 不挂订单的纯属性行，规避 MySQL 唯一键多 NULL 不去重）。<ul>
+<li>挂订单的行由「部件组 + 边别 + 批次」唯一，<code>attr_key</code> 恒为空串；</li>
+<li>纯属性期初行改由 <code>attr_key</code>（属性指纹 = <code>货号|产品类型|组类型|节数|规格|表面处理|颜色</code>）兜底唯一。
+该逻辑唯一<strong>下沉到数据库唯一键</strong>而非仅靠应用层判重——并发下应用层「先查再插」挡不住重复行。</li>
+</ul>
+</li>
 <li>出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，<strong>禁止直接改 balance</strong>。</li>
 <li><strong>装配入库闸门</strong>：<code>biz_type=&#39;inbound&#39;</code> 入库单<strong>确认时</strong>，按每条明细的 order_part_group_id + side 校验 <code>本次入库量 ≤ 可入库量(§4.4)</code>；超额则拒绝（<code>BadRequestException</code> 中文提示，含部件组、可入库量、本次量）。<code>biz_type=&#39;opening_balance&#39;</code>（期初）与 <code>reversal</code>（红字）<strong>豁免</strong>该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，<code>Σ已入库量</code> 按 direction 自然回落，可入库量随之回补。</li>
 </ul>
@@ -1277,6 +1311,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <ul>
 <li>红字单 direction 与原单相反，聚合时按 <code>direction × quantity</code> 求和即自然抵扣，无需特判。</li>
 <li>欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。</li>
+<li><strong>完成数包含期初</strong>（<code>opening_balance</code>）：期初是上线前已完成的存量，业务上确实&quot;已完成&quot;，不计入就与手工账对不上。
+⚠️ 这与 §4.4 入库闸门的「已入库量」<strong>故意不同</strong>——闸门必须排除期初，否则「装配 0 + 期初 N」的组额度恒为 −N、永久挡死后续正常入库。两处服务于不同问题，勿&quot;统一&quot;。</li>
 <li>同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。</li>
 <li>装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。</li>
 <li>台账行内可展开：该组的出入库流水、外发流水、装配批次明细。</li>
@@ -1334,8 +1370,18 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 </tr>
 <tr>
 <td>assembly</td>
-<td><code>POST /assembly/batch</code>、<code>PUT /assembly/batch/:id</code>、<code>DELETE /assembly/batch/:id</code>、<code>GET /assembly?orderPartGroupId=</code></td>
-<td>装配批次增删改查（按部件组，一组多批）；删/改受 §7 闸门约束</td>
+<td><code>GET /assembly</code></td>
+<td><strong>装配管理列表</strong>：按部件组一行，聚合批次数/已录量/已完成量/最早未完成计划日/逾期标记；筛选关键字、装配车间、交期区间、只看未装完、只看逾期</td>
+</tr>
+<tr>
+<td>assembly</td>
+<td><code>GET /assembly/batch?orderPartGroupId=&amp;side=</code></td>
+<td>某组的批次明细 + 分边别小计（已录/已完成/已入库/可入库）</td>
+</tr>
+<tr>
+<td>assembly</td>
+<td><code>POST /assembly/batch</code>、<code>PUT /assembly/batch/:id</code>、<code>DELETE /assembly/batch/:id</code></td>
+<td>装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束</td>
 </tr>
 <tr>
 <td>assembly</td>
@@ -1344,8 +1390,13 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 </tr>
 <tr>
 <td>finished-stock</td>
-<td><code>POST /finished-stock</code>（建单含明细）、<code>POST /finished-stock/:id/confirm</code>、<code>POST /finished-stock/:id/cancel</code>、<code>POST /finished-stock/:id/reverse</code>、<code>GET /finished-stock</code>、<code>GET /finished-stock/balance</code></td>
-<td>confirm 入库时校验装配闸门（§4.5）；reverse=生成红字单并自动确认；balance=库存查询</td>
+<td><code>POST /finished-stock</code>（建单含明细）、<code>PUT /finished-stock/:id</code>（仅草稿）、<code>POST /finished-stock/:id/confirm</code>、<code>POST /finished-stock/:id/cancel</code>、<code>POST /finished-stock/:id/reverse</code>、<code>GET /finished-stock</code>、<code>GET /finished-stock/:id</code></td>
+<td>confirm 入库时校验装配闸门（§4.5）并驱动余额；reverse=生成红字单并自动确认，支持按行部分冲销；已确认单禁改禁作废</td>
+</tr>
+<tr>
+<td>finished-stock</td>
+<td><code>GET /finished-stock/balance</code>、<code>GET /finished-stock/group-options</code></td>
+<td>库存查询；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行</td>
 </tr>
 <tr>
 <td>opening</td>
