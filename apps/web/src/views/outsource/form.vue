@@ -8,6 +8,12 @@
           <span v-if="blankNo" class="title-sub">{{ formatBlankNo(blankNo) }}</span>
         </div>
         <div>
+          <!-- 已建单才可打印：新建态还没有发坯单号，印出来 No. 是空的 -->
+          <el-button
+            v-if="editId"
+            size="small" v-permission.disable="'outsource:print'" :icon="Printer"
+            @click="openPrint"
+          >打印发外单</el-button>
           <el-button size="small" @click="goBack">取消</el-button>
           <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
         </div>
@@ -155,7 +161,7 @@
 import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
+import { Back, Plus, Delete, Search, Printer } from '@element-plus/icons-vue';
 import {
   getOutsourceDetail,
   getPartGroupOptions,
@@ -368,6 +374,10 @@ async function onSave() {
   } finally {
     saving.value = false;
   }
+}
+
+function openPrint() {
+  router.push({ name: 'OutsourcePrint', query: { id: editId.value } });
 }
 
 function goBack() {
