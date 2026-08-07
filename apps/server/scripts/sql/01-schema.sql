@@ -247,8 +247,6 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   order_qty        INT          NOT NULL COMMENT '订单数量（按 unit 计）',
   unit             VARCHAR(16)  NOT NULL DEFAULT 'piece' COMMENT '单位：set套 piece支（仅此两种，1套=2支）',
   qty_pcs          INT          NOT NULL COMMENT '支数口径（服务端计算冗余）：套→×2，支→原值；台账「订单数」',
-  production_no    VARCHAR(64)  NULL COMMENT '【已弃用 2026-08-07】生产单号已上移订单级 t_order.production_no；本列仅保留历史数据，程序不再读写',
-  assembly_workshop VARCHAR(32) NULL COMMENT '【已弃用 2026-08-07】订单环节不安排装配车间；车间改由装配批次 t_assembly_batch.workshop 录入，本列仅保留历史数据，程序不再读写',
   delivery_date    DATE         NULL COMMENT '交货日期',
   delivery_address VARCHAR(255) NULL COMMENT '交货地址',
   remark           VARCHAR(255) NULL COMMENT '备注',
@@ -256,10 +254,9 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_order (order_id),
-  KEY idx_production_no (production_no),
   KEY idx_customer_drawing_no (customer_drawing_no),
   KEY idx_item_no (item_no)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单产品行（四级结构第二级；图号/版本/料厚下沉部件组）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单产品行（四级结构第二级；生产单号在订单级，图号/版本/料厚下沉部件组）';
 
 CREATE TABLE IF NOT EXISTS t_order_part_group (
   id                 INT AUTO_INCREMENT PRIMARY KEY,

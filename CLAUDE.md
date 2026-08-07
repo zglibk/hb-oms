@@ -109,6 +109,10 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 1. 在 `apps/server/scripts/sql/` 新建幂等的 `migration-*.sql`（可重复执行不报错，建表用 `CREATE TABLE IF NOT EXISTS`，加列/加索引用存在性判断）。
 2. 在 `apps/server/scripts/db-migrate.ts` 的 `MIGRATIONS` 数组**末尾**登记（顺序即执行顺序），并在结构验证段 `expectedColumns` 为新表/关键新列补充校验项。
 3. 同步更新 `apps/server/scripts/sql/01-schema.sql`（供全新安装 `db:init` 使用），列定义必须与迁移 SQL **完全一致**。
+   - ⚠️ **写删列迁移时必须回头加固前序迁移**（2026-08-07 连踩两次）：`db:migrate` 每次跑**全量清单**，某列被删后，早先引用该列的迁移语句（UPDATE / MODIFY COLUMN）会在下次执行时报 `Unknown column` 而中断整条流程——本地能过是因为那次列还在。删列前把前序迁移里所有引用该列的语句改成「`information_schema` 判存在 → `PREPARE`」。
+   - 注意 `IF(cond, 0, (SELECT … col …))` **挡不住**：MySQL 在**预处理阶段**就解析子查询的列名，条件为假照样报错，整条查询都得进 `PREPARE`。
+   - 删列迁移应设**安全闸门**：命中会丢数据的情形就中止而不是照删。普通脚本里不能用 `SIGNAL`（仅存储程序可用），用「让预处理语句 `SELECT * FROM \`中止原因写成表名\`」制造报错，报错文本即提示语。
+   - 删列后同步：`expectedColumns` 移除该列、`forbiddenColumns` 加上它（盯住不得被旧版 schema 重建复活）。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
 现有迁移清单见 `db-migrate.ts`（截至内置角色统一共 19 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
@@ -196,7 +200,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **字段归属（2026-08-07 调整，勿再挪回去）**：
   - `po_no`（PO#，客户订单文件上的订单编号）与 `production_no`（生产单号）**都在订单级 `t_order`，一对一**——一张订单不会有两个生产单号。台账「订单编号」列取的就是 `t_order.production_no`，下游单据的 `production_no` 快照也一律自订单取。
   - 产品级新增 `customer_drawing_no`（**客户图号**，客户来图上的图号），与部件组的 `drawing_no`（**生产图号**，内部转化的技术图纸）是两个字段，别混。
-  - `t_order_product.production_no` 与 `t_order_product.assembly_workshop` 已弃用：列在库中保留历史数据（COMMENT 已标注），实体不映射、DTO 不接收、程序不读不写。生产数据核对后另开清理迁移 DROP。
+  - `t_order_product.production_no` 与 `t_order_product.assembly_workshop` **已删列**（`migration-drop-deprecated-order-cols.sql`）。该迁移带**安全闸门**：若存在「同一订单多个产品行填了不同生产单号」就中止不删（回填只取行序最前的一个，删列会让其余值永久消失）——闸门用「让预处理语句指向一个不存在的表」实现，报错文本即中止原因。db-migrate.ts 另加 `forbiddenColumns` 断言盯住这两列不得复活。
 - 默认一产品一组（`whole` 整品）；缓冲类可拆「外中轨」「内轨」等多组，各组独立图号/版本/料厚；**组不拆数量**，各组支数默认 = 产品支数。同产品行内 `group_type` 唯一。
 - 部件行由服务端按 `expandPartRows(组类型, 节数, 是否卡口, 组支数)` **蓝图展开**（三节轨 3 行 / 二节轨 2 行无中轨；含卡口再按左右分列，奇数支左边多一支），客户端只能微调追溯码/备注。
 

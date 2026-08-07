@@ -25,19 +25,23 @@ PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 -- 回填：取该订单下**行序最靠前的非空**生产单号（同单多值时以第一行为准，其余保留在产品行不删）。
 -- 用相关子查询而非 GROUP_CONCAT+SUBSTRING_INDEX——后者遇到单号自身含逗号会截错值。
-UPDATE t_order o
-   SET o.production_no = (
-     SELECT p.production_no
-       FROM t_order_product p
-      WHERE p.order_id = o.id AND p.production_no IS NOT NULL AND p.production_no <> ''
-      ORDER BY p.sort ASC, p.id ASC
-      LIMIT 1
-   )
- WHERE (o.production_no IS NULL OR o.production_no = '')
-   AND EXISTS (
-     SELECT 1 FROM t_order_product p
-      WHERE p.order_id = o.id AND p.production_no IS NOT NULL AND p.production_no <> ''
-   );
+-- ⚠️ 必须包在列存在性判断里：后续的 migration-drop-deprecated-order-cols.sql 会把
+-- t_order_product.production_no 删掉，而 db:migrate 每次跑**全量清单**，裸写这条
+-- UPDATE 会在删列后报 Unknown column 而让整个迁移流程失败。
+SET @src_col := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 't_order_product' AND COLUMN_NAME = 'production_no');
+SET @sql := IF(@src_col = 1, '
+  UPDATE t_order o
+     SET o.production_no = (
+       SELECT p.production_no FROM t_order_product p
+        WHERE p.order_id = o.id AND p.production_no IS NOT NULL AND p.production_no <> ""
+        ORDER BY p.sort ASC, p.id ASC LIMIT 1)
+   WHERE (o.production_no IS NULL OR o.production_no = "")
+     AND EXISTS (SELECT 1 FROM t_order_product p
+                  WHERE p.order_id = o.id AND p.production_no IS NOT NULL AND p.production_no <> "")',
+  'SELECT ''产品行 production_no 已删除，无需回填''');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 -- ===== 2. t_order_product.customer_drawing_no =====
 SET @exist := (SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -63,11 +67,19 @@ DELETE rp FROM t_role_permission rp
 DELETE FROM t_permission WHERE perm_code = 'order:cancel';
 
 -- ===== 4. 弃用标记（只改 COMMENT，不删列、不改类型，重复执行同定义无害）=====
-ALTER TABLE t_order_product
-  MODIFY COLUMN production_no VARCHAR(64) NULL
-    COMMENT '【已弃用 2026-08-07】生产单号已上移订单级 t_order.production_no；本列仅保留历史数据，程序不再读写',
-  MODIFY COLUMN assembly_workshop VARCHAR(32) NULL
-    COMMENT '【已弃用 2026-08-07】订单环节不安排装配车间；车间改由装配批次 t_assembly_batch.workshop 录入，本列仅保留历史数据，程序不再读写';
+-- 同样要判存在：这两列稍后会被清理迁移删除，删后再 MODIFY 会报 Unknown column。
+SET @sql := IF(@src_col = 1,
+  'ALTER TABLE t_order_product MODIFY COLUMN production_no VARCHAR(64) NULL COMMENT ''【已弃用 2026-08-07】生产单号已上移订单级 t_order.production_no；本列仅保留历史数据，程序不再读写''',
+  'SELECT ''产品行 production_no 已删除，跳过注释订正''');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @ws_col := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 't_order_product' AND COLUMN_NAME = 'assembly_workshop');
+SET @sql := IF(@ws_col = 1,
+  'ALTER TABLE t_order_product MODIFY COLUMN assembly_workshop VARCHAR(32) NULL COMMENT ''【已弃用 2026-08-07】订单环节不安排装配车间；车间改由装配批次 t_assembly_batch.workshop 录入，本列仅保留历史数据，程序不再读写''',
+  'SELECT ''产品行 assembly_workshop 已删除，跳过注释订正''');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 -- ===== 5. 下游快照列的来源注释订正（生产单号快照现自订单取，非产品行）=====
 ALTER TABLE t_outsource_item

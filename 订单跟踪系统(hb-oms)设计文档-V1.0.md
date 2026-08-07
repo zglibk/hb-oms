@@ -240,8 +240,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | order_qty | int | 订单数量（按 unit 计） |
 | unit | varchar(16) | 单位：套 / 支 |
 | qty_pcs | int | **支数口径**（服务端计算冗余）：unit=套 → order_qty×2，unit=支 → order_qty。台账「订单数」即此值 |
-| ~~production_no~~ | varchar(64) | **【已弃用 2026-08-07】** 已上移订单级 `t_order.production_no`；列保留历史数据，程序不读不写 |
-| ~~assembly_workshop~~ | varchar(32) | **【已弃用 2026-08-07】** 订单环节不安排装配车间，改由装配批次录入；列保留历史数据，程序不读不写 |
+| ~~production_no~~ | — | **【已删除 2026-08-07】** 已上移订单级 `t_order.production_no`（migration-drop-deprecated-order-cols.sql） |
+| ~~assembly_workshop~~ | — | **【已删除 2026-08-07】** 订单环节不安排装配车间，改由装配批次 `t_assembly_batch.workshop` 录入 |
 | customer_drawing_no | varchar(128) | **客户图号**：客户来图上的图号；区别于部件组的 `drawing_no`（生产图号，内部转化的技术图纸） |
 | delivery_date | date | 交货日期 |
 | delivery_address | varchar(255) | 交货地址 |

@@ -31,7 +31,7 @@ export class CreateAssemblyBatchDto {
   @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' })
   side?: string;
 
-  /** 装配车间（字典 assembly_workshop）；不传则继承产品行 assembly_workshop */
+  /** 装配车间（字典 assembly_workshop）；订单环节不安排车间，由本批次录入决定 */
   @IsOptional()
   @IsString()
   @MaxLength(32)
@@ -101,7 +101,7 @@ export class QueryAssemblyDto {
   /** 关键字：订单号/客户/生产单号/产品型号/货号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
-  /** 装配车间（字典 assembly_workshop）：匹配产品行计划车间或批次实际车间 */
+  /** 装配车间（字典 assembly_workshop）：匹配该部件组各装配批次的实际车间 */
   @IsOptional() @IsString() @MaxLength(32) workshop?: string;
 
   /** 交货日期区间 */

@@ -48,7 +48,7 @@ export class AssemblyBatch {
     length: 32,
     nullable: true,
     comment:
-      '装配车间（字典 assembly_workshop：装一~装八）；默认继承产品行 assembly_workshop，可覆写为实际装配车间',
+      '装配车间（字典 assembly_workshop：装一~装八）；批次录入时指定，订单环节不再预设计划车间',
   })
   workshop: string | null;
 

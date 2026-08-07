@@ -46,6 +46,17 @@ const MIGRATIONS: string[] = [
   'migration-part-stock.sql',
   'migration-builtin-roles.sql',
   'migration-order-field-adjust.sql',
+  'migration-drop-deprecated-order-cols.sql',
+];
+
+/**
+ * 结构验证：**不该再存在**的列。
+ * 弃用列删干净后若被误恢复（如有人照旧版 01-schema.sql 重建表），程序不会报错
+ * 但会悄悄回到"两处都有生产单号"的分叉状态，故在此显式盯住。
+ */
+const forbiddenColumns = [
+  't_order_product.production_no', // 已上移 t_order.production_no
+  't_order_product.assembly_workshop', // 已下沉 t_assembly_batch.workshop
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -66,7 +77,7 @@ const expectedColumns = [
   // M2 订单四级结构
   't_order.order_no',
   't_order_product.qty_pcs',
-  't_order_product.assembly_workshop',
+  // t_order_product.assembly_workshop 已于 2026-08-07 删除，移入下方 forbiddenColumns
   't_order_part_group.group_type',
   't_order_part_group.drawing_no',
   't_order_part.part_group_id',
@@ -155,14 +166,20 @@ async function main() {
   );
   const actual = new Set<string>(rows.map((r: any) => r.col));
   const missing = expectedColumns.filter((c) => !actual.has(c));
+  const lingering = forbiddenColumns.filter((c) => actual.has(c));
 
   console.log('\n结构验证:');
-  if (missing.length) {
+  if (missing.length || lingering.length) {
     for (const c of missing) console.log(`  ✗ 缺失 ${c}`);
+    for (const c of lingering) console.log(`  ✗ 已弃用列仍存在 ${c}`);
     await db.end();
-    throw new Error(`结构验证失败，缺失 ${missing.length} 项（全新库请先执行 pnpm db:init）`);
+    throw new Error(
+      `结构验证失败：缺失 ${missing.length} 项、残留弃用列 ${lingering.length} 项` +
+        '（全新库请先执行 pnpm db:init）',
+    );
   }
   console.log(`  ✓ ${expectedColumns.length} 项关键列全部存在`);
+  console.log(`  ✓ ${forbiddenColumns.length} 项已弃用列均已清除`);
 
   await db.end();
   console.log('\n🎉 迁移完成');
