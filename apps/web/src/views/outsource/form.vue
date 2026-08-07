@@ -90,9 +90,11 @@
               />
             </template>
           </el-table-column>
+          <!-- 发出数量由重量÷单重自动折算（syncQty），仍允许人工微调；min 取 0 与重量列一致，
+               「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
           <el-table-column label="发出数量(支)" width="120" align="center">
             <template #default="{ row }">
-              <el-input-number v-model="row.sendQty" :min="1" :precision="0" :step="1" :controls="false" style="width: 100%" />
+              <el-input-number v-model="row.sendQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="120">
@@ -306,7 +308,6 @@ function onPickChange(rows: PartGroupOption[]) {
 function confirmPick() {
   picked.value.forEach((o) => {
     if (form.items.some((it) => it.orderPartGroupId === o.orderPartGroupId)) return;
-    const sendQty = o.remainQty > 0 ? o.remainQty : o.qtyPcs;
     form.items.push({
       orderPartGroupId: o.orderPartGroupId,
       orderNo: o.orderNo,
@@ -316,10 +317,13 @@ function confirmPick() {
       dimensionText: o.dimensionText,
       qtyPcs: o.qtyPcs,
       sentQty: o.sentQty,
+      // 单重自部件信息带出，可改；重量与数量都留空由过磅实测录入
       unitWeight: o.unitWeight,
-      // 单重已知时按剩余支数反算默认重量，未知则留 0 由人工录入
-      sendWeight: o.unitWeight > 0 ? Math.round(sendQty * o.unitWeight * 100) / 100 : 0,
-      sendQty,
+      // 外发按**实际过磅重量**结算：发出数量 = 发出重量 ÷ 单重（syncQty 自动折算）。
+      // 这里刻意**不**用订单数量预填——订单数是"应该发多少"，发坯单要记的是"实际发了多少"，
+      // 拿订单数当默认值会让人顺手保存成一个没过磅的假数，回货对账时才发现对不上。
+      sendWeight: 0,
+      sendQty: 0,
       remark: '',
     });
   });
