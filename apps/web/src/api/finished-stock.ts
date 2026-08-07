@@ -170,9 +170,21 @@ export const createFinishedDoc = (data: FinishedDocPayload) =>
 export const updateFinishedDoc = (id: number, data: FinishedDocPayload) =>
   request.put(`/api/finished-stock/${id}`, data);
 
-export const confirmFinishedDoc = (id: number) => request.post(`/api/finished-stock/${id}/confirm`);
+/** 确认/冲销后订单状态的自动同步结果（§3.1：发货欠数 ≤ 0 自动完结，回正自动重开） */
+export interface FinishSyncResult {
+  /** 本次被自动完结的订单号 */
+  finished?: string[];
+  /** 本次被自动重开的订单号 */
+  reopened?: string[];
+}
+
+export const confirmFinishedDoc = (id: number) =>
+  request.post<any, FinishSyncResult>(`/api/finished-stock/${id}/confirm`);
 
 export const cancelFinishedDoc = (id: number) => request.post(`/api/finished-stock/${id}/cancel`);
 
 export const reverseFinishedDoc = (id: number, data: ReversePayload) =>
-  request.post<any, { id: number; docNo: string }>(`/api/finished-stock/${id}/reverse`, data);
+  request.post<any, { id: number; docNo: string } & FinishSyncResult>(
+    `/api/finished-stock/${id}/reverse`,
+    data,
+  );

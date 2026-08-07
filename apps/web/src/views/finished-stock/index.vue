@@ -154,6 +154,7 @@ import {
   cancelFinishedDoc,
   reverseFinishedDoc,
   type FinishedDocRow,
+  type FinishSyncResult,
 } from '@/api/finished-stock';
 import {
   FINISHED_DOC_STATUS,
@@ -226,11 +227,25 @@ async function onConfirm(row: FinishedDocRow) {
   );
   actingId.value = row.id;
   try {
-    await confirmFinishedDoc(row.id);
+    const res = await confirmFinishedDoc(row.id);
     ElMessage.success('已确认');
+    notifyOrderSync(res);
     load();
   } finally {
     actingId.value = null;
+  }
+}
+
+/**
+ * 订单状态自动变更提示（§3.1）：发货欠数交清会自动完结、回正会自动重开。
+ * 这是确认/冲销的**副作用**，不提示的话用户会以为订单状态被人偷改了。
+ */
+function notifyOrderSync(res?: FinishSyncResult) {
+  if (res?.finished?.length) {
+    ElMessage.success(`订单 ${res.finished.join('、')} 已交清，自动完结`);
+  }
+  if (res?.reopened?.length) {
+    ElMessage.warning(`订单 ${res.reopened.join('、')} 发货欠数回正，已自动重开`);
   }
 }
 
@@ -265,6 +280,7 @@ async function onReverse(row: FinishedDocRow) {
       reason: String(value).trim(),
     });
     ElMessage.success(`已生成红字单 ${res.docNo}`);
+    notifyOrderSync(res);
     load();
   } finally {
     actingId.value = null;

@@ -22,6 +22,7 @@ import {
   UpdateFinishedDocDto,
 } from './dto/finished-stock.dto';
 import { loadInboundQuota, quotaKey } from '../assembly/assembly-quota.util';
+import { syncOrderFinishState } from '../order/order-owed.util';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import {
@@ -367,7 +368,11 @@ export class FinishedStockService {
         status: FINISHED_DOC_STATUS.CONFIRMED,
         ...auditOnUpdate(user),
       });
-      return { id, status: FINISHED_DOC_STATUS.CONFIRMED };
+
+      // 出库量变了 → 发货欠数变了 → 订单可能该完结（§3.1）。同事务内同步，
+      // 保证库存与订单状态一起成立或一起回滚
+      const sync = await syncOrderFinishState(mgr, this.orderIdsOf(items), user);
+      return { id, status: FINISHED_DOC_STATUS.CONFIRMED, ...sync };
     });
   }
 
@@ -449,8 +454,15 @@ export class FinishedStockService {
       // 红字单建后立即生效：驱动余额（红字豁免装配闸门，但结存仍不得为负）
       await this.applyItemsToBalance(mgr, redDoc, saved, user);
 
-      return { id: redDoc.id, docNo, originDocId: origin.id };
+      // 冲销出库单会让发货欠数回正 → 已完结订单需自动重开（§3.1）
+      const sync = await syncOrderFinishState(mgr, this.orderIdsOf(saved), user);
+      return { id: redDoc.id, docNo, originDocId: origin.id, ...sync };
     });
+  }
+
+  /** 明细涉及的订单 ID（去重，跳过不挂订单的纯属性行） */
+  private orderIdsOf(items: FinishedItem[]): number[] {
+    return [...new Set(items.map((it) => it.orderId).filter((v) => v > 0))];
   }
 
   /* ==================== 内部：余额与闸门 ==================== */

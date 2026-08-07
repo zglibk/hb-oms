@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
-  FINISHED_BIZ_TYPE,
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   OUTSOURCE_STATUS,
@@ -9,6 +8,13 @@ import {
   hasSocket,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
+// 单据族 SQL 与参数是台账与订单自动完结共用的欠数口径，唯一事实源在 order-owed.util
+import {
+  INBOUND_FAMILY_PARAMS,
+  INBOUND_FAMILY_SQL,
+  OUTBOUND_FAMILY_PARAMS,
+  OUTBOUND_FAMILY_SQL,
+} from './order-owed.util';
 
 /**
  * ===== 订单跟踪台账：本系统的核心产出（设计文档 §5.1）=====
@@ -26,30 +32,6 @@ import { QueryLedgerDto } from './dto/ledger.dto';
  *     计进去会让该组额度永久为负、挡死后续正常入库。
  *   两者服务于不同问题，各自正确。
  */
-
-/** 入向单据族：生产入库 + 期初，以及冲销它们的红字单 */
-const INBOUND_FAMILY_SQL = `(
-  fd.biz_type IN (?, ?)
-  OR (fd.biz_type = ? AND fo.biz_type IN (?, ?))
-)`;
-/** 出向单据族：销售出库，以及冲销它的红字单 */
-const OUTBOUND_FAMILY_SQL = `(
-  fd.biz_type = ?
-  OR (fd.biz_type = ? AND fo.biz_type = ?)
-)`;
-
-const INBOUND_FAMILY_PARAMS = [
-  FINISHED_BIZ_TYPE.INBOUND,
-  FINISHED_BIZ_TYPE.OPENING_BALANCE,
-  FINISHED_BIZ_TYPE.REVERSAL,
-  FINISHED_BIZ_TYPE.INBOUND,
-  FINISHED_BIZ_TYPE.OPENING_BALANCE,
-];
-const OUTBOUND_FAMILY_PARAMS = [
-  FINISHED_BIZ_TYPE.SALE_OUTBOUND,
-  FINISHED_BIZ_TYPE.REVERSAL,
-  FINISHED_BIZ_TYPE.SALE_OUTBOUND,
-];
 
 export interface LedgerRow {
   orderPartGroupId: number;
