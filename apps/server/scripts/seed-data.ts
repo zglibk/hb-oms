@@ -13,12 +13,28 @@ export const DEPARTMENTS = [
   { dept_code: 'IT', dept_name: 'IT部', parent_id: 1, sort: 4 },
 ];
 
-// ---------- 角色（data_scope：1全部 2本部门 3本部门及下级 4本人 5自定义）----------
+// ---------- 内置角色：公司实际岗位编制，数据范围一律「全部」、一律内置 ----------
+// data_scope：1全部 2本部门 3本部门及下级 4本人 5自定义
+// 存量库由 migration-builtin-roles.sql 同步（含旧编码 salesman/merchandiser/warehouse
+// 原地迁移为 BUS_OPR/DOC_OPR/WH_OPR，保住既有用户与权限绑定）；本数组供 db:init 全新安装。
 export const ROLES = [
-  { role_code: 'salesman', role_name: '业务员', data_scope: 1, sort: 1, remark: '录单/跟踪订单完成情况' },
-  { role_code: 'merchandiser', role_name: '跟单员', data_scope: 1, sort: 2, remark: '订单跟踪/外发跟进' },
-  { role_code: 'warehouse', role_name: '仓管员', data_scope: 1, sort: 3, remark: '成品出入库操作' },
-  { role_code: 'admin', role_name: '系统管理员', data_scope: 1, sort: 9, remark: '系统管理' },
+  { role_code: 'GEN_MGR', role_name: '总经理', data_scope: 1, sort: 1, remark: '公司经营决策' },
+  { role_code: 'VICE_MGR', role_name: '副总经理', data_scope: 1, sort: 2, remark: '协助总经理分管业务' },
+  { role_code: 'BUS_MGR', role_name: '业务经理', data_scope: 1, sort: 3, remark: '业务团队管理与客户维护' },
+  { role_code: 'BUS_OPR', role_name: '业务员', data_scope: 1, sort: 4, remark: '录单/跟踪订单完成情况' },
+  { role_code: 'DOC_OPR', role_name: '跟单员', data_scope: 1, sort: 5, remark: '订单跟踪/外发跟进' },
+  { role_code: 'PLN_MGR', role_name: '计划经理', data_scope: 1, sort: 6, remark: '生产计划统筹' },
+  { role_code: 'PLN_OPR', role_name: '计划员', data_scope: 1, sort: 7, remark: '排程与交期跟进' },
+  { role_code: 'PROD_MGR', role_name: '生产经理', data_scope: 1, sort: 8, remark: '生产现场管理' },
+  { role_code: 'PROD_OPR', role_name: '生产文员', data_scope: 1, sort: 9, remark: '生产数据录入与统计' },
+  { role_code: 'WH_OPR', role_name: '仓管员', data_scope: 1, sort: 10, remark: '成品出入库操作' },
+  { role_code: 'TECH_MGR', role_name: '技术经理', data_scope: 1, sort: 11, remark: '技术工艺管理' },
+  { role_code: 'TECH_ENG', role_name: '技术工程师', data_scope: 1, sort: 12, remark: '工艺文件与图纸维护' },
+  { role_code: 'QA_MGR', role_name: '品质经理', data_scope: 1, sort: 13, remark: '品质体系管理' },
+  { role_code: 'PQE_ENG', role_name: 'PQE 工程师', data_scope: 1, sort: 14, remark: '制程品质工程' },
+  { role_code: 'FIN_MGR', role_name: '财务经理', data_scope: 1, sort: 15, remark: '财务核算管理' },
+  { role_code: 'PAY_OPR', role_name: '薪资核算员', data_scope: 1, sort: 16, remark: '计件与薪资核算' },
+  { role_code: 'admin', role_name: '系统管理员', data_scope: 1, sort: 17, remark: '系统管理' },
 ];
 
 // ---------- 权限树 ----------
@@ -30,20 +46,26 @@ export type { PermSeed } from '../src/modules/system/permission-manifest';
 // ---------- 角色 → 权限 绑定矩阵（值为 perm_code 列表；admin 特殊处理为全部）----------
 // M1 仅基础数据/系统管理；订单/外发/出入库权限点随 M2~M4 落地后补充绑定
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
-  // 业务员：基础数据维护（客户/工艺/物料）
-  salesman: [
+  // 业务员：基础数据维护（客户/开单信息/部件信息）
+  BUS_OPR: [
     'basic', 'basic:customer', 'customer:create', 'customer:update', 'customer:import',
     'basic:process-info', 'process-info:create', 'process-info:update',
     'basic:material', 'material:create', 'material:update', 'material:import', 'material:export',
   ],
   // 跟单员：基础数据查看与维护
-  merchandiser: [
+  DOC_OPR: [
     'basic', 'basic:customer', 'customer:create', 'customer:update',
     'basic:process-info', 'process-info:create', 'process-info:update',
     'basic:material',
   ],
-  // 仓管员：M1 暂无专属菜单（成品出入库 M4 落地后补充）
-  warehouse: [],
+  // 仓管员：成品出入库操作
+  WH_OPR: [
+    'material-mgmt', 'finished-stock', 'finished-stock:create', 'finished-stock:update',
+    'finished-stock:confirm', 'finished-stock:cancel',
+    'stock-balance', 'part-stock',
+  ],
+  // 其余内置角色不预置权限：岗位职责差异大，由管理员在「角色管理 → 分配权限」按需授予，
+  // 预置一套猜测出来的权限反而会让人以为已经配好、不再核对。
   // admin 在脚本中绑定全部权限
 };
 
@@ -115,7 +137,7 @@ export const DICTS: Array<{
 // ---------- 账号（plainPwd 在 db-init 中 bcrypt 加密）----------
 export const USERS = [
   { username: 'admin', plainPwd: 'Admin@123', real_name: '系统管理员', dept_code: 'IT', roles: ['admin'] },
-  { username: 'sales01', plainPwd: 'Sale@123', real_name: '业务员01', dept_code: 'SALE', roles: ['salesman'] },
-  { username: 'follow01', plainPwd: 'Sale@123', real_name: '跟单员01', dept_code: 'SALE', roles: ['merchandiser'] },
-  { username: 'wh01', plainPwd: 'Wh@12345', real_name: '仓管员01', dept_code: 'WAREHOUSE', roles: ['warehouse'] },
+  { username: 'sales01', plainPwd: 'Sale@123', real_name: '业务员01', dept_code: 'SALE', roles: ['BUS_OPR'] },
+  { username: 'follow01', plainPwd: 'Sale@123', real_name: '跟单员01', dept_code: 'SALE', roles: ['DOC_OPR'] },
+  { username: 'wh01', plainPwd: 'Wh@12345', real_name: '仓管员01', dept_code: 'WAREHOUSE', roles: ['WH_OPR'] },
 ];

@@ -43,6 +43,7 @@ const MIGRATIONS: string[] = [
   'migration-assembly-batch.sql',
   'migration-assembly-plan-start.sql',
   'migration-finished-stock.sql',
+  'migration-builtin-roles.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */

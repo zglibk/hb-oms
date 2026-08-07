@@ -83,12 +83,29 @@ export {
   normalizeVersion,
 } from '@hb-oms/shared';
 
-/** 角色编码 → 中文名映射（与后端种子角色一致） */
+/**
+ * 内置角色编码 → 中文名（与后端 seed-data.ts ROLES / migration-builtin-roles.sql 一致）。
+ * 仅作**兜底展示**：角色列表与用户分配处一律取库中 role_name，
+ * 这里只服务于拿不到角色对象、手里只有编码的场景。管理员自建角色不在此表，回退显示编码。
+ */
 export const ROLE_MAP: Record<string, string> = {
+  GEN_MGR: '总经理',
+  VICE_MGR: '副总经理',
+  BUS_MGR: '业务经理',
+  BUS_OPR: '业务员',
+  DOC_OPR: '跟单员',
+  PLN_MGR: '计划经理',
+  PLN_OPR: '计划员',
+  PROD_MGR: '生产经理',
+  PROD_OPR: '生产文员',
+  WH_OPR: '仓管员',
+  TECH_MGR: '技术经理',
+  TECH_ENG: '技术工程师',
+  QA_MGR: '品质经理',
+  PQE_ENG: 'PQE 工程师',
+  FIN_MGR: '财务经理',
+  PAY_OPR: '薪资核算员',
   admin: '系统管理员',
-  salesman: '业务员',
-  merchandiser: '跟单员',
-  warehouse: '仓管员',
 };
 
 /** 取角色中文名，未知角色回退为原编码 */
