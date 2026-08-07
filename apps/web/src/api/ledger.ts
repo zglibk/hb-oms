@@ -27,7 +27,8 @@ export interface LedgerRow {
   drawingNo: string | null;
   drawingVersion: string | null;
   materialThickness: string | null;
-  assemblyWorkshop: string | null;
+  /** 该部件组各装配批次的车间（去重）；车间已下沉批次级，一组多批可分在不同车间 */
+  assemblyWorkshops: string[];
   deliveryDate: string | null;
   isExport: number;
   exportCountry: string | null;

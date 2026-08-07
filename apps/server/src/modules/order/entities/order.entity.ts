@@ -18,8 +18,24 @@ export class Order {
   @Column({ name: 'order_no', type: 'varchar', length: 32, unique: true, comment: '系统单号，ORD 采番' })
   orderNo: string;
 
-  @Column({ name: 'po_no', type: 'varchar', length: 64, nullable: true, comment: 'PO#（客户单号/合同号）' })
+  @Column({
+    name: 'po_no',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment: 'PO#（客户订单文件上的订单编号，手工填写；与 production_no 一对一）',
+  })
   poNo: string | null;
+
+  @Column({
+    name: 'production_no',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    comment:
+      '生产单号（订单级，手工填写；与 po_no 一对一；对应手工台账「订单编号」如 GLI46212-A，台账默认展示此号）',
+  })
+  productionNo: string | null;
 
   @Column({ name: 'customer_id', type: 'int', nullable: true, comment: '客户ID（t_customer，可空支持手输客户）' })
   customerId: number | null;

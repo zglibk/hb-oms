@@ -94,7 +94,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="装配车间">
-            <el-select v-model="draft.workshop" clearable style="width: 120px" placeholder="继承产品行">
+            <el-select v-model="draft.workshop" clearable style="width: 120px" placeholder="选择车间">
               <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
@@ -213,7 +213,10 @@ function resetDraft() {
   editingId.value = null;
   editingIndex.value = 0;
   draft.side = socket.value ? 'left' : '';
-  draft.workshop = data.value?.group?.assemblyWorkshop ?? '';
+  // 车间不再从订单继承（订单环节已不安排装配车间）；沿用该组最近一条批次的车间做默认值，
+  // 一组多批通常同车间，仍可逐批改；该组还没有批次时留空由计划员选
+  const batches = data.value?.list ?? [];
+  draft.workshop = batches[batches.length - 1]?.workshop ?? '';
   draft.planStartDate = today();
   draft.planDate = today();
   draft.actualDate = null;

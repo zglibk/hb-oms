@@ -36,7 +36,8 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'order:create', perm_name: '新增订单', perm_type: 2, parent_code: 'order', sort: 1 },
   { perm_code: 'order:update', perm_name: '编辑订单', perm_type: 2, parent_code: 'order', sort: 2 },
   { perm_code: 'order:finish', perm_name: '完结/重开订单', perm_type: 2, parent_code: 'order', sort: 3 },
-  { perm_code: 'order:cancel', perm_name: '作废订单', perm_type: 2, parent_code: 'order', sort: 4 },
+  // 2026-08-07：作废改为删除（两者限制条件相同——被下游引用即禁止，留废记录无价值）
+  { perm_code: 'order:delete', perm_name: '删除订单', perm_type: 2, parent_code: 'order', sort: 4 },
 
   { perm_code: 'outsource', perm_name: '外发管理', perm_type: 1, parent_code: 'production', menu_path: '/outsource', component: 'outsource/index', icon: 'Van', sort: 2 },
   { perm_code: 'outsource:create', perm_name: '新增发坯单', perm_type: 2, parent_code: 'outsource', sort: 1 },

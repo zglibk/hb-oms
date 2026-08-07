@@ -203,7 +203,7 @@ export class OutsourceService {
       params.push(query.surfaceType);
     }
     if (query.keyword) {
-      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR p.production_no LIKE ?
+      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
                       OR g.product_model LIKE ? OR g.drawing_no LIKE ?)`;
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
@@ -216,7 +216,7 @@ export class OutsourceService {
               g.order_product_id  AS orderProductId,
               o.order_no          AS orderNo,
               o.customer_name     AS customerName,
-              p.production_no     AS productionNo,
+              o.production_no     AS productionNo,
               g.product_model     AS productModel,
               p.dimension_raw     AS dimensionRaw,
               p.dimension_unit    AS dimensionUnit,

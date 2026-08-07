@@ -45,7 +45,7 @@
               <table class="expand-grid">
                 <thead>
                   <tr>
-                    <th>生产单号</th>
+                    <th>客户图号</th>
                     <th>产品型号</th>
                     <th>规格</th>
                     <th>数量</th>
@@ -53,14 +53,13 @@
                     <th>表面处理</th>
                     <th>图号/版本</th>
                     <th>料厚</th>
-                    <th>装配车间</th>
                     <th>交期</th>
                   </tr>
                 </thead>
                 <tbody>
                   <template v-for="p in row.products" :key="p.id">
                     <tr v-for="(g, gi) in p.partGroups" :key="g.id">
-                      <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.productionNo || '—' }}</td>
+                      <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.customerDrawingNo || '—' }}</td>
                       <td>{{ g.productModel || productLabel(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dimensionText(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.orderQty }} {{ unitLabel(p.unit) }}</td>
@@ -68,7 +67,6 @@
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dictLabel(surfaceDict, p.surfaceType) }}</td>
                       <td>{{ g.drawingNo || '—' }}<template v-if="g.drawingVersion"> / {{ g.drawingVersion }}</template></td>
                       <td class="eg-center">{{ g.materialThickness || '—' }}</td>
-                      <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dictLabel(workshopDict, p.assemblyWorkshop) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.deliveryDate || '—' }}</td>
                     </tr>
                   </template>
@@ -80,6 +78,9 @@
         <el-table-column label="订单号" prop="orderNo" width="140" fixed="left" />
         <el-table-column label="PO#" prop="poNo" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.poNo || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="生产单号" prop="productionNo" width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="订单日期" prop="orderDate" width="105">
@@ -123,11 +124,11 @@
                 size="small" v-permission.disable="'order:finish'" link type="warning" :icon="RefreshLeft"
                 :loading="actingId === row.id" @click="onReopen(row)"
               >重开</el-button>
+              <!-- 删除取代作废：限制条件本就相同（被下游引用即禁止），留废记录无价值 -->
               <el-button
-                v-if="row.status !== ORDER_STATUS_VALUE.CANCELLED"
-                size="small" v-permission.disable="'order:cancel'" link type="danger" :icon="Delete"
-                :loading="actingId === row.id" @click="onCancel(row)"
-              >作废</el-button>
+                size="small" v-permission.disable="'order:delete'" link type="danger" :icon="Delete"
+                :loading="actingId === row.id" @click="onDelete(row)"
+              >删除</el-button>
             </app-actions>
           </template>
         </el-table-column>
@@ -146,7 +147,7 @@ import {
   getOrderList,
   finishOrder,
   reopenOrder,
-  cancelOrder,
+  deleteOrder,
   type OrderItem,
   type OrderProductItem,
 } from '@/api/order';
@@ -171,11 +172,10 @@ const total = ref(0);
 const query = reactive({ page: 1, pageSize: 20, keyword: '', status: undefined as number | undefined });
 const dateRange = ref<[string, string] | null>(null);
 
+// assembly_workshop 字典不再需要——订单环节已不安排装配车间
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
-const workshopDict = ref<Array<{ label: string; value: string }>>([]);
-Promise.all([loadDict('surface_type'), loadDict('assembly_workshop')]).then(([sf, ws]) => {
-  surfaceDict.value = sf.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
-  workshopDict.value = ws.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
+loadDict('surface_type').then((sf: any[]) => {
+  surfaceDict.value = sf.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
 async function load() {
@@ -246,13 +246,14 @@ async function onFinish(row: OrderItem) {
 async function onReopen(row: OrderItem) {
   act(row, reopenOrder, '已重开');
 }
-async function onCancel(row: OrderItem) {
+async function onDelete(row: OrderItem) {
   await ElMessageBox.confirm(
-    `确定作废订单「${row.orderNo}」吗？被外发/出入库引用的订单无法作废。`,
-    '作废订单',
-    { type: 'warning', confirmButtonText: '作废', confirmButtonClass: 'el-button--danger' },
+    `确定删除订单「${row.orderNo}」吗？将连同产品行、部件组、部件明细一并删除，且**不可恢复**。` +
+      '被外发/装配/出入库引用的订单无法删除。',
+    '删除订单',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
   );
-  act(row, cancelOrder, '已作废');
+  act(row, deleteOrder, '已删除');
 }
 </script>
 

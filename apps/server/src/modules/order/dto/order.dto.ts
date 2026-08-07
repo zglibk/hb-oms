@@ -66,6 +66,12 @@ export class CreateOrderProductDto {
 
   @IsOptional() @IsString() @MaxLength(64) itemNo?: string;
 
+  /** 客户图号：客户来图上的图号，区别于部件组的生产图号 drawingNo */
+  @IsOptional()
+  @IsString({ message: '客户图号必须是文本' })
+  @MaxLength(128, { message: '客户图号不能超过 128 个字符' })
+  customerDrawingNo?: string;
+
   @IsOptional() @IsString() @MaxLength(128) productName?: string;
 
   /** 产品类型多选组合（数组或逗号串均可，服务端经共享包规范化） */
@@ -96,9 +102,8 @@ export class CreateOrderProductDto {
   @IsIn(['set', 'piece'], { message: '单位仅支持 套(set) / 支(piece)' })
   unit: string;
 
-  @IsOptional() @IsString() @MaxLength(64) productionNo?: string;
-
-  @IsOptional() @IsString() @MaxLength(32) assemblyWorkshop?: string;
+  // productionNo 已上移订单级（CreateOrderDto.productionNo）；assemblyWorkshop 已移除
+  // ——订单环节不安排装配车间，车间在装配批次录入。两者不再接收产品级入参。
 
   @IsOptional() @IsDateString({}, { message: '交货日期格式应为 YYYY-MM-DD' }) deliveryDate?: string;
 
@@ -118,7 +123,14 @@ export class CreateOrderProductDto {
 }
 
 export class CreateOrderDto {
+  /** PO#：客户订单文件上的订单编号，手工填写 */
   @IsOptional() @IsString() @MaxLength(64) poNo?: string;
+
+  /** 生产单号：订单级，与 PO# 一对一；台账「订单编号」展示此号 */
+  @IsOptional()
+  @IsString({ message: '生产单号必须是文本' })
+  @MaxLength(64, { message: '生产单号不能超过 64 个字符' })
+  productionNo?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() customerId?: number;
 

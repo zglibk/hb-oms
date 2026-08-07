@@ -47,7 +47,8 @@ export interface AssemblyGroupRow {
   groupType: string | null;
   railSection: string | null;
   dimensionText: string | null;
-  assemblyWorkshop: string | null;
+  /** 该部件组各装配批次的车间（去重）；订单环节不再安排装配车间 */
+  assemblyWorkshops: string[];
   deliveryDate: string | null;
   /** 组支数（订单数口径） */
   qtyPcs: number;
@@ -94,7 +95,6 @@ export interface AssemblyBatchesResult {
     dimensionText: string | null;
     groupType: string | null;
     qtyPcs: number;
-    assemblyWorkshop: string | null;
     socket: boolean;
   } | null;
   sides: AssemblySideSummary[];

@@ -105,7 +105,7 @@
           <template #default="{ row }">{{ row.returnedQty }}</template>
         </el-table-column>
         <el-table-column label="装配车间" width="90" align="center">
-          <template #default="{ row }">{{ dictLabel(workshopDict, row.assemblyWorkshop) }}</template>
+          <template #default="{ row }">{{ dictLabels(workshopDict, row.assemblyWorkshops) }}</template>
         </el-table-column>
         <el-table-column label="装配完成" width="90" align="center">
           <template #default="{ row }">
@@ -227,6 +227,11 @@ load();
 onActivated(load);
 
 /* ===== 展示辅助 ===== */
+/** 多值字典展示：数组逐个转中文标签后并列（无值显示 —） */
+function dictLabels(opts: Array<{ label: string; value: string }>, vs: string[] | null | undefined): string {
+  if (!vs?.length) return '—';
+  return vs.map((v) => opts.find((o) => o.value === v)?.label ?? v).join('/');
+}
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';
   return opts.find((o) => o.value === v)?.label ?? v;

@@ -42,6 +42,16 @@ export class OrderProduct {
   @Column({ name: 'item_no', type: 'varchar', length: 64, nullable: true, comment: '货号快照（如 53#）' })
   itemNo: string | null;
 
+  @Column({
+    name: 'customer_drawing_no',
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    comment:
+      '客户图号（产品级）：客户来图上的图号；区别于部件组的 drawing_no 生产图号（内部转化的技术图纸）',
+  })
+  customerDrawingNo: string | null;
+
   @Column({ name: 'product_name', type: 'varchar', length: 128, nullable: true, comment: '产品名称' })
   productName: string | null;
 
@@ -90,23 +100,10 @@ export class OrderProduct {
   @Column({ name: 'qty_pcs', type: 'int', comment: '支数口径（服务端计算冗余）：套→×2，支→原值；台账「订单数」' })
   qtyPcs: number;
 
-  @Column({
-    name: 'production_no',
-    type: 'varchar',
-    length: 64,
-    nullable: true,
-    comment: '生产单号（手工填写；对应手工台账「订单编号」如 GLI46212-A；台账默认展示此号）',
-  })
-  productionNo: string | null;
-
-  @Column({
-    name: 'assembly_workshop',
-    type: 'varchar',
-    length: 32,
-    nullable: true,
-    comment: '装配车间（字典 assembly_workshop：assembly_1装一~assembly_8装八）；计划属性，装配批次默认继承可覆写',
-  })
-  assemblyWorkshop: string | null;
+  // 【已弃用 2026-08-07】production_no 已上移订单级 t_order.production_no（与 PO# 一对一，
+  // 一张订单不会有两个生产单号）；assembly_workshop 也已移除——订单环节不安排装配车间，
+  // 车间是装配批次录入时才定的（t_assembly_batch.workshop）。两列在库中保留历史数据，
+  // 实体不再映射，程序不读不写。待生产数据核对后另开清理迁移 DROP。
 
   @Column({ name: 'delivery_date', type: 'date', nullable: true, comment: '交货日期' })
   deliveryDate: string | null;

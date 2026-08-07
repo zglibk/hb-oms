@@ -39,8 +39,11 @@ export interface AssemblyGroupRow {
   groupType: string | null;
   railSection: string | null;
   dimensionText: string | null;
-  /** 计划装配车间（产品行级） */
-  assemblyWorkshop: string | null;
+  /**
+   * 该部件组各装配批次的车间（去重）。车间已下沉批次级——订单环节不再安排装配车间，
+   * 一组多批可分在不同车间，故是列表而非单值；无批次时为空数组。
+   */
+  assemblyWorkshops: string[];
   deliveryDate: string | null;
   /** 组支数（台账「订单数」口径） */
   qtyPcs: number;
@@ -84,17 +87,16 @@ export class AssemblyService {
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
 
     if (query.keyword) {
-      where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR p.production_no LIKE ?
+      where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
                    OR g.product_model LIKE ? OR p.item_no LIKE ?)`);
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
     }
     if (query.workshop) {
-      // 计划车间（产品行）或实际装配车间（批次覆写）命中其一即算该车间的活
-      where.push(`(p.assembly_workshop = ?
-                   OR EXISTS (SELECT 1 FROM t_assembly_batch b
-                               WHERE b.order_part_group_id = g.id AND b.workshop = ?))`);
-      params.push(query.workshop, query.workshop);
+      // 车间只存在于装配批次（订单环节不再安排计划车间），故只匹配批次实际车间
+      where.push(`EXISTS (SELECT 1 FROM t_assembly_batch b
+                           WHERE b.order_part_group_id = g.id AND b.workshop = ?)`);
+      params.push(query.workshop);
     }
     if (query.deliveryFrom) {
       where.push('p.delivery_date >= ?');
@@ -121,7 +123,10 @@ export class AssemblyService {
                      SUM(qty)                                                   AS planned_qty,
                      SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done_qty,
                      MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date,
-                     MAX(actual_date)                                           AS last_actual_date
+                     MAX(actual_date)                                           AS last_actual_date,
+                     -- 装配车间已下沉批次级（订单不再预设计划车间），一组多批可能分在不同车间，
+                     -- 故聚合成去重列表交给界面并列展示；NULL 会被 GROUP_CONCAT 自动跳过
+                     GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
                 FROM t_assembly_batch
                GROUP BY order_part_group_id
              ) a ON a.gid = g.id
@@ -143,7 +148,7 @@ export class AssemblyService {
               o.order_no          AS order_no,
               o.customer_name     AS customer_name,
               o.order_date        AS order_date,
-              p.production_no     AS production_no,
+              o.production_no     AS production_no,
               p.item_no           AS item_no,
               p.material_code     AS material_code,
               p.product_type      AS product_type,
@@ -151,7 +156,7 @@ export class AssemblyService {
               p.dimension_raw     AS dimension_raw,
               p.dimension_unit    AS dimension_unit,
               p.dimension_mm      AS dimension_mm,
-              p.assembly_workshop AS assembly_workshop,
+              a.workshops         AS workshops,
               p.delivery_date     AS delivery_date,
               COALESCE(a.batch_count, 0) AS batch_count,
               COALESCE(a.planned_qty, 0) AS planned_qty,
@@ -184,7 +189,7 @@ export class AssemblyService {
         groupType: r.group_type ?? null,
         railSection: r.rail_section ?? null,
         dimensionText: this.dimensionText(r),
-        assemblyWorkshop: r.assembly_workshop ?? null,
+        assemblyWorkshops: this.splitList(r.workshops),
         deliveryDate: this.dateText(r.delivery_date),
         qtyPcs,
         socket: hasSocket(r.product_type),
@@ -297,7 +302,8 @@ export class AssemblyService {
           orderProductId: snap.orderProductId,
           orderPartGroupId: snap.orderPartGroupId,
           side,
-          workshop: dto.workshop?.trim() || snap.assemblyWorkshop || null,
+          // 车间不再继承产品行计划车间（订单环节已不安排装配车间），完全由本批次录入决定
+          workshop: dto.workshop?.trim() || null,
           planStartDate,
           planDate,
           actualDate,
@@ -452,6 +458,15 @@ export class AssemblyService {
 
   private todayText(): string {
     return this.dateText(new Date()) as string;
+  }
+
+  /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */
+  private splitList(v: any): string[] {
+    if (!v) return [];
+    return String(v)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   /** 规格展示：走共享包唯一口径，禁止本地再写一份拼接 */

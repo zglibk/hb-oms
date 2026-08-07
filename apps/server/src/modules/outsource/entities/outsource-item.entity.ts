@@ -39,7 +39,7 @@ export class OutsourceItem {
   @Column({ name: 'customer_name', type: 'varchar', length: 128, nullable: true, comment: '客户名称快照' })
   customerName: string | null;
 
-  @Column({ name: 'production_no', type: 'varchar', length: 64, nullable: true, comment: '生产单号快照（自产品行）' })
+  @Column({ name: 'production_no', type: 'varchar', length: 64, nullable: true, comment: '生产单号快照（自订单 t_order.production_no）' })
   productionNo: string | null;
 
   @Column({

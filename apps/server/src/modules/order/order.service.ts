@@ -45,10 +45,10 @@ export class OrderService {
     if (query.dateFrom) qb.andWhere('o.orderDate >= :df', { df: query.dateFrom });
     if (query.dateTo) qb.andWhere('o.orderDate <= :dt', { dt: query.dateTo });
     if (query.keyword) {
-      // 生产单号/货号在产品行，用子查询命中后回联订单
+      // 生产单号已上移订单级，直接查 o；货号仍在产品行，用子查询命中后回联订单
       qb.andWhere(
-        `(o.orderNo LIKE :kw OR o.poNo LIKE :kw OR o.customerName LIKE :kw
-          OR o.id IN (SELECT p.order_id FROM t_order_product p WHERE p.production_no LIKE :kw OR p.item_no LIKE :kw))`,
+        `(o.orderNo LIKE :kw OR o.poNo LIKE :kw OR o.productionNo LIKE :kw OR o.customerName LIKE :kw
+          OR o.id IN (SELECT p.order_id FROM t_order_product p WHERE p.item_no LIKE :kw OR p.customer_drawing_no LIKE :kw))`,
         { kw: `%${query.keyword}%` },
       );
     }
@@ -117,6 +117,7 @@ export class OrderService {
         mgr.getRepository(Order).create({
           orderNo,
           poNo: dto.poNo ?? null,
+          productionNo: dto.productionNo ?? null,
           customerId: dto.customerId ?? null,
           customerName: dto.customerName,
           orderDate: dto.orderDate,
@@ -150,6 +151,7 @@ export class OrderService {
     return this.dataSource.transaction(async (mgr) => {
       await mgr.getRepository(Order).update(id, {
         poNo: dto.poNo ?? null,
+        productionNo: dto.productionNo ?? null,
         customerId: dto.customerId ?? null,
         customerName: dto.customerName,
         orderDate: dto.orderDate,
@@ -187,6 +189,7 @@ export class OrderService {
           materialId: p.materialId ?? null,
           materialCode: p.materialCode ?? null,
           itemNo: p.itemNo ?? null,
+          customerDrawingNo: p.customerDrawingNo ?? null,
           productName: p.productName ?? null,
           productType: productType || null,
           railSection: p.railSection ?? null,
@@ -199,8 +202,6 @@ export class OrderService {
           orderQty: p.orderQty,
           unit: p.unit,
           qtyPcs,
-          productionNo: p.productionNo ?? null,
-          assemblyWorkshop: p.assemblyWorkshop ?? null,
           deliveryDate: p.deliveryDate ?? null,
           deliveryAddress: p.deliveryAddress ?? null,
           remark: p.remark ?? null,
@@ -285,13 +286,32 @@ export class OrderService {
     return { id };
   }
 
-  /** 作废：被外发/装配/出入库引用后禁止（§3.1），只能走完结 */
-  async cancel(id: number, user: CurrentUserPayload) {
+  /**
+   * 删除（2026-08-07 取代「作废」）：连带删除产品行/部件组/部件行四级数据。
+   *
+   * 为什么是物理删除而不是置作废状态：作废的限制条件与删除**完全一致**——一旦被外发/
+   * 装配/出入库引用就都禁止，所以作废从来只能作用于"还没走下游流程"的单据；这种单据
+   * 留一条 status=9 的废记录对账没有价值，只会让订单列表越积越脏。
+   *
+   * 库中已有的 status=9 历史订单原样保留（ORDER_STATUS.CANCELLED 枚举因此不删），
+   * 只是不再产生新的作废记录。
+   *
+   * 不收 user 参数：行已物理删除，写不了审计列；操作人由 @OperationLog 拦截器
+   * 从请求上下文记入 t_operation_log（含 biz_id），追溯到人靠那条日志。
+   */
+  async remove(id: number) {
     const order = await this.mustGet(id);
-    if (order.status === ORDER_STATUS.CANCELLED) throw new BadRequestException('订单已作废');
-    await this.assertNoDownstreamRefs(id, '作废');
-    await this.orderRepo.update(id, { status: ORDER_STATUS.CANCELLED, ...auditOnUpdate(user) });
-    return { id };
+    await this.assertNoDownstreamRefs(id, '删除');
+
+    await this.dataSource.transaction(async (mgr) => {
+      // 自下而上删，避免中途失败留下悬挂子行
+      await mgr.getRepository(OrderPart).delete({ orderId: id });
+      await mgr.getRepository(OrderPartGroup).delete({ orderId: id });
+      await mgr.getRepository(OrderProduct).delete({ orderId: id });
+      await mgr.getRepository(Order).delete({ id });
+    });
+    // 返回单号供界面提示与操作日志定位（订单行已不存在，事后查不到）
+    return { id, orderNo: order.orderNo };
   }
 
   private async mustGet(id: number): Promise<Order> {

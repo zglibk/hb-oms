@@ -45,6 +45,7 @@ const MIGRATIONS: string[] = [
   'migration-finished-stock.sql',
   'migration-part-stock.sql',
   'migration-builtin-roles.sql',
+  'migration-order-field-adjust.sql',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -117,6 +118,9 @@ const expectedColumns = [
   't_part_adjust.source',
   't_part_adjust.delta',
   't_part_adjust.reason',
+  // 订单字段口径调整：生产单号上移订单级 + 产品级客户图号
+  't_order.production_no',
+  't_order_product.customer_drawing_no',
 ];
 
 async function main() {

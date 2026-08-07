@@ -40,7 +40,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="PO#">
-              <el-input v-model="form.poNo" placeholder="客户单号/合同号" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
+              <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
+            </el-form-item>
+          </el-col>
+          <!-- 生产单号与 PO# 一对一，都是订单级；不再挂在产品行上 -->
+          <el-col :xs="24" :sm="12" :md="8">
+            <el-form-item label="生产单号">
+              <el-input v-model="form.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -124,13 +130,17 @@
 
           <el-row :gutter="12">
             <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="生产单号" label-width="80px">
-                <el-input v-model="p.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="货号" label-width="80px">
                 <el-input v-model="p.itemNo" placeholder="如 53#" />
+              </el-form-item>
+            </el-col>
+            <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事 -->
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="客户图号" label-width="80px">
+                <el-input
+                  v-model="p.customerDrawingNo" placeholder="客户来图图号"
+                  :spellcheck="false" :formatter="upperFmt" :parser="upperFmt"
+                />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -188,13 +198,7 @@
                 <el-input v-model="p.sheetMaterial" placeholder="如 Q235" :formatter="upperFmt" :parser="upperFmt" />
               </el-form-item>
             </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="装配车间" label-width="80px">
-                <el-select v-model="p.assemblyWorkshop" clearable style="width: 100%">
-                  <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
+            <!-- 装配车间已移除：订单环节不安排车间，车间在「装配管理」新建批次时录入 -->
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="交货日期" label-width="80px">
                 <el-date-picker v-model="p.deliveryDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -246,6 +250,11 @@
           <div class="group-title">
             部件组（跟踪粒度；多数产品一个「整品」组，缓冲类可拆 外中轨+内轨）
             <el-button size="small" link type="primary" :icon="Plus" @click="addGroup(p)">添加部件组</el-button>
+            <!-- 同一产品的几个组常常只有组类型不同，图号/版本/料厚/支数都一样，故提供复制 -->
+            <el-button
+              size="small" link type="primary" :icon="CopyDocument"
+              :disabled="!canAddGroup(p)" @click="copyLastGroup(p)"
+            >复制上一行</el-button>
           </div>
           <table class="group-grid">
             <thead>
@@ -366,6 +375,8 @@ interface ProductRow {
   exportCountry: string;
   materialCode: string;
   itemNo: string;
+  /** 客户图号（客户来图图号，区别于部件组的生产图号） */
+  customerDrawingNo: string;
   productName: string;
   railSection: string;
   dimensionRaw: string;
@@ -376,8 +387,6 @@ interface ProductRow {
   sheetMaterial: string;
   orderQty: number;
   unit: string;
-  productionNo: string;
-  assemblyWorkshop: string;
   deliveryDate: string;
   deliveryAddress: string;
   remark: string;
@@ -402,6 +411,7 @@ const emptyProduct = (): ProductRow => ({
   exportCountry: '',
   materialCode: '',
   itemNo: '',
+  customerDrawingNo: '',
   productName: '',
   railSection: 'three_section',
   dimensionRaw: '',
@@ -412,8 +422,6 @@ const emptyProduct = (): ProductRow => ({
   sheetMaterial: '',
   orderQty: 1,
   unit: 'piece',
-  productionNo: '',
-  assemblyWorkshop: '',
   deliveryDate: '',
   deliveryAddress: '',
   remark: '',
@@ -422,6 +430,8 @@ const emptyProduct = (): ProductRow => ({
 
 const form = reactive({
   poNo: '',
+  /** 生产单号：订单级，与 PO# 一对一 */
+  productionNo: '',
   customerId: undefined as number | undefined,
   customerName: '',
   orderDate: new Date().toISOString().slice(0, 10),
@@ -447,16 +457,13 @@ const rules = {
 const attachments = ref<string[]>([]);
 
 /* ===== 字典 ===== */
+// assembly_workshop 字典不再在订单表单加载——订单环节已不安排装配车间
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
-const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 const productTypeDict = ref<Array<{ label: string; value: string }>>([]);
-Promise.all([loadDict('surface_type'), loadDict('assembly_workshop'), loadDict('product_type')]).then(
-  ([sf, ws, pt]) => {
-    surfaceDict.value = sf.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
-    workshopDict.value = ws.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
-    productTypeDict.value = pt.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
-  },
-);
+Promise.all([loadDict('surface_type'), loadDict('product_type')]).then(([sf, pt]) => {
+  surfaceDict.value = sf.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
+  productTypeDict.value = pt.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
+});
 
 /* ===== 客户下拉（双列：名称+代码；带出默认业务员/跟单员/地址） ===== */
 const customers = ref<CustomerItem[]>([]);
@@ -503,6 +510,7 @@ async function init() {
       orderNo.value = row.orderNo;
       Object.assign(form, {
         poNo: row.poNo ?? '',
+        productionNo: row.productionNo ?? '',
         customerId: row.customerId ?? undefined,
         customerName: row.customerName,
         orderDate: (row.orderDate || '').slice(0, 10),
@@ -520,6 +528,7 @@ async function init() {
           exportCountry: p.exportCountry ?? '',
           materialCode: p.materialCode ?? '',
           itemNo: p.itemNo ?? '',
+          customerDrawingNo: p.customerDrawingNo ?? '',
           productName: p.productName ?? '',
           railSection: p.railSection ?? 'three_section',
           dimensionRaw: p.dimensionRaw ?? (p.dimensionMm != null ? String(p.dimensionMm) : ''),
@@ -530,8 +539,6 @@ async function init() {
           sheetMaterial: p.sheetMaterial ?? '',
           orderQty: p.orderQty,
           unit: p.unit,
-          productionNo: p.productionNo ?? '',
-          assemblyWorkshop: p.assemblyWorkshop ?? '',
           deliveryDate: p.deliveryDate ? String(p.deliveryDate).slice(0, 10) : '',
           deliveryAddress: p.deliveryAddress ?? '',
           remark: p.remark ?? '',
@@ -576,16 +583,40 @@ function copyProduct(pi: number) {
 function removeProduct(pi: number) {
   form.products.splice(pi, 1);
 }
-function addGroup(p: ProductRow) {
+/** 下一个还没被占用的组类型（同产品行内 groupType 唯一，见 uk_product_group） */
+function nextFreeGroupType(p: ProductRow): string | undefined {
   const used = new Set(p.partGroups.map((g) => g.groupType));
-  const next = PART_GROUP_OPTIONS.find((o) => !used.has(o.value));
+  return PART_GROUP_OPTIONS.find((o) => !used.has(o.value))?.value;
+}
+function canAddGroup(p: ProductRow): boolean {
+  return !!p.partGroups.length && !!nextFreeGroupType(p);
+}
+function addGroup(p: ProductRow) {
+  const next = nextFreeGroupType(p);
   if (!next) {
     ElMessage.warning('组类型已用尽');
     return;
   }
   const g = emptyGroup();
-  g.groupType = next.value;
+  g.groupType = next;
   p.partGroups.push(g);
+}
+/**
+ * 复制上一行：沿用最后一组的图号/版本/料厚/支数/备注，只把组类型换成下一个未占用的。
+ * 组类型不能照抄——同产品行内唯一（uk_product_group），抄了保存就撞唯一键。
+ */
+function copyLastGroup(p: ProductRow) {
+  const src = p.partGroups[p.partGroups.length - 1];
+  if (!src) {
+    addGroup(p);
+    return;
+  }
+  const next = nextFreeGroupType(p);
+  if (!next) {
+    ElMessage.warning('组类型已用尽');
+    return;
+  }
+  p.partGroups.push({ ...src, _key: nextKey(), groupType: next });
 }
 
 /* ===== 展示/换算辅助 ===== */
@@ -645,6 +676,7 @@ async function onSave() {
   await formRef.value?.validate();
   const payload: OrderPayload = {
     poNo: form.poNo || undefined,
+    productionNo: form.productionNo || undefined,
     customerId: form.customerId,
     customerName: form.customerName,
     orderDate: form.orderDate,
@@ -660,6 +692,7 @@ async function onSave() {
       exportCountry: p.isExport ? p.exportCountry || undefined : undefined,
       materialCode: p.materialCode || undefined,
       itemNo: p.itemNo || undefined,
+      customerDrawingNo: p.customerDrawingNo || undefined,
       productName: p.productName || undefined,
       productType: p._types.join(','),
       railSection: p.railSection,
@@ -671,8 +704,6 @@ async function onSave() {
       sheetMaterial: p.sheetMaterial || undefined,
       orderQty: p.orderQty,
       unit: p.unit,
-      productionNo: p.productionNo || undefined,
-      assemblyWorkshop: p.assemblyWorkshop || undefined,
       deliveryDate: p.deliveryDate || undefined,
       deliveryAddress: p.deliveryAddress || undefined,
       remark: p.remark || undefined,
@@ -796,9 +827,43 @@ export default { name: 'OrderForm' };
 .customer-2col-popper {
   .el-select-dropdown__item {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
-    min-width: 300px;
-    .opt-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .opt-code { flex: none; color: var(--el-text-color-secondary); font-size: 12px; font-family: Consolas, monospace; }
+    min-width: 320px;
+    height: auto;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+    transition: background-color 0.15s, color 0.15s;
+    &:last-child { border-bottom: none; }
+
+    .opt-name {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 13px;
+    }
+    .opt-code {
+      flex: none; min-width: 76px; text-align: right;
+      color: var(--el-text-color-secondary);
+      font-size: 12px; font-family: Consolas, monospace;
+    }
+
+    // 鼠标悬停 / 键盘焦点
+    &.hover, &:hover {
+      background-color: var(--el-color-primary-light-9);
+      .opt-name { color: var(--el-color-primary); }
+      .opt-code { color: var(--el-color-primary); opacity: 0.85; }
+    }
+
+    // 当前选中项
+    &.selected {
+      background-color: var(--el-color-primary-light-9);
+      font-weight: 600;
+      position: relative;
+      &::before {
+        content: '';
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 3px; background: var(--el-color-primary);
+      }
+      .opt-name { color: var(--el-color-primary); font-weight: 600; }
+      .opt-code { color: var(--el-color-primary); }
+    }
   }
 }
 </style>

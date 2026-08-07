@@ -199,7 +199,8 @@ CREATE TABLE IF NOT EXISTS t_no_sequence (
 CREATE TABLE IF NOT EXISTS t_order (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   order_no       VARCHAR(32)  NOT NULL COMMENT '系统单号，ORD 采番',
-  po_no          VARCHAR(64)  NULL COMMENT 'PO#（客户单号/合同号）',
+  po_no          VARCHAR(64)  NULL COMMENT 'PO#（客户订单文件上的订单编号，手工填写；与 production_no 一对一）',
+  production_no  VARCHAR(64)  NULL COMMENT '生产单号（订单级，手工填写；与 po_no 一对一；对应手工台账「订单编号」如 GLI46212-A，台账默认展示此号）',
   customer_id    INT          NULL COMMENT '客户ID（t_customer，可空支持手输客户）',
   customer_name  VARCHAR(128) NOT NULL COMMENT '客户名称快照',
   order_date     DATE         NOT NULL COMMENT '订单日期',
@@ -219,6 +220,7 @@ CREATE TABLE IF NOT EXISTS t_order (
   UNIQUE KEY uk_order_no (order_no),
   KEY idx_customer (customer_id),
   KEY idx_status (status),
+  KEY idx_production_no (production_no),
   KEY idx_order_date (order_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单主表（四级结构第一级）';
 
@@ -232,6 +234,7 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   material_id      INT          NULL COMMENT '物料主数据ID（可空支持手工行）',
   material_code    VARCHAR(64)  NULL COMMENT '物料代码快照（产品编码）',
   item_no          VARCHAR(64)  NULL COMMENT '货号快照（如 53#）',
+  customer_drawing_no VARCHAR(128) NULL COMMENT '客户图号（产品级）：客户来图上的图号；区别于部件组的 drawing_no 生产图号（内部转化的技术图纸）',
   product_name     VARCHAR(128) NULL COMMENT '产品名称',
   product_type     VARCHAR(128) NULL COMMENT '产品类型多选组合（字典序逗号拼接，如 standard,self_lock；含 socket 触发卡口规则）',
   rail_section     VARCHAR(32)  NULL COMMENT '轨道节数：two_section二节轨 three_section三节轨',
@@ -244,8 +247,8 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   order_qty        INT          NOT NULL COMMENT '订单数量（按 unit 计）',
   unit             VARCHAR(16)  NOT NULL DEFAULT 'piece' COMMENT '单位：set套 piece支（仅此两种，1套=2支）',
   qty_pcs          INT          NOT NULL COMMENT '支数口径（服务端计算冗余）：套→×2，支→原值；台账「订单数」',
-  production_no    VARCHAR(64)  NULL COMMENT '生产单号（手工填写；对应手工台账「订单编号」如 GLI46212-A；台账默认展示此号）',
-  assembly_workshop VARCHAR(32) NULL COMMENT '装配车间（字典 assembly_workshop：assembly_1装一~assembly_8装八）；计划属性，装配批次默认继承可覆写',
+  production_no    VARCHAR(64)  NULL COMMENT '【已弃用 2026-08-07】生产单号已上移订单级 t_order.production_no；本列仅保留历史数据，程序不再读写',
+  assembly_workshop VARCHAR(32) NULL COMMENT '【已弃用 2026-08-07】订单环节不安排装配车间；车间改由装配批次 t_assembly_batch.workshop 录入，本列仅保留历史数据，程序不再读写',
   delivery_date    DATE         NULL COMMENT '交货日期',
   delivery_address VARCHAR(255) NULL COMMENT '交货地址',
   remark           VARCHAR(255) NULL COMMENT '备注',
@@ -254,6 +257,7 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_order (order_id),
   KEY idx_production_no (production_no),
+  KEY idx_customer_drawing_no (customer_drawing_no),
   KEY idx_item_no (item_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单产品行（四级结构第二级；图号/版本/料厚下沉部件组）';
 
@@ -367,7 +371,7 @@ CREATE TABLE IF NOT EXISTS t_outsource_item (
   order_part_group_id INT           NOT NULL COMMENT '锚点：订单部件组（跟踪/台账粒度）',
   order_no            VARCHAR(32)   NULL COMMENT '订单号快照',
   customer_name       VARCHAR(128)  NULL COMMENT '客户名称快照',
-  production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自产品行）',
+  production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自订单 t_order.production_no）',
   product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（自部件组 = 货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
   dimension_text      VARCHAR(64)   NULL COMMENT '规格展示快照（如 350mm）',
   cycle_code          VARCHAR(64)   NULL COMMENT '周期码快照（自部件行追溯码）',
@@ -410,7 +414,7 @@ CREATE TABLE IF NOT EXISTS t_assembly_batch (
   order_product_id    INT          NOT NULL COMMENT '冗余订单产品行ID',
   order_part_group_id INT          NOT NULL COMMENT '锚点：订单部件组（跟踪/台账粒度）',
   side                VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：含卡口组合 left左 right右，其余空串；入库闸门按 side 分别核算，左右不串量',
-  workshop            VARCHAR(32)  NULL COMMENT '装配车间（字典 assembly_workshop：装一~装八）；默认继承产品行 assembly_workshop，可覆写为实际装配车间',
+  workshop            VARCHAR(32)  NULL COMMENT '装配车间（字典 assembly_workshop：装一~装八）；批次录入时指定，订单环节不再预设计划车间',
   plan_start_date     DATE         NULL COMMENT '计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门）',
   plan_date           DATE         NULL COMMENT '计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间）',
   actual_date         DATE         NULL COMMENT '实际完成时间：NULL=计划中，非空=已完成（该批数量计入可入库量）',
@@ -418,7 +422,7 @@ CREATE TABLE IF NOT EXISTS t_assembly_batch (
   status              TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1计划中 2已完成；派生自 actual_date（共享包 deriveAssemblyStatus 唯一赋值），落库值须与 actual_date 保持一致',
   order_no            VARCHAR(32)  NULL COMMENT '订单号快照',
   customer_name       VARCHAR(128) NULL COMMENT '客户名称快照',
-  production_no       VARCHAR(64)  NULL COMMENT '生产单号快照（自产品行；台账「订单编号」口径）',
+  production_no       VARCHAR(64)  NULL COMMENT '生产单号快照（自订单 t_order.production_no；台账「订单编号」口径）',
   product_model       VARCHAR(128) NULL COMMENT '产品型号快照（自部件组 = 货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
   dimension_text      VARCHAR(64)  NULL COMMENT '规格展示快照（如 350mm）',
   remark              VARCHAR(255) NULL COMMENT '备注',
@@ -471,7 +475,7 @@ CREATE TABLE IF NOT EXISTS t_finished_item (
   order_part_group_id INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单部件组（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
   order_no            VARCHAR(32)   NULL COMMENT '订单号快照',
   customer_name       VARCHAR(128)  NULL COMMENT '客户名称快照',
-  production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自产品行；台账「订单编号」口径）',
+  production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自订单 t_order.production_no；台账「订单编号」口径）',
   item_no             VARCHAR(64)   NULL COMMENT '货号快照（如 53#）',
   product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
   product_type        VARCHAR(128)  NULL COMMENT '产品类型多选组合串快照（字典序逗号拼接，如 standard,self_lock）',

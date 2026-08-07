@@ -61,7 +61,8 @@ export interface LedgerRow {
   drawingNo: string | null;
   drawingVersion: string | null;
   materialThickness: string | null;
-  assemblyWorkshop: string | null;
+  /** 该部件组各装配批次的车间（去重）；车间已下沉批次级，一组多批可分在不同车间 */
+  assemblyWorkshops: string[];
   deliveryDate: string | null;
   isExport: number;
   exportCountry: string | null;
@@ -103,7 +104,7 @@ export class OrderLedgerService {
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
 
     if (query.keyword) {
-      where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR p.production_no LIKE ?
+      where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
                    OR g.product_model LIKE ? OR p.item_no LIKE ? OR p.material_code LIKE ?)`);
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw, kw);
@@ -133,7 +134,9 @@ export class OrderLedgerService {
       params.push(query.surfaceType);
     }
     if (query.assemblyWorkshop) {
-      where.push('p.assembly_workshop = ?');
+      // 车间已下沉批次级（订单环节不再安排装配车间），按批次实际车间匹配
+      where.push(`EXISTS (SELECT 1 FROM t_assembly_batch b
+                           WHERE b.order_part_group_id = g.id AND b.workshop = ?)`);
       params.push(query.assemblyWorkshop);
     }
     if (query.isExport != null) {
@@ -182,7 +185,9 @@ export class OrderLedgerService {
         LEFT JOIN (
               SELECT order_part_group_id AS gid,
                      SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done_qty,
-                     MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date
+                     MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date,
+                     -- 装配车间已下沉批次级，一组多批可分在不同车间，聚合成去重列表展示
+                     GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
                 FROM t_assembly_batch
                GROUP BY order_part_group_id
              ) asm ON asm.gid = g.id
@@ -224,12 +229,12 @@ export class OrderLedgerService {
               g.material_thickness AS materialThickness,
               o.order_no AS orderNo, o.order_date AS orderDate, o.customer_name AS customerName,
               o.salesman AS salesman, o.merchandiser AS merchandiser,
-              p.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
+              o.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
               p.product_type AS productType, p.rail_section AS railSection,
               p.dimension_raw AS dimensionRaw, p.dimension_unit AS dimensionUnit,
               p.dimension_mm AS dimensionMm, p.order_qty AS orderQty, p.unit AS unit,
               p.surface_type AS surfaceType, p.color AS color,
-              p.assembly_workshop AS assemblyWorkshop, p.delivery_date AS deliveryDate,
+              asm.workshops AS workshops, p.delivery_date AS deliveryDate,
               p.is_export AS isExport, p.export_country AS exportCountry,
               IFNULL(fin.in_qty, 0)     AS inQty,
               IFNULL(fin.out_qty, 0)    AS outQty,
@@ -276,7 +281,7 @@ export class OrderLedgerService {
         drawingNo: r.drawingNo ?? null,
         drawingVersion: r.drawingVersion ?? null,
         materialThickness: r.materialThickness ?? null,
-        assemblyWorkshop: r.assemblyWorkshop ?? null,
+        assemblyWorkshops: this.splitList(r.workshops),
         deliveryDate,
         isExport: Number(r.isExport) || 0,
         exportCountry: r.exportCountry ?? null,
@@ -326,6 +331,15 @@ export class OrderLedgerService {
         totalDeliveryOwed: totalQty - totalOut,
       },
     };
+  }
+
+  /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */
+  private splitList(v: any): string[] {
+    if (!v) return [];
+    return String(v)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   private dateText(v: any): string | null {

@@ -106,7 +106,7 @@ export class AssemblyBatch {
     type: 'varchar',
     length: 64,
     nullable: true,
-    comment: '生产单号快照（自产品行；台账「订单编号」口径）',
+    comment: '生产单号快照（自订单 t_order.production_no；台账「订单编号」口径）',
   })
   productionNo: string | null;
 

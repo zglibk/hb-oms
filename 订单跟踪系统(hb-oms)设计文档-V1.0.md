@@ -60,8 +60,8 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 9 | 工艺信息 | 独立基础数据模块，创建订单时**按生产图号匹配**自动带入（可修改） |
 | 10 | 装配环节 | 外发回货与成品入库之间新增装配；**一组可多批装配**（锚定部件组），计划员手工录计划/实际完成时间 + 装配数量；作为入库**硬闸门**：`可入库量 = Σ已完成装配量 − 已入库量`，**按量卡**、支持部分装配部分入库；期初入库豁免 |
 | 11 | 部件组跟踪维度 | 产品行下设**部件组**（`t_order_part_group`）作为跟踪/台账锚点：默认一产品一组（整品）；缓冲类可拆「外中轨」「内轨」等多组，各组独立图号/版本/料厚，外发/装配/出入库/台账四数按组核算（对齐手工台账行粒度）；组不拆数量，各组支数默认=产品支数 |
-| 12 | 装配车间 | 产品行字段 `assembly_workshop`（字典：装一~装八，可扩展）作为计划属性与台账列；装配批次带车间字段，默认继承产品行、可覆写 |
-| 13 | 单号展示 | 手工台账「订单编号」（如 `GLI46212-A`，客户前缀+业务自编后缀）= 产品行**生产单号 production_no**；台账默认展示此号，ORD 系统采番号仅内部定位用 |
+| 12 | 装配车间 | **仅批次级**（`t_assembly_batch.workshop`，字典：装一~装八，可扩展）。~~产品行 assembly_workshop~~ 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该部件组各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配 |
+| 13 | 单号展示 | 手工台账「订单编号」（如 `GLI46212-A`，客户前缀+业务自编后缀）= **订单级生产单号 t_order.production_no**（2026-08-07 由产品行上移，与 PO# 一对一——一张订单不会有两个生产单号）；台账默认展示此号，ORD 系统采番号仅内部定位用 |
 
 ### 2.1 统一口径
 
@@ -207,7 +207,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | order_no | varchar(32) UK | 系统单号，`ORD` 采番 |
-| po_no | varchar(64) | PO#（客户单号/合同号） |
+| po_no | varchar(64) | PO#（客户订单文件上的订单编号，手工填写；与 production_no 一对一） |
+| production_no | varchar(64) | **生产单号（订单级）**，手工填写；对应手工台账「订单编号」如 `GLI46212-A`，-A/-B 后缀由业务自编；**台账默认展示此号**，ORD 系统号仅内部定位 |
 | customer_id / customer_name | int / varchar(128) | 客户 ID + 名称快照（选客户后自动带出默认业务员/跟单员/交货地址，可改） |
 | order_date | date | 订单日期 |
 | salesman | varchar(64) | 业务员 |
@@ -239,8 +240,9 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | order_qty | int | 订单数量（按 unit 计） |
 | unit | varchar(16) | 单位：套 / 支 |
 | qty_pcs | int | **支数口径**（服务端计算冗余）：unit=套 → order_qty×2，unit=支 → order_qty。台账「订单数」即此值 |
-| production_no | varchar(64) | 生产单号（手工填写，产品行级，同订单内不同产品行可不同；对应手工台账「订单编号」如 `GLI46212-A`，-A/-B 后缀由业务自编；**台账默认展示此号**，ORD 系统号仅内部用） |
-| assembly_workshop | varchar(32) | 装配车间（字典 `assembly_workshop`：装一~装八，可扩展）；计划属性，台账列展示；装配批次默认继承、可覆写 |
+| ~~production_no~~ | varchar(64) | **【已弃用 2026-08-07】** 已上移订单级 `t_order.production_no`；列保留历史数据，程序不读不写 |
+| ~~assembly_workshop~~ | varchar(32) | **【已弃用 2026-08-07】** 订单环节不安排装配车间，改由装配批次录入；列保留历史数据，程序不读不写 |
+| customer_drawing_no | varchar(128) | **客户图号**：客户来图上的图号；区别于部件组的 `drawing_no`（生产图号，内部转化的技术图纸） |
 | delivery_date | date | 交货日期 |
 | delivery_address | varchar(255) | 交货地址 |
 | remark / sort | | 备注 / 行序 |
@@ -305,7 +307,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | doc_id | int idx | 所属发坯单 |
 | order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | order_no / customer_name | varchar(32) / varchar(128) | 订单号、客户名称快照（列表与打印直接取用，免回联） |
-| production_no | varchar(64) | 生产单号（自产品行快照） |
+| production_no | varchar(64) | 生产单号（自订单 `t_order.production_no` 快照） |
 | product_model | varchar(128) | 产品型号（自部件组快照 = `货号+产品类型组合+组后缀`，如 45#缓冲外中轨、53#普通滑轨） |
 | dimension_text | varchar(64) | 规格（展示快照） |
 | cycle_code | varchar(64) | 周期码（自部件行追溯码快照） |
@@ -341,7 +343,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | id | int PK | |
 | order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | side | varchar(16) | 边别：含卡口组合 left/right，其余 `''`（闸门按 side 分别卡量） |
-| workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；默认继承产品行 assembly_workshop，可覆写（实际在哪装） |
+| workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；**批次录入时指定**（订单环节不再预设计划车间），默认沿用该组最近一条批次的车间 |
 | plan_start_date | date | 计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门） |
 | plan_date | date | 计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间） |
 | actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
@@ -457,7 +459,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 下单日期 | t_order.order_date |
 | 业务跟单 | t_order.salesman / merchandiser |
 | 客户 | t_order.customer_name |
-| 订单编号 | t_order_product.production_no（生产单号，台账默认展示；ORD 系统号仅内部） |
+| 订单编号 | t_order.production_no（订单级生产单号，台账默认展示；ORD 系统号仅内部） |
 | 产品编码 | t_order_product.material_code |
 | 产品型号 | t_order_part_group.product_model（货号+类型组合+组后缀，如 45#缓冲外中轨） |
 | 规格(MM) | t_order_product.dimension_mm |
@@ -466,7 +468,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 图号 / 版本 | t_order_part_group.drawing_no / drawing_version |
 | 材料厚度 | t_order_part_group.material_thickness |
 | 外发已回货数量 | Σt_outsource_return.return_qty（按组聚合） |
-| 装配车间 | t_order_product.assembly_workshop（批次覆写时展示批次值） |
+| 装配车间 | 聚合该部件组各装配批次的 t_assembly_batch.workshop（多批不同车间则并列显示） |
 | 成品入库 | 完成数（下方聚合） |
 | 订单欠数 | 生产欠数 = 订单数 − 完成数 |
 | 订单交期 | t_order_product.delivery_date |
@@ -522,7 +524,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 |---|---|---|
 | customer | CRUD + `POST /customer/import`、`GET /customer/import-template` | 客户资料；Excel 批量导入（整批校验、逐行错误、覆盖更新开关） |
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
-| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`POST /order/:id/cancel` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7 |
+| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |

@@ -147,7 +147,7 @@ export class FinishedStockService {
     }
     if (query.keyword) {
       where.push(`(b.item_no LIKE ? OR b.product_model LIKE ?
-                   OR o.order_no LIKE ? OR o.customer_name LIKE ? OR p.production_no LIKE ?)`);
+                   OR o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?)`);
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
     }
@@ -164,7 +164,7 @@ export class FinishedStockService {
     );
     const rows: any[] = await this.dataSource.query(
       `SELECT b.*, o.order_no AS orderNo, o.customer_name AS customerName,
-              p.production_no AS productionNo
+              o.production_no AS productionNo
        ${fromSql}
        ORDER BY b.item_no ASC, b.id DESC
        LIMIT ? OFFSET ?`,
@@ -209,7 +209,7 @@ export class FinishedStockService {
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
     let where = ' WHERE o.status <> ?';
     if (query.keyword) {
-      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR p.production_no LIKE ?
+      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
                       OR g.product_model LIKE ? OR p.item_no LIKE ?)`;
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
@@ -220,7 +220,7 @@ export class FinishedStockService {
       `SELECT g.id AS groupId, g.order_id AS orderId, g.order_product_id AS orderProductId,
               g.group_type AS groupType, g.product_model AS productModel, g.qty_pcs AS qtyPcs,
               o.order_no AS orderNo, o.customer_name AS customerName,
-              p.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
+              o.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
               p.rail_section AS railSection, p.dimension_raw AS dimensionRaw,
               p.dimension_unit AS dimensionUnit, p.dimension_mm AS dimensionMm,
               p.surface_type AS surfaceType, p.color AS color

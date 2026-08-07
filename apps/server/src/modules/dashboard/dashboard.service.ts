@@ -109,7 +109,7 @@ export class DashboardService {
   private readonly owedRowColumns = `
               g.id AS groupId, o.id AS orderId, o.order_no AS orderNo,
               o.customer_name AS customerName, o.salesman AS salesman,
-              o.merchandiser AS merchandiser, p.production_no AS productionNo,
+              o.merchandiser AS merchandiser, o.production_no AS productionNo,
               g.product_model AS productModel, p.delivery_date AS deliveryDate,
               g.qty_pcs AS qtyPcs,
               g.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;

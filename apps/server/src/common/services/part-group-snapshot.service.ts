@@ -18,7 +18,7 @@ export interface PartGroupSnapshot {
   orderStatus: number;
   orderNo: string | null;
   customerName: string | null;
-  /** 生产单号（自产品行；对应手工台账「订单编号」） */
+  /** 生产单号（自订单，与 PO# 一对一；对应手工台账「订单编号」） */
   productionNo: string | null;
   /** 产品型号（自部件组 = 货号+产品类型组合+组后缀） */
   productModel: string | null;
@@ -40,8 +40,6 @@ export interface PartGroupSnapshot {
   groupType: string | null;
   /** 组支数口径（支） */
   qtyPcs: number;
-  /** 产品行计划装配车间（字典 assembly_workshop），装配批次默认继承 */
-  assemblyWorkshop: string | null;
   itemNo: string | null;
   materialCode: string | null;
   deliveryDate: string | null;
@@ -86,14 +84,13 @@ export class PartGroupSnapshotService {
               o.status            AS order_status,
               o.order_no          AS order_no,
               o.customer_name     AS customer_name,
-              p.production_no     AS production_no,
+              o.production_no     AS production_no,
               p.item_no           AS item_no,
               p.material_code     AS material_code,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
               p.color             AS color,
               p.surface_type      AS surface_type,
-              p.assembly_workshop AS assembly_workshop,
               p.delivery_date     AS delivery_date,
               p.dimension_raw     AS dimension_raw,
               p.dimension_unit    AS dimension_unit,
@@ -127,7 +124,6 @@ export class PartGroupSnapshotService {
         color: r.color ?? null,
         groupType: r.group_type ?? null,
         qtyPcs: Number(r.qty_pcs) || 0,
-        assemblyWorkshop: r.assembly_workshop ?? null,
         itemNo: r.item_no ?? null,
         materialCode: r.material_code ?? null,
         deliveryDate: r.delivery_date ?? null,

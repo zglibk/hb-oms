@@ -41,6 +41,8 @@ export interface OrderProductItem {
   materialId: number | null;
   materialCode: string | null;
   itemNo: string | null;
+  /** 客户图号（客户来图图号，区别于部件组的生产图号 drawingNo） */
+  customerDrawingNo: string | null;
   productName: string | null;
   productType: string | null;
   railSection: string | null;
@@ -53,8 +55,6 @@ export interface OrderProductItem {
   orderQty: number;
   unit: string;
   qtyPcs: number;
-  productionNo: string | null;
-  assemblyWorkshop: string | null;
   deliveryDate: string | null;
   deliveryAddress: string | null;
   remark: string | null;
@@ -66,6 +66,8 @@ export interface OrderItem {
   id: number;
   orderNo: string;
   poNo: string | null;
+  /** 生产单号（订单级，与 PO# 一对一；台账「订单编号」口径） */
+  productionNo: string | null;
   customerId: number | null;
   customerName: string;
   orderDate: string;
@@ -112,6 +114,7 @@ export interface OrderProductPayload {
   materialId?: number;
   materialCode?: string;
   itemNo?: string;
+  customerDrawingNo?: string;
   productName?: string;
   productType?: string;
   railSection?: string;
@@ -123,8 +126,6 @@ export interface OrderProductPayload {
   sheetMaterial?: string;
   orderQty: number;
   unit: string;
-  productionNo?: string;
-  assemblyWorkshop?: string;
   deliveryDate?: string;
   deliveryAddress?: string;
   remark?: string;
@@ -134,6 +135,7 @@ export interface OrderProductPayload {
 
 export interface OrderPayload {
   poNo?: string;
+  productionNo?: string;
   customerId?: number;
   customerName: string;
   orderDate: string;
@@ -160,4 +162,5 @@ export const updateOrder = (id: number, data: OrderPayload) =>
 
 export const finishOrder = (id: number) => request.post(`/api/order/${id}/finish`);
 export const reopenOrder = (id: number) => request.post(`/api/order/${id}/reopen`);
-export const cancelOrder = (id: number) => request.post(`/api/order/${id}/cancel`);
+/** 删除订单（取代作废）：仅未被外发/装配/出入库引用时可删，连带删四级数据 */
+export const deleteOrder = (id: number) => request.delete(`/api/order/${id}`);

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -74,10 +75,11 @@ export class OrderController {
     return this.service.reopen(id, user);
   }
 
-  @Post(':id/cancel')
-  @RequirePermissions('order:cancel')
-  @OperationLog('订单管理', '作废订单')
-  async cancel(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
-    return this.service.cancel(id, user);
+  /** 删除（取代作废）：仅未被外发/装配/出入库引用的订单可删，连带删四级数据 */
+  @Delete(':id')
+  @RequirePermissions('order:delete')
+  @OperationLog('订单管理', '删除订单')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(id);
   }
 }
