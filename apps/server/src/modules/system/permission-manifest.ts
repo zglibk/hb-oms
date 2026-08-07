@@ -53,14 +53,6 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'assembly:update', perm_name: '编辑装配批次', perm_type: 2, parent_code: 'assembly', sort: 2 },
   { perm_code: 'assembly:delete', perm_name: '删除装配批次', perm_type: 2, parent_code: 'assembly', sort: 3 },
 
-  { perm_code: 'finished-stock', perm_name: '成品出入库', perm_type: 1, parent_code: 'production', menu_path: '/finished-stock', component: 'finished-stock/index', icon: 'Box', sort: 4 },
-  { perm_code: 'finished-stock:create', perm_name: '新增出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 1 },
-  { perm_code: 'finished-stock:update', perm_name: '编辑出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 2 },
-  { perm_code: 'finished-stock:confirm', perm_name: '确认出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 3 },
-  { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
-  { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
-
-  { perm_code: 'stock-balance', perm_name: '库存查询', perm_type: 1, parent_code: 'production', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Coin', sort: 5 },
 
   // ===== 工艺管理 =====
   { perm_code: 'process', perm_name: '工艺管理', perm_type: 1, menu_path: '/process', icon: 'SetUp', sort: 6 },
@@ -72,16 +64,17 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'process-info:import', perm_name: '批量导入开单信息', perm_type: 2, parent_code: 'basic:process-info', sort: 4 },
   { perm_code: 'process-info:export', perm_name: '导出开单信息', perm_type: 2, parent_code: 'basic:process-info', sort: 5 },
 
-  // ===== 物料管理 =====
+  // ===== 物料管理（成品库存口径：出入库单据 + 结存查询） =====
   { perm_code: 'material-mgmt', perm_name: '物料管理', perm_type: 1, menu_path: '/material', icon: 'Box', sort: 7 },
 
-  // 部件信息（原物料信息，2026-08 改版；perm_code/路由保持 material 内部标识稳定）
-  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 1 },
-  { perm_code: 'material:create', perm_name: '新增部件', perm_type: 2, parent_code: 'basic:material', sort: 1 },
-  { perm_code: 'material:update', perm_name: '编辑部件', perm_type: 2, parent_code: 'basic:material', sort: 2 },
-  { perm_code: 'material:delete', perm_name: '删除部件', perm_type: 2, parent_code: 'basic:material', sort: 3 },
-  { perm_code: 'material:import', perm_name: '批量导入部件', perm_type: 2, parent_code: 'basic:material', sort: 4 },
-  { perm_code: 'material:export', perm_name: '导出部件清单', perm_type: 2, parent_code: 'basic:material', sort: 5 },
+  { perm_code: 'finished-stock', perm_name: '成品出入库', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/finished-stock', component: 'finished-stock/index', icon: 'Goods', sort: 1 },
+  { perm_code: 'finished-stock:create', perm_name: '新增出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 1 },
+  { perm_code: 'finished-stock:update', perm_name: '编辑出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 2 },
+  { perm_code: 'finished-stock:confirm', perm_name: '确认出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 3 },
+  { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
+  { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
+
+  { perm_code: 'stock-balance', perm_name: '库存查询', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
 
   // ===== 设备管理 =====
   { perm_code: 'equipment', perm_name: '设备管理', perm_type: 1, menu_path: '/equipment', icon: 'Cpu', sort: 8 },
@@ -104,6 +97,15 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'dept:create', perm_name: '新增部门', perm_type: 2, parent_code: 'basic:dept', sort: 1 },
   { perm_code: 'dept:update', perm_name: '编辑部门', perm_type: 2, parent_code: 'basic:dept', sort: 2 },
   { perm_code: 'dept:delete', perm_name: '删除部门', perm_type: 2, parent_code: 'basic:dept', sort: 3 },
+
+  // 部件信息（原物料信息，2026-08 改版；perm_code/路由/组件路径保持 material 内部标识稳定，
+  // 2026-08-07 由「物料管理」移入「基础数据」——它本就是主数据，与出入库单据不同性质）
+  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 3 },
+  { perm_code: 'material:create', perm_name: '新增部件', perm_type: 2, parent_code: 'basic:material', sort: 1 },
+  { perm_code: 'material:update', perm_name: '编辑部件', perm_type: 2, parent_code: 'basic:material', sort: 2 },
+  { perm_code: 'material:delete', perm_name: '删除部件', perm_type: 2, parent_code: 'basic:material', sort: 3 },
+  { perm_code: 'material:import', perm_name: '批量导入部件', perm_type: 2, parent_code: 'basic:material', sort: 4 },
+  { perm_code: 'material:export', perm_name: '导出部件清单', perm_type: 2, parent_code: 'basic:material', sort: 5 },
 
   // ===== 系统管理 =====
   // SetUp：不用 Setting——后者在 el-sub-menu 展开重绘时偶发不渲染（沿袭 hb-mes 经验）
