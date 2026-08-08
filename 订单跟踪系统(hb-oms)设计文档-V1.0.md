@@ -504,7 +504,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
   ⚠️ 这与 §4.4 入库闸门的「已入库量」**故意不同**——闸门必须排除期初，否则「装配 0 + 期初 N」的组额度恒为 −N、永久挡死后续正常入库。两处服务于不同问题，勿"统一"。
 - 同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。
 - 装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
-- 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。
+- 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。走独立接口 `GET /order/ledger/detail?orderPartGroupId=`，**展开时才加载**（一页几十行随列表全查三张流水太重）。
+- 同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单编号/产品编码/规格/数量单位/表面处理/订单交期）**跨行合并**，观感对齐手工台账；仅合并相邻的同产品行。
 - 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、表面处理（字典）、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）、装配车间。
 - 支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。
 
@@ -526,6 +527,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
 | order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
+| order | `GET /order/ledger/detail?orderPartGroupId=` | 台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载 |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
 | outsource | `GET /outsource/print/:id` | 发坯单打印数据（后续可加 Excel 导出） |

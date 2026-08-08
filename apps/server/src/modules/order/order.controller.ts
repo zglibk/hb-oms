@@ -12,7 +12,7 @@ import {
 import { OrderService } from './order.service';
 import { OrderLedgerService } from './order-ledger.service';
 import { CreateOrderDto, QueryOrderDto, UpdateOrderDto } from './dto/order.dto';
-import { QueryLedgerDto } from './dto/ledger.dto';
+import { QueryLedgerDetailDto, QueryLedgerDto } from './dto/ledger.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -36,6 +36,15 @@ export class OrderController {
   @Get('ledger')
   async ledger(@Query() query: QueryLedgerDto) {
     return this.ledgerService.findLedger(query);
+  }
+
+  /**
+   * 台账行内展开：某部件组的出入库/外发/装配三条流水（§5.1）。
+   * 同样**必须在 `:id` 之前**注册。只读查询，不标 @OperationLog。
+   */
+  @Get('ledger/detail')
+  async ledgerDetail(@Query() query: QueryLedgerDetailDto) {
+    return this.ledgerService.findRowDetail(query.orderPartGroupId);
   }
 
   @Get(':id')

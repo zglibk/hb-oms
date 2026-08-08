@@ -85,3 +85,63 @@ export interface LedgerResult {
 
 export const getLedger = (params: LedgerQuery) =>
   request.get<any, LedgerResult>('/api/order/ledger', { params });
+
+/* ===== 行内展开：该部件组的三条流水 ===== */
+
+/** 成品出入库流水（只含已确认单据） */
+export interface LedgerFinishedRow {
+  docNo: string | null;
+  bizType: string | null;
+  /** 1入 −1出；数量恒为正，方向由此表达 */
+  direction: number;
+  docDate: string | null;
+  side: string;
+  quantity: number;
+  /** 红字单被冲的原单号；非红字为 null */
+  originDocNo: string | null;
+  creatorName: string | null;
+  remark: string | null;
+}
+
+/** 外发流水（排除已作废发坯单） */
+export interface LedgerOutsourceRow {
+  blankNo: string | null;
+  processorName: string | null;
+  surfaceType: string | null;
+  color: string | null;
+  status: number;
+  sendDate: string | null;
+  requireBackDate: string | null;
+  sendWeight: number;
+  unitWeight: number;
+  sendQty: number;
+  returnedQty: number;
+  pendingQty: number;
+}
+
+/** 装配批次 */
+export interface LedgerAssemblyRow {
+  id: number;
+  side: string;
+  workshop: string | null;
+  planStartDate: string | null;
+  planDate: string | null;
+  actualDate: string | null;
+  qty: number;
+  /** 实际完成日非空 = 已完成（服务端按 actual_date 派生，不读 status 列） */
+  completed: boolean;
+  creatorName: string | null;
+  remark: string | null;
+}
+
+export interface LedgerRowDetail {
+  finished: LedgerFinishedRow[];
+  outsource: LedgerOutsourceRow[];
+  assembly: LedgerAssemblyRow[];
+}
+
+/** 展开某台账行时按需加载，不随列表一起返回（一页几十行全查太重） */
+export const getLedgerRowDetail = (orderPartGroupId: number) =>
+  request.get<any, LedgerRowDetail>('/api/order/ledger/detail', {
+    params: { orderPartGroupId },
+  });

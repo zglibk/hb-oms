@@ -333,6 +333,97 @@ export class OrderLedgerService {
     };
   }
 
+  /**
+   * 台账行内展开明细（设计文档 §5.1）：该部件组的三条流水。
+   *
+   * 只读、按需加载——台账一页 15~100 行，若随列表一起返回，三张流水表要多查三遍
+   * 全量数据，而用户实际只会展开其中一两行。故独立接口，展开时才查。
+   *
+   * 口径与台账主表保持一致：
+   *   - 成品流水只取**已确认**单据（草稿/已作废不算数，与四数聚合同口径）；
+   *   - 外发流水排除已作废发坯单（与台账「外发已回货」列同口径）；
+   *   - 装配批次全取，用 actual_date 是否为空区分计划中/已完成。
+   */
+  async findRowDetail(orderPartGroupId: number) {
+    const [finished, outsource, assembly] = await Promise.all([
+      this.dataSource.query(
+        `SELECT fd.doc_no AS docNo, fd.biz_type AS bizType, fd.direction AS direction,
+                fd.doc_date AS docDate, fi.side AS side, fi.quantity AS quantity,
+                fd.creator_name AS creatorName, fi.remark AS remark,
+                fo.doc_no AS originDocNo
+           FROM t_finished_item fi
+           JOIN t_finished_doc fd ON fd.id = fi.doc_id
+           LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
+          WHERE fi.order_part_group_id = ? AND fd.status = ?
+          ORDER BY fd.doc_date ASC, fd.id ASC`,
+        [orderPartGroupId, FINISHED_DOC_STATUS.CONFIRMED],
+      ),
+      this.dataSource.query(
+        `SELECT od.blank_no AS blankNo, od.processor_name AS processorName,
+                od.surface_type AS surfaceType, od.color AS color, od.status AS status,
+                od.actual_send_date AS sendDate, od.require_back_date AS requireBackDate,
+                oi.send_weight AS sendWeight, oi.unit_weight AS unitWeight,
+                oi.send_qty AS sendQty, oi.returned_qty AS returnedQty
+           FROM t_outsource_item oi
+           JOIN t_outsource_doc od ON od.id = oi.doc_id
+          WHERE oi.order_part_group_id = ? AND od.status <> ?
+          ORDER BY od.id ASC`,
+        [orderPartGroupId, OUTSOURCE_STATUS.CANCELLED],
+      ),
+      this.dataSource.query(
+        `SELECT id, side, workshop, plan_start_date AS planStartDate, plan_date AS planDate,
+                actual_date AS actualDate, qty, remark, creator_name AS creatorName
+           FROM t_assembly_batch
+          WHERE order_part_group_id = ?
+          ORDER BY id ASC`,
+        [orderPartGroupId],
+      ),
+    ]);
+
+    return {
+      finished: finished.map((r: any) => ({
+        docNo: r.docNo ?? null,
+        bizType: r.bizType ?? null,
+        /** 1入 −1出；数量恒为正，方向由此表达 */
+        direction: Number(r.direction) || 0,
+        docDate: this.dateText(r.docDate),
+        side: r.side ?? '',
+        quantity: Number(r.quantity) || 0,
+        /** 红字单被冲的原单号，非红字为 null */
+        originDocNo: r.originDocNo ?? null,
+        creatorName: r.creatorName ?? null,
+        remark: r.remark ?? null,
+      })),
+      outsource: outsource.map((r: any) => ({
+        blankNo: r.blankNo ?? null,
+        processorName: r.processorName ?? null,
+        surfaceType: r.surfaceType ?? null,
+        color: r.color ?? null,
+        status: Number(r.status) || 0,
+        sendDate: this.dateText(r.sendDate),
+        requireBackDate: this.dateText(r.requireBackDate),
+        sendWeight: Number(r.sendWeight) || 0,
+        unitWeight: Number(r.unitWeight) || 0,
+        sendQty: Number(r.sendQty) || 0,
+        returnedQty: Number(r.returnedQty) || 0,
+        pendingQty: (Number(r.sendQty) || 0) - (Number(r.returnedQty) || 0),
+      })),
+      assembly: assembly.map((r: any) => ({
+        id: Number(r.id),
+        side: r.side ?? '',
+        workshop: r.workshop ?? null,
+        planStartDate: this.dateText(r.planStartDate),
+        planDate: this.dateText(r.planDate),
+        actualDate: this.dateText(r.actualDate),
+        qty: Number(r.qty) || 0,
+        /** 派生状态：实际完成日为空=计划中，非空=已完成（不读 status 列，防脏数据） */
+        completed: !!r.actualDate,
+        creatorName: r.creatorName ?? null,
+        remark: r.remark ?? null,
+      })),
+    };
+  }
+
   /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */
   private splitList(v: any): string[] {
     if (!v) return [];

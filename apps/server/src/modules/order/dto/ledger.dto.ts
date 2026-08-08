@@ -47,3 +47,11 @@ export class QueryLedgerDto {
   /** 只看逾期（交期已过且仍欠发货） */
   @IsOptional() @Transform(toBoolean) onlyOverdue?: boolean;
 }
+
+/** 台账行内展开：查某部件组的出入库/外发/装配三条流水 */
+export class QueryLedgerDetailDto {
+  @Type(() => Number)
+  @IsInt({ message: '部件组ID必须是整数' })
+  @Min(1, { message: '部件组ID不合法' })
+  orderPartGroupId: number;
+}
