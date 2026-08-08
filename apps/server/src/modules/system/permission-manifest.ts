@@ -10,6 +10,11 @@
  *
  * 注意：本清单只做"新增/更新"，不删除数据库中多余的权限行
  * （管理员通过菜单管理 UI 手工创建的权限予以保留）。
+ *
+ * 【页面读权限 = 菜单权限点本身】
+ * 各模块的 GET 接口一律用其所属菜单的 perm_code 作守卫（如 order / ledger /
+ * outsource / basic:customer），只勾菜单、不勾增删改按钮即得只读角色。
+ * 少数跨页引用型只读接口（客户下拉、字典、部门树等）例外，见各 controller 注释。
  */
 
 // perm_type：1菜单 2按钮（接口权限与按钮 perm_code 复用守卫校验）
@@ -23,9 +28,27 @@ export interface PermSeed {
   component?: string;
   icon?: string;
   sort: number;
+  /**
+   * 权限性质：0 操作 / 1 查看（只读）。缺省由 accessTypeOf() 推导——
+   * 菜单即页面读权限故记为查看，按钮默认是操作。按钮型的读权限点
+   * （如「查看首页看板」）必须在此显式写 access_type: 1，否则会被
+   * 角色权限树的「仅授只读」漏掉、也不会参与同页读权限补齐。
+   */
+  access_type?: number;
+}
+
+/** 权限性质缺省推导：菜单=查看、按钮=操作 */
+export function accessTypeOf(p: PermSeed): number {
+  return p.access_type ?? (p.perm_type === 1 ? 1 : 0);
 }
 
 export const PERMISSIONS: PermSeed[] = [
+  // ===== 统计查看：首页看板不是菜单（静态路由），但它聚合全厂订单/欠数/库存，
+  // 需要能按角色收回。分组容器 stat 刻意用 perm_type=2，建成菜单会在侧栏多出
+  // 一条点不开的条目（buildMenuTree 只取 perm_type=1，故不影响侧栏）。 =====
+  { perm_code: 'stat', perm_name: '统计查看', perm_type: 2, sort: 1 },
+  { perm_code: 'stat:dashboard', perm_name: '查看首页看板', perm_type: 2, parent_code: 'stat', access_type: 1, sort: 1 },
+
   // ===== 订单跟踪台账：系统核心产出，按设计文档 §8 作「首页级入口」置于一级菜单最前 =====
   { perm_code: 'ledger', perm_name: '订单跟踪台账', perm_type: 1, menu_path: '/ledger', component: 'ledger/index', icon: 'DataAnalysis', sort: 4 },
   // 按钮权限（perm_type=2）不进菜单树（auth.service.buildMenuTree 只取 permType===1），

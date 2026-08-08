@@ -5,7 +5,11 @@
         <el-button size="small" v-permission="'changelog:create'" type="primary" :icon="Plus" @click="openCreate">新增版本</el-button>
       </div>
       <app-table :data="paged" v-loading="loading" border stripe :page="page" :page-size="size">
-        <el-table-column label="版本号" prop="version" width="120" />
+        <el-table-column label="版本号" width="120">
+          <template #default="{ row }">
+            {{ row.version }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="标题" prop="title" min-width="160" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.title || '—' }}</template>
         </el-table-column>

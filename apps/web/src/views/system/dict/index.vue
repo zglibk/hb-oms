@@ -19,7 +19,11 @@
       <app-table :data="paged" v-loading="loading" border stripe :page="page" :page-size="size" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="45" align="center" />
         <el-table-column label="字典类型" prop="dictType" width="180" />
-        <el-table-column label="标签" prop="dictLabel" width="160" />
+        <el-table-column label="标签" width="160">
+          <template #default="{ row }">
+            {{ row.dictLabel }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="键值" prop="dictValue" width="180" />
         <el-table-column label="排序" prop="sort" width="80" class-name="col-num" />
         <el-table-column label="状态" width="90">

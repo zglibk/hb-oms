@@ -1,5 +1,6 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -50,8 +51,17 @@ export class SystemConfig {
   loginBgSetAsDefault: number;
 
   // ===== 元数据 =====
+  // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
+  // 故只带更新侧审计；created_at 仅用于记录该行何时落库。
   @Column({ name: 'updated_by', type: 'int', nullable: true })
   updatedBy: number | null;
+
+  /** 最后更新人姓名快照 */
+  @Column({ name: 'updater_name', type: 'varchar', length: 64, nullable: true })
+  updaterName: string | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;

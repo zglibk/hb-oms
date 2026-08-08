@@ -40,7 +40,11 @@
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="55" align="center" />
-        <el-table-column label="客户代码" prop="customerCode" width="87" />
+        <el-table-column label="客户代码" width="87">
+          <template #default="{ row }">
+            {{ row.customerCode }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="客户名称" prop="customerName" min-width="90" class-name="col-left" />
         <el-table-column label="联系人" prop="contactPerson" width="100" />
         <el-table-column label="联系电话" prop="contactPhone" width="130" />

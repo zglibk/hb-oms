@@ -7,7 +7,11 @@
         </el-button>
       </div>
       <app-table :data="paged" v-loading="loading" border stripe :page="page" :page-size="size">
-        <el-table-column label="角色名称" prop="roleName" width="150" />
+        <el-table-column label="角色名称" width="150">
+          <template #default="{ row }">
+            {{ row.roleName }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="编码" prop="roleCode" width="160" />
         <el-table-column label="数据范围" width="130">
           <template #default="{ row }">{{ scopeLabel(row.dataScope) }}</template>
@@ -85,15 +89,40 @@
 
     <!-- 分配权限 -->
     <el-dialog v-model="permVisible" :title="`分配权限 - ${currentRole?.roleName}`" width="780px">
+      <div class="perm-tip">
+        <el-alert type="info" :closable="false" show-icon>
+          <template #title>
+            勾选<b>菜单</b>即授予该页面的<b>查看</b>权限；下面的按钮是<b>操作</b>权限，按需单独勾选。
+            父子<b>不联动</b>——只勾菜单不勾按钮，即为该页面的只读角色。
+          </template>
+        </el-alert>
+        <div class="perm-quick">
+          <el-button size="small" @click="checkAllPerms">全选</el-button>
+          <el-button size="small" @click="checkViewOnly">仅授只读</el-button>
+          <el-button size="small" @click="clearPerms">全部清空</el-button>
+        </div>
+      </div>
       <el-tree
         ref="treeRef"
         :data="permTree"
         show-checkbox
+        check-strictly
         node-key="id"
         :props="{ label: 'permName', children: 'children' }"
         default-expand-all
         class="perm-tree"
-      />
+      >
+        <template #default="{ data }">
+          <span class="perm-node">
+            <span>{{ data.permName }}</span>
+            <el-tag
+              size="small"
+              :type="data.accessType === 1 ? 'success' : 'warning'"
+              effect="plain"
+            >{{ data.accessType === 1 ? '查看' : '操作' }}</el-tag>
+          </span>
+        </template>
+      </el-tree>
       <template #footer>
         <el-button size="small" @click="permVisible=false">取消</el-button>
         <el-button size="small" type="primary" :loading="permSaving" @click="onPermSave">保存权限</el-button>
@@ -190,13 +219,31 @@ async function onDelete(row: any) {
   load();
 }
 
-/** 收集权限树全部叶子节点 id（有 children 的为父节点） */
-function collectLeafIds(nodes: any[], out = new Set<number>()): Set<number> {
+/** 扁平化权限树（前序遍历） */
+function flattenPerms(nodes: any[], out: any[] = []): any[] {
   for (const n of nodes) {
-    if (n.children?.length) collectLeafIds(n.children, out);
-    else out.add(n.id);
+    out.push(n);
+    if (n.children?.length) flattenPerms(n.children, out);
   }
   return out;
+}
+
+/* 【为什么用 check-strictly（父子勾选互不联动）】
+ * 旧版默认级联：勾中「订单管理」会连带勾上其下全部增删改按钮，
+ * "只读订单页"这种授权在界面上根本表达不出来。改 strict 后
+ * 菜单=页面查看权、按钮=操作权，各自独立勾选；父链由服务端
+ * normalizePermissionIds 兜底补齐，不会因漏勾父级导致菜单断链。 */
+function checkAllPerms() {
+  treeRef.value?.setCheckedKeys(flattenPerms(permTree.value).map((n) => n.id));
+}
+/** 仅授只读：所有 access_type=1 的权限点（菜单 + 查看类按钮） */
+function checkViewOnly() {
+  treeRef.value?.setCheckedKeys(
+    flattenPerms(permTree.value).filter((n) => n.accessType === 1).map((n) => n.id),
+  );
+}
+function clearPerms() {
+  treeRef.value?.setCheckedKeys([]);
 }
 
 async function openPerm(row: any) {
@@ -206,19 +253,17 @@ async function openPerm(row: any) {
   checkedPerms.value = await getRolePermissions(row.id);
   permVisible.value = true;
   await nextTick();
-  // 回显只勾叶子节点：库中保存了父节点行（供菜单树建链），但 el-tree 非
-  // check-strictly 模式下 setCheckedKeys 传入父节点会级联勾选整棵子树，
-  // 造成"显示已授权范围 > 实际授权范围"的假象；过滤后父级半选态由树自动推导。
-  const leafIds = collectLeafIds(permTree.value);
-  treeRef.value?.setCheckedKeys(checkedPerms.value.filter((id) => leafIds.has(id)));
+  // check-strictly 下 setCheckedKeys 不级联，库里存什么就勾什么（含父节点行），
+  // 所见即所得——不再需要过滤叶子节点来规避级联造成的"虚高"显示。
+  treeRef.value?.setCheckedKeys(checkedPerms.value);
 }
 async function onPermSave() {
   permSaving.value = true;
   try {
+    // check-strictly 下没有半选态，勾什么传什么；父链补齐与同页读权限补齐
+    // 由服务端 normalizePermissionIds 统一兜底（API 直调同样受控）。
     const checked = treeRef.value.getCheckedKeys();
-    const halfChecked = treeRef.value.getHalfCheckedKeys();
-    // 半选父节点一并落库：buildMenuTree 依赖完整父链，缺父级会导致菜单树断链
-    await assignRolePermissions(currentRole.value.id, [...checked, ...halfChecked]);
+    await assignRolePermissions(currentRole.value.id, checked);
     ElMessage.success('权限已保存并即时生效（其他在线用户刷新页面后菜单同步）');
     permVisible.value = false;
 
@@ -240,5 +285,25 @@ onActivated(load);
 .perm-tree {
   max-height: calc((100vh - 200px) * 2 / 3);
   overflow-y: auto;
+}
+
+.perm-tip {
+  margin-bottom: 10px;
+
+  :deep(.el-alert__title) {
+    line-height: 1.6;
+  }
+}
+
+.perm-quick {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.perm-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>

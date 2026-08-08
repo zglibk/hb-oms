@@ -64,7 +64,11 @@
           </template>
         </el-table-column>
         <el-table-column type="selection" width="42" fixed="left" />
-        <el-table-column label="生产图号" prop="drawingNo" width="120" fixed="left" />
+        <el-table-column label="生产图号" width="120" fixed="left">
+          <template #default="{ row }">
+            {{ row.drawingNo }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="规格" width="90">
           <template #default="{ row }">{{ row.dimension || '—' }}</template>
         </el-table-column>

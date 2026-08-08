@@ -71,7 +71,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="单号" prop="docNo" width="140" fixed="left" />
+        <el-table-column label="单号" width="140" fixed="left">
+          <template #default="{ row }">
+            {{ row.docNo }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="业务类型" width="110" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="tagTypeOf(FINISHED_BIZ_TYPE_OPTIONS, row.bizType)">

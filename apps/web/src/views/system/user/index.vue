@@ -79,7 +79,11 @@
           reserve-selection
           :selectable="(row: any) => row.username !== 'admin'"
         />
-        <el-table-column label="账号" prop="username" width="130" />
+        <el-table-column label="账号" width="130">
+          <template #default="{ row }">
+            {{ row.username }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="姓名" prop="realName" width="120" />
         <el-table-column label="部门" prop="deptName" width="110" />
         <el-table-column label="角色" min-width="160" class-name="col-left">

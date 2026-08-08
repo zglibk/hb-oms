@@ -7,28 +7,39 @@ import {
   QueryInboundQuotaDto,
   UpdateAssemblyBatchDto,
 } from './dto/assembly.dto';
-import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：只读接口用菜单权限点 `assembly`；可入库量另放行成品出入库页 */
 @Controller('assembly')
 export class AssemblyController {
   constructor(private readonly service: AssemblyService) {}
 
   /** 装配管理列表：按部件组一行，附装配进度聚合 */
   @Get()
+  @RequirePermissions('assembly')
   async list(@Query() query: QueryAssemblyDto) {
     return this.service.findList(query);
   }
 
   /** 某部件组的批次明细 + 分边别小计与可入库量；注册在 :id 型路由之前 */
   @Get('batch')
+  @RequirePermissions('assembly')
   async batches(@Query() query: QueryAssemblyBatchDto) {
     return this.service.findBatches(query);
   }
 
-  /** 可入库量（§4.4 闸门口径），供 M4 成品入库表单前置展示 */
+  /**
+   * 可入库量（§4.4 闸门口径），供 M4 成品入库表单前置展示。
+   * 跨页引用：装配页与成品出入库页都会看，故任一菜单即可（OR），
+   * 否则仓管员开入库单时会因没有装配菜单而 403。
+   */
   @Get('inbound-quota')
+  @RequireAnyPermissions('assembly', 'finished-stock')
   async inboundQuota(@Query() query: QueryInboundQuotaDto) {
     return this.service.findInboundQuota(query);
   }

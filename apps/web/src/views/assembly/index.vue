@@ -47,7 +47,9 @@
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="orderPartGroupId">
         <el-table-column label="订单编号" width="130" fixed="left" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
+          <template #default="{ row }">
+            {{ row.productionNo || row.orderNo || '—' }}<audit-info mode="inline" :row="row" />
+          </template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />

@@ -4,8 +4,11 @@ import { Repository } from 'typeorm';
 import { Permission } from '../entities/permission.entity';
 import { Role } from '../entities/role.entity';
 import { RolePermission } from '../entities/role-permission.entity';
-import { PERMISSIONS } from '../permission-manifest';
+import { PERMISSIONS, accessTypeOf } from '../permission-manifest';
 import { UserAuthCacheService } from '../../auth/user-auth-cache.service';
+
+/** 清单同步写入行的审计署名（区别于人工在菜单管理里创建/修改的行） */
+const SYNC_ACTOR = '系统同步';
 
 /**
  * 权限清单同步服务（缺陷 B 根治的核心组件）
@@ -76,21 +79,37 @@ export class PermissionSyncService implements OnApplicationBootstrap {
             icon: p.icon ?? null,
             sort: p.sort,
             status: 1,
+            accessType: accessTypeOf(p),
+            // 清单同步的行没有"操作人"，署名为系统，与人工在菜单管理里建的行区分
+            creatorId: null,
+            creatorName: SYNC_ACTOR,
+            updaterId: null,
+            updaterName: SYNC_ACTOR,
           }),
         );
         codeToId.set(p.perm_code, saved.id);
         created += 1;
       } else {
-        // 清单为结构事实源：名称/类型/路由/组件/图标/排序以清单为准；
+        // 清单为结构事实源：名称/类型/路由/组件/图标/排序/性质以清单为准；
         // status 保留库中取值（允许管理员在 UI 中临时停用某权限）。
-        await this.permRepo.update(exist.id, {
+        const patch = {
           permName: p.perm_name,
           permType: p.perm_type,
           menuPath: p.menu_path ?? null,
           component: p.component ?? null,
           icon: p.icon ?? null,
           sort: p.sort,
-        });
+          accessType: accessTypeOf(p),
+        };
+        // 仅在真有差异时才 UPDATE：t_permission 带 updated_at/updater_name，
+        // 无条件更新会把全部权限行的"最后更新时间"刷成每次启动时刻，审计意义归零。
+        if (this.differs(exist, patch)) {
+          await this.permRepo.update(exist.id, {
+            ...patch,
+            updaterId: null,
+            updaterName: SYNC_ACTOR,
+          });
+        }
         codeToId.set(p.perm_code, exist.id);
       }
     }
@@ -98,9 +117,23 @@ export class PermissionSyncService implements OnApplicationBootstrap {
     for (const p of PERMISSIONS) {
       const id = codeToId.get(p.perm_code)!;
       const parentId = p.parent_code ? (codeToId.get(p.parent_code) ?? 0) : 0;
-      await this.permRepo.update(id, { parentId });
+      // 同理只在父级真变化时才写（清单调整菜单归属靠这一句生效）
+      const cur = await this.permRepo.findOne({ where: { id } });
+      if (cur && cur.parentId !== parentId) {
+        await this.permRepo.update(id, { parentId });
+      }
     }
     return created;
+  }
+
+  /** 逐字段比对清单值与库中值，判断是否需要落 UPDATE */
+  private differs(
+    exist: Permission,
+    patch: Partial<Permission>,
+  ): boolean {
+    return (Object.keys(patch) as (keyof Permission)[]).some(
+      (k) => (exist[k] ?? null) !== (patch[k] ?? null),
+    );
   }
 
   /** admin 补授全库权限（幂等 INSERT ... NOT EXISTS，含 UI 手工创建的权限行） */

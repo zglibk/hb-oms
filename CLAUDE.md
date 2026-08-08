@@ -82,6 +82,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 应用启动时自动 upsert 到 `t_permission`、回填 parentId、并补授 admin，**新增权限点/改名/改父级都无需写迁移 SQL**（但授予非 admin 角色仍需迁移 SQL）。
 - 后端新增 `@RequirePermissions('xxx')` 或前端 `v-permission="'xxx'"` 时，必须在该清单登记。
 - `perm_type`：1=菜单 2=按钮；菜单节点的 `component` 对应前端 `src/views/` 下的组件路径。
+- `access_type`：0=操作 1=查看，缺省由 `accessTypeOf()` 按「菜单=查看、按钮=操作」推导；**按钮型的读权限点必须在清单显式写 `access_type: 1`**（现役唯一一个是 `stat:dashboard`），否则角色权限树的「仅授只读」漏掉它、服务端的同页读权限补齐也认不出它。
 - 现有菜单树（2026-08-07 调整后）：
   - **订单跟踪台账(4)** —— 一级叶子菜单，系统核心产出
   - 生产管理(5)：订单管理、外发管理、装配管理
@@ -100,6 +101,21 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
   - 迁移用 `INSERT IGNORE` + `UPDATE` 的 upsert 写法：生产库可能已有管理员在界面手工建的同编码角色（实测已有 `BUS_MGR`），直接 INSERT 会撞唯一键。`status` 不在 UPDATE 之列，保留库中取值以允许临时停用。
 
 > **命名稳定性约定**：业务侧改展示名（如「物料信息」→「部件信息」、「工艺信息」→「开单信息」）时，**只改 perm_name / 菜单文案 / 页面标题 / 表注释**；内部标识（表名 `t_material` / `t_process_info`、权限码 `material:*` / `process-info:*`、路由路径、组件路径）保持不变，避免连锁改动与历史数据割裂。
+>
+> ⚠️ 该约定 2026-08-07 被破过一次并留下真 bug：部件信息由「物料管理」移入「基础数据」时权限码从 `system:material` 改成了 `basic:material`，但控制器守卫仍写旧码，而旧码已不在清单里——授了新菜单的角色打开页面必 403，只是 admin 旁路把它盖住了。2026-08-08 已把守卫与前端 `v-permission` 统一到 `basic:material`，迁移清掉了库里的孤儿行。**改权限码必须全库 grep 一遍守卫与 v-permission**。
+
+### 2.1 查看权限与只读角色（2026-08-08）
+
+**页面读权限 = 该页菜单权限点本身**。各模块的 GET 接口一律用所属菜单码作守卫：`order` / `ledger` / `outsource` / `assembly` / `finished-stock` / `stock-balance` / `part-stock` / `basic:customer` / `basic:process-info` / `basic:material` / `equipment:info` / `system:*`。**只勾菜单、不勾按钮 = 只读角色**。
+
+在此之前 hb-oms 的菜单权限点只控制侧栏显隐，**所有业务 GET 接口零守卫**，任意登录账号直接调 API 就能读全厂订单、台账、库存与客户资料——菜单藏起来了，数据没藏。
+
+- **跨页引用型只读接口刻意只要求登录**（各 controller 有注释说明理由）：`/customer/all`（订单/开单信息表单的客户下拉）、`/process-info/by-drawing`（订单表单按图号带入）、`/system/material/by-code`、`/system/dept` 与 `/system/dept/tree`（用户管理选部门、角色数据范围）、`/system/dict/type/:type`（全局字典）。挂菜单码会让「录订单的人没有客户资料菜单」直接 403。作为补偿，`/customer/all` 已收窄投影，只回下拉需要的 6 个字段，联系人电话/备注/审计信息不外露。
+- **一个接口服务两个页面时用 `@RequireAnyPermissions`（OR）**：`/finished-stock/group-options`（成品出入库 + 期初录入）、`/assembly/inbound-quota`（装配 + 成品出入库）、`/system/menu/tree`（菜单权限页 + 角色分配权限弹窗）。最后一个此前只认 `system:menu`，导致「只能管角色、不能改菜单」的管理员打不开分配权限弹窗。
+- **首页看板** `GET /dashboard/summary` 由 `stat:dashboard` 管控（容器 `stat` 是 perm_type=2 的根节点，`buildMenuTree` 只取 perm_type=1 故侧栏不受影响）。迁移已补授全部存量角色、行为不变，可按角色收回；前端无该权限时**不发请求、不弹 403**，欢迎区与日历照常显示。
+- **`RoleService.normalizePermissionIds` 服务端兜底**（放后端而非只靠前端勾选，API 直调同样造不出半残授权）：① 父链补齐——缺父级会让 `buildMenuTree` 断链，出现「权限在、菜单不显示」；② 同页读权限补齐——授了菜单 M 下任一按钮，就补上 M 下所有 **perm_type=2** 的 access_type=1 点，杜绝「页面能开、列表接口 403」。
+  > ⚠️ **规则②必须限定 perm_type=2**。菜单节点自身也是 access_type=1，不限定的话「系统管理」下清一色兄弟菜单，只授「数据字典」会被连带补上用户管理/角色管理/菜单权限——**静默越权**（hb-mes 曾真实踩过）。兄弟菜单是各自独立的页面，必须逐个授权。
+- **角色分配权限树改为 `check-strictly`（父子勾选互不联动）**：旧版默认级联下勾中「订单管理」会连带勾上其下全部增删改按钮，「只读订单页」这种授权在界面上**根本表达不出来**。节点带「查看/操作」标签，并提供「全选 / 仅授只读 / 全部清空」。回显也随之改为库里存什么勾什么（不再过滤叶子节点）。
 
 ---
 
@@ -233,6 +249,17 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **基础数据**（客户资料、开单信息、部件信息、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
 - **业务流水**（订单、外发单、装配批次、出入库单）：创建时**快照冗余**基础数据关键字段（客户名、生产单号、产品型号、规格、周期码等），基础数据后续变更**不回写**历史单据；审计字段齐全；确认后的单据只能冲销不能改。
 - 快照字段一律**由服务端从上游表读取落库**，不采信客户端传值（防伪造）。
+
+**审计字段六件套（强制，2026-08-08 全面补齐）**：`creator_id` + `creator_name` + `updated_by` + `updater_name` + `created_at` + `updated_at`。
+
+- **凡人工可创建/编辑的表都必须带齐**，写入统一走 [audit.util.ts](apps/server/src/common/utils/audit.util.ts) 的 `auditOnCreate(user)` / `auditOnUpdate(user)`（后者只动 updater_*，不覆盖原创建人），禁止在各 service 里手抄 `user.realName || user.username`。姓名是**操作当时的快照**，用户停用/删除后仍可追溯。
+- 已覆盖：t_order、t_order_product、t_order_part_group、t_outsource_doc、t_outsource_item、t_assembly_batch、t_finished_doc、t_customer、t_process_info、t_material、t_equipment_info、t_part_balance、t_dict、t_department、t_role、t_permission、t_user、t_changelog；t_system_config 与 t_file 按单向语义只带更新/创建侧。
+- **豁免（理由记录在此，勿反复重提）**：`t_order_part`（`expandPartRows` 蓝图展开、不可人工增删改）、`t_finished_item`（挂父单据 t_finished_doc，父表审计齐全）、`t_finished_balance`（余额表，靠单据流水追溯）、`t_outsource_return` 与 `t_part_adjust`（只增不改的流水行，已带 creator_*+created_at）、`t_process_info_history`（履历行，自带 operator_*）、`t_operation_log` 与三张关联表（系统生成/无人工语义）。
+- **整体重建型子表的口径**：订单编辑 = 删旧产品/组/部件行后重写，子行创建人无从保留，故**沿用订单头的创建人**（谁录的这张单），更新人记本次编辑者；外发明细同理沿用单头。否则每次编辑都会把子行创建人改写成编辑者。
+- 自助操作的更新人记本人（个人中心改资料/改密）；**登录成功失败计数、会话撤销等系统簿记只动 updated_at，不写 updated_by**，否则「最后更新人」会被登录行为洗掉。
+- `t_permission` 由清单同步写入的行审计署名记「系统同步」；同步**只在字段真有差异时才 UPDATE**——否则每次启动都会把全部权限行的 `updated_at` 刷成启动时刻，审计意义归零。
+- **前端展示**：统一走 [AuditInfo.vue](apps/web/src/components/AuditInfo.vue)（已全局注册），两种形态——详情/表单页底部独立审计条 `mode="block"`、列表页主标识列旁的信息图标 `mode="inline"`（悬浮显示，不占列宽）。禁止各页面重复拼 `xxx || '—'`。注意该组件**自带一个 el-descriptions**，不能塞进调用方的 el-descriptions 当子项——后者只收集自己默认插槽里 `type.name === 'ElDescriptionsItem'` 的 vnode，组件包装后收集不到。
+- **接口必须把字段带出来**：列表 service 里手工挑字段拼返回值的地方（如 user.service 的 `findList` / `findOne`）最容易漏，新增列表接口时对照检查；用 `Object.assign(实体, ...)` 拼的（order/outsource/finished-stock）天然带出。
 
 ### 5.6 已落地业务模块的关键不变式
 
@@ -391,6 +418,8 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2f | 台账行内展开 / 跨组合并单元格 | 均已落地。展开走独立接口 `GET /order/ledger/detail?orderPartGroupId=`（**按需加载**，不随列表返回——一页几十行全查三张流水太重），口径与台账主表一致（成品只取已确认、外发排除已作废、装配按 actual_date 派生完成态）。跨行合并只合并**相邻**的同 `orderProductId` 行：排序由服务端决定，万一同产品的组没挨着，宁可不合并也不能把中间夹着的别的产品错并进来 | ✅ 已完成（2026-08-08） |
 | 2g | 新手引导 | 已补成完整业务主线十步（首页看板→订单→外发→装配→出入库→台账→物料→基础数据→系统管理），章节顺序与操作手册一一对应；过时文案（工艺信息/物料档案/「首页后续将展示」）一并订正；版本号递增到 `hb_mes_tour_done_v2` 让老用户重看。**踩坑**：引导目标多为二级菜单，父级 sub-menu 折叠时节点在 DOM 里但尺寸 0×0，el-tour 会把气泡定位到左上角空白；又因 el-menu 开了 `unique-opened`（手风琴）逐个 open 会互相顶掉。解法是引导期间把 `unique-opened` 置 false 并一次性展开全部相关父级、等 360ms 过渡结束再 startTour，结束时恢复手风琴并只留当前路由的父级 | ✅ 已完成（2026-08-08） |
 | 2h | 操作手册 | `apps/web/public/manual.html` 已落地：11 章按业务时间线组织（快速上手→录订单→外发→装配→出入库→台账→看板→期初→基础数据→管理员→FAQ），顶栏搜索 + 侧栏目录 + 滚动高亮，纯静态零依赖。用户面板「操作手册」改指 `${import.meta.env.BASE_URL}manual.html`（**不要写死路径**——生产 base 是 `/oms/admin/`、开发是 `/`，写死任一个都会在另一端 404）。**功能改动涉及用户操作时须同步更新手册对应章节** | ✅ 已完成（2026-08-08） |
+| 2i | 审计追溯全面补齐 | 六件套补到 t_dict/t_department/t_role/t_permission/t_user/t_changelog/t_order_product/t_order_part_group/t_outsource_item，写入统一走 audit.util；新增全局组件 AuditInfo（列表悬浮图标 + 详情审计条）。豁免表与整体重建型子表口径见 §5.5 | ✅ 已完成（2026-08-08） |
+| 2j | 查看权限 / 只读角色 | 各模块 GET 接口挂菜单权限点（此前全裸）、新增 `access_type`、角色树改 check-strictly + 仅授只读、`normalizePermissionIds` 服务端兜底、看板加 `stat:dashboard`。口径见 §2.1 | ✅ 已完成（2026-08-08） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |
 | 5 | 外发回货验收(FQC) | V1 仅用备注承载，不独立建模 | 📘 V1 不做 |

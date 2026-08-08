@@ -24,27 +24,32 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：全部只读接口用菜单权限点 `outsource`，打印另需 outsource:print */
 @Controller('outsource')
 export class OutsourceController {
   constructor(private readonly service: OutsourceService) {}
 
   @Get()
+  @RequirePermissions('outsource')
   async list(@Query() query: QueryOutsourceDto) {
     return this.service.findList(query);
   }
 
   /** 可发外部件组选项（表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('part-group-options')
+  @RequirePermissions('outsource')
   async partGroupOptions(@Query() query: QueryPartGroupOptionDto) {
     return this.service.findPartGroupOptions(query);
   }
 
   @Get('print/:id')
+  @RequirePermissions('outsource:print')
   async print(@Param('id', ParseIntPipe) id: number) {
     return this.service.findPrintData(id);
   }
 
   @Get(':id')
+  @RequirePermissions('outsource')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

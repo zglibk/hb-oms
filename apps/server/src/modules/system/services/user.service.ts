@@ -18,6 +18,11 @@ import {
   UpdateUserDto,
 } from '../dto/user.dto';
 import { UserAuthCacheService } from '../../auth/user-auth-cache.service';
+import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import {
+  auditOnCreate,
+  auditOnUpdate,
+} from '../../../common/utils/audit.util';
 
 @Injectable()
 export class UserService {
@@ -32,7 +37,7 @@ export class UserService {
     private readonly authCache: UserAuthCacheService,
   ) {}
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, operator: CurrentUserPayload) {
     const exist = await this.userRepo.findOne({
       where: { username: dto.username },
     });
@@ -41,6 +46,7 @@ export class UserService {
     return this.dataSource.transaction(async (manager) => {
       const hash = await bcrypt.hash(dto.password, 12);
       const user = manager.create(User, {
+        ...auditOnCreate(operator),
         username: dto.username,
         password: hash,
         realName: dto.realName,
@@ -67,10 +73,15 @@ export class UserService {
     }
   }
 
-  async update(id: number, dto: UpdateUserDto) {
+  async update(
+    id: number,
+    dto: UpdateUserDto,
+    operator: CurrentUserPayload,
+  ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
     await this.userRepo.update(id, {
+      ...auditOnUpdate(operator),
       realName: dto.realName ?? user.realName,
       gender: dto.gender ?? user.gender,
       deptId: dto.deptId ?? user.deptId,
@@ -83,19 +94,32 @@ export class UserService {
     return { id };
   }
 
-  async assignRoles(id: number, dto: AssignRolesDto) {
+  async assignRoles(
+    id: number,
+    dto: AssignRolesDto,
+    operator: CurrentUserPayload,
+  ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
-    await this.dataSource.transaction((m) => this.bindRoles(m, id, dto.roleIds));
+    await this.dataSource.transaction(async (m) => {
+      await this.bindRoles(m, id, dto.roleIds);
+      // 角色绑定是对该账号的人工变更，计入其审计
+      await m.update(User, id, auditOnUpdate(operator));
+    });
     this.authCache.invalidateUser(id); // 角色绑定变更即刻生效
     return { id };
   }
 
-  async resetPassword(id: number, dto: ResetPasswordDto) {
+  async resetPassword(
+    id: number,
+    dto: ResetPasswordDto,
+    operator: CurrentUserPayload,
+  ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
     const hash = await bcrypt.hash(dto.password, 12);
     await this.userRepo.update(id, {
+      ...auditOnUpdate(operator),
       password: hash,
       mustChangePwd: 1,
       // 重置密码后撤销该用户全部历史会话（安全审查 P1）
@@ -106,13 +130,18 @@ export class UserService {
   }
 
   /** 启停账号 */
-  async toggleStatus(id: number, status: number) {
+  async toggleStatus(
+    id: number,
+    status: number,
+    operator: CurrentUserPayload,
+  ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
     if (user.username === 'admin' && status === 0) {
       throw new BadRequestException('不可停用系统管理员');
     }
     await this.userRepo.update(id, {
+      ...auditOnUpdate(operator),
       status,
       // 停用账号时一并撤销其全部会话，防止已泄露的 refresh token 在重新启用后复活
       ...(status === 0 ? { tokenInvalidBefore: new Date() } : {}),
@@ -193,6 +222,11 @@ export class UserService {
         lastLoginAt: u.lastLoginAt,
         roleIds: myRoleIds,
         roleNames: myRoles.map((r) => r.roleName),
+        // 审计四件套：列表页悬浮图标展示，手工挑字段的地方最容易漏
+        creatorName: u.creatorName,
+        createdAt: u.createdAt,
+        updaterName: u.updaterName,
+        updatedAt: u.updatedAt,
       };
     });
     return { list, total, page, pageSize };
@@ -212,6 +246,10 @@ export class UserService {
       status: user.status,
       remark: user.remark,
       roleIds: userRoles.map((r) => r.roleId),
+      creatorName: user.creatorName,
+      createdAt: user.createdAt,
+      updaterName: user.updaterName,
+      updatedAt: user.updatedAt,
     };
   }
 }

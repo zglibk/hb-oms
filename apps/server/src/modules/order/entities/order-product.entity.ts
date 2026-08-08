@@ -117,6 +117,18 @@ export class OrderProduct {
   @Column({ type: 'int', default: 0, comment: '行序' })
   sort: number;
 
+  @Column({ name: 'creator_id', type: 'int', nullable: true, comment: '创建人ID' })
+  creatorId: number | null;
+
+  @Column({ name: 'creator_name', type: 'varchar', length: 64, nullable: true, comment: '创建人姓名快照' })
+  creatorName: string | null;
+
+  @Column({ name: 'updated_by', type: 'int', nullable: true, comment: '最后更新人ID' })
+  updaterId: number | null;
+
+  @Column({ name: 'updater_name', type: 'varchar', length: 64, nullable: true, comment: '最后更新人姓名快照' })
+  updaterName: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

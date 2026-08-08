@@ -12,6 +12,10 @@ import { ChangelogService } from './changelog.service';
 import { SaveChangelogDto } from './dto/save-changelog.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import {
+  CurrentUser,
+  CurrentUserPayload,
+} from '../../common/decorators/current-user.decorator';
 
 /**
  * 更新日志接口
@@ -41,8 +45,11 @@ export class ChangelogController {
   @Post()
   @RequirePermissions('changelog:create')
   @OperationLog('更新日志', '新增版本')
-  create(@Body() dto: SaveChangelogDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: SaveChangelogDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.service.create(dto, user);
   }
 
   @Put(':id')
@@ -51,8 +58,9 @@ export class ChangelogController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: SaveChangelogDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')

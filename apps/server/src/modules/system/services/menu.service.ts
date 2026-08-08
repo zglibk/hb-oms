@@ -12,6 +12,11 @@ import {
   UpdatePermissionDto,
 } from '../dto/permission.dto';
 import { UserAuthCacheService } from '../../auth/user-auth-cache.service';
+import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import {
+  auditOnCreate,
+  auditOnUpdate,
+} from '../../../common/utils/audit.util';
 
 export interface PermTreeNode extends Permission {
   children: PermTreeNode[];
@@ -48,15 +53,16 @@ export class MenuService {
     return this.permRepo.find({ order: { sort: 'ASC', id: 'ASC' } });
   }
 
-  async create(dto: CreatePermissionDto) {
+  async create(dto: CreatePermissionDto, user: CurrentUserPayload) {
     const exist = await this.permRepo.findOne({
       where: { permCode: dto.permCode },
     });
     if (exist) throw new BadRequestException('权限标识已存在');
+    const permType = dto.permType;
     const perm = this.permRepo.create({
       permCode: dto.permCode,
       permName: dto.permName,
-      permType: dto.permType,
+      permType,
       parentId: dto.parentId ?? 0,
       menuPath: dto.menuPath ?? null,
       component: dto.component ?? null,
@@ -64,13 +70,16 @@ export class MenuService {
       icon: dto.icon ?? null,
       sort: dto.sort ?? 0,
       status: 1,
+      // 与清单 accessTypeOf 同口径：菜单=查看、按钮=操作
+      accessType: dto.accessType ?? (permType === 1 ? 1 : 0),
+      ...auditOnCreate(user),
     });
     const saved = await this.permRepo.save(perm);
     this.authCache.invalidateAll();
     return { id: saved.id };
   }
 
-  async update(id: number, dto: UpdatePermissionDto) {
+  async update(id: number, dto: UpdatePermissionDto, user: CurrentUserPayload) {
     const perm = await this.permRepo.findOne({ where: { id } });
     if (!perm) throw new NotFoundException('权限不存在');
     await this.permRepo.update(id, {
@@ -83,6 +92,8 @@ export class MenuService {
       icon: dto.icon ?? perm.icon,
       sort: dto.sort ?? perm.sort,
       status: dto.status ?? perm.status,
+      accessType: dto.accessType ?? perm.accessType,
+      ...auditOnUpdate(user),
     });
     this.authCache.invalidateAll(); // 停用/改父级等结构变化即刻生效
     return { id };

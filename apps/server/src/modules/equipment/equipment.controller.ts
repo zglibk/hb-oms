@@ -19,16 +19,19 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：设备信息页用菜单权限点 `equipment:info` */
 @Controller('equipment-info')
 export class EquipmentController {
   constructor(private readonly service: EquipmentService) {}
 
   @Get()
+  @RequirePermissions('equipment:info')
   async list(@Query() query: QueryEquipmentInfoDto) {
     return this.service.findList(query);
   }
 
   @Get(':id')
+  @RequirePermissions('equipment:info')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

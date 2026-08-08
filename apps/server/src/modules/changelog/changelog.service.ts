@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Changelog } from './entities/changelog.entity';
 import { SaveChangelogDto } from './dto/save-changelog.dto';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 
 /**
  * 更新日志服务
@@ -32,9 +34,10 @@ export class ChangelogService {
     });
   }
 
-  create(dto: SaveChangelogDto): Promise<Changelog> {
+  create(dto: SaveChangelogDto, user: CurrentUserPayload): Promise<Changelog> {
     return this.repo.save(
       this.repo.create({
+        ...auditOnCreate(user),
         version: dto.version,
         title: dto.title ?? null,
         content: dto.content,
@@ -46,10 +49,15 @@ export class ChangelogService {
     );
   }
 
-  async update(id: number, dto: SaveChangelogDto): Promise<Changelog> {
+  async update(
+    id: number,
+    dto: SaveChangelogDto,
+    user: CurrentUserPayload,
+  ): Promise<Changelog> {
     const exist = await this.repo.findOne({ where: { id } });
     if (!exist) throw new NotFoundException('更新日志不存在');
     await this.repo.update(id, {
+      ...auditOnUpdate(user),
       version: dto.version,
       title: dto.title ?? null,
       content: dto.content,

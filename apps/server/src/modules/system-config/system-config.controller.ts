@@ -36,9 +36,9 @@ export class SystemConfigController {
   @OperationLog('系统管理', '更新系统配置')
   update(
     @Body() dto: UpdateSystemConfigDto,
-    @CurrentUser('id') userId: number,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.service.update(dto, userId);
+    return this.service.update(dto, user);
   }
 
   /** 公开接口（登录页免登读取 logo + favicon + 默认背景） */

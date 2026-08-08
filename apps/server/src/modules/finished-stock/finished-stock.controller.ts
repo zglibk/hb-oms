@@ -8,32 +8,46 @@ import {
   ReverseFinishedDocDto,
   UpdateFinishedDocDto,
 } from './dto/finished-stock.dto';
-import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/**
+ * 读权限口径（§二）：单据列表/详情用菜单权限点 `finished-stock`，
+ * 结存查询是独立菜单故用 `stock-balance`（两个页面可分开授权）。
+ */
 @Controller('finished-stock')
 export class FinishedStockController {
   constructor(private readonly service: FinishedStockService) {}
 
   @Get()
+  @RequirePermissions('finished-stock')
   async list(@Query() query: QueryFinishedDocDto) {
     return this.service.findList(query);
   }
 
   /** 成品库存（结存查询）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('balance')
+  @RequirePermissions('stock-balance')
   async balance(@Query() query: QueryBalanceDto) {
     return this.service.findBalance(query);
   }
 
-  /** 可出入库部件组选项（附可入库量与当前结存） */
+  /**
+   * 可出入库部件组选项（附可入库量与当前结存）。
+   * 跨页引用：成品出入库表单与期初录入页共用，故任一菜单即可（OR）。
+   */
   @Get('group-options')
+  @RequireAnyPermissions('finished-stock', 'opening')
   async groupOptions(@Query() query: QueryStockGroupOptionDto) {
     return this.service.findGroupOptions(query);
   }
 
   @Get(':id')
+  @RequirePermissions('finished-stock')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

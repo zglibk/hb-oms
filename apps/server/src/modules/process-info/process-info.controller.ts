@@ -27,16 +27,22 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：开单信息页用菜单权限点 `basic:process-info` */
 @Controller('process-info')
 export class ProcessInfoController {
   constructor(private readonly service: ProcessInfoService) {}
 
   @Get()
+  @RequirePermissions('basic:process-info')
   async list(@Query() query: QueryProcessInfoDto) {
     return this.service.findList(query);
   }
 
-  /** 按生产图号匹配（订单表单自动带入；未命中返回 null） */
+  /**
+   * 按生产图号匹配（订单表单自动带入；未命中返回 null）。
+   * **跨页引用型只读接口，刻意只要求登录**：录订单的人未必有开单信息菜单，
+   * 挂 basic:process-info 会让订单表单的图号带入直接 403。
+   */
   @Get('by-drawing')
   async byDrawing(@Query('drawingNo') drawingNo: string) {
     return this.service.findByDrawingNo(drawingNo);
@@ -61,6 +67,7 @@ export class ProcessInfoController {
 
   /** 下载导入模板（注意：必须注册在 @Get(':id') 之前，否则被参数路由拦截） */
   @Get('import-template')
+  @RequirePermissions('process-info:import')
   @SkipTransform()
   async importTemplate(@Res() res: Response) {
     const buf = await this.service.buildImportTemplate();
@@ -75,13 +82,15 @@ export class ProcessInfoController {
     res.send(buf);
   }
 
-  /** 修改履历（新增/修改/导入更新，产品级+部件级明细，时间倒序；只读不设按钮权限） */
+  /** 修改履历（新增/修改/导入更新，产品级+部件级明细，时间倒序；读权限同页面） */
   @Get(':id/history')
+  @RequirePermissions('basic:process-info')
   async history(@Param('id', ParseIntPipe) id: number) {
     return this.service.findHistory(id);
   }
 
   @Get(':id')
+  @RequirePermissions('basic:process-info')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

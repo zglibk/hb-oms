@@ -20,6 +20,7 @@ import { TokenBlacklistService } from './token-blacklist.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { auditOnUpdate } from '../../common/utils/audit.util';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { CaptchaService } from '../captcha/captcha.service';
 import { OperationLogWriterService } from '../../common/services/operation-log-writer.service';
@@ -136,7 +137,9 @@ export class AuthService {
       );
     }
 
-    // 登录成功，清零失败计数 + 记录登录时间
+    // 登录成功，清零失败计数 + 记录登录时间。
+    // **系统簿记不写 updated_by/updater_name**：否则「最后更新人」会被每次
+    // 登录洗成用户自己，谁改过这个账号就再也查不出来了（登录失败计数同理）。
     await this.userRepo.update(user.id, {
       loginFailCount: 0,
       lockedUntil: null,
@@ -428,11 +431,16 @@ export class AuthService {
     };
   }
 
-  /** 个人中心自助更新（仅 realName / gender / phone / remark / avatar） */
+  /**
+   * 个人中心自助更新（仅 realName / gender / phone / remark / avatar）。
+   * 更新人记**本人**——自助修改也是一次人工变更，记上才能解释资料为何变了。
+   */
   async updateProfile(userId: number, dto: UpdateProfileDto) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('用户不存在');
     await this.userRepo.update(userId, {
+      updaterId: userId,
+      updaterName: (user.realName || user.username || '').trim() || null,
       realName: dto.realName,
       gender: dto.gender ?? user.gender,
       phone: dto.phone ?? user.phone,
@@ -457,6 +465,7 @@ export class AuthService {
     this.validatePasswordStrength(dto.newPassword);
     const hash = await bcrypt.hash(dto.newPassword, 12);
     await this.userRepo.update(u.id, {
+      ...auditOnUpdate(user),
       password: hash,
       mustChangePwd: 0,
       // 改密后撤销全部历史会话（含其他设备上尚未过期的 refresh token）

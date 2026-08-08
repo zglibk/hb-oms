@@ -87,7 +87,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="货号" prop="itemNo" width="100" align="center" />
+        <el-table-column label="货号" width="100" align="center">
+          <template #default="{ row }">
+            {{ row.itemNo }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="部件" width="90" align="center">
           <template #default="{ row }">{{ partTypeLabel(row.partType) }}</template>
         </el-table-column>

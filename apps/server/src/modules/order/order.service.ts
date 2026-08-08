@@ -131,7 +131,7 @@ export class OrderService {
           ...auditOnCreate(user),
         }),
       );
-      await this.writeChildren(mgr, order.id, dto.products);
+      await this.writeChildren(mgr, order.id, dto.products, auditOnCreate(user));
       return { id: order.id, orderNo };
     });
   }
@@ -166,13 +166,29 @@ export class OrderService {
       await mgr.getRepository(OrderPart).delete({ orderId: id });
       await mgr.getRepository(OrderPartGroup).delete({ orderId: id });
       await mgr.getRepository(OrderProduct).delete({ orderId: id });
-      await this.writeChildren(mgr, id, dto.products);
+      // 编辑是"整体重建"：子行被删后重写，创建人无从保留，故**沿用订单头的创建人**
+      // （谁录的这张单），更新人记本次操作者。否则每次编辑都会把子行创建人改写成编辑者。
+      await this.writeChildren(mgr, id, dto.products, {
+        creatorId: order.creatorId,
+        creatorName: order.creatorName,
+        ...auditOnUpdate(user),
+      });
       return { id };
     });
   }
 
   /** 产品行/部件组入库（创建与更新共用；qty_pcs/型号快照/部件行蓝图展开在此统一计算） */
-  private async writeChildren(mgr: EntityManager, orderId: number, products: CreateOrderProductDto[]) {
+  private async writeChildren(
+    mgr: EntityManager,
+    orderId: number,
+    products: CreateOrderProductDto[],
+    audit: {
+      creatorId: number | null;
+      creatorName: string | null;
+      updaterId: number;
+      updaterName: string | null;
+    },
+  ) {
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
       const productType = normalizeProductTypes(p.productType ?? '');
@@ -181,6 +197,7 @@ export class OrderService {
 
       const product = await mgr.getRepository(OrderProduct).save(
         mgr.getRepository(OrderProduct).create({
+          ...audit,
           orderId,
           orderType: p.orderType ?? 1,
           isNewOrder: p.isNewOrder ?? 0,
@@ -221,6 +238,7 @@ export class OrderService {
         const groupQty = g.qtyPcs ?? qtyPcs;
         const group = await mgr.getRepository(OrderPartGroup).save(
           mgr.getRepository(OrderPartGroup).create({
+            ...audit,
             orderId,
             orderProductId: product.id,
             groupType: g.groupType,

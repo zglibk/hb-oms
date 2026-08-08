@@ -7,6 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Dict } from '../entities/dict.entity';
+import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import {
+  auditOnCreate,
+  auditOnUpdate,
+} from '../../../common/utils/audit.util';
 
 /** 导入模板列定义（同时用于生成模板与解析导入，保证表头一致） */
 interface ImportColumn {
@@ -96,8 +101,9 @@ export class DictService {
     return rows.map((r) => r.dictType);
   }
 
-  async create(data: Partial<Dict>) {
+  async create(data: Partial<Dict>, user: CurrentUserPayload) {
     const dict = this.dictRepo.create({
+      ...auditOnCreate(user),
       dictType: data.dictType,
       dictLabel: data.dictLabel,
       dictValue: data.dictValue,
@@ -129,7 +135,7 @@ export class DictService {
     }
   }
 
-  async update(id: number, data: Partial<Dict>) {
+  async update(id: number, data: Partial<Dict>, user: CurrentUserPayload) {
     const dict = await this.dictRepo.findOne({ where: { id } });
     if (!dict) throw new NotFoundException('字典项不存在');
     // 保留项：禁止改值与停用（改 label/排序/备注放行）
@@ -140,6 +146,7 @@ export class DictService {
       this.assertNotReserved(dict, '停用');
     }
     await this.dictRepo.update(id, {
+      ...auditOnUpdate(user),
       dictLabel: data.dictLabel ?? dict.dictLabel,
       dictValue: data.dictValue ?? dict.dictValue,
       sort: data.sort ?? dict.sort,
@@ -393,7 +400,7 @@ export class DictService {
   }
 
   /** 解析上传的 xlsx 并批量入库（严格预校验：发现任何错误即终止，不入库） */
-  async importFromExcel(buffer: Buffer) {
+  async importFromExcel(buffer: Buffer, user: CurrentUserPayload) {
     const wb = new ExcelJS.Workbook();
     try {
       await wb.xlsx.load(buffer as any);
@@ -535,6 +542,7 @@ export class DictService {
     // ===================== 阶段二：全部校验通过，执行入库 =====================
     const entities = rows.map((r) =>
       this.dictRepo.create({
+        ...auditOnCreate(user),
         dictType: r.dictType,
         dictLabel: r.dictLabel,
         dictValue: r.dictValue,

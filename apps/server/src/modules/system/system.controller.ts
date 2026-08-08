@@ -39,7 +39,10 @@ import {
   CreatePermissionDto,
   UpdatePermissionDto,
 } from './dto/permission.dto';
-import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import {
   CurrentUser,
@@ -85,15 +88,22 @@ export class SystemController {
   @Post('user')
   @RequirePermissions('user:create')
   @OperationLog('系统管理', '新增用户')
-  createUser(@Body() dto: CreateUserDto) {
-    return this.userService.create(dto);
+  createUser(
+    @Body() dto: CreateUserDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.userService.create(dto, user);
   }
 
   @Put('user/:id')
   @RequirePermissions('user:update')
   @OperationLog('系统管理', '修改用户')
-  updateUser(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) {
-    return this.userService.update(id, dto);
+  updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.userService.update(id, dto, user);
   }
 
   @Post('user/:id/roles')
@@ -102,8 +112,9 @@ export class SystemController {
   assignRoles(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignRolesDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.userService.assignRoles(id, dto);
+    return this.userService.assignRoles(id, dto, user);
   }
 
   @Post('user/:id/reset-password')
@@ -112,8 +123,9 @@ export class SystemController {
   resetPwd(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ResetPasswordDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.userService.resetPassword(id, dto);
+    return this.userService.resetPassword(id, dto, user);
   }
 
   @Post('user/:id/status/:status')
@@ -122,8 +134,9 @@ export class SystemController {
   toggleStatus(
     @Param('id', ParseIntPipe) id: number,
     @Param('status', ParseIntPipe) status: number,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.userService.toggleStatus(id, status);
+    return this.userService.toggleStatus(id, status, user);
   }
 
   @Delete('user')
@@ -146,15 +159,22 @@ export class SystemController {
   @Post('role')
   @RequirePermissions('role:create')
   @OperationLog('系统管理', '新增角色')
-  createRole(@Body() dto: CreateRoleDto) {
-    return this.roleService.create(dto);
+  createRole(
+    @Body() dto: CreateRoleDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.roleService.create(dto, user);
   }
 
   @Put('role/:id')
   @RequirePermissions('role:update')
   @OperationLog('系统管理', '修改角色')
-  updateRole(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateRoleDto) {
-    return this.roleService.update(id, dto);
+  updateRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateRoleDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.roleService.update(id, dto, user);
   }
 
   @Delete('role/:id')
@@ -176,8 +196,9 @@ export class SystemController {
   assignPerms(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignPermsDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.roleService.assignPermissions(id, dto);
+    return this.roleService.assignPermissions(id, dto, user);
   }
 
   @Get('role/:id/depts')
@@ -187,8 +208,13 @@ export class SystemController {
   }
 
   // ===== 菜单/权限 =====
+  /**
+   * 权限树。菜单权限页与**角色分配权限对话框**共用一棵树，
+   * 故任一菜单即可（OR）——只挂 system:menu 会让「只能管角色、不能改菜单」
+   * 的管理员打不开分配权限弹窗。
+   */
   @Get('menu/tree')
-  @RequirePermissions('system:menu')
+  @RequireAnyPermissions('system:menu', 'system:role')
   menuTree() {
     return this.menuService.tree();
   }
@@ -196,8 +222,11 @@ export class SystemController {
   @Post('menu')
   @RequirePermissions('menu:create')
   @OperationLog('系统管理', '新增菜单')
-  createMenu(@Body() dto: CreatePermissionDto) {
-    return this.menuService.create(dto);
+  createMenu(
+    @Body() dto: CreatePermissionDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.menuService.create(dto, user);
   }
 
   @Put('menu/:id')
@@ -206,8 +235,9 @@ export class SystemController {
   updateMenu(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePermissionDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.menuService.update(id, dto);
+    return this.menuService.update(id, dto, user);
   }
 
   @Delete('menu/:id')
@@ -239,15 +269,19 @@ export class SystemController {
   @Post('dict')
   @RequirePermissions('dict:create')
   @OperationLog('系统管理', '新增字典项')
-  createDict(@Body() body: any) {
-    return this.dictService.create(body);
+  createDict(@Body() body: any, @CurrentUser() user: CurrentUserPayload) {
+    return this.dictService.create(body, user);
   }
 
   @Put('dict/:id')
   @RequirePermissions('dict:update')
   @OperationLog('系统管理', '修改字典项')
-  updateDict(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-    return this.dictService.update(id, body);
+  updateDict(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.dictService.update(id, body, user);
   }
 
   @Delete('dict/:id')
@@ -306,16 +340,24 @@ export class SystemController {
   @RequirePermissions('dict:import')
   @OperationLog('系统管理', '批量导入字典')
   @UseInterceptors(FileInterceptor('file'))
-  async dictImport(@UploadedFile() file: Express.Multer.File) {
+  async dictImport(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
     if (!file) throw new BadRequestException('请选择要上传的 Excel 文件');
     const name = (file.originalname || '').toLowerCase();
     if (!name.endsWith('.xlsx')) {
       throw new BadRequestException('仅支持 .xlsx 格式文件');
     }
-    return this.dictService.importFromExcel(file.buffer);
+    return this.dictService.importFromExcel(file.buffer, user);
   }
 
   // ===== 部门 =====
+  /**
+   * 部门树/列表。**跨页引用型只读接口，刻意只要求登录**：
+   * 部门信息页、用户管理（选所属部门）、角色数据范围（自定义部门）三处共用，
+   * 挂 basic:dept 会让只有用户管理权限的管理员选不到部门。
+   */
   @Get('dept/tree')
   deptTree() {
     return this.deptService.tree();
@@ -329,15 +371,19 @@ export class SystemController {
   @Post('dept')
   @RequirePermissions('dept:create')
   @OperationLog('部门信息', '新增部门')
-  createDept(@Body() body: any) {
-    return this.deptService.create(body);
+  createDept(@Body() body: any, @CurrentUser() user: CurrentUserPayload) {
+    return this.deptService.create(body, user);
   }
 
   @Put('dept/:id')
   @RequirePermissions('dept:update')
   @OperationLog('部门信息', '修改部门')
-  updateDept(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-    return this.deptService.update(id, body);
+  updateDept(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.deptService.update(id, body, user);
   }
 
   @Delete('dept/:id')
@@ -377,14 +423,17 @@ export class SystemController {
   }
 
   // ===== 部件主数据 =====
-  /** 按部件代码精确查询（订单录入自动带出用） */
+  /**
+   * 按部件代码精确查询（订单录入自动带出用）。
+   * **跨页引用型只读接口，刻意只要求登录**：录订单的人未必有部件信息菜单。
+   */
   @Get('material/by-code')
   getMaterialByCode(@Query('code') code: string) {
     return this.materialService.findByCode(code);
   }
 
   @Get('material/item-nos')
-  @RequirePermissions('system:material')
+  @RequirePermissions('basic:material')
   materialItemNumbers() {
     return this.materialService.itemNumbers();
   }
@@ -448,8 +497,14 @@ export class SystemController {
     res.end(buffer);
   }
 
+  /**
+   * 部件信息列表。读权限用菜单权限点 `basic:material`——
+   * 2026-08-07 该菜单由「物料管理」移入「基础数据」并改码，守卫却仍写着旧码
+   * `system:material`（清单里已不存在），授了新菜单的角色打开页面必 403，
+   * 仅靠 admin 旁路掩盖着。迁移会清掉库中残留的旧权限行。
+   */
   @Get('material')
-  @RequirePermissions('system:material')
+  @RequirePermissions('basic:material')
   materialList(@Query() query: QueryMaterialDto) {
     return this.materialService.findList(query);
   }

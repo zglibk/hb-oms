@@ -12,6 +12,7 @@ import { useThemeStore } from './stores/theme';
 import AppTable from './components/AppTable.vue';
 import AppPagination from './components/AppPagination.vue';
 import AppActions from './components/AppActions.vue';
+import AuditInfo from './components/AuditInfo.vue';
 import './styles/index.scss';
 import './styles/responsive.scss';
 import { applyCachedTitle } from './utils/document-meta';
@@ -34,6 +35,8 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.component('AppTable', AppTable);
 app.component('AppPagination', AppPagination);
 app.component('AppActions', AppActions);
+// 审计追溯统一展示（列表悬浮图标 / 详情底部审计条），禁止各页面重复拼
+app.component('AuditInfo', AuditInfo);
 // 全局甘特图组件（基于 dhtmlxGantt 二次封装，多处可调用）
 
 app.use(createPinia());

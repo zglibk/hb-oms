@@ -28,7 +28,11 @@
         <el-button size="small" v-permission="'equipment-info:create'" type="primary" :icon="Plus" @click="openCreate">新增设备信息</el-button>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize">
-        <el-table-column label="机台号" prop="machineNo" width="90" fixed="left" />
+        <el-table-column label="机台号" width="90" fixed="left">
+          <template #default="{ row }">
+            {{ row.machineNo }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="140" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>

@@ -58,6 +58,7 @@ export class FileService {
     bizType: string,
     bizId: number | null,
     creatorId: number | null,
+    creatorName: string | null,
   ): Promise<FileEntity> {
     if (!file) throw new BadRequestException('未接收到文件');
 
@@ -106,6 +107,7 @@ export class FileService {
       fileSize: file.size,
       mimeType: sniffed.mime, // 以服务端嗅探结果为准，不落库客户端声明值
       creatorId,
+      creatorName,
     });
     return this.fileRepo.save(entity);
   }

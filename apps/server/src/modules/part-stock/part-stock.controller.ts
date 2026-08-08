@@ -9,23 +9,27 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：全部只读接口用菜单权限点 `part-stock`，调整余量另需 part-stock:adjust */
 @Controller('part-stock')
 export class PartStockController {
   constructor(private readonly service: PartStockService) {}
 
   @Get()
+  @RequirePermissions('part-stock')
   async list(@Query() query: QueryPartStockDto) {
     return this.service.findList(query);
   }
 
   /** 当前筛选条件下的余量合计（页面汇总用） */
   @Get('summary')
+  @RequirePermissions('part-stock')
   async summary(@Query() query: QueryPartStockDto) {
     return this.service.findSummary(query);
   }
 
   /** 变动流水：按余量行下钻或按货号全局查 */
   @Get('adjust')
+  @RequirePermissions('part-stock')
   async adjustList(@Query() query: QueryPartAdjustDto) {
     return this.service.findAdjustList(query);
   }

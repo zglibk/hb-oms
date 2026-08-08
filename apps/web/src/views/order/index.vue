@@ -75,7 +75,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="订单号" prop="orderNo" width="140" fixed="left" />
+        <el-table-column label="订单号" width="140" fixed="left">
+          <template #default="{ row }">
+            {{ row.orderNo }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="PO#" prop="poNo" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.poNo || '—' }}</template>
         </el-table-column>

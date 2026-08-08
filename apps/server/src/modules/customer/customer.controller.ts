@@ -27,16 +27,22 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/** 读权限口径（§二）：客户资料页用菜单权限点 `basic:customer` */
 @Controller('customer')
 export class CustomerController {
   constructor(private readonly service: CustomerService) {}
 
   @Get()
+  @RequirePermissions('basic:customer')
   async list(@Query() query: QueryCustomerDto) {
     return this.service.findList(query);
   }
 
-  /** 全量启用客户（订单表单下拉，无分页） */
+  /**
+   * 全量启用客户（订单/开单信息表单下拉，无分页）。
+   * **跨页引用型只读接口，刻意只要求登录**：录订单的人未必有客户资料菜单，
+   * 挂 basic:customer 会让订单表单的客户下拉直接 403（只回客户代码/名称，无敏感字段）。
+   */
   @Get('all')
   async all() {
     return this.service.findAllEnabled();
@@ -77,6 +83,7 @@ export class CustomerController {
 
   /** 下载导入模板 */
   @Get('import-template')
+  @RequirePermissions('customer:import')
   @SkipTransform()
   async importTemplate(@Res() res: Response) {
     const buf = await this.service.buildImportTemplate();

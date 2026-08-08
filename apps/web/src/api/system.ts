@@ -269,6 +269,9 @@ export interface SystemConfig {
   copyrightInfo: string | null;
   loginBgUrl: string | null;
   loginBgSetAsDefault: number;
+  /** 审计（单例配置行只有更新侧语义，接口只回不收） */
+  updaterName?: string | null;
+  updatedAt?: string | null;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */

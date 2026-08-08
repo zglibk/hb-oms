@@ -47,6 +47,8 @@ const MIGRATIONS: string[] = [
   'migration-builtin-roles.sql',
   'migration-order-field-adjust.sql',
   'migration-drop-deprecated-order-cols.sql',
+  // 审计追溯六件套补齐 + t_permission.access_type（查看/操作）+ stat:dashboard
+  'migration-audit-trace-and-view-perm.sql',
 ];
 
 /**
@@ -132,6 +134,23 @@ const expectedColumns = [
   // 订单字段口径调整：生产单号上移订单级 + 产品级客户图号
   't_order.production_no',
   't_order_product.customer_drawing_no',
+  // 审计追溯六件套（§5.5）：抽查各表的姓名快照列，缺了说明迁移没跑到
+  't_dict.creator_name',
+  't_dict.updater_name',
+  't_department.creator_name',
+  't_role.updater_name',
+  't_permission.creator_name',
+  't_permission.updated_at',
+  't_user.creator_name',
+  't_user.updated_by',
+  't_changelog.creator_name',
+  't_order_product.creator_name',
+  't_order_part_group.creator_name',
+  't_outsource_item.updater_name',
+  't_system_config.updater_name',
+  't_file.creator_name',
+  // 查看权限（只读角色）
+  't_permission.access_type',
 ];
 
 async function main() {

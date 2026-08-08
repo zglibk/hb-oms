@@ -299,7 +299,7 @@ export class OutsourceService {
           ...auditOnCreate(user),
         }),
       );
-      await this.writeItems(mgr, doc.id, dto.items);
+      await this.writeItems(mgr, doc.id, dto.items, auditOnCreate(user));
       return { id: doc.id, blankNo };
     });
   }
@@ -325,7 +325,12 @@ export class OutsourceService {
         ...auditOnUpdate(user),
       });
       await mgr.getRepository(OutsourceItem).delete({ docId: id });
-      await this.writeItems(mgr, id, dto.items);
+      // 明细整体重建：创建人沿用单头（谁开的这张单），更新人记本次编辑者
+      await this.writeItems(mgr, id, dto.items, {
+        creatorId: doc.creatorId,
+        creatorName: doc.creatorName,
+        ...auditOnUpdate(user),
+      });
       return { id };
     });
   }
@@ -349,7 +354,9 @@ export class OutsourceService {
       if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
         throw new BadRequestException('发坯单已作废，不能修改发出数量');
       }
+      // 行级人工改数：只动更新人（这行是谁修正的），保留原录入人
       await mgr.getRepository(OutsourceItem).update(itemId, {
+        ...auditOnUpdate(user),
         sendWeight: String(dto.sendWeight ?? 0),
         unitWeight: String(dto.unitWeight ?? 0),
         sendQty: dto.sendQty,
@@ -365,6 +372,12 @@ export class OutsourceService {
     mgr: EntityManager,
     docId: number,
     items: CreateOutsourceDto['items'],
+    audit: {
+      creatorId: number | null;
+      creatorName: string | null;
+      updaterId: number;
+      updaterName: string | null;
+    },
   ) {
     const groupIds = items.map((it) => it.orderPartGroupId);
     const dupe = groupIds.find((gid, i) => groupIds.indexOf(gid) !== i);
@@ -384,6 +397,7 @@ export class OutsourceService {
         );
       }
       return mgr.getRepository(OutsourceItem).create({
+        ...audit,
         docId,
         orderId: snap.orderId,
         orderProductId: snap.orderProductId,

@@ -1,26 +1,87 @@
 <!--
   首页看板（销售视角，设计文档 §5.2）。
 
+  欢迎区：问候 + 日历摘要（公历/农历/年余/下一法定假日）
   汇总卡：进行中订单数 / 总生产欠数 / 总发货欠数 / 逾期订单数
   列表区：左卡「逾期未发货 / 临近交期」页签切换，右卡「外发超期未回齐」
 
   按设计文档明确**不做 ECharts 大屏**，普通管理页即可。
-  数据全部来自 GET /dashboard/summary（登录即可访问，不挂权限点），
-  但列表的「跳转」入口按权限显隐——没有台账/外发权限的用户点过去只会撞守卫。
+  数据全部来自 GET /dashboard/summary（权限点 stat:dashboard）。
+  **无该权限时不发请求、不弹 403**，欢迎区与日历照常显示，只是四卡与列表留空——
+  首页是所有人的落地页，不该因为看不到经营数字就整页报错。
+  列表的「跳转」入口另按权限显隐——没有台账/外发权限的用户点过去只会撞守卫。
 -->
 <template>
   <div class="page" v-loading="loading">
     <el-card shadow="never" class="welcome-card">
       <div class="welcome__text">
-        <h2>{{ greeting }}，{{ userStore.userInfo?.realName || userStore.userInfo?.username }}</h2>
-        <p>
-          业务主线：录订单 → 部件外发（可选）→ 回货 → 装配 → 成品入库 → 成品出库；
-          下方为<b>进行中订单</b>的交付情况，明细见订单跟踪台账。
-        </p>
+        <h2>{{ greeting }}，{{ politeName }}</h2>
+        <div class="welcome-cal" aria-label="今日日历">
+          <span class="cal-chip cal-chip--solar">
+            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.7" />
+              <path d="M3 10h18" fill="none" stroke="currentColor" stroke-width="1.7" />
+              <path d="M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <circle cx="8.5" cy="14.5" r="1.1" fill="currentColor" />
+              <circle cx="12" cy="14.5" r="1.1" fill="currentColor" />
+              <circle cx="15.5" cy="14.5" r="1.1" fill="currentColor" />
+            </svg>
+            <el-tag size="small" effect="plain" type="primary" round>公历</el-tag>
+            <b>{{ cal.solarText }}</b>
+          </span>
+
+          <span class="cal-chip cal-chip--lunar">
+            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M15.2 3.2a8.8 8.8 0 1 0 5.6 15.4A9.2 9.2 0 0 1 15.2 3.2z"
+                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"
+              />
+              <circle cx="9.2" cy="10.2" r="0.9" fill="currentColor" />
+              <circle cx="12.4" cy="13.8" r="0.7" fill="currentColor" />
+            </svg>
+            <el-tag size="small" effect="plain" round class="cal-tag--lunar">农历</el-tag>
+            <b>{{ cal.lunarText }}</b>
+          </span>
+
+          <span class="cal-chip cal-chip--year">
+            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 3h10v4.2c0 1.4-.7 2.7-1.9 3.4L12 13l-3.1-2.4A4 4 0 0 1 7 7.2V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M7 21h10v-4.2c0-1.4-.7-2.7-1.9-3.4L12 11l-3.1 2.4A4 4 0 0 0 7 16.8V21z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <el-tag size="small" effect="plain" type="warning" round>年余</el-tag>
+            <b>{{ cal.year }} 年还剩 <em>{{ cal.yearLeftDays }}</em> 天</b>
+          </span>
+
+          <span class="cal-chip cal-chip--holiday">
+            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3c2.2 2.4 3.4 4.4 3.4 6.2A3.4 3.4 0 1 1 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <path d="M12 3c-2.2 2.4-3.4 4.4-3.4 6.2A3.4 3.4 0 1 0 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <path d="M8.2 14.5c1.2 2.8 2.6 4.6 3.8 6.5 1.2-1.9 2.6-3.7 3.8-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <circle cx="12" cy="9.4" r="1.2" fill="currentColor" />
+            </svg>
+            <el-tag size="small" effect="plain" type="danger" round>节假</el-tag>
+            <b v-if="cal.nextHoliday">
+              <template v-if="cal.nextHoliday.daysLeft === 0">今天是{{ cal.nextHoliday.name }}</template>
+              <template v-else>距{{ cal.nextHoliday.name }}还有 <em>{{ cal.nextHoliday.daysLeft }}</em> 天</template>
+            </b>
+            <b v-else>近期暂无法定节假日</b>
+          </span>
+        </div>
       </div>
     </el-card>
 
-    <div class="sum-bar">
+    <el-alert
+      v-if="!canDashboard"
+      class="no-stat"
+      type="info"
+      :closable="false"
+      show-icon
+      title="您的角色未获授「查看首页看板」权限，经营汇总数据不予显示"
+      description="如需查看，请联系系统管理员在「角色管理 → 分配权限」中勾选「统计查看 → 查看首页看板」。"
+    />
+
+    <div class="sum-bar" v-if="canDashboard">
       <app-stat-card color="blue" :value="cards.activeOrders" label="进行中订单" :link-text="canLedger ? '台账>' : ''" @link="go('/ledger')">
         <template #icon><el-icon><Tickets /></el-icon></template>
       </app-stat-card>
@@ -35,7 +96,7 @@
       </app-stat-card>
     </div>
 
-    <el-row :gutter="16" class="list-row">
+    <el-row :gutter="16" class="list-row" v-if="canDashboard">
       <!-- 左：逾期未发货 / 临近交期 合并成一张页签卡。
            两者都是「交期视角的待办」，并排两张卡既占地方又要来回扫；
            页签标签带**总条数**角标，不切过去也知道那边有没有事。 -->
@@ -174,6 +235,7 @@ import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { loadDict } from '@/composables/useDict';
 import { OUTSOURCE_STATUS, formatBlankNo, labelOf, tagTypeOf } from '@/constants/dict';
+import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
 
 const router = useRouter();
@@ -198,6 +260,8 @@ const cards = computed(() => summary.value.cards);
 const counts = computed(() => summary.value.counts);
 
 const canLedger = computed(() => userStore.hasPermission('ledger'));
+/** 看板数据权限：无此权限则整块汇总不请求也不渲染 */
+const canDashboard = computed(() => userStore.hasPermission('stat:dashboard'));
 const canOutsource = computed(() => userStore.hasPermission('outsource'));
 const hasOutsource = computed(() => summary.value.overdueOutsource.length > 0);
 
@@ -230,7 +294,22 @@ const greeting = computed(() => {
   return '晚上好';
 });
 
+/** 欢迎称呼：有性别时用「姓+先生/女士」，未知性别仍用姓名，避免误称 */
+const politeName = computed(() => {
+  const u = userStore.userInfo;
+  const name = (u?.realName || '').trim();
+  if (!name) return u?.username || '用户';
+  const surname = name.charAt(0);
+  if (u?.gender === 1) return `${surname}先生`;
+  if (u?.gender === 2) return `${surname}女士`;
+  return name;
+});
+
+/** 欢迎区日历摘要（公历 / 农历 / 年余 / 下一法定假日） */
+const cal = computed(() => getCalendarBrief());
+
 async function load() {
+  if (!canDashboard.value) return; // 无权限：不请求，避免整页 403 提示
   loading.value = true;
   try {
     summary.value = await getDashboardSummary();
@@ -265,10 +344,86 @@ export default { name: 'HomeDashboard' };
 .welcome-card {
   margin-bottom: 12px;
   .welcome__text {
-    h2 { margin: 0 0 8px; font-size: 20px; }
-    p { margin: 0; color: var(--el-text-color-secondary); line-height: 1.8; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
   }
 }
+
+.welcome-cal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.cal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  line-height: 1.3;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 40, 32, 0.06);
+  }
+
+  b {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+    white-space: nowrap;
+  }
+  em {
+    font-style: normal;
+    font-weight: 700;
+    color: inherit;
+  }
+
+  &__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  &--solar {
+    .cal-chip__icon { color: var(--el-color-primary); }
+    b { color: var(--el-color-primary); }
+  }
+  &--lunar {
+    .cal-chip__icon { color: #0d9488; }
+    b { color: #0f766e; }
+  }
+  &--year {
+    .cal-chip__icon { color: var(--el-color-warning); }
+    b em { color: var(--el-color-warning); }
+  }
+  &--holiday {
+    .cal-chip__icon { color: var(--el-color-danger); }
+    b em { color: var(--el-color-danger); }
+  }
+}
+
+.cal-tag--lunar {
+  --el-tag-text-color: #0f766e;
+  --el-tag-border-color: rgba(13, 148, 136, 0.35);
+  --el-tag-bg-color: rgba(13, 148, 136, 0.08);
+}
+
+@media (max-width: 768px) {
+  .cal-chip {
+    border-radius: 10px;
+    width: 100%;
+    b { white-space: normal; }
+  }
+}
+.no-stat {
+  margin-bottom: 12px;
+}
+
 .sum-bar {
   display: flex;
   gap: 16px;

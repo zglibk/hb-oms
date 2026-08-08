@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileService } from './file.service';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  CurrentUserPayload,
+} from '../../common/decorators/current-user.decorator';
+import { auditDisplayName } from '../../common/utils/audit.util';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 
@@ -23,13 +27,14 @@ export class FileController {
     @UploadedFile() file: Express.Multer.File,
     @Body('bizType') bizType: string,
     @Body('bizId') bizId: string,
-    @CurrentUser('id') userId: number,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
     const saved = await this.fileService.save(
       file,
       bizType || 'common',
       bizId ? Number(bizId) : null,
-      userId,
+      user.id,
+      auditDisplayName(user) || null,
     );
     return { url: '/' + saved.filePath, fileNo: saved.fileNo, id: saved.id };
   }
@@ -41,13 +46,14 @@ export class FileController {
   @UseInterceptors(FileInterceptor('file'))
   async editorImage(
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser('id') userId: number,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
     const saved = await this.fileService.save(
       file,
       'editor_image',
       null,
-      userId,
+      user.id,
+      auditDisplayName(user) || null,
     );
     // wangEditor 自定义上传返回格式
     return {

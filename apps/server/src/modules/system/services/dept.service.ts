@@ -3,6 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Department } from '../entities/department.entity';
 import { User } from '../entities/user.entity';
+import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import {
+  auditOnCreate,
+  auditOnUpdate,
+} from '../../../common/utils/audit.util';
 
 @Injectable()
 export class DeptService {
@@ -35,7 +40,7 @@ export class DeptService {
     if (exist) throw new BadRequestException(`部门编码「${deptCode}」已存在（${exist.deptName}）`);
   }
 
-  async create(data: Partial<Department>) {
+  async create(data: Partial<Department>, user: CurrentUserPayload) {
     if (!data.deptName?.trim()) throw new BadRequestException('部门名称必填');
     if (!data.deptCode?.trim()) throw new BadRequestException('部门编码必填');
     await this.assertCodeUnique(data.deptCode.trim());
@@ -44,6 +49,7 @@ export class DeptService {
       if (!parent) throw new BadRequestException('上级部门不存在');
     }
     const dept = this.deptRepo.create({
+      ...auditOnCreate(user),
       deptCode: data.deptCode.trim(),
       deptName: data.deptName.trim(),
       parentId: data.parentId ?? 0,
@@ -56,7 +62,7 @@ export class DeptService {
     return { id: saved.id };
   }
 
-  async update(id: number, data: Partial<Department>) {
+  async update(id: number, data: Partial<Department>, user: CurrentUserPayload) {
     const dept = await this.deptRepo.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('部门不存在');
     if (data.deptCode && data.deptCode.trim() !== dept.deptCode) {
@@ -71,6 +77,7 @@ export class DeptService {
       }
     }
     await this.deptRepo.update(id, {
+      ...auditOnUpdate(user),
       deptCode: data.deptCode?.trim() ?? dept.deptCode,
       deptName: data.deptName?.trim() ?? dept.deptName,
       parentId: data.parentId ?? dept.parentId,

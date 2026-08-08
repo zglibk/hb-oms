@@ -148,6 +148,12 @@
               >保存</el-button>
             </el-form-item>
           </el-form>
+
+          <!-- 单例配置行只有「被修改」没有「被创建」，故只露更新侧 -->
+          <div v-if="form.updaterName || form.updatedAt" class="config-audit">
+            最后更新：{{ form.updaterName || '—' }}
+            <span v-if="form.updatedAt">（{{ formatDateTime(form.updatedAt) }}）</span>
+          </div>
         </el-tab-pane>
 
         <!-- 审批管理不移植：OMS 无审核流（设计文档决策 #2） -->
@@ -534,6 +540,13 @@ onActivated(() => {
 }
 
 /* 危险操作区 */
+.config-audit {
+  margin-top: 4px;
+  padding-left: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
 .danger-zone {
   max-width: 760px;
   padding: 16px 0;

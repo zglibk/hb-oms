@@ -4,6 +4,8 @@ import { DataSource, Repository } from 'typeorm';
 import { SystemConfig } from './entities/system-config.entity';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
 import { normalizeUploadUrl } from '../../common/utils/upload-url.util';
+import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { auditOnUpdate } from '../../common/utils/audit.util';
 
 const UPLOAD_URL_FIELDS = ['logoUrl', 'faviconUrl', 'loginBgUrl'] as const;
 
@@ -39,9 +41,16 @@ export class SystemConfigService {
   }
 
   /** 更新配置（传入的字段覆盖现有值） */
-  async update(dto: UpdateSystemConfigDto, userId: number): Promise<SystemConfig> {
+  async update(
+    dto: UpdateSystemConfigDto,
+    user: CurrentUserPayload,
+  ): Promise<SystemConfig> {
     const row = await this.get();
-    Object.assign(row, this.normalizeUploadFields({ ...dto }), { updatedBy: userId });
+    const audit = auditOnUpdate(user);
+    Object.assign(row, this.normalizeUploadFields({ ...dto }), {
+      updatedBy: audit.updaterId,
+      updaterName: audit.updaterName,
+    });
     const saved = await this.repo.save(row);
     return this.normalizeUploadFields(saved);
   }

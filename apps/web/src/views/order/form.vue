@@ -296,6 +296,9 @@
           </table>
         </el-card>
 
+        <!-- 编辑态才有审计信息（新建时还没落库） -->
+        <audit-info v-if="editId" :row="auditRow" />
+
         <div class="form-footer">
           <el-button size="small" @click="goBack">取消</el-button>
           <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
@@ -347,6 +350,8 @@ const upperFmt = (v: string) => (v ?? '').toUpperCase();
 const route = useRoute();
 const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
+/** 审计追溯原始行（编辑态由详情接口带回，走全局 AuditInfo 展示） */
+const auditRow = ref<any>(null);
 const orderNo = ref('');
 
 const pageLoading = ref(false);
@@ -508,6 +513,7 @@ async function init() {
     if (editId.value) {
       const row = await getOrderDetail(editId.value);
       orderNo.value = row.orderNo;
+      auditRow.value = row; // 底部审计条（创建人/更新人/时间）
       Object.assign(form, {
         poNo: row.poNo ?? '',
         productionNo: row.productionNo ?? '',

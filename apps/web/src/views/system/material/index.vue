@@ -42,7 +42,11 @@
       <el-table v-loading="loading" :data="list" border stripe @selection-change="onSelectionChange">
         <el-table-column type="selection" width="45" align="center" />
         <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" class-name="col-num" />
-        <el-table-column label="部件代码" prop="materialCode" width="150" />
+        <el-table-column label="部件代码" width="150">
+          <template #default="{ row }">
+            {{ row.materialCode }}<audit-info mode="inline" :row="row" />
+          </template>
+        </el-table-column>
         <el-table-column label="货号" prop="itemNo" width="130" />
         <el-table-column label="产品名称" prop="productName" min-width="90" />
         <el-table-column label="规格" prop="spec" width="90" />
@@ -86,7 +90,7 @@
                 type="primary"
                 class="btn-view"
                 :icon="View"
-                v-permission="'system:material'"
+                v-permission="'basic:material'"
                 @click="openDetail(row)"
               >详情</el-button>
               <el-button size="small" v-permission.disable="'material:update'" link type="primary" class="btn-edit" :icon="Edit" @click="openEdit(row)">编辑</el-button>
@@ -198,6 +202,7 @@
         <el-descriptions-item label="创建时间">{{ detailRow.createdAt ? formatDateTime(detailRow.createdAt) : '—' }}</el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detailRow.remark || '—' }}</el-descriptions-item>
       </el-descriptions>
+      <audit-info v-if="detailRow" :row="detailRow" :column="2" />
       <template #footer>
         <el-button size="small" @click="detailVisible = false">关闭</el-button>
       </template>

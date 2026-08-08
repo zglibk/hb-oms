@@ -83,7 +83,9 @@
           </template>
         </el-table-column>
         <el-table-column label="发坯单号" width="120" fixed="left">
-          <template #default="{ row }">{{ formatBlankNo(row.blankNo) }}</template>
+          <template #default="{ row }">
+            {{ formatBlankNo(row.blankNo) }}<audit-info mode="inline" :row="row" />
+          </template>
         </el-table-column>
         <el-table-column label="加工商" prop="processorName" min-width="130" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="表面处理" width="100">

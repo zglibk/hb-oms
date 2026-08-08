@@ -76,8 +76,24 @@ export class CustomerService {
   }
 
   /** 全量启用客户（订单表单下拉用） */
+  /**
+   * 全量启用客户（表单下拉用）。本接口刻意只要求登录（见 controller 注释），
+   * 故**只投影下拉真正需要的字段**：代码/名称用于检索显示，业务员/跟单员/
+   * 交货地址用于选中后带出默认值。联系人电话、备注、审计信息等不外露。
+   */
   async findAllEnabled() {
-    return this.repo.find({ where: { status: 1 }, order: { customerCode: 'ASC' } });
+    return this.repo.find({
+      select: [
+        'id',
+        'customerCode',
+        'customerName',
+        'salesman',
+        'merchandiser',
+        'deliveryAddress',
+      ],
+      where: { status: 1 },
+      order: { customerCode: 'ASC' },
+    });
   }
 
   async create(dto: CreateCustomerDto, user: CurrentUserPayload) {

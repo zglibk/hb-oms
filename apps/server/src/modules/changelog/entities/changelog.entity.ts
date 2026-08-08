@@ -36,6 +36,21 @@ export class Changelog {
   @Column({ type: 'tinyint', default: 1 })
   status: number;
 
+  @Column({ name: 'creator_id', type: 'int', nullable: true })
+  creatorId: number | null;
+
+  /** 创建人姓名快照（审计用，停用/删除用户后仍可追溯） */
+  @Column({ name: 'creator_name', type: 'varchar', length: 64, nullable: true })
+  creatorName: string | null;
+
+  /** 最后更新人 ID（审计用） */
+  @Column({ name: 'updated_by', type: 'int', nullable: true })
+  updaterId: number | null;
+
+  /** 最后更新人姓名快照 */
+  @Column({ name: 'updater_name', type: 'varchar', length: 64, nullable: true })
+  updaterName: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

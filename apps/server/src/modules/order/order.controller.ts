@@ -20,6 +20,10 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
+/**
+ * 读权限口径（§二）：列表/详情用菜单权限点 `order`，台账用 `ledger`。
+ * 只勾这两个菜单、不勾 order:* 按钮，即为「只读订单/台账」角色。
+ */
 @Controller('order')
 export class OrderController {
   constructor(
@@ -28,6 +32,7 @@ export class OrderController {
   ) {}
 
   @Get()
+  @RequirePermissions('order')
   async list(@Query() query: QueryOrderDto) {
     return this.service.findList(query);
   }
@@ -37,6 +42,7 @@ export class OrderController {
    * **必须注册在 `:id` 之前**，否则 /order/ledger 会被参数路由吞掉（ParseIntPipe 直接 400）。
    */
   @Get('ledger')
+  @RequirePermissions('ledger')
   async ledger(@Query() query: QueryLedgerDto) {
     return this.ledgerService.findLedger(query);
   }
@@ -46,6 +52,7 @@ export class OrderController {
    * 同样**必须在 `:id` 之前**注册。只读查询，不标 @OperationLog。
    */
   @Get('ledger/detail')
+  @RequirePermissions('ledger')
   async ledgerDetail(@Query() query: QueryLedgerDetailDto) {
     return this.ledgerService.findRowDetail(query.orderPartGroupId);
   }
@@ -72,6 +79,7 @@ export class OrderController {
   }
 
   @Get(':id')
+  @RequirePermissions('order')
   async detail(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);
   }

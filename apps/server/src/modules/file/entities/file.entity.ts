@@ -34,6 +34,13 @@ export class FileEntity {
   @Column({ name: 'creator_id', type: 'int', nullable: true })
   creatorId: number | null;
 
+  /**
+   * 上传人姓名快照。文件行只增不改（替换=新增一条），
+   * 故只带创建侧审计，不设 updated_by / updated_at。
+   */
+  @Column({ name: 'creator_name', type: 'varchar', length: 64, nullable: true })
+  creatorName: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
