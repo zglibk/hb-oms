@@ -190,7 +190,7 @@
                     {{ pwdStrength.label }}
                   </span>
                 </div>
-                <div class="pwd-tip">至少 8 位，含大小写/数字/特殊字符中的至少三种</div>
+                <div class="pwd-tip">至少 6 位，含大小写/数字/特殊字符中的至少三种</div>
               </el-form-item>
               <el-form-item label="确认新密码" prop="confirm">
                 <el-input v-model="pwdForm.confirm" type="password" show-password />
@@ -331,7 +331,7 @@ const pwdStrength = computed(() => {
   if (/[^a-zA-Z0-9]/.test(p)) types++;
   const len = p.length;
   let score = 0;
-  if (len >= 8 && types >= 3) score = 1;
+  if (len >= 6 && types >= 3) score = 1;
   if (len >= 10 && types >= 3) score = 2;
   if (len >= 12 && types >= 4) score = 3;
   if (len >= 14 && types >= 4) score = 4;

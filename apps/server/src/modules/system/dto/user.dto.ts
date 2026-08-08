@@ -18,7 +18,7 @@ export class CreateUserDto {
 
   @IsNotEmpty({ message: '初始密码必填' })
   @IsString()
-  @MinLength(8, { message: '密码至少8位' })
+  @MinLength(6, { message: '密码至少6位' })
   password: string;
 
   @IsNotEmpty({ message: '姓名必填' })
@@ -65,7 +65,7 @@ export class AssignRolesDto {
 export class ResetPasswordDto {
   @IsNotEmpty({ message: '新密码必填' })
   @IsString()
-  @MinLength(8, { message: '密码至少8位' })
+  @MinLength(6, { message: '密码至少6位' })
   password: string;
 }
 

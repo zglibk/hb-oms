@@ -7,7 +7,7 @@ export class ChangePasswordDto {
 
   @IsNotEmpty({ message: '请输入新密码' })
   @IsString()
-  @MinLength(8, { message: '新密码至少 8 位' })
+  @MinLength(6, { message: '新密码至少 6 位' })
   @MaxLength(128)
   newPassword: string;
 }

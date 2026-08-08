@@ -139,7 +139,7 @@
           <el-input v-model="form.username" name="username" autocomplete="off" :spellcheck="false" :disabled="!!editId" />
         </el-form-item>
         <el-form-item v-if="!editId" label="初始密码" prop="password">
-          <el-input v-model="form.password" name="password" autocomplete="new-password" placeholder="≥8位，首次登录需改密" />
+          <el-input v-model="form.password" name="password" autocomplete="new-password" placeholder="≥6位，首次登录需改密" />
         </el-form-item>
         <el-form-item label="姓名" prop="realName">
           <el-input v-model="form.realName" />
@@ -222,7 +222,7 @@ const form = reactive<any>({ username: '', password: '', realName: '', gender: 0
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
-  password: [{ required: true, min: 8, message: '密码至少8位', trigger: 'blur' }],
+  password: [{ required: true, min: 6, message: '密码至少6位', trigger: 'blur' }],
   realName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   roleIds: [{ required: true, type: 'array', min: 1, message: '请分配角色', trigger: 'change' }],
 };
@@ -300,10 +300,10 @@ async function onAssignSave() {
 
 async function onResetPwd(row: any) {
   const { value } = await ElMessageBox.prompt(
-    `为「${row.realName}」设置新密码（≥8位）`, '重置密码',
+    `为「${row.realName}」设置新密码（≥6位）`, '重置密码',
     {
       inputType: 'password',
-      inputValidator: (v) => (!!v && v.length >= 8 ? true : '密码至少8位'),
+      inputValidator: (v) => (!!v && v.length >= 6 ? true : '密码至少6位'),
     },
   );
   await resetUserPassword(row.id, value);

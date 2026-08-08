@@ -466,9 +466,9 @@ export class AuthService {
     return { success: true };
   }
 
-  /** 密码强度：≥8 位，含大小写/数字/特殊字符中至少三种（文档 19.3.2） */
+  /** 密码强度：≥6 位，含大小写/数字/特殊字符中至少三种（文档 19.3.2） */
   private validatePasswordStrength(pwd: string) {
-    if (pwd.length < 8) throw new BadRequestException('密码至少 8 位');
+    if (pwd.length < 6) throw new BadRequestException('密码至少 6 位');
     let kinds = 0;
     if (/[a-z]/.test(pwd)) kinds++;
     if (/[A-Z]/.test(pwd)) kinds++;
