@@ -27,8 +27,8 @@ export const PRESET_COLORS = [
   { label: '墨黑', value: '#303133' },
 ];
 
-/** 默认主题色：钢蓝（饱和度低于原 #1E5EFF，长时间阅读更舒适） */
-export const DEFAULT_COLOR = '#2563EB';
+/** 默认主题色：主题绿 */
+export const DEFAULT_COLOR = '#13A67D';
 
 const WHITE = '#FFFFFF';
 const BLACK = '#000000';

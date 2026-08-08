@@ -9,28 +9,51 @@
 
   * { box-sizing: border-box; margin: 0; }
   :root {
-    --brand: #1f5aa8; --brand-dark: #16406f; --bg: #f5f7fa; --card: #fff;
-    --text: #24292f; --muted: #6b7280; --line: #e5e8ee; --code-bg: #f0f2f6;
+    /* 与后台默认「主题绿」对齐 */
+    --brand: #13A67D; --brand-dark: #0B7A5C; --brand-soft: #E8F7F2;
+    --bg: #f4f6f5; --card: #fff;
+    --text: #1f2933; --muted: #6b7280; --line: #e2e8e6; --code-bg: #f0f4f2;
+    --shadow: 0 1px 2px rgba(15, 40, 32, .04), 0 8px 24px rgba(15, 40, 32, .05);
   }
-  html { scroll-behavior: smooth; scroll-padding-top: 68px; }
-  body { font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; }
-  .nav { position: sticky; top: 0; z-index: 50; background: var(--brand); color: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-  .nav-inner { max-width: 1580px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .brand { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .brand-mark { display: inline-block; background: #fff; color: var(--brand); font-weight: 800; border-radius: 6px; padding: 1px 7px; margin-right: 8px; font-size: 14px; }
-  .brand-sub { opacity: .72; font-size: 13px; margin-left: 6px; font-weight: 400; }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+  body {
+    font-family: "Segoe UI Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11, 122, 92, .96);
+    backdrop-filter: saturate(1.2) blur(8px);
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-mark {
+    display: inline-grid; place-items: center;
+    min-width: 32px; height: 26px; padding: 0 7px; margin-right: 8px;
+    background: #fff; color: var(--brand-dark); font-weight: 800; border-radius: 6px; font-size: 12px; letter-spacing: .04em;
+  }
+  .brand-sub { opacity: .7; font-size: 12px; margin-left: 6px; font-weight: 400; }
   .nav nav { display: flex; gap: 4px; }
-  .nav nav a { color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 15px; white-space: nowrap; }
-  .nav nav a:hover { background: rgba(255,255,255,.16); }
-  .nav nav a.active { background: rgba(255,255,255,.24); font-weight: 600; }
+  .nav nav a {
+    color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; white-space: nowrap; transition: background .15s ease;
+  }
+  .nav nav a:hover { background: rgba(255,255,255,.14); }
+  .nav nav a.active { background: rgba(255,255,255,.22); font-weight: 600; }
   .nav nav a.disabled { opacity: .55; cursor: not-allowed; }
-  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 28px 16px 36px; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 36px 16px 40px; }
 
-  .layout { max-width: 1580px; margin: 0 auto; display: flex; align-items: flex-start; gap: 0; }
-  aside { position: sticky; top: 56px; width: 300px; flex: none; max-height: calc(100vh - 56px); overflow-y: auto; padding: 20px 8px 40px 20px; font-size: 13.5px; }
+  .layout { max-width: 1280px; margin: 0 auto; display: flex; align-items: flex-start; gap: 0; }
+  aside { position: sticky; top: 56px; width: 280px; flex: none; max-height: calc(100vh - 56px); overflow-y: auto; padding: 20px 8px 40px 20px; font-size: 13.5px; }
   aside .toc-title { font-weight: 700; color: var(--muted); font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; }
   aside a { display: block; color: var(--text); text-decoration: none; padding: 4px 10px; border-left: 2px solid transparent; border-radius: 0 6px 6px 0; line-height: 1.5; margin: 2px 0; }
-  aside a:hover { background: #e9eef6; }
+  aside a:hover { background: var(--brand-soft); }
   aside a.toc-l3 { padding-left: 26px; color: var(--muted); }
   article { flex: 1; min-width: 0; background: var(--card); border-left: 1px solid var(--line); border-right: 1px solid var(--line); padding: 36px 44px 64px; }
   article h1 { font-size: 26px; border-bottom: 2px solid var(--brand); padding-bottom: 12px; margin-bottom: 18px; }
@@ -40,15 +63,15 @@
   article p { margin: 10px 0; }
   article ul, article ol { padding-left: 26px; margin: 10px 0; }
   article li { margin: 4px 0; }
-  article blockquote { border-left: 4px solid var(--brand); background: #f2f6fb; padding: 10px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; color: #3d4a5c; }
+  article blockquote { border-left: 4px solid var(--brand); background: var(--brand-soft); padding: 10px 16px; margin: 14px 0; border-radius: 0 8px 8px 0; color: #3d4a5c; }
   article blockquote p { margin: 4px 0; }
-  .anchor { visibility: hidden; margin-left: 8px; color: #9db4d0; text-decoration: none; font-size: .85em; }
+  .anchor { visibility: hidden; margin-left: 8px; color: #8fb9a8; text-decoration: none; font-size: .85em; }
   h1:hover .anchor, h2:hover .anchor, h3:hover .anchor, h4:hover .anchor { visibility: visible; }
   .table-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
   th, td { border: 1px solid var(--line); padding: 7px 12px; text-align: left; vertical-align: top; }
-  th { background: #eef3fa; color: var(--brand-dark); white-space: nowrap; }
-  tr:nth-child(even) td { background: #fafbfd; }
+  th { background: var(--brand-soft); color: var(--brand-dark); white-space: nowrap; }
+  tr:nth-child(even) td { background: #fafcfb; }
   code { background: var(--code-bg); border-radius: 4px; padding: 1px 6px; font-size: .9em; font-family: Consolas, "Courier New", monospace; }
   pre { background: #20293a; color: #dbe4f3; padding: 16px 18px; border-radius: 8px; overflow-x: auto; margin: 14px 0; line-height: 1.55; }
   pre code { background: none; padding: 0; color: inherit; font-size: 13px; }
@@ -1368,6 +1391,11 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>order</td>
 <td><code>GET /order/ledger/detail?orderPartGroupId=</code></td>
 <td>台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载</td>
+</tr>
+<tr>
+<td>order</td>
+<td><code>GET /order/ledger/export</code></td>
+<td>台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝</td>
 </tr>
 <tr>
 <td>outsource</td>

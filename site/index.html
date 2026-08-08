@@ -9,46 +9,163 @@
 
   * { box-sizing: border-box; margin: 0; }
   :root {
-    --brand: #1f5aa8; --brand-dark: #16406f; --bg: #f5f7fa; --card: #fff;
-    --text: #24292f; --muted: #6b7280; --line: #e5e8ee; --code-bg: #f0f2f6;
+    /* 与后台默认「主题绿」对齐 */
+    --brand: #13A67D; --brand-dark: #0B7A5C; --brand-soft: #E8F7F2;
+    --bg: #f4f6f5; --card: #fff;
+    --text: #1f2933; --muted: #6b7280; --line: #e2e8e6; --code-bg: #f0f4f2;
+    --shadow: 0 1px 2px rgba(15, 40, 32, .04), 0 8px 24px rgba(15, 40, 32, .05);
   }
-  html { scroll-behavior: smooth; scroll-padding-top: 68px; }
-  body { font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; }
-  .nav { position: sticky; top: 0; z-index: 50; background: var(--brand); color: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-  .nav-inner { max-width: 1580px; margin: 0 auto; padding: 0 20px; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .brand { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .brand-mark { display: inline-block; background: #fff; color: var(--brand); font-weight: 800; border-radius: 6px; padding: 1px 7px; margin-right: 8px; font-size: 14px; }
-  .brand-sub { opacity: .72; font-size: 13px; margin-left: 6px; font-weight: 400; }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+  body {
+    font-family: "Segoe UI Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11, 122, 92, .96);
+    backdrop-filter: saturate(1.2) blur(8px);
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-mark {
+    display: inline-grid; place-items: center;
+    min-width: 32px; height: 26px; padding: 0 7px; margin-right: 8px;
+    background: #fff; color: var(--brand-dark); font-weight: 800; border-radius: 6px; font-size: 12px; letter-spacing: .04em;
+  }
+  .brand-sub { opacity: .7; font-size: 12px; margin-left: 6px; font-weight: 400; }
   .nav nav { display: flex; gap: 4px; }
-  .nav nav a { color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 15px; white-space: nowrap; }
-  .nav nav a:hover { background: rgba(255,255,255,.16); }
-  .nav nav a.active { background: rgba(255,255,255,.24); font-weight: 600; }
+  .nav nav a {
+    color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; white-space: nowrap; transition: background .15s ease;
+  }
+  .nav nav a:hover { background: rgba(255,255,255,.14); }
+  .nav nav a.active { background: rgba(255,255,255,.22); font-weight: 600; }
   .nav nav a.disabled { opacity: .55; cursor: not-allowed; }
-  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 28px 16px 36px; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 36px 16px 40px; }
 
-  .hero { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: #fff; padding: 64px 20px 72px; text-align: center; }
-  .hero h1 { font-size: 30px; letter-spacing: 1px; }
-  .hero p { margin-top: 12px; opacity: .88; font-size: 16px; }
-  .hero .cta { display: inline-block; margin-top: 26px; background: #fff; color: var(--brand); font-weight: 600; text-decoration: none; padding: 10px 26px; border-radius: 8px; }
-  .hero .cta:hover { opacity: .92; }
-  main { max-width: 1580px; margin: -34px auto 0; padding: 0 20px 8px; }
-  .sec { margin-top: 22px; }
-  .sec:first-child { margin-top: 0; }
-  .sec > h2 { font-size: 17px; color: var(--brand-dark); margin: 0 0 12px; padding-left: 2px; }
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 22px; box-shadow: 0 2px 10px rgba(31,90,168,.06); }
-  .feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-  .feat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; box-shadow: 0 2px 10px rgba(31,90,168,.06); }
-  .feat h3 { font-size: 15px; color: var(--brand); margin-bottom: 6px; }
-  .feat p { font-size: 13.5px; color: var(--muted); }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; box-shadow: 0 2px 10px rgba(31,90,168,.06); }
-  .card h3 { font-size: 16px; color: var(--brand); margin-bottom: 8px; }
-  .card p { font-size: 14px; color: var(--muted); }
-  .steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
-  .step { background: #eef3fa; border: 1px solid #d7e3f2; color: var(--brand-dark); padding: 6px 14px; border-radius: 999px; white-space: nowrap; }
-  .step.opt { border-style: dashed; color: var(--muted); }
-  .arrow { color: #9db4d0; }
-  .panel-note { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .hero {
+    position: relative; overflow: hidden; color: #fff;
+    background:
+      radial-gradient(120% 80% at 12% 0%, rgba(255,255,255,.18) 0%, transparent 55%),
+      radial-gradient(90% 70% at 100% 30%, rgba(0,0,0,.18) 0%, transparent 50%),
+      linear-gradient(145deg, #16b289 0%, var(--brand) 42%, var(--brand-dark) 100%);
+    padding: clamp(48px, 8vw, 88px) 24px clamp(56px, 9vw, 96px);
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .22;
+    background-image:
+      linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(180deg, #000 20%, transparent 95%);
+  }
+  .hero-inner {
+    position: relative; max-width: 1120px; margin: 0 auto;
+    display: grid; gap: 18px; justify-items: start;
+    animation: rise .55s ease both;
+  }
+  .hero-brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: clamp(28px, 4.5vw, 42px); font-weight: 800; letter-spacing: .04em; line-height: 1.1;
+  }
+  .hero-brand span {
+    display: inline-grid; place-items: center;
+    width: 1.15em; height: 1.15em; border-radius: 12px;
+    background: #fff; color: var(--brand-dark); font-size: .55em; letter-spacing: 0;
+  }
+  .hero h1 {
+    max-width: 16em; font-size: clamp(22px, 3.2vw, 30px); font-weight: 600;
+    letter-spacing: .02em; line-height: 1.35;
+  }
+  .hero p {
+    max-width: 36em; margin: 0; opacity: .9;
+    font-size: clamp(14px, 1.5vw, 16px); line-height: 1.7;
+  }
+  .hero .cta {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 8px;
+    background: #fff; color: var(--brand-dark); font-weight: 700; text-decoration: none;
+    padding: 12px 22px; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .hero .cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.16); }
+  .hero .cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 8px; }
+  .sec { margin-top: 36px; animation: rise .55s ease both; }
+  .sec:nth-child(1) { animation-delay: .05s; }
+  .sec:nth-child(2) { animation-delay: .12s; }
+  .sec:nth-child(3) { animation-delay: .18s; }
+  .sec > h2 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    margin: 0 0 14px; letter-spacing: .02em;
+  }
+  .sec > h2 small {
+    display: block; margin-top: 4px; font-size: 13px; font-weight: 400;
+    color: var(--muted); letter-spacing: 0;
+  }
+
+  .flow {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .step {
+    background: var(--brand-soft); color: #065f46;
+    border: 1px solid rgba(19,166,125,.35);
+    padding: 8px 14px; border-radius: 999px; font-size: 13px; white-space: nowrap; font-weight: 600;
+  }
+  .step.opt { background: #fff; border: 1px dashed #9ca3af; color: #4b5563; font-weight: 500; }
+  .arrow { color: #6b8f80; font-size: 13px; }
+  .flow-note { width: 100%; margin-top: 4px; font-size: 13px; color: #4b5563; }
+
+  .metrics {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  }
+  .metric {
+    position: relative; padding: 18px 18px 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    border-top: 3px solid var(--brand);
+  }
+  .metric strong {
+    display: block; font-size: 18px; color: var(--brand-dark); margin-bottom: 6px; letter-spacing: .02em;
+  }
+  .metric p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  .feats {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  }
+  .feat {
+    padding: 16px 18px 16px 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    border-left: 3px solid var(--brand);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .feat:hover { background: #fbfdfc; border-color: rgba(19,166,125,.35); }
+  .feat h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; font-weight: 700; }
+  .feat p { font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 860px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .feats { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .nav-inner { padding: 0 16px; }
+    main { padding: 20px 16px 8px; }
+    .metrics { grid-template-columns: 1fr; }
+    .hero-brand { font-size: 28px; }
+  }
 </style>
 </head>
 <body>
@@ -64,73 +181,74 @@
       </nav>
     </div>
   </header>
-<div class="hero">
-  <h1>欢迎使用海宝五金订单跟踪系统</h1>
-  <p>从客户下单到成品出货，全过程一条主线记录；每张订单的订单数、完成数、库存数与欠数随时可查。</p>
-  <a class="cta" href="admin/">进入后台管理 →</a>
-</div>
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-brand"><span>HB</span>海宝 OMS</div>
+    <h1>订单跟踪，四数一眼清</h1>
+    <p>从客户下单到成品出货，全过程一条主线记录；订单数、完成数、库存数与欠数随时可查。</p>
+    <a class="cta" href="admin/">进入后台管理 →</a>
+  </div>
+</section>
 <main>
   <section class="sec">
-    <h2>业务主线</h2>
-    <div class="panel">
-      <div class="steps">
-        <span class="step">客户下单</span><span class="arrow">→</span>
-        <span class="step">创建订单</span><span class="arrow">→</span>
-        <span class="step opt">部件外发（可选）</span><span class="arrow">→</span>
-        <span class="step opt">外发回货（可选）</span><span class="arrow">→</span>
-        <span class="step">装配</span><span class="arrow">→</span>
-        <span class="step">成品入库</span><span class="arrow">→</span>
-        <span class="step">成品出库</span>
-      </div>
-      <p class="panel-note">外发与回货按需使用；不需要表面处理的部件组直接进入装配与入库环节。</p>
+    <h2>业务主线<small>外发与回货按需使用；无需表面处理的部件组可直达装配与入库</small></h2>
+    <div class="flow">
+      <span class="step">客户下单</span><span class="arrow">→</span>
+      <span class="step">创建订单</span><span class="arrow">→</span>
+      <span class="step opt">部件外发</span><span class="arrow">→</span>
+      <span class="step opt">外发回货</span><span class="arrow">→</span>
+      <span class="step">装配</span><span class="arrow">→</span>
+      <span class="step">成品入库</span><span class="arrow">→</span>
+      <span class="step">成品出库</span>
+      <p class="flow-note">虚线步骤为可选环节。</p>
     </div>
   </section>
 
   <section class="sec">
-    <h2>主要功能</h2>
+    <h2>四个核心数字<small>全系统统一折算为「支」，1 套 = 2 支</small></h2>
+    <div class="metrics">
+      <div class="metric"><strong>订单数</strong><p>客户订购数量，套/支自动换算。</p></div>
+      <div class="metric"><strong>完成数</strong><p>累计成品入库；生产欠数 = 订单数 − 完成数。</p></div>
+      <div class="metric"><strong>库存数</strong><p>当前成品结存，按部件组（分左右）实时聚合。</p></div>
+      <div class="metric"><strong>欠数</strong><p>双口径：生产欠数与发货欠数并列。</p></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>主要功能<small>覆盖接单、外发、装配、出入库与基础资料</small></h2>
     <div class="feats">
       <div class="feat">
         <h3>订单跟踪台账</h3>
-        <p>全系统的落点。按订单 → 产品 → 部件组逐层展开，实时给出订单数、完成数、库存数与欠数；发货欠数清零后订单自动完结，重新出现欠数自动重开。</p>
+        <p>全系统落点。按订单 → 产品 → 部件组展开，实时给出四数；发货欠数清零后自动完结，再欠自动重开。</p>
       </div>
       <div class="feat">
         <h3>订单管理</h3>
-        <p>订单 → 产品 → 部件组 → 部件四级录入，货号、规格、表面处理、交期一次登记；套/支自动换算（1 套 = 2 支），支持完结、重开与作废。</p>
+        <p>订单 → 产品 → 部件组 → 部件四级录入；货号、规格、表面处理、交期一次登记，支持完结、重开与作废。</p>
       </div>
       <div class="feat">
         <h3>外发管理</h3>
-        <p>部件外发全过程：开发坯单、登记发出、分批回货登记、关闭或作废，并可直接打印《电镀发外加工单》交供应商。</p>
+        <p>发坯单、发出、分批回货、关闭或作废；可打印《电镀发外加工单》交供应商。</p>
       </div>
       <div class="feat">
         <h3>装配管理</h3>
-        <p>按部件组分左右建立装配批次，登记计划开始、计划完成与实际完成日期；实际完成量即成品入库的可用额度。</p>
+        <p>按部件组分左右建装配批次，登记计划与实际完成；实际完成量即成品入库可用额度。</p>
       </div>
       <div class="feat">
         <h3>成品出入库</h3>
-        <p>成品入库、销售出库、期初录入与红字冲销四类单据；入库受装配完成量约束，单据确认后只能冲销、不能改数。</p>
+        <p>入库、出库、期初与红字冲销；入库受装配完成量约束，确认后只能冲销、不能改数。</p>
       </div>
       <div class="feat">
         <h3>成品库存 · 部件台账</h3>
-        <p>成品按订单部件组（分左右）实时结存；部件半成品另设属性台账，按部件、边别、材质、节数、产品类型、料厚、规格七维归集，不依赖订单。</p>
+        <p>成品按订单部件组结存；部件半成品按七维属性归集，不依赖订单。</p>
       </div>
       <div class="feat">
         <h3>期初录入</h3>
-        <p>系统上线时把手工账一次性搬进系统：成品期初可挂历史订单、也可只按属性登记；部件期初按七维属性累加入账。</p>
+        <p>上线时把手工账搬进系统：成品可挂历史订单或按属性登记；部件期初按七维累加。</p>
       </div>
       <div class="feat">
         <h3>基础数据 · 系统管理</h3>
-        <p>客户资料、部门信息、部件信息、开单信息与设备信息集中维护；用户、角色、菜单、字典与操作日志一体，内置 17 个岗位角色并支持数据范围控制。</p>
+        <p>客户、部门、部件、开单与设备集中维护；用户/角色/菜单/字典/日志一体，支持数据范围。</p>
       </div>
-    </div>
-  </section>
-
-  <section class="sec">
-    <h2>四个核心数字</h2>
-    <div class="cards">
-      <div class="card"><h3>订单数</h3><p>客户订购数量，统一折算为「支」；套/支自动换算，1 套 = 2 支。</p></div>
-      <div class="card"><h3>完成数</h3><p>累计成品入库数量，生产欠数 = 订单数 − 完成数。</p></div>
-      <div class="card"><h3>库存数</h3><p>当前成品结存，按订单部件组（卡口分左右）实时聚合。</p></div>
-      <div class="card"><h3>欠数</h3><p>双口径并列：生产欠数（还差多少没做完）与发货欠数（还欠客户多少货）。</p></div>
     </div>
   </section>
 </main>
