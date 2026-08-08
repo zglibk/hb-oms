@@ -189,9 +189,20 @@
               <div class="hint">正为增、负为减；不接受 0</div>
             </el-form-item>
           </el-col>
-          <el-col :span="24">
+          <!-- 调整原因收敛成几个预设，便于事后按类统计；选「其他」再补充具体原因，
+               否则流水上留一个光秃秃的「其他」等于没写，失去追溯意义 -->
+          <el-col :span="isOtherReason ? 10 : 24">
             <el-form-item label="调整原因" prop="reason">
-              <el-input v-model="form.reason" placeholder="如：期初补录 / 盘盈 / 录错纠正" maxlength="255" />
+              <el-select v-model="form.reason" placeholder="请选择" style="width: 100%">
+                <el-option v-for="r in PART_ADJUST_REASON_OPTIONS" :key="r" :label="r" :value="r" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="isOtherReason" :span="14">
+            <el-form-item label="具体原因" prop="reasonDetail" label-width="80px">
+              <el-input
+                v-model="form.reasonDetail" placeholder="请说明具体原因" maxlength="240" show-word-limit
+              />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -230,6 +241,8 @@ import {
   RAIL_SECTION_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   PART_ADJUST_SOURCE,
+  PART_ADJUST_REASON_OPTIONS,
+  PART_ADJUST_REASON_OTHER,
   partTypeLabel,
   sideLabel,
   railSectionLabel,
@@ -313,6 +326,8 @@ const form = reactive({
   dimensionMm: 0,
   delta: 0,
   reason: '',
+  /** 仅「其他」时使用；提交时与 reason 合并成一句落库 */
+  reasonDetail: '',
   remark: '',
 });
 
@@ -320,8 +335,20 @@ const rules: FormRules = {
   itemNo: [{ required: true, message: '请填写货号', trigger: 'blur' }],
   partType: [{ required: true, message: '请选择部件', trigger: 'change' }],
   delta: [{ required: true, message: '请填写调整量', trigger: 'blur' }],
-  reason: [{ required: true, message: '请填写调整原因', trigger: 'blur' }],
+  reason: [{ required: true, message: '请选择调整原因', trigger: 'change' }],
+  reasonDetail: [
+    {
+      validator: (_r: unknown, v: string, cb: (e?: Error) => void) =>
+        isOtherReason.value && !String(v ?? '').trim()
+          ? cb(new Error('选择「其他」时请说明具体原因'))
+          : cb(),
+      trigger: 'blur',
+    },
+  ],
 };
+
+/** 选了「其他」才展开具体原因输入框 */
+const isOtherReason = computed(() => form.reason === PART_ADJUST_REASON_OTHER);
 
 /** 既有行才能预览调整后余量（新建行基数未知） */
 const previewQty = computed(() =>
@@ -339,6 +366,7 @@ function openAdjust(row?: PartBalanceRow) {
   form.dimensionMm = row?.dimensionMm ?? 0;
   form.delta = 0;
   form.reason = '';
+  form.reasonDetail = '';
   form.remark = row?.remark ?? '';
   dialogVisible.value = true;
 }
@@ -361,7 +389,11 @@ async function onSubmit() {
       materialThickness: form.materialThickness.trim(),
       dimensionMm: form.dimensionMm || 0,
       delta: form.delta,
-      reason: form.reason.trim(),
+      // 「其他」拼上具体原因一起落库（存成「其他：xxx」），流水上既看得出归类、
+      // 又留得住细节；其余预设直接存类目名，便于事后按类统计
+      reason: isOtherReason.value
+        ? `${PART_ADJUST_REASON_OTHER}：${form.reasonDetail.trim()}`
+        : form.reason,
       remark: form.remark || undefined,
     });
     ElMessage.success(`已调整，当前余量 ${res.quantity} 支`);

@@ -111,6 +111,21 @@ export const ROLE_MAP: Record<string, string> = {
   admin: '系统管理员',
 };
 
+/**
+ * 部件余量「调整原因」预设项（仅前端使用，故不进共享包）。
+ *
+ * 后端**不做枚举校验**、`reason` 仍是自由文本：选「其他」时用户填的就是任意内容，
+ * 校验只能退化成「非空」，加了没有意义；期初模块也会自己传「期初录入」之类的文案。
+ * 这里的下拉是**引导**——让手工调整的原因收敛到可统计的几类，而不是硬闸门。
+ */
+export const PART_ADJUST_REASON_OTHER = '其他';
+export const PART_ADJUST_REASON_OPTIONS: string[] = [
+  '期初补录',
+  '盘盈盘亏',
+  '录错纠正',
+  PART_ADJUST_REASON_OTHER,
+];
+
 /** 取角色中文名，未知角色回退为原编码 */
 export function roleLabel(code: string): string {
   return ROLE_MAP[code] || code;
