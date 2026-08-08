@@ -37,7 +37,7 @@
           :default-active="activeMenu"
           :collapse="collapsed"
           :collapse-transition="false"
-          unique-opened
+          :unique-opened="!tourOpen && !tourExpanding"
           router
         >
           <!-- 首页：静态菜单项，不受权限控制 -->
@@ -209,8 +209,8 @@
   <el-tour
     v-model="tourOpen"
     :scroll-into-view-options="{ block: 'center' }"
-    @finish="finishTour"
-    @close="finishTour"
+    @finish="onFinishTour"
+    @close="onFinishTour"
   >
     <el-tour-step
       v-for="step in tourSteps"
@@ -252,7 +252,7 @@ const CACHED_PAGES = [
   'HomeDashboard',
 ];
 
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import { useUserStore } from '@/stores/user';
@@ -381,7 +381,13 @@ onMounted(() => {
 /* ===== 新手引导（el-tour）===== */
 const { tourOpen, startTour, finishTour, shouldAutoStart } = useTour();
 
-/** 候选步骤：按业务五步（手册章节）排序；target 为空 = 居中欢迎页 */
+/**
+ * 候选步骤：**顺着业务主线走一遍**，与操作手册章节一一对应（手册第 N 章 = 这里第 N 步），
+ * 用户跟完引导再去看手册不会错位。target 为空 = 居中欢迎页。
+ *
+ * 步骤会按当前用户实际可见的菜单动态过滤（见下方 tourSteps），
+ * 所以这里可以把全流程都写上，仓管员不会看到计划员的步骤。
+ */
 const TOUR_STEP_DEFS: Array<{
   path?: string;
   title: string;
@@ -390,22 +396,72 @@ const TOUR_STEP_DEFS: Array<{
   {
     title: '欢迎使用海宝订单跟踪系统',
     description:
-      '业务主线：录订单 → 部件外发（可选）→ 回货 → 成品入库 → 成品出库；台账随时告诉你每张订单的订单数/完成数/库存数/欠数。',
+      '这套系统回答一个问题：这张订单做完了多少、仓库还有多少、还欠客户多少。'
+      + '业务主线：录订单 → 部件外发（可选）→ 回货 → 装配 → 成品入库 → 成品出库。'
+      + '下面按这条主线带你认一遍菜单。',
   },
   {
     path: '/home',
-    title: '首页',
-    description: '登录后先看这里：后续将展示进行中订单、欠数与逾期提醒等销售视角汇总。',
+    title: '首页看板',
+    description:
+      '登录后的落地页：进行中订单数、总生产欠数、总发货欠数、逾期订单四张卡，'
+      + '下面三张待办列表——逾期未发货、7 天内临近交期、外发超期未回齐。只统计进行中的订单。',
+  },
+  {
+    path: '/order',
+    title: '第一步：订单管理',
+    description:
+      '录客户订单。结构是 订单 → 产品 → 部件组 → 部件行，部件行由系统自动展开。'
+      + '「部件组」是全系统的跟踪单位，外发/装配/出入库/台账都锚定它。',
+  },
+  {
+    path: '/outsource',
+    title: '第二步：外发管理（可选）',
+    description:
+      '需要电镀、喷涂等表面处理时开发坯单发给加工厂。'
+      + '发出数量由过磅重量 ÷ 单重自动折算，不是订单数量；回货可分多次登记。'
+      + '表面处理选「无」的产品不需要这一步。',
+  },
+  {
+    path: '/assembly',
+    title: '第三步：装配管理',
+    description:
+      '按部件组录装配批次，一组可分多批。'
+      + '关键：只有填了「实际完成」日期的批次才算装完，才能拿去入库——这是成品入库的闸门。',
+  },
+  {
+    path: '/finished-stock',
+    title: '第四步：成品出入库',
+    description:
+      '成品入库与销售出库。单据先存草稿，点「确认」才生效并扣减库存。'
+      + '已确认的单不能改也不能删，做错了开红字冲销单更正。',
+  },
+  {
+    path: '/ledger',
+    title: '订单跟踪台账（核心）',
+    description:
+      '按部件组一行，实时呈现 订单数 / 完成数 / 库存数 / 欠数。'
+      + '欠数分两个口径：生产欠数看还差多少没做完，发货欠数看还欠客户多少。'
+      + '展开行还能看到这个组的出入库、外发、装配三条流水。',
+  },
+  {
+    path: '/material',
+    title: '物料管理',
+    description:
+      '成品出入库、库存查询、部件台账都在这一组。'
+      + '系统上线时先用「期初录入」把手工账上的现有库存搬进来，台账才对得上。',
   },
   {
     path: '/basic',
     title: '基础数据',
-    description: '客户资料（支持 Excel 批量导入）、工艺信息（按生产图号维护，录订单自动带入）、物料档案都在这里。',
+    description:
+      '客户资料（支持 Excel 批量导入，选客户自动带出业务员/跟单员/交货地址）、部门信息、部件信息。'
+      + '工艺资料在「工艺管理 → 开单信息」，按生产图号维护，录订单填了图号会自动带入。',
   },
   {
     path: '/system',
     title: '系统管理（管理员）',
-    description: '开账号、配角色权限、数据字典与操作日志。',
+    description: '开账号、配角色权限、维护数据字典、查操作日志。改完权限当事人要重新登录才生效。',
   },
 ];
 
@@ -430,17 +486,50 @@ const tourSteps = computed(() => {
   steps.push({
     title: '随时求助',
     description:
-      '忘了怎么操作？点这里打开「操作手册」按步骤查；想再看一遍本引导，同样在这里点「新手引导」。祝使用顺利！',
+      '忘了怎么操作？点这里打开「操作手册」——章节顺序和刚才这一遍完全对应，'
+      + '每章都有字段说明和常见问题。想再看一遍本引导，同样在这里点「新手引导」。祝使用顺利！',
     target: () => document.querySelector('[data-tour="user-info"]') as HTMLElement,
   });
   return steps;
 });
 
-function onStartTour() {
+/** 引导期间临时关掉手风琴，让所有涉及的父级菜单同时展开（见 onStartTour） */
+const tourExpanding = ref(false);
+
+async function onStartTour() {
   userPopoverVisible.value = false;
   // 侧栏收起时菜单文字不可见，引导前强制展开
   if (collapsed.value && !isMobile.value) collapsed.value = false;
+
+  // 引导要高亮的多是二级菜单（订单/外发/装配/出入库），父级 sub-menu 折叠时
+  // 这些节点在 DOM 里但尺寸是 0×0，el-tour 会把气泡定位到左上角空白处。
+  // 又因为 el-menu 开了 unique-opened（手风琴），逐个 open 会互相顶掉，
+  // 故引导期间先关掉手风琴，把用到的父级一次性全部展开。
+  tourExpanding.value = true;
+  await nextTick();
+  const ancestorIds = new Set<number>();
+  TOUR_STEP_DEFS.forEach((def) => {
+    if (def.path) {
+      findAncestorMenuIds(menus.value, def.path).forEach((id) => ancestorIds.add(id));
+    }
+  });
+  ancestorIds.forEach((id) => menuRef.value?.open(String(id)));
+  // el-menu 展开是 collapse 过渡（约 300ms），过早开始会拿到动画中途的坐标
+  await new Promise((resolve) => setTimeout(resolve, 360));
   startTour();
+}
+
+/** 引导结束：恢复手风琴，只保留当前路由所属的父级展开 */
+function onFinishTour() {
+  finishTour();
+  tourExpanding.value = false;
+  const keep = new Set(findAncestorMenuIds(menus.value, activeMenu.value).map(String));
+  menus.value.forEach(function closeAll(node: MenuNode) {
+    if (node.children?.length) {
+      if (!keep.has(String(node.id))) menuRef.value?.close(String(node.id));
+      node.children.forEach(closeAll);
+    }
+  });
 }
 
 function goProfile() {
@@ -460,8 +549,9 @@ async function onLogout() {
 
 function openManual() {
   userPopoverVisible.value = false;
-  // 操作手册随 M2+ 功能完善后提供；先跳前台设计文档页
-  window.open('/oms/design-doc.html', '_blank');
+  // manual.html 放在 public/ 下，随构建原样拷进 dist，故用 BASE_URL 拼绝对路径
+  // （生产 base 是 /oms/admin/，开发是 /；写死任一个都会在另一端 404）
+  window.open(`${import.meta.env.BASE_URL}manual.html`, '_blank');
 }
 </script>
 

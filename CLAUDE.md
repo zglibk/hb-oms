@@ -68,7 +68,8 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 开发期 Vite proxy 将 `/api`、`/uploads` 代理到 `localhost:8100`；`@` 别名指向 `src/`。生产构建 `base = '/oms/admin/'`。
 - 状态用 Pinia（`stores/user.ts` 含 token/权限/菜单）。
 - **懒加载 chunk 失效兜底**（`router/index.ts` 的 `router.onError`）：部署脚本会 `rm -rf web-dist/assets` 再解包新产物，**发版前打开的页面**持有的旧哈希 chunk 全部消失；此时请求老 chunk 会被 Nginx 的 SPA 规则回吐 `index.html`（`Content-Type: text/html`），动态 import 因 MIME 不符而 reject，vue-router **中止导航、页面原地不动**，用户以为按钮失灵（2026-08-06 发版后实测复现，退出按钮首当其冲）。兜底逻辑识别到 chunk 加载失败即带目标路径硬跳转一次，sessionStorage 打标防死循环，导航成功后清标。**新增懒加载路由无需额外处理；但不要删掉这段 onError**。
-- 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
+- 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart`、`AppStatCard` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
+- **新手引导与操作手册是一对，改功能要一起改**：引导（`layout/index.vue` 的 `TOUR_STEP_DEFS`，el-tour，按业务主线高亮侧栏菜单，步骤按用户可见菜单动态过滤）与手册（`apps/web/public/manual.html`，纯静态、按业务时间线分章）**章节顺序一一对应**，引导最后一步就指向手册。**任何改动用户操作方式的功能，必须同步更新手册对应章节**；引导内容大改时递增 `useTour.ts` 的 `TOUR_DONE_KEY` 版本号（当前 `hb_mes_tour_done_v2`）让老用户重看。手册链接一律用 `${import.meta.env.BASE_URL}manual.html` 拼，**别写死**（生产 base 是 `/oms/admin/`、开发是 `/`）。
 - `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
 - 主题：侧栏固定深色（底 `#1E293B`、logo 区 `#16202E`、子菜单 `#192433`、hover `#263349`、激活 `#1C3462` + 左侧 4.5px `#165DFF` 竖条），标题行下分隔线 `#334155`；「更换主题」只影响 Element 主色，不改侧栏配色。
 
@@ -326,7 +327,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、数量修正、打印 | ✅ 已完成 |
 | M3.5 装配 | 装配批次 CRUD（一组多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
 | M4 出入库+台账 | 出入库单、确认/红字冲销（支持部分冲销）、**装配入库闸门**（复用 `assembly-quota.util.ts`）、balance、库存查询、**订单跟踪台账** + 口径核算脚本 | ✅ 已完成 |
-| M5 期初+看板 | 补录订单、成品/部件期初、部件台账、首页看板（✅）；剩 Excel 导出（2e）、新手引导（2g）、操作手册（2h） | 🔵 进行中 |
+| M5 期初+看板 | 补录订单、成品/部件期初、部件台账、首页看板、台账展开与合并、新手引导、操作手册均已完成；**仅剩台账 Excel 导出（2e），已确认暂缓** | 🔵 仅剩 2e |
 
 期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉。
 
@@ -387,9 +388,9 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2c | 期初录入 opening | 三类期初（成品挂订单 / 成品纯属性 / 部件）+ 订单「期初补录」开关全部落地；纯属性行经 `createOpeningBalance` 走通，部件期初整批全有全无 | ✅ 已完成（2026-08-07） |
 | 2d | 首页看板 dashboard | `GET /dashboard/summary` + 首页四卡三列表已落地（§5.2，不做 ECharts 大屏）。**欠数口径复用 order-owed.util 的单据族 SQL**，与台账、订单自动完结同一事实源；两处刻意的差异见 dashboard.service 头注释（看板只看进行中 + 欠数逐组取正） | ✅ 已完成（2026-08-07） |
 | 2e | **台账 Excel 导出** | §5.1 要求，未实现。`exceljs` 已在依赖、物料/字典/开单信息均已有导出可参照，主要工作是列序对齐手工台账 | ⬜ 待 M5 |
-| 2f | 台账行内展开 / 跨组合并单元格 | §5.1 要求可展开看该组出入库·外发·装配流水，且同产品行多组时产品级列跨行合并。均未做，属体验增强，不影响四数正确性 | ⬜ 低优先级 |
-| 2g | 新手引导步骤停留在 M1 | `TOUR_STEP_DEFS` 只有 首页/基础数据/系统管理，**整条业务主线（订单→外发→装配→出入库→台账）一步都没有**；文案仍称「工艺信息」（已改名开单信息）。改内容需递增 `hb_mes_tour_done_v1` 版本号 | ⬜ 待 M5 |
-| 2h | 操作手册缺失 | hb-oms 无 `public/manual.html`（hb-mes 有），「操作手册」按钮当前跳前台设计文档页，是占位 | ⬜ 待 M5 |
+| 2f | 台账行内展开 / 跨组合并单元格 | 均已落地。展开走独立接口 `GET /order/ledger/detail?orderPartGroupId=`（**按需加载**，不随列表返回——一页几十行全查三张流水太重），口径与台账主表一致（成品只取已确认、外发排除已作废、装配按 actual_date 派生完成态）。跨行合并只合并**相邻**的同 `orderProductId` 行：排序由服务端决定，万一同产品的组没挨着，宁可不合并也不能把中间夹着的别的产品错并进来 | ✅ 已完成（2026-08-08） |
+| 2g | 新手引导 | 已补成完整业务主线十步（首页看板→订单→外发→装配→出入库→台账→物料→基础数据→系统管理），章节顺序与操作手册一一对应；过时文案（工艺信息/物料档案/「首页后续将展示」）一并订正；版本号递增到 `hb_mes_tour_done_v2` 让老用户重看。**踩坑**：引导目标多为二级菜单，父级 sub-menu 折叠时节点在 DOM 里但尺寸 0×0，el-tour 会把气泡定位到左上角空白；又因 el-menu 开了 `unique-opened`（手风琴）逐个 open 会互相顶掉。解法是引导期间把 `unique-opened` 置 false 并一次性展开全部相关父级、等 360ms 过渡结束再 startTour，结束时恢复手风琴并只留当前路由的父级 | ✅ 已完成（2026-08-08） |
+| 2h | 操作手册 | `apps/web/public/manual.html` 已落地：11 章按业务时间线组织（快速上手→录订单→外发→装配→出入库→台账→看板→期初→基础数据→管理员→FAQ），顶栏搜索 + 侧栏目录 + 滚动高亮，纯静态零依赖。用户面板「操作手册」改指 `${import.meta.env.BASE_URL}manual.html`（**不要写死路径**——生产 base 是 `/oms/admin/`、开发是 `/`，写死任一个都会在另一端 404）。**功能改动涉及用户操作时须同步更新手册对应章节** | ✅ 已完成（2026-08-08） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |
 | 5 | 外发回货验收(FQC) | V1 仅用备注承载，不独立建模 | 📘 V1 不做 |
