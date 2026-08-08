@@ -124,7 +124,7 @@ export class FinishedStockService {
     });
   }
 
-  /** 库存查询：余额行 + 订单侧展示信息 */
+  /** 成品库存（只读结存查询）：余额行 + 订单侧展示信息 */
   async findBalance(query: QueryBalanceDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;

@@ -132,7 +132,7 @@ export class QueryFinishedDocDto {
   @IsOptional() @IsDateString() dateTo?: string;
 }
 
-/** 库存查询：按余额行，可按部件组/属性筛选 */
+/** 成品库存查询：按余额行，可按部件组/属性筛选 */
 export class QueryBalanceDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
 

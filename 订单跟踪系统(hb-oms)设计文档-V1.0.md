@@ -536,14 +536,14 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id` | 装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束 |
 | assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
 | finished-stock | `POST /finished-stock`（建单含明细）、`PUT /finished-stock/:id`（仅草稿）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/:id` | confirm 入库时校验装配闸门（§4.5）并驱动余额；reverse=生成红字单并自动确认，支持按行部分冲销；已确认单禁改禁作废 |
-| finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 库存查询；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
+| finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 成品库存（只读结存查询）；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
 | system | 用户/角色/菜单/字典/物料 CRUD | 照搬 hb-mes system 模块裁剪 |
 | dashboard | `GET /dashboard/summary` | 首页看板汇总 |
 | file / export | 上传 / Excel 导出 | 照搬 hb-mes 模式 |
 
-**前端页面清单**：订单管理（列表/表单/详情/附件）、**订单跟踪台账**、外发管理（单据/发出/回货登记/打印发坯单）、**装配管理**（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、库存查询、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。
+**前端页面清单**：订单管理（列表/表单/详情/附件）、**订单跟踪台账**、外发管理（单据/发出/回货登记/打印发坯单）、**装配管理**（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。
 
 ---
 
@@ -553,11 +553,11 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 2. **出库确认**校验结存充足（按 order_part_group_id + side + batch_no 定位 balance），不足拒绝。
 3. **外发明细行**被回货登记引用后禁止删除；外发单已有回货禁止作废；发出数量修改需重算回齐状态。
 4. **订单修改限制**：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。
-5. **卡口守恒**：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，库存查询可按边别下钻。
+5. **卡口守恒**：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，「成品库存」页可按边别下钻。
 6. **回货超发出**允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。
 7. **期初补录订单**（is_opening=1）免非关键必填校验，但四数口径与正常订单完全一致。
 8. **并发**：单号采番走 NumberGeneratorService 原子自增；余额增减在 `dataSource.transaction` 内行锁（`SELECT ... FOR UPDATE`）后更新，防并发超扣。
-9. **纯属性期初行**不参与任何订单欠数，仅计入库存查询总量。
+9. **纯属性期初行**不参与任何订单欠数，仅计入成品库存总量。
 10. **产品类型组合串**一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。
 11. **客户资料**被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。
 12. **工艺信息**被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。

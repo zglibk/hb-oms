@@ -143,7 +143,7 @@
     <a class="toc-item toc-sub" data-key="成品入库 确认 草稿" onclick="jump('ch4-1')">4.1 成品入库</a>
     <a class="toc-item toc-sub" data-key="销售出库 库存不足" onclick="jump('ch4-2')">4.2 销售出库</a>
     <a class="toc-item toc-sub" data-key="做错了 红字冲销 部分冲销" onclick="jump('ch4-3')">4.3 单据做错了：红字冲销</a>
-    <a class="toc-item toc-sub" data-key="库存查询 结存 批次" onclick="jump('ch4-4')">4.4 库存查询</a>
+    <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次" onclick="jump('ch4-4')">4.4 成品库存</a>
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
@@ -203,7 +203,7 @@
         <tbody>
           <tr><td>业务员 / 跟单员</td><td>录订单、查台账回复客户交期、看首页逾期提醒</td><td>第1、5、6章</td></tr>
           <tr><td>计划员</td><td>开发坯单外发、登记回货、录装配批次</td><td>第2、3章</td></tr>
-          <tr><td>仓管员</td><td>成品入库、销售出库、库存查询、期初录入</td><td>第4、7章</td></tr>
+          <tr><td>仓管员</td><td>成品入库、销售出库、成品库存、期初录入</td><td>第4、7章</td></tr>
           <tr><td>经理层</td><td>首页看板、台账筛选与汇总</td><td>第5、6章</td></tr>
           <tr><td>系统管理员</td><td>开账号配权限、维护字典与基础数据</td><td>第8、9章</td></tr>
         </tbody>
@@ -473,8 +473,9 @@
       </ol>
       <p>草稿状态的单据不用这么麻烦，直接编辑或作废即可。</p>
 
-      <h2 class="section__title" id="ch4-4">4.4 库存查询</h2>
-      <p>菜单位置：<strong>物料管理 → 库存查询</strong>。按部件组（卡口分左右）显示当前结存，可按客户、订单、型号等筛选。</p>
+      <h2 class="section__title" id="ch4-4">4.4 成品库存</h2>
+      <p>菜单位置：<strong>物料管理 → 成品库存</strong>。按部件组（卡口分左右）显示当前结存，可按客户、订单、型号等筛选。</p>
+      <div class="alert alert--info">这一页<strong>只能看不能改</strong>：成品结存是出入库单据算出来的，改数一律走入库单/出库单/红字冲销。这一点和「部件台账」不同——部件台账可以手工调整。</div>
       <p>单号前缀速查：</p>
       <table class="field-table">
         <thead><tr><th>前缀</th><th>单据</th></tr></thead>

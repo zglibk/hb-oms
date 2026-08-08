@@ -21,7 +21,7 @@ export class FinishedStockController {
     return this.service.findList(query);
   }
 
-  /** 库存查询；注册在 :id 之前，避免被参数路由拦截 */
+  /** 成品库存（结存查询）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('balance')
   async balance(@Query() query: QueryBalanceDto) {
     return this.service.findBalance(query);

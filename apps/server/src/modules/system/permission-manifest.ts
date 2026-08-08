@@ -75,7 +75,7 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
   { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
 
-  { perm_code: 'stock-balance', perm_name: '库存查询', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
+  { perm_code: 'stock-balance', perm_name: '成品库存', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
 
   { perm_code: 'part-stock', perm_name: '部件台账', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/part-stock', component: 'part-stock/index', icon: 'Grid', sort: 3 },
   { perm_code: 'part-stock:adjust', perm_name: '调整部件余量', perm_type: 2, parent_code: 'part-stock', sort: 1 },

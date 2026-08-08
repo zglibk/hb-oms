@@ -217,12 +217,12 @@
 <tr>
 <td>12</td>
 <td>装配车间</td>
-<td>产品行字段 <code>assembly_workshop</code>（字典：装一~装八，可扩展）作为计划属性与台账列；装配批次带车间字段，默认继承产品行、可覆写</td>
+<td><strong>仅批次级</strong>（<code>t_assembly_batch.workshop</code>，字典：装一~装八，可扩展）。<del>产品行 assembly_workshop</del> 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该部件组各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配</td>
 </tr>
 <tr>
 <td>13</td>
 <td>单号展示</td>
-<td>手工台账「订单编号」（如 <code>GLI46212-A</code>，客户前缀+业务自编后缀）= 产品行<strong>生产单号 production_no</strong>；台账默认展示此号，ORD 系统采番号仅内部定位用</td>
+<td>手工台账「订单编号」（如 <code>GLI46212-A</code>，客户前缀+业务自编后缀）= <strong>订单级生产单号 t_order.production_no</strong>（2026-08-07 由产品行上移，与 PO# 一对一——一张订单不会有两个生产单号）；台账默认展示此号，ORD 系统采番号仅内部定位用</td>
 </tr>
 </tbody></table></div>
 <h3 id="21-统一口径">2.1 统一口径<a class="anchor" href="#21-统一口径" aria-hidden="true">#</a></h3>
@@ -463,7 +463,12 @@
 <tr>
 <td>po_no</td>
 <td>varchar(64)</td>
-<td>PO#（客户单号/合同号）</td>
+<td>PO#（客户订单文件上的订单编号，手工填写；与 production_no 一对一）</td>
+</tr>
+<tr>
+<td>production_no</td>
+<td>varchar(64)</td>
+<td><strong>生产单号（订单级）</strong>，手工填写；对应手工台账「订单编号」如 <code>GLI46212-A</code>，-A/-B 后缀由业务自编；<strong>台账默认展示此号</strong>，ORD 系统号仅内部定位</td>
 </tr>
 <tr>
 <td>customer_id / customer_name</td>
@@ -603,14 +608,19 @@
 <td><strong>支数口径</strong>（服务端计算冗余）：unit=套 → order_qty×2，unit=支 → order_qty。台账「订单数」即此值</td>
 </tr>
 <tr>
-<td>production_no</td>
-<td>varchar(64)</td>
-<td>生产单号（手工填写，产品行级，同订单内不同产品行可不同；对应手工台账「订单编号」如 <code>GLI46212-A</code>，-A/-B 后缀由业务自编；<strong>台账默认展示此号</strong>，ORD 系统号仅内部用）</td>
+<td><del>production_no</del></td>
+<td>—</td>
+<td><strong>【已删除 2026-08-07】</strong> 已上移订单级 <code>t_order.production_no</code>（migration-drop-deprecated-order-cols.sql）</td>
 </tr>
 <tr>
-<td>assembly_workshop</td>
-<td>varchar(32)</td>
-<td>装配车间（字典 <code>assembly_workshop</code>：装一~装八，可扩展）；计划属性，台账列展示；装配批次默认继承、可覆写</td>
+<td><del>assembly_workshop</del></td>
+<td>—</td>
+<td><strong>【已删除 2026-08-07】</strong> 订单环节不安排装配车间，改由装配批次 <code>t_assembly_batch.workshop</code> 录入</td>
+</tr>
+<tr>
+<td>customer_drawing_no</td>
+<td>varchar(128)</td>
+<td><strong>客户图号</strong>：客户来图上的图号；区别于部件组的 <code>drawing_no</code>（生产图号，内部转化的技术图纸）</td>
 </tr>
 <tr>
 <td>delivery_date</td>
@@ -804,7 +814,7 @@
 <tr>
 <td>production_no</td>
 <td>varchar(64)</td>
-<td>生产单号（自产品行快照）</td>
+<td>生产单号（自订单 <code>t_order.production_no</code> 快照）</td>
 </tr>
 <tr>
 <td>product_model</td>
@@ -914,7 +924,7 @@
 <tr>
 <td>workshop</td>
 <td>varchar(32)</td>
-<td>装配车间（字典 <code>assembly_workshop</code>）；默认继承产品行 assembly_workshop，可覆写（实际在哪装）</td>
+<td>装配车间（字典 <code>assembly_workshop</code>）；<strong>批次录入时指定</strong>（订单环节不再预设计划车间），默认沿用该组最近一条批次的车间</td>
 </tr>
 <tr>
 <td>plan_start_date</td>
@@ -1229,7 +1239,7 @@
 </tr>
 <tr>
 <td>订单编号</td>
-<td>t_order_product.production_no（生产单号，台账默认展示；ORD 系统号仅内部）</td>
+<td>t_order.production_no（订单级生产单号，台账默认展示；ORD 系统号仅内部）</td>
 </tr>
 <tr>
 <td>产品编码</td>
@@ -1265,7 +1275,7 @@
 </tr>
 <tr>
 <td>装配车间</td>
-<td>t_order_product.assembly_workshop（批次覆写时展示批次值）</td>
+<td>聚合该部件组各装配批次的 t_assembly_batch.workshop（多批不同车间则并列显示）</td>
 </tr>
 <tr>
 <td>成品入库</td>
@@ -1315,7 +1325,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 ⚠️ 这与 §4.4 入库闸门的「已入库量」<strong>故意不同</strong>——闸门必须排除期初，否则「装配 0 + 期初 N」的组额度恒为 −N、永久挡死后续正常入库。两处服务于不同问题，勿&quot;统一&quot;。</li>
 <li>同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。</li>
 <li>装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。</li>
-<li>台账行内可展开：该组的出入库流水、外发流水、装配批次明细。</li>
+<li>台账行内可展开：该组的出入库流水、外发流水、装配批次明细。走独立接口 <code>GET /order/ledger/detail?orderPartGroupId=</code>，<strong>展开时才加载</strong>（一页几十行随列表全查三张流水太重）。</li>
+<li>同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单编号/产品编码/规格/数量单位/表面处理/订单交期）<strong>跨行合并</strong>，观感对齐手工台账；仅合并相邻的同产品行。</li>
 <li>筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date &lt; 今天 且 发货欠数 &gt; 0）、表面处理（字典）、是否出口、产品类型（多选组合按<strong>包含匹配</strong>：FIND_IN_SET 单值命中即入选）、装配车间。</li>
 <li>支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。</li>
 </ul>
@@ -1345,13 +1356,18 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 </tr>
 <tr>
 <td>order</td>
-<td><code>POST /order</code>、<code>PUT /order/:id</code>、<code>GET /order</code>、<code>GET /order/:id</code>、<code>POST /order/:id/finish</code>、<code>POST /order/:id/reopen</code>、<code>POST /order/:id/cancel</code></td>
-<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7</td>
+<td><code>POST /order</code>、<code>PUT /order/:id</code>、<code>GET /order</code>、<code>GET /order/:id</code>、<code>POST /order/:id/finish</code>、<code>POST /order/:id/reopen</code>、<code>DELETE /order/:id</code></td>
+<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。<strong>DELETE 于 2026-08-07 取代原 <code>/cancel</code></strong>：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；<code>ORDER_STATUS.CANCELLED</code> 枚举保留供历史数据</td>
 </tr>
 <tr>
 <td>order</td>
 <td><code>GET /order/ledger</code></td>
 <td><strong>订单跟踪台账</strong>（§5.1 聚合，核心接口）</td>
+</tr>
+<tr>
+<td>order</td>
+<td><code>GET /order/ledger/detail?orderPartGroupId=</code></td>
+<td>台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载</td>
 </tr>
 <tr>
 <td>outsource</td>
@@ -1396,7 +1412,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <tr>
 <td>finished-stock</td>
 <td><code>GET /finished-stock/balance</code>、<code>GET /finished-stock/group-options</code></td>
-<td>库存查询；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行</td>
+<td>成品库存（只读结存查询）；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行</td>
 </tr>
 <tr>
 <td>opening</td>
@@ -1424,7 +1440,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>照搬 hb-mes 模式</td>
 </tr>
 </tbody></table></div>
-<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、外发管理（单据/发出/回货登记/打印发坯单）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、库存查询、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
+<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、外发管理（单据/发出/回货登记/打印发坯单）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
 <hr>
 <h2 id="7-边界与不变式">7. 边界与不变式<a class="anchor" href="#7-边界与不变式" aria-hidden="true">#</a></h2>
 <ol>
@@ -1432,11 +1448,11 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <li><strong>出库确认</strong>校验结存充足（按 order_part_group_id + side + batch_no 定位 balance），不足拒绝。</li>
 <li><strong>外发明细行</strong>被回货登记引用后禁止删除；外发单已有回货禁止作废；发出数量修改需重算回齐状态。</li>
 <li><strong>订单修改限制</strong>：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。</li>
-<li><strong>卡口守恒</strong>：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，库存查询可按边别下钻。</li>
+<li><strong>卡口守恒</strong>：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，「成品库存」页可按边别下钻。</li>
 <li><strong>回货超发出</strong>允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。</li>
 <li><strong>期初补录订单</strong>（is_opening=1）免非关键必填校验，但四数口径与正常订单完全一致。</li>
 <li><strong>并发</strong>：单号采番走 NumberGeneratorService 原子自增；余额增减在 <code>dataSource.transaction</code> 内行锁（<code>SELECT ... FOR UPDATE</code>）后更新，防并发超扣。</li>
-<li><strong>纯属性期初行</strong>不参与任何订单欠数，仅计入库存查询总量。</li>
+<li><strong>纯属性期初行</strong>不参与任何订单欠数，仅计入成品库存总量。</li>
 <li><strong>产品类型组合串</strong>一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。</li>
 <li><strong>客户资料</strong>被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。</li>
 <li><strong>工艺信息</strong>被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。</li>
