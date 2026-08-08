@@ -44,6 +44,10 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="reload">查询</el-button>
+          <el-button
+            size="small" v-permission="'ledger:export'" plain :icon="Download"
+            :loading="exporting" @click="onExport"
+          >导出</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -248,8 +252,10 @@
 <script setup lang="ts">
 import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import {
   Search,
+  Download,
   Document,
   Goods,
   CircleCheckFilled,
@@ -260,6 +266,7 @@ import {
 import {
   getLedger,
   getLedgerRowDetail,
+  exportLedger,
   type LedgerRow,
   type LedgerRowDetail,
   type LedgerSummary,
@@ -377,6 +384,39 @@ const productSpans = computed(() => {
   }
   return spans;
 });
+
+/* ===== 导出 Excel ===== */
+const exporting = ref(false);
+async function onExport() {
+  if (!total.value) {
+    ElMessage.warning('当前筛选无台账数据，无需导出');
+    return;
+  }
+  exporting.value = true;
+  try {
+    // 只传筛选条件，不传分页——导出的是当前筛选的全量，不是当前这一页
+    const blob = await exportLedger({
+      keyword: query.keyword || undefined,
+      salesman: query.salesman || undefined,
+      merchandiser: query.merchandiser || undefined,
+      surfaceType: query.surfaceType,
+      assemblyWorkshop: query.assemblyWorkshop,
+      productType: query.productType,
+      onlyOwed: query.onlyOwed,
+      onlyOverdue: query.onlyOverdue,
+      deliveryFrom: deliveryRange.value?.[0],
+      deliveryTo: deliveryRange.value?.[1],
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `订单跟踪台账_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    exporting.value = false;
+  }
+}
 
 function spanMethod({ column, rowIndex }: { column: { label?: string }; rowIndex: number }) {
   if (!column?.label || !PRODUCT_LEVEL_COLS.has(column.label)) return;

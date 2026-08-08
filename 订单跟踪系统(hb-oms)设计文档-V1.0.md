@@ -528,6 +528,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
 | order | `GET /order/ledger/detail?orderPartGroupId=` | 台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载 |
+| order | `GET /order/ledger/export` | 台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝 |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
 | outsource | `GET /outsource/print/:id` | 发坯单打印数据（后续可加 Excel 导出） |

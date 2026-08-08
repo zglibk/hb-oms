@@ -28,6 +28,9 @@ export interface PermSeed {
 export const PERMISSIONS: PermSeed[] = [
   // ===== 订单跟踪台账：系统核心产出，按设计文档 §8 作「首页级入口」置于一级菜单最前 =====
   { perm_code: 'ledger', perm_name: '订单跟踪台账', perm_type: 1, menu_path: '/ledger', component: 'ledger/index', icon: 'DataAnalysis', sort: 4 },
+  // 按钮权限（perm_type=2）不进菜单树（auth.service.buildMenuTree 只取 permType===1），
+  // 所以挂在这里不会把台账从一级叶子菜单变成可展开的父菜单
+  { perm_code: 'ledger:export', perm_name: '导出台账', perm_type: 2, parent_code: 'ledger', sort: 1 },
 
   // ===== 生产管理（订单管理挂其下；M3 外发/M3.5 装配/M4 出入库同入此组） =====
   { perm_code: 'production', perm_name: '生产管理', perm_type: 1, menu_path: '/production', icon: 'Operation', sort: 5 },

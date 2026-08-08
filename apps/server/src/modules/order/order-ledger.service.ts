@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import * as ExcelJS from 'exceljs';
 import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   OUTSOURCE_STATUS,
   formatDimension,
   hasSocket,
+  UNIT_OPTIONS,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
 // 单据族 SQL 与参数是台账与订单自动完结共用的欠数口径，唯一事实源在 order-owed.util
@@ -32,6 +34,12 @@ import {
  *     计进去会让该组额度永久为负、挡死后续正常入库。
  *   两者服务于不同问题，各自正确。
  */
+
+/**
+ * 单次导出行数上限。超过就拒绝——静默截断出去的表用户不会知道少了行，
+ * 拿去对账比不给更糟。
+ */
+const EXPORT_MAX_ROWS = 5000;
 
 export interface LedgerRow {
   orderPartGroupId: number;
@@ -422,6 +430,161 @@ export class OrderLedgerService {
         remark: r.remark ?? null,
       })),
     };
+  }
+
+  /**
+   * 导出 Excel（设计文档 §5.1）：列序对齐台账页，便于过渡期与手工表并行对账。
+   *
+   * **直接复用 findLedger**，不为导出另写一份聚合 SQL——两份 SQL 迟早分叉，
+   * 届时"页面显示 100、导出成 98"这种问题最难查。筛选、四数、汇总、装配车间
+   * 聚合全部继承台账口径，页面看到什么就导出什么。
+   *
+   * 超上限**拒绝而不是静默截断**：截断出去的表用户不会知道少了行，拿去对账
+   * 反而比不给更糟。
+   */
+  async exportExcel(query: QueryLedgerDto): Promise<Buffer> {
+    const { list, total, summary } = await this.findLedger({
+      ...query,
+      page: 1,
+      pageSize: EXPORT_MAX_ROWS,
+    });
+    if (!total) {
+      throw new BadRequestException('当前筛选条件下没有台账数据，未生成导出文件');
+    }
+    if (total > EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `当前筛选结果 ${total} 行，超过单次导出上限 ${EXPORT_MAX_ROWS} 行；` +
+          '请先按客户 / 交期区间 / 只看有欠数等条件缩小范围再导出',
+      );
+    }
+
+    // 表面处理与装配车间落库的是字典值（如 spray / assembly_2），导出必须转中文
+    const dict = await this.loadDictLabels(['surface_type', 'assembly_workshop']);
+    const label = (type: string, v: string | null) =>
+      v ? (dict.get(`${type}:${v}`) ?? v) : '';
+    const unitLabel = (v: string | null) =>
+      UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('订单跟踪台账');
+
+    const columns: Array<{ header: string; width: number; productLevel?: boolean }> = [
+      { header: '下单日期', width: 12, productLevel: true },
+      { header: '业务员', width: 10, productLevel: true },
+      { header: '跟单员', width: 10, productLevel: true },
+      { header: '客户', width: 20, productLevel: true },
+      { header: '订单编号', width: 16, productLevel: true },
+      { header: '产品编码', width: 14, productLevel: true },
+      { header: '产品型号', width: 22 },
+      { header: '规格', width: 12, productLevel: true },
+      { header: '订单数量', width: 10, productLevel: true },
+      { header: '单位', width: 7, productLevel: true },
+      { header: '表面处理', width: 11, productLevel: true },
+      { header: '颜色', width: 10, productLevel: true },
+      { header: '生产图号', width: 16 },
+      { header: '版本', width: 8 },
+      { header: '料厚', width: 14 },
+      { header: '外发已回货', width: 11 },
+      { header: '装配车间', width: 12 },
+      { header: '装配完成', width: 10 },
+      { header: '订单数(支)', width: 11 },
+      { header: '成品入库', width: 10 },
+      { header: '生产欠数', width: 10 },
+      { header: '订单交期', width: 12, productLevel: true },
+      { header: '成品出货', width: 10 },
+      { header: '发货欠数', width: 10 },
+      { header: '库存数', width: 10 },
+      { header: '状态', width: 10 },
+    ];
+    ws.columns = columns.map((c) => ({ header: c.header, width: c.width }));
+    const head = ws.getRow(1);
+    head.font = { bold: true };
+    head.alignment = { vertical: 'middle', horizontal: 'center' };
+    head.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+
+    const today = new Date().toISOString().slice(0, 10);
+    list.forEach((r) => {
+      ws.addRow([
+        r.orderDate ?? '',
+        r.salesman ?? '',
+        r.merchandiser ?? '',
+        r.customerName ?? '',
+        r.productionNo || r.orderNo || '',
+        r.materialCode ?? '',
+        r.productModel ?? '',
+        r.dimensionText ?? '',
+        r.orderQty,
+        unitLabel(r.unit),
+        label('surface_type', r.surfaceType),
+        r.color ?? '',
+        r.drawingNo ?? '',
+        r.drawingVersion ?? '',
+        r.materialThickness ?? '',
+        r.returnedQty,
+        r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
+        r.assembledQty,
+        r.qtyPcs,
+        r.inQty,
+        r.productionOwed,
+        r.deliveryDate ?? '',
+        r.outQty,
+        r.deliveryOwed,
+        r.stockQty,
+        r.overdue ? '逾期' : r.deliveryOwed <= 0 ? '已交清' : '跟进中',
+      ]);
+    });
+
+    // 产品级列跨行合并：与台账页同一规则——只合并**相邻**的同产品行，
+    // 同产品的组万一没挨着就各自成行，绝不把中间夹着的别的产品并进来
+    const productCols = columns
+      .map((c, i) => (c.productLevel ? i + 1 : 0))
+      .filter(Boolean);
+    let i = 0;
+    while (i < list.length) {
+      let j = i;
+      while (j + 1 < list.length && list[j + 1].orderProductId === list[i].orderProductId) j++;
+      if (j > i) {
+        const from = i + 2; // +1 表头、+1 转成 1-based
+        const to = j + 2;
+        productCols.forEach((col) => ws.mergeCells(from, col, to, col));
+      }
+      i = j + 1;
+    }
+
+    // 汇总行：与页面顶部汇总卡同一口径（当前筛选的整体合计，不受分页影响）
+    const totalRow = ws.addRow([
+      '合计', '', '', `${summary.rows} 行`, '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+      summary.totalQty,
+      summary.totalIn,
+      summary.totalProductionOwed,
+      '',
+      summary.totalOut,
+      summary.totalDeliveryOwed,
+      summary.totalStock,
+      '',
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
+    });
+
+    // 分隔符用半角，全角空格会被 eslint no-irregular-whitespace 拦下
+    ws.getCell(`A${ws.rowCount + 2}`).value = `导出时间：${today} | 导出行数：${list.length}`;
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  /** 字典值 → 中文标签，键为 `${dictType}:${dictValue}`（只取启用项） */
+  private async loadDictLabels(types: string[]): Promise<Map<string, string>> {
+    const rows: any[] = await this.dataSource.query(
+      `SELECT dict_type, dict_value, dict_label FROM t_dict
+        WHERE dict_type IN (${types.map(() => '?').join(',')}) AND status = 1`,
+      types,
+    );
+    return new Map(rows.map((r) => [`${r.dict_type}:${r.dict_value}`, r.dict_label]));
   }
 
   /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */

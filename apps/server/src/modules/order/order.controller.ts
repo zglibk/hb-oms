@@ -8,13 +8,16 @@ import {
   Post,
   Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { OrderService } from './order.service';
 import { OrderLedgerService } from './order-ledger.service';
 import { CreateOrderDto, QueryOrderDto, UpdateOrderDto } from './dto/order.dto';
 import { QueryLedgerDetailDto, QueryLedgerDto } from './dto/ledger.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 @Controller('order')
@@ -45,6 +48,27 @@ export class OrderController {
   @Get('ledger/detail')
   async ledgerDetail(@Query() query: QueryLedgerDetailDto) {
     return this.ledgerService.findRowDetail(query.orderPartGroupId);
+  }
+
+  /**
+   * 台账 Excel 导出（§5.1）：按当前筛选全量导出，列序对齐台账页。
+   * 同样**必须在 `:id` 之前**注册；文件流用 @SkipTransform 跳过统一包装。
+   * 只读导出，按 §4.3 不标 @OperationLog。
+   */
+  @Get('ledger/export')
+  @RequirePermissions('ledger:export')
+  @SkipTransform()
+  async ledgerExport(@Query() query: QueryLedgerDto, @Res() res: Response) {
+    const buf = await this.ledgerService.exportExcel(query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent('订单跟踪台账.xlsx')}"`,
+    );
+    res.send(buf);
   }
 
   @Get(':id')

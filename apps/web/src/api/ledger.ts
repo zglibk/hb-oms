@@ -145,3 +145,7 @@ export const getLedgerRowDetail = (orderPartGroupId: number) =>
   request.get<any, LedgerRowDetail>('/api/order/ledger/detail', {
     params: { orderPartGroupId },
   });
+
+/** 导出 Excel：按当前筛选全量导出（不含分页参数），列序对齐台账页 */
+export const exportLedger = (params: Omit<LedgerQuery, 'page' | 'pageSize'>) =>
+  request.get<any, Blob>('/api/order/ledger/export', { params, responseType: 'blob' });
