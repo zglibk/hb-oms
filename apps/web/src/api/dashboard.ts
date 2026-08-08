@@ -45,11 +45,19 @@ export interface DashboardOutsourceRow {
   pendingQty: number;
 }
 
+/** 三张待办列表的真实总条数（列表被 topLimit 截断，角标用这个而不是 list.length） */
+export interface DashboardCounts {
+  overdueOrders: number;
+  upcomingOrders: number;
+  overdueOutsource: number;
+}
+
 export interface DashboardSummary {
   cards: DashboardCards;
   overdueOrders: DashboardOwedRow[];
   upcomingOrders: DashboardOwedRow[];
   overdueOutsource: DashboardOutsourceRow[];
+  counts: DashboardCounts;
   /** 列表区截断条数，界面据此提示「仅显示前 N 条」 */
   topLimit: number;
   /** 「临近交期」窗口天数 */

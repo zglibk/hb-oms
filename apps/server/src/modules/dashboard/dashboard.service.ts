@@ -115,11 +115,12 @@ export class DashboardService {
               g.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
 
   async summary() {
-    const [cards, overdueOrders, upcomingOrders, overdueOutsource] = await Promise.all([
+    const [cards, overdueOrders, upcomingOrders, overdueOutsource, counts] = await Promise.all([
       this.loadCards(),
       this.loadOverdueOrders(),
       this.loadUpcomingOrders(),
       this.loadOverdueOutsource(),
+      this.loadListCounts(),
     ]);
 
     return {
@@ -130,9 +131,54 @@ export class DashboardService {
       upcomingOrders,
       /** 外发超期未回齐 */
       overdueOutsource,
+      /** 三张列表的**真实总条数**（列表被 TOP_LIMIT 截断，角标要显示总数） */
+      counts,
       /** 列表区统一截断条数，供界面提示「仅显示前 N 条」 */
       topLimit: TOP_LIMIT,
       upcomingDays: UPCOMING_DAYS,
+    };
+  }
+
+  /**
+   * 三张待办列表的总条数。
+   *
+   * 单独查而不是用 `list.length`：列表被 TOP_LIMIT 截断，拿显示条数当总数会骗人
+   * ——界面角标写的是「共 N 条」，25 条只显示 10 条却标 10，用户会以为只有 10 条。
+   *
+   * 前两个数与列表用同一 FROM/条件，保证角标与列表口径一致。
+   */
+  private async loadListCounts() {
+    const [owedRows, osRows] = await Promise.all([
+      this.dataSource.query(
+        // ⚠️ 占位符顺序 = SQL 文本顺序：SELECT 里的 INTERVAL ? 在 FROM/WHERE 的占位符之前
+        `SELECT
+           COUNT(CASE WHEN p.delivery_date IS NOT NULL
+                       AND p.delivery_date < CURDATE()
+                       AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS overdueCnt,
+           COUNT(CASE WHEN p.delivery_date IS NOT NULL
+                       AND p.delivery_date >= CURDATE()
+                       AND p.delivery_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+                       AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS upcomingCnt
+         ${this.activeGroupsFrom}`,
+        [UPCOMING_DAYS, ...this.activeGroupsParams],
+      ),
+      this.dataSource.query(
+        `SELECT COUNT(*) AS cnt FROM (
+           SELECT d.id
+             FROM t_outsource_doc d
+             JOIN t_outsource_item i ON i.doc_id = d.id
+            WHERE d.status IN (?, ?)
+              AND d.require_back_date IS NOT NULL
+              AND d.require_back_date < CURDATE()
+            GROUP BY d.id
+           HAVING SUM(i.returned_qty) < SUM(i.send_qty)) x`,
+        [OUTSOURCE_STATUS.SENT, OUTSOURCE_STATUS.PARTIAL_RETURNED],
+      ),
+    ]);
+    return {
+      overdueOrders: Number(owedRows?.[0]?.overdueCnt) || 0,
+      upcomingOrders: Number(owedRows?.[0]?.upcomingCnt) || 0,
+      overdueOutsource: Number(osRows?.[0]?.cnt) || 0,
     };
   }
 
