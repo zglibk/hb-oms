@@ -179,26 +179,20 @@ function isPiecePixel(x: number, y: number, size: number): boolean {
   return (body || tab) && !notch;
 }
 
-export function renderCaptchaImages(
+/** 在背景上挖出一个与滑块同形的缺口（不生成滑块图） */
+function cutHole(
+  background: Buffer,
   width: number,
   height: number,
   pieceSize: number,
   gapX: number,
   gapY: number,
-): { backgroundImage: string; sliderImage: string } {
-  const scene = buildScene(width, height);
-  const background = Buffer.from(scene);
-  const piece = Buffer.alloc(pieceSize * pieceSize * 4);
-
+): void {
   for (let y = 0; y < pieceSize; y++) {
     for (let x = 0; x < pieceSize; x++) {
       if (!isPiecePixel(x, y, pieceSize)) continue;
       const sourceX = gapX + x;
       const sourceY = gapY + y;
-      const sourceOffset = pixelOffset(width, sourceX, sourceY);
-      const pieceOffset = pixelOffset(pieceSize, x, y);
-      scene.copy(piece, pieceOffset, sourceOffset, sourceOffset + 4);
-
       const edge =
         !isPiecePixel(x - 1, y, pieceSize) ||
         !isPiecePixel(x + 1, y, pieceSize) ||
@@ -215,6 +209,84 @@ export function renderCaptchaImages(
         alpha,
       );
     }
+  }
+}
+
+/** 从原图裁出滑块拼图块，同时在背景挖真缺口 */
+function cutPieceAndHole(
+  scene: Buffer,
+  background: Buffer,
+  piece: Buffer,
+  width: number,
+  height: number,
+  pieceSize: number,
+  gapX: number,
+  gapY: number,
+): void {
+  for (let y = 0; y < pieceSize; y++) {
+    for (let x = 0; x < pieceSize; x++) {
+      if (!isPiecePixel(x, y, pieceSize)) continue;
+      const sourceX = gapX + x;
+      const sourceY = gapY + y;
+      const sourceOffset = pixelOffset(width, sourceX, sourceY);
+      const pieceOffset = pixelOffset(pieceSize, x, y);
+      scene.copy(piece, pieceOffset, sourceOffset, sourceOffset + 4);
+    }
+  }
+  cutHole(background, width, height, pieceSize, gapX, gapY);
+}
+
+/**
+ * 挑选与真缺口不重叠的干扰缺口坐标。
+ * 干扰块只出现在背景上，滑块仍对应唯一真缺口。
+ */
+function pickDistractorPositions(
+  width: number,
+  height: number,
+  pieceSize: number,
+  gapX: number,
+  gapY: number,
+  count: number,
+): Array<{ x: number; y: number }> {
+  const rnd = createPrng();
+  const minX = pieceSize + 20;
+  const maxX = width - pieceSize - 10;
+  const minY = 10;
+  const maxY = height - pieceSize - 10;
+  const minDist = pieceSize + 8;
+  const occupied = [{ x: gapX, y: gapY }];
+  const result: Array<{ x: number; y: number }> = [];
+
+  for (let attempt = 0; attempt < 80 && result.length < count; attempt++) {
+    const x = Math.floor(minX + rnd() * Math.max(maxX - minX, 1));
+    const y = Math.floor(minY + rnd() * Math.max(maxY - minY, 1));
+    const ok = occupied.every(
+      (p) => Math.hypot(p.x - x, p.y - y) >= minDist,
+    );
+    if (!ok) continue;
+    occupied.push({ x, y });
+    result.push({ x, y });
+  }
+  return result;
+}
+
+export function renderCaptchaImages(
+  width: number,
+  height: number,
+  pieceSize: number,
+  gapX: number,
+  gapY: number,
+): { backgroundImage: string; sliderImage: string } {
+  const scene = buildScene(width, height);
+  const background = Buffer.from(scene);
+  const piece = Buffer.alloc(pieceSize * pieceSize * 4);
+
+  // 真缺口：裁滑块 + 挖洞
+  cutPieceAndHole(scene, background, piece, width, height, pieceSize, gapX, gapY);
+
+  // 2 个干扰缺口：仅挖洞，不生成对应滑块，增加辨识难度
+  for (const d of pickDistractorPositions(width, height, pieceSize, gapX, gapY, 2)) {
+    cutHole(background, width, height, pieceSize, d.x, d.y);
   }
 
   const toDataUrl = (png: Buffer) =>

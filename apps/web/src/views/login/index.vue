@@ -56,7 +56,7 @@
 
     <!-- 方案介绍浮层（页面级，独立于登录卡片，浮在任意背景之上） -->
     <div class="brand-intro" aria-label="系统方案介绍">
-      <h2 class="brand-intro__title">智能制造 MES 全流程管控系统</h2>
+      <h2 class="brand-intro__title">海宝五金订单跟踪系统</h2>
       <span class="brand-intro__rule" aria-hidden="true"></span>
       <ul class="brand-intro__list">
         <li class="brand-intro__item">
@@ -64,8 +64,8 @@
             <el-icon><Setting /></el-icon>
           </span>
           <div class="brand-intro__text">
-            <p>研发与自动化大规模生产</p>
-            <p>家具阻尼滑轨全流程管控</p>
+            <p>接单 → 外发 → 回货 → 装配</p>
+            <p>成品出入库全链路跟踪</p>
           </div>
         </li>
         <li class="brand-intro__item">
@@ -73,8 +73,8 @@
             <el-icon><Grid /></el-icon>
           </span>
           <div class="brand-intro__text">
-            <p>冰箱电器抽屉滑轨</p>
-            <p>定制化精密加工管理</p>
+            <p>订单数 · 完成数 · 库存数 · 欠数</p>
+            <p>双口径欠数，交付进度一眼清</p>
           </div>
         </li>
         <li class="brand-intro__item">
@@ -82,8 +82,8 @@
             <el-icon><Share /></el-icon>
           </span>
           <div class="brand-intro__text">
-            <p>智能排产、物料追溯</p>
-            <p>与数字化车间一体化管理</p>
+            <p>订单跟踪台账统一落点</p>
+            <p>逾期与临近交期及时预警</p>
           </div>
         </li>
       </ul>
@@ -100,12 +100,12 @@
         <div class="intro-top" v-show="themeStore.loginBgScheme !== 'particles'">
           <div class="logo-box">HB</div>
           <div class="logo-text">
-            <span class="cn">海宝精密</span>
-            <span class="en">MES SYSTEM</span>
+            <span class="cn">海宝 OMS</span>
+            <span class="en">ORDER TRACKING</span>
           </div>
         </div>
         <div class="intro-illustration" aria-hidden="true">
-          <!-- MES 主题插画：数字化车间 + 滑轨产品 + 流程节点 -->
+          <!-- OMS 主题插画：数字化看板 + 滑轨产品 + 流程节点 -->
           <svg viewBox="0 0 340 300" width="340" height="300" xmlns="http://www.w3.org/2000/svg" fill="none">
             <defs>
               <linearGradient id="ill-panel" x1="0" y1="0" x2="1" y2="1">
@@ -180,8 +180,8 @@
           <div class="form-header">
             <!-- 手机端专用：登录框上方显示 Logo + 系统名称（PC 端由左侧浮层/插画标识，无需重复） -->
             <div class="form-system-name">
-              <company-logo :size="30" aria-label="海宝精密" />
-              <span>{{ themeStore.systemName || '海宝精密 MES 系统' }}</span>
+              <company-logo :size="30" aria-label="海宝 OMS" />
+              <span>{{ themeStore.systemName || '海宝 OMS 系统' }}</span>
             </div>
             <h2>欢迎回来</h2>
             <p>请登录您的账号以继续</p>
@@ -252,6 +252,9 @@
               </el-button>
             </el-form-item>
           </el-form>
+          <div class="form-footer">
+            <a class="to-frontend" :href="frontendHomeUrl">去前台 &gt;&gt;</a>
+          </div>
         </div>
 
         <!-- 滑块验证码对话框：相对 form-side 居中（PC 端随登录卡片靠右） -->
@@ -318,6 +321,17 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const themeStore = useThemeStore();
+
+/** 前台首页：生产 base=/oms/admin/ → /oms/；开发环境退回上级路径 */
+const frontendHomeUrl = computed(() => {
+  const base = import.meta.env.BASE_URL || '/';
+  if (/\/admin\/?$/.test(base)) return base.replace(/\/admin\/?$/, '/');
+  try {
+    return new URL('..', window.location.origin + base).pathname;
+  } catch {
+    return '../';
+  }
+});
 
 const formRef = ref<FormInstance>();
 const loading = ref(false);
@@ -512,8 +526,9 @@ async function doLogin() {
     const redirect = (route.query.redirect as string) || '/';
     await router.replace(redirect);
   } catch {
-    // 凭证已被后端一次性核销，失败后清空，下次点登录需重新验证
-    captchaToken.value = '';
+    // 凭证已被后端一次性核销：必须同步重置按钮态，否则仍显示「验证通过」
+    // 却因 token 已空而提示「请先完成验证」，随后倒计时到点又变成「超时」
+    resetCaptchaStatus();
   } finally {
     loading.value = false;
   }
@@ -1097,6 +1112,29 @@ onMounted(() => {
 .form-inner {
   width: 100%;
   max-width: 20rem;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.to-frontend {
+  font-size: 13px;
+  color: #86909c;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #41a881;
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(65, 168, 129, 0.45);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 }
 
 .form-header {

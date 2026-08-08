@@ -97,6 +97,11 @@
                   <span class="user-meta__name">{{
                     userStore.userInfo?.realName || userStore.userInfo?.username
                   }}</span>
+                  <span
+                    v-if="roleDisplay !== '—'"
+                    class="user-meta__role"
+                    :title="roleDisplay"
+                  >{{ roleDisplay }}</span>
                 </span>
                 <el-icon class="user-arrow mobile-hidden" aria-hidden="true"><ArrowDown /></el-icon>
               </span>
@@ -876,7 +881,8 @@ function openManual() {
         max-width: 7.5rem;
       }
       &__role {
-        font-size: var(--hb-font-size-xs);
+        font-size: 11px;
+        line-height: 1.2;
         color: var(--el-text-color-secondary);
         white-space: nowrap;
         overflow: hidden;

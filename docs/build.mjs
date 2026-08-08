@@ -107,14 +107,31 @@ const BASE_CSS = `
     background: #fff; color: var(--brand-dark); font-weight: 800; border-radius: 6px; font-size: 12px; letter-spacing: .04em;
   }
   .brand-sub { opacity: .7; font-size: 12px; margin-left: 6px; font-weight: 400; }
-  .nav nav { display: flex; gap: 4px; }
+  .nav nav { display: flex; align-items: stretch; gap: 4px; height: 100%; }
   .nav nav a {
-    color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px;
-    font-size: 14px; white-space: nowrap; transition: background .15s ease;
+    position: relative; display: inline-flex; align-items: center;
+    color: #fff; text-decoration: none; padding: 0 14px;
+    font-size: 14px; white-space: nowrap; font-weight: 500;
+    background: transparent; border: none; border-radius: 0;
+    opacity: .88; transition: opacity .2s ease;
   }
-  .nav nav a:hover { background: rgba(255,255,255,.14); }
-  .nav nav a.active { background: rgba(255,255,255,.22); font-weight: 600; }
+  .nav nav a:hover { opacity: 1; background: transparent; }
+  .nav nav a.active { opacity: 1; font-weight: 600; background: transparent; }
+  /* 底线：左右两端向中间聚合 */
+  .nav nav a::before,
+  .nav nav a::after {
+    content: ""; position: absolute; bottom: 0; height: 2px;
+    width: 0; background: #fff; transition: width .28s ease;
+  }
+  .nav nav a::before { left: 14px; }
+  .nav nav a::after { right: 14px; }
+  .nav nav a:hover::before,
+  .nav nav a:hover::after,
+  .nav nav a.active::before,
+  .nav nav a.active::after { width: calc(50% - 14px); }
   .nav nav a.disabled { opacity: .55; cursor: not-allowed; }
+  .nav nav a.disabled::before,
+  .nav nav a.disabled::after { display: none; }
   footer { text-align: center; color: var(--muted); font-size: 13px; padding: 36px 16px 40px; }
 `;
 
@@ -135,56 +152,60 @@ ${BASE_CSS}
       radial-gradient(120% 80% at 12% 0%, rgba(255,255,255,.18) 0%, transparent 55%),
       radial-gradient(90% 70% at 100% 30%, rgba(0,0,0,.18) 0%, transparent 50%),
       linear-gradient(145deg, #16b289 0%, var(--brand) 42%, var(--brand-dark) 100%);
-    padding: clamp(48px, 8vw, 88px) 24px clamp(56px, 9vw, 96px);
+    padding: 20px 24px 22px;
   }
   .hero::before {
-    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .22;
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .16;
     background-image:
       linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px);
     background-size: 48px 48px;
-    mask-image: linear-gradient(180deg, #000 20%, transparent 95%);
+    mask-image: linear-gradient(180deg, #000 35%, transparent 100%);
   }
   .hero-inner {
-    position: relative; max-width: 1120px; margin: 0 auto;
-    display: grid; gap: 18px; justify-items: start;
-    animation: rise .55s ease both;
+    position: relative; max-width: 1120px; margin: 0 auto; width: 100%;
+    display: grid; gap: 10px; justify-items: start;
+    animation: rise .45s ease both;
   }
   .hero-brand {
     display: inline-flex; align-items: center; gap: 10px;
-    font-size: clamp(28px, 4.5vw, 42px); font-weight: 800; letter-spacing: .04em; line-height: 1.1;
+    font-size: clamp(26px, 3.6vw, 34px); font-weight: 800; letter-spacing: .04em; line-height: 1.1;
   }
   .hero-brand span {
     display: inline-grid; place-items: center;
-    width: 1.15em; height: 1.15em; border-radius: 12px;
+    width: 1.15em; height: 1.15em; border-radius: 10px;
     background: #fff; color: var(--brand-dark); font-size: .55em; letter-spacing: 0;
   }
-  .hero h1 {
-    max-width: 16em; font-size: clamp(22px, 3.2vw, 30px); font-weight: 600;
-    letter-spacing: .02em; line-height: 1.35;
-  }
   .hero p {
-    max-width: 36em; margin: 0; opacity: .9;
-    font-size: clamp(14px, 1.5vw, 16px); line-height: 1.7;
+    margin: 0; max-width: none; width: 100%;
+    opacity: .92; font-size: 15px; line-height: 1.65;
   }
   .hero .cta {
-    display: inline-flex; align-items: center; gap: 8px; margin-top: 8px;
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 2px;
     background: #fff; color: var(--brand-dark); font-weight: 700; text-decoration: none;
-    padding: 12px 22px; border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    padding: 9px 16px; border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.12);
     transition: transform .15s ease, box-shadow .15s ease;
   }
-  .hero .cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.16); }
+  .hero .cta:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,.16); }
   .hero .cta:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
-  main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 8px; }
-  .sec { margin-top: 36px; animation: rise .55s ease both; }
-  .sec:nth-child(1) { animation-delay: .05s; }
-  .sec:nth-child(2) { animation-delay: .12s; }
-  .sec:nth-child(3) { animation-delay: .18s; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 8px; }
+
+  /* 左：业务主线+功能；右：主要数据 */
+  .layout-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 20px;
+    align-items: start;
+    animation: rise .45s ease both;
+  }
+  .col-main { min-width: 0; display: grid; gap: 28px; }
+  .col-side { min-width: 0; }
+
   .sec > h2 {
     font-size: 16px; font-weight: 700; color: var(--text);
-    margin: 0 0 14px; letter-spacing: .02em;
+    margin: 0 0 12px; letter-spacing: .02em;
   }
   .sec > h2 small {
     display: block; margin-top: 4px; font-size: 13px; font-weight: 400;
@@ -193,58 +214,70 @@ ${BASE_CSS}
 
   .flow {
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-    padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     box-shadow: var(--shadow);
+    transition: box-shadow .2s ease, transform .2s ease;
   }
+  .flow:hover { box-shadow: 0 4px 16px rgba(15, 40, 32, .08); }
   .step {
     background: var(--brand-soft); color: #065f46;
-    border: 1px solid rgba(19,166,125,.35);
-    padding: 8px 14px; border-radius: 999px; font-size: 13px; white-space: nowrap; font-weight: 600;
+    border: 1px solid rgba(19,166,125,.28);
+    padding: 7px 12px; border-radius: 999px; font-size: 13px; white-space: nowrap; font-weight: 600;
   }
   .step.opt { background: #fff; border: 1px dashed #9ca3af; color: #4b5563; font-weight: 500; }
   .arrow { color: #6b8f80; font-size: 13px; }
-  .flow-note { width: 100%; margin-top: 4px; font-size: 13px; color: #4b5563; }
+  .flow-note { width: 100%; margin-top: 2px; font-size: 13px; color: #4b5563; }
 
   .metrics {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    display: grid; grid-template-columns: 1fr; gap: 10px;
   }
   .metric {
-    position: relative; padding: 18px 18px 16px;
+    padding: 14px 16px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    border-top: 3px solid var(--brand);
+    box-shadow: var(--shadow);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .metric:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(15, 40, 32, .1);
   }
   .metric strong {
-    display: block; font-size: 18px; color: var(--brand-dark); margin-bottom: 6px; letter-spacing: .02em;
+    display: block; font-size: 16px; color: var(--brand-dark); margin-bottom: 4px; letter-spacing: .02em;
   }
-  .metric p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .metric p { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 
   .feats {
     display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
   }
   .feat {
-    padding: 16px 18px 16px 16px;
+    padding: 16px 18px;
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    border-left: 3px solid var(--brand);
-    transition: border-color .15s ease, background .15s ease;
+    box-shadow: var(--shadow);
+    transition: transform .18s ease, box-shadow .18s ease;
   }
-  .feat:hover { background: #fbfdfc; border-color: rgba(19,166,125,.35); }
+  .feat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(15, 40, 32, .1);
+  }
   .feat h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; font-weight: 700; }
   .feat p { font-size: 13px; color: var(--muted); line-height: 1.65; }
 
   @keyframes rise {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  @media (max-width: 860px) {
+  @media (max-width: 900px) {
+    .layout-grid { grid-template-columns: 1fr; }
     .metrics { grid-template-columns: repeat(2, 1fr); }
-    .feats { grid-template-columns: 1fr; }
   }
-  @media (max-width: 520px) {
-    .nav-inner { padding: 0 16px; }
-    main { padding: 20px 16px 8px; }
+  @media (max-width: 640px) {
+    .feats { grid-template-columns: 1fr; }
     .metrics { grid-template-columns: 1fr; }
-    .hero-brand { font-size: 28px; }
+    .nav-inner { padding: 0 16px; }
+    main { padding: 18px 16px 8px; }
+    .hero { padding: 22px 16px 26px; }
+    .hero-brand { font-size: 26px; }
   }
 </style>
 </head>
@@ -253,73 +286,76 @@ ${NAV('home')}
 <section class="hero">
   <div class="hero-inner">
     <div class="hero-brand"><span>HB</span>海宝 OMS</div>
-    <h1>订单跟踪，四数一眼清</h1>
     <p>从客户下单到成品出货，全过程一条主线记录；订单数、完成数、库存数与欠数随时可查。</p>
     <a class="cta" href="admin/">进入后台管理 →</a>
   </div>
 </section>
 <main>
-  <section class="sec">
-    <h2>业务主线<small>外发与回货按需使用；无需表面处理的部件组可直达装配与入库</small></h2>
-    <div class="flow">
-      <span class="step">客户下单</span><span class="arrow">→</span>
-      <span class="step">创建订单</span><span class="arrow">→</span>
-      <span class="step opt">部件外发</span><span class="arrow">→</span>
-      <span class="step opt">外发回货</span><span class="arrow">→</span>
-      <span class="step">装配</span><span class="arrow">→</span>
-      <span class="step">成品入库</span><span class="arrow">→</span>
-      <span class="step">成品出库</span>
-      <p class="flow-note">虚线步骤为可选环节。</p>
-    </div>
-  </section>
+  <div class="layout-grid">
+    <div class="col-main">
+      <section class="sec">
+        <h2>业务主线<small>外发与回货按需使用；无需表面处理的部件组可直达装配与入库</small></h2>
+        <div class="flow">
+          <span class="step">客户下单</span><span class="arrow">→</span>
+          <span class="step">创建订单</span><span class="arrow">→</span>
+          <span class="step opt">部件外发</span><span class="arrow">→</span>
+          <span class="step opt">外发回货</span><span class="arrow">→</span>
+          <span class="step">装配</span><span class="arrow">→</span>
+          <span class="step">成品入库</span><span class="arrow">→</span>
+          <span class="step">成品出库</span>
+          <p class="flow-note">虚线步骤为可选环节。</p>
+        </div>
+      </section>
 
-  <section class="sec">
-    <h2>四个核心数字<small>全系统统一折算为「支」，1 套 = 2 支</small></h2>
-    <div class="metrics">
-      <div class="metric"><strong>订单数</strong><p>客户订购数量，套/支自动换算。</p></div>
-      <div class="metric"><strong>完成数</strong><p>累计成品入库；生产欠数 = 订单数 − 完成数。</p></div>
-      <div class="metric"><strong>库存数</strong><p>当前成品结存，按部件组（分左右）实时聚合。</p></div>
-      <div class="metric"><strong>欠数</strong><p>双口径：生产欠数与发货欠数并列。</p></div>
+      <section class="sec">
+        <h2>主要功能<small>覆盖接单、外发、装配、出入库与基础资料</small></h2>
+        <div class="feats">
+          <div class="feat">
+            <h3>订单跟踪台账</h3>
+            <p>全系统落点。按订单 → 产品 → 部件组展开，实时给出四数；发货欠数清零后自动完结，再欠自动重开。</p>
+          </div>
+          <div class="feat">
+            <h3>订单管理</h3>
+            <p>订单 → 产品 → 部件组 → 部件四级录入；货号、规格、表面处理、交期一次登记，支持完结、重开与作废。</p>
+          </div>
+          <div class="feat">
+            <h3>外发管理</h3>
+            <p>发坯单、发出、分批回货、关闭或作废；可打印《电镀发外加工单》交供应商。</p>
+          </div>
+          <div class="feat">
+            <h3>装配管理</h3>
+            <p>按部件组分左右建装配批次，登记计划与实际完成；实际完成量即成品入库可用额度。</p>
+          </div>
+          <div class="feat">
+            <h3>成品出入库</h3>
+            <p>入库、出库、期初与红字冲销；入库受装配完成量约束，确认后只能冲销、不能改数。</p>
+          </div>
+          <div class="feat">
+            <h3>成品库存 · 部件台账</h3>
+            <p>成品按订单部件组结存；部件半成品按七维属性归集，不依赖订单。</p>
+          </div>
+          <div class="feat">
+            <h3>期初录入</h3>
+            <p>上线时把手工账搬进系统：成品可挂历史订单或按属性登记；部件期初按七维累加。</p>
+          </div>
+          <div class="feat">
+            <h3>基础数据 · 系统管理</h3>
+            <p>客户、部门、部件、开单与设备集中维护；用户/角色/菜单/字典/日志一体，支持数据范围。</p>
+          </div>
+        </div>
+      </section>
     </div>
-  </section>
 
-  <section class="sec">
-    <h2>主要功能<small>覆盖接单、外发、装配、出入库与基础资料</small></h2>
-    <div class="feats">
-      <div class="feat">
-        <h3>订单跟踪台账</h3>
-        <p>全系统落点。按订单 → 产品 → 部件组展开，实时给出四数；发货欠数清零后自动完结，再欠自动重开。</p>
+    <aside class="col-side sec">
+      <h2>主要数据<small>全系统统一折算为「支」，1 套 = 2 支</small></h2>
+      <div class="metrics">
+        <div class="metric"><strong>订单数</strong><p>客户订购数量，套/支自动换算。</p></div>
+        <div class="metric"><strong>完成数</strong><p>累计成品入库；生产欠数 = 订单数 − 完成数。</p></div>
+        <div class="metric"><strong>库存数</strong><p>当前成品结存，按部件组（分左右）实时聚合。</p></div>
+        <div class="metric"><strong>欠数</strong><p>双口径：生产欠数与发货欠数并列。</p></div>
       </div>
-      <div class="feat">
-        <h3>订单管理</h3>
-        <p>订单 → 产品 → 部件组 → 部件四级录入；货号、规格、表面处理、交期一次登记，支持完结、重开与作废。</p>
-      </div>
-      <div class="feat">
-        <h3>外发管理</h3>
-        <p>发坯单、发出、分批回货、关闭或作废；可打印《电镀发外加工单》交供应商。</p>
-      </div>
-      <div class="feat">
-        <h3>装配管理</h3>
-        <p>按部件组分左右建装配批次，登记计划与实际完成；实际完成量即成品入库可用额度。</p>
-      </div>
-      <div class="feat">
-        <h3>成品出入库</h3>
-        <p>入库、出库、期初与红字冲销；入库受装配完成量约束，确认后只能冲销、不能改数。</p>
-      </div>
-      <div class="feat">
-        <h3>成品库存 · 部件台账</h3>
-        <p>成品按订单部件组结存；部件半成品按七维属性归集，不依赖订单。</p>
-      </div>
-      <div class="feat">
-        <h3>期初录入</h3>
-        <p>上线时把手工账搬进系统：成品可挂历史订单或按属性登记；部件期初按七维累加。</p>
-      </div>
-      <div class="feat">
-        <h3>基础数据 · 系统管理</h3>
-        <p>客户、部门、部件、开单与设备集中维护；用户/角色/菜单/字典/日志一体，支持数据范围。</p>
-      </div>
-    </div>
-  </section>
+    </aside>
+  </div>
 </main>
 <footer>海宝五金 · hb-oms 订单跟踪系统 · 内部系统</footer>
 </body>
