@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>海宝五金订单跟踪系统 操作手册</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-light: #dbeafe;
+    --text: #1f2937;
+    --text-light: #6b7280;
+    --border: #e5e7eb;
+    --bg: #ffffff;
+    --bg-page: #f9fafb;
+    --warning-bg: #fef3c7;
+    --warning-border: #f59e0b;
+    --info-bg: #dbeafe;
+    --info-border: #3b82f6;
+    --tip-bg: #d1fae5;
+    --tip-border: #10b981;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text); background: var(--bg-page); line-height: 1.8; font-size: 15px;
+  }
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 100;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .topbar__title { font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .topbar__search {
+    margin-left: auto; width: 240px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .topbar__search:focus { border-color: var(--primary); }
+  .topbar__toggle { display: none; font-size: 20px; cursor: pointer; background: none; border: none; color: var(--text); }
+  .layout { display: flex; padding-top: 56px; min-height: 100vh; }
+  .sidebar {
+    position: fixed; top: 56px; left: 0; bottom: 0; width: 268px;
+    background: var(--bg); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 16px 0; z-index: 50; transition: transform 0.25s ease;
+  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  .toc-item {
+    display: block; padding: 8px 20px; font-size: 13.5px; color: var(--text-light);
+    text-decoration: none; border-left: 3px solid transparent; transition: all 0.15s; cursor: pointer;
+  }
+  .toc-item:hover { color: var(--primary); background: var(--bg-page); }
+  .toc-item.active { color: var(--primary); border-left-color: var(--primary); background: var(--primary-light); font-weight: 600; }
+  .toc-sub { padding-left: 36px; font-size: 13px; }
+  .content { flex: 1; margin-left: 268px; padding: 32px 40px 80px; max-width: 940px; }
+  .chapter { margin-bottom: 56px; scroll-margin-top: 72px; }
+  .chapter__title {
+    font-size: 24px; font-weight: 700; margin-bottom: 8px;
+    padding-bottom: 12px; border-bottom: 2px solid var(--primary);
+  }
+  .section__title {
+    font-size: 18px; font-weight: 600; margin: 28px 0 12px;
+    padding-left: 10px; border-left: 4px solid var(--primary); scroll-margin-top: 72px;
+  }
+  .subsection__title { font-size: 15.5px; font-weight: 600; margin: 20px 0 10px; }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 0 0 12px 22px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: #f0f2f6; border-radius: 4px; padding: 1px 6px; font-size: 13.5px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  .steps { list-style: none; counter-reset: step; margin: 12px 0 16px; }
+  .steps > li { counter-increment: step; position: relative; padding-left: 36px; margin-bottom: 10px; }
+  .steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: 2px;
+    width: 24px; height: 24px; background: var(--primary); color: #fff;
+    border-radius: 50%; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .alert { padding: 12px 16px; border-radius: 6px; margin: 12px 0; border-left: 4px solid; font-size: 14px; }
+  .alert--info { background: var(--info-bg); border-color: var(--info-border); }
+  .alert--warning { background: var(--warning-bg); border-color: var(--warning-border); }
+  .alert--tip { background: var(--tip-bg); border-color: var(--tip-border); }
+  .field-table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; }
+  .field-table th, .field-table td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  .field-table th { background: var(--bg-page); font-weight: 600; }
+  .field-table tbody tr:nth-child(even) { background: var(--bg-page); }
+  .field-table td:first-child { font-weight: 600; white-space: nowrap; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 16px; }
+  .flow__node { padding: 4px 12px; background: var(--primary-light); color: var(--primary); border-radius: 4px; font-size: 13px; font-weight: 600; }
+  .flow__node--opt { background: #f3f4f6; color: var(--text-light); border: 1px dashed var(--border); }
+  .flow__arrow { color: var(--text-light); font-size: 14px; }
+  @media (max-width: 768px) {
+    .topbar__toggle { display: block; }
+    .topbar__search { width: 140px; }
+    .sidebar { transform: translateX(-100%); box-shadow: 2px 0 8px rgba(0,0,0,0.15); }
+    .sidebar.open { transform: translateX(0); }
+    .content { margin-left: 0; padding: 20px 16px 60px; }
+    .field-table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="topbar__toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <span class="topbar__title">海宝五金订单跟踪系统 · 操作手册</span>
+  <input class="topbar__search" type="text" placeholder="搜索章节..." oninput="filterToc(this.value)" />
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <a class="toc-item" data-key="快速上手 四个数 角色 登录 界面 约定" onclick="jump('ch0')">第0章 快速上手</a>
+    <a class="toc-item toc-sub" data-key="系统管什么 四个数 欠数 主线" onclick="jump('ch0-1')">0.1 这套系统管什么</a>
+    <a class="toc-item toc-sub" data-key="我是谁 角色 职责 菜单" onclick="jump('ch0-2')">0.2 我是谁，我该做什么</a>
+    <a class="toc-item toc-sub" data-key="登录 界面 侧栏 用户面板 手册" onclick="jump('ch0-3')">0.3 登录与界面</a>
+    <a class="toc-item toc-sub" data-key="通用 约定 必填 单位 支 套 卡口 分页" onclick="jump('ch0-4')">0.4 通用操作约定</a>
+
+    <a class="toc-item" data-key="订单 录入 新增 第一步" onclick="jump('ch1')">第1章 第一步：录入客户订单</a>
+    <a class="toc-item toc-sub" data-key="订单 填写顺序 四级 产品 部件组" onclick="jump('ch1-1')">1.1 填写顺序：四级结构</a>
+    <a class="toc-item toc-sub" data-key="订单 关键字段 PO 生产单号 客户图号 单位" onclick="jump('ch1-2')">1.2 关键字段怎么填</a>
+    <a class="toc-item toc-sub" data-key="部件组 拆分 整品 外中轨 内轨 复制上一行" onclick="jump('ch1-3')">1.3 部件组怎么拆</a>
+    <a class="toc-item toc-sub" data-key="订单列表 编辑 完结 重开 删除" onclick="jump('ch1-4')">1.4 订单列表常用操作</a>
+
+    <a class="toc-item" data-key="外发 发坯单 电镀 表面处理 第二步" onclick="jump('ch2')">第2章 第二步：部件外发（可选）</a>
+    <a class="toc-item toc-sub" data-key="要不要外发 表面处理 无 镀锌" onclick="jump('ch2-1')">2.1 什么时候要外发</a>
+    <a class="toc-item toc-sub" data-key="新建发坯单 重量 单重 发出数量 过磅" onclick="jump('ch2-2')">2.2 新建发坯单</a>
+    <a class="toc-item toc-sub" data-key="登记发出 实际发外日期" onclick="jump('ch2-3')">2.3 登记发出</a>
+    <a class="toc-item toc-sub" data-key="回货登记 分批 超回 撤销" onclick="jump('ch2-4')">2.4 回货登记</a>
+    <a class="toc-item toc-sub" data-key="关闭 尾数 作废 区别" onclick="jump('ch2-5')">2.5 关闭尾数与作废</a>
+    <a class="toc-item toc-sub" data-key="打印 电镀发外加工单 四联单" onclick="jump('ch2-6')">2.6 打印《电镀发外加工单》</a>
+
+    <a class="toc-item" data-key="装配 批次 第三步 车间 闸门" onclick="jump('ch3')">第3章 第三步：装配</a>
+    <a class="toc-item toc-sub" data-key="装配批次 是什么 部件组 边别" onclick="jump('ch3-1')">3.1 装配批次是什么</a>
+    <a class="toc-item toc-sub" data-key="录入批次 计划开始 计划完成 实际完成 车间" onclick="jump('ch3-2')">3.2 录入装配批次</a>
+    <a class="toc-item toc-sub" data-key="可入库量 闸门 公式 为什么入不了" onclick="jump('ch3-3')">3.3 可入库量：入库闸门</a>
+
+    <a class="toc-item" data-key="入库 出库 成品 第四步 仓管" onclick="jump('ch4')">第4章 第四步：成品入库与出库</a>
+    <a class="toc-item toc-sub" data-key="成品入库 确认 草稿" onclick="jump('ch4-1')">4.1 成品入库</a>
+    <a class="toc-item toc-sub" data-key="销售出库 库存不足" onclick="jump('ch4-2')">4.2 销售出库</a>
+    <a class="toc-item toc-sub" data-key="做错了 红字冲销 部分冲销" onclick="jump('ch4-3')">4.3 单据做错了：红字冲销</a>
+    <a class="toc-item toc-sub" data-key="库存查询 结存 批次" onclick="jump('ch4-4')">4.4 库存查询</a>
+
+    <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
+    <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
+    <a class="toc-item toc-sub" data-key="双欠数 生产欠数 发货欠数 区别" onclick="jump('ch5-2')">5.2 两个欠数的区别</a>
+    <a class="toc-item toc-sub" data-key="筛选 展开 流水 合并单元格" onclick="jump('ch5-3')">5.3 筛选、展开与合并行</a>
+    <a class="toc-item toc-sub" data-key="自动完结 重开 交清" onclick="jump('ch5-4')">5.4 订单自动完结与重开</a>
+
+    <a class="toc-item" data-key="首页 看板 逾期 临近交期 超期" onclick="jump('ch6')">第6章 首页看板</a>
+
+    <a class="toc-item" data-key="期初 上线 补录 历史订单 部件台账" onclick="jump('ch7')">第7章 上线准备：期初录入</a>
+    <a class="toc-item toc-sub" data-key="补录 历史订单 期初补录开关" onclick="jump('ch7-1')">7.1 先补录未完结的历史订单</a>
+    <a class="toc-item toc-sub" data-key="成品期初 挂订单 纯属性" onclick="jump('ch7-2')">7.2 成品期初</a>
+    <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
+    <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
+
+    <a class="toc-item" data-key="基础数据 客户 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
+    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置" onclick="jump('ch9')">第9章 管理员篇</a>
+    <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
+  </nav>
+
+  <main class="content">
+
+    <!-- ============ 第0章 ============ -->
+    <section class="chapter" id="ch0">
+      <h1 class="chapter__title">第0章 快速上手</h1>
+
+      <h2 class="section__title" id="ch0-1">0.1 这套系统管什么</h2>
+      <p>一句话：<strong>随时回答「这张订单做完了多少、仓库还有多少、还欠客户多少」</strong>。</p>
+      <p>系统围绕每张订单呈现四个数字：</p>
+      <table class="field-table">
+        <thead><tr><th>数字</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>订单数</td><td>客户订购数量，统一折算成「支」</td></tr>
+          <tr><td>完成数</td><td>累计成品入库数量</td></tr>
+          <tr><td>库存数</td><td>当前成品结存数量</td></tr>
+          <tr><td>欠数</td><td>两个口径并列：<strong>生产欠数</strong>（还差多少没做完）与<strong>发货欠数</strong>（还欠客户多少货）</td></tr>
+        </tbody>
+      </table>
+
+      <p>业务主线（也是本手册的章节顺序）：</p>
+      <div class="flow">
+        <span class="flow__node">录订单</span><span class="flow__arrow">→</span>
+        <span class="flow__node flow__node--opt">部件外发（可选）</span><span class="flow__arrow">→</span>
+        <span class="flow__node flow__node--opt">外发回货（可选）</span><span class="flow__arrow">→</span>
+        <span class="flow__node">装配</span><span class="flow__arrow">→</span>
+        <span class="flow__node">成品入库</span><span class="flow__arrow">→</span>
+        <span class="flow__node">成品出库</span>
+      </div>
+
+      <div class="alert alert--info">
+        <strong>本系统不做什么：</strong>不排产、不做多级审核、不做车间报工、不管拉槽/冲压工序。这些环节仍按现行方式在车间进行，系统只记录订单跟踪需要的结果。
+      </div>
+
+      <h2 class="section__title" id="ch0-2">0.2 我是谁，我该做什么</h2>
+      <table class="field-table">
+        <thead><tr><th>岗位</th><th>主要在系统里做的事</th><th>看哪几章</th></tr></thead>
+        <tbody>
+          <tr><td>业务员 / 跟单员</td><td>录订单、查台账回复客户交期、看首页逾期提醒</td><td>第1、5、6章</td></tr>
+          <tr><td>计划员</td><td>开发坯单外发、登记回货、录装配批次</td><td>第2、3章</td></tr>
+          <tr><td>仓管员</td><td>成品入库、销售出库、库存查询、期初录入</td><td>第4、7章</td></tr>
+          <tr><td>经理层</td><td>首页看板、台账筛选与汇总</td><td>第5、6章</td></tr>
+          <tr><td>系统管理员</td><td>开账号配权限、维护字典与基础数据</td><td>第8、9章</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--tip">
+        看不到某个菜单 = 你的角色没有该权限，不是系统坏了。找管理员在「系统管理 → 角色管理」里加权限，<strong>加完需要重新登录才生效</strong>。
+      </div>
+
+      <h2 class="section__title" id="ch0-3">0.3 登录与界面</h2>
+      <ol class="steps">
+        <li>打开 <code>http://120.79.138.198/oms/admin/</code>，输入账号密码，拖动滑块完成验证。</li>
+        <li>左侧是菜单栏，点顶部「☰」可收起，屏幕小的时候会自动收起。</li>
+        <li>右上角头像点开是用户面板：修改资料、修改密码、<strong>操作手册</strong>（就是本页）、<strong>新手引导</strong>（重看一遍引导）、退出登录。</li>
+        <li>顶部有页签栏，常用页面会保留，来回切换不丢筛选条件。</li>
+      </ol>
+
+      <h2 class="section__title" id="ch0-4">0.4 通用操作约定</h2>
+      <ul>
+        <li><strong>数量单位</strong>：系统内所有数量以「支」为准。订单单位可选「套」或「支」，<strong>1 套 = 2 支</strong>（滑轨两支一组），系统自动折算。</li>
+        <li><strong>规格</strong>：可按 mm 或英寸录入，换算固定 <strong>1 英寸 = 25mm</strong>（我司口径，不是国标 25.4）。</li>
+        <li><strong>卡口产品分左右</strong>：产品类型组合里只要含「卡口」，部件、装配、库存、出入库全部按左/右分开算，左右不串量。</li>
+        <li><strong>带 <span style="color:#f56c6c">*</span> 的是必填</strong>，没填完保存会红框提示。</li>
+        <li><strong>已确认的单据不能改</strong>：成品出入库单一旦确认，只能开红字冲销单更正，不能直接编辑或删除（见 4.3）。</li>
+        <li>列表页顶部都有筛选条，改完点「查询」；分页在列表底部。</li>
+      </ul>
+    </section>
+
+    <!-- ============ 第1章 ============ -->
+    <section class="chapter" id="ch1">
+      <h1 class="chapter__title">第1章 第一步：录入客户订单</h1>
+      <p>菜单位置：<strong>生产管理 → 订单管理 → 新增订单</strong></p>
+
+      <h2 class="section__title" id="ch1-1">1.1 填写顺序：四级结构</h2>
+      <p>一张订单分四层，从上往下填：</p>
+      <div class="flow">
+        <span class="flow__node">订单</span><span class="flow__arrow">→</span>
+        <span class="flow__node">产品行</span><span class="flow__arrow">→</span>
+        <span class="flow__node">部件组</span><span class="flow__arrow">→</span>
+        <span class="flow__node">部件行（自动展开）</span>
+      </div>
+      <ol class="steps">
+        <li><strong>订单信息</strong>：选客户（选中后自动带出默认业务员、跟单员、交货地址），填 PO#、生产单号、订单日期。</li>
+        <li><strong>产品明细</strong>：一张订单可以有多个产品，点「添加产品」增加。每个产品填货号、产品类型、规格、数量、表面处理、交期等。</li>
+        <li><strong>部件组</strong>：每个产品下至少一个组，默认「整品」。缓冲类产品可拆成「外中轨 + 内轨」分别跟踪（见 1.3）。</li>
+        <li><strong>部件行</strong>：不用手填，系统按组类型 + 轨道节数 + 是否卡口<strong>自动展开</strong>（如三节轨整品 = 外轨/中轨/内轨各一行）。只有追溯码和备注可以微调。</li>
+        <li>点右上角「保存」。</li>
+      </ol>
+
+      <h2 class="section__title" id="ch1-2">1.2 关键字段怎么填</h2>
+      <h3 class="subsection__title">订单级字段</h3>
+      <table class="field-table">
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>PO#</td><td><strong>客户订单文件上的订单编号</strong>，手工填写，自动转大写</td></tr>
+          <tr><td>生产单号</td><td>我们内部的生产单号（如 <code>GLI46212-A</code>），与 PO# <strong>一对一</strong>。<strong>台账「订单编号」列显示的就是它</strong>。系统自动生成的 ORD 号只作内部定位用</td></tr>
+          <tr><td>订单日期</td><td>下单日期，默认今天</td></tr>
+          <tr><td>业务员 / 跟单员</td><td>选客户时自动带出，可改</td></tr>
+          <tr><td>下单来源</td><td>官方订单文件 / 口头 / 电话 / 社交软件</td></tr>
+          <tr><td>期初补录</td><td>系统上线时补录历史订单才打开，见 7.1。日常新单<strong>不要开</strong></td></tr>
+          <tr><td>订单附件</td><td>客户订单文件原件，可传多个</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="subsection__title">产品级字段</h3>
+      <table class="field-table">
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>货号</td><td>如 <code>53#</code>，与产品类型组合起来就是产品型号</td></tr>
+          <tr><td>客户图号</td><td><strong>客户来图上的图号</strong>。注意与部件组里的「生产图号」不是一回事——生产图号是我们内部转化的技术图纸编号</td></tr>
+          <tr><td>产品类型</td><td><strong>可多选</strong>（如 普通 + 自锁）。<strong>只要选了「卡口」，后面全流程按左右分开算</strong></td></tr>
+          <tr><td>轨道节数</td><td>三节轨 / 二节轨。决定自动展开几行部件（三节 = 外/中/内，二节 = 外/内无中轨）</td></tr>
+          <tr><td>规格</td><td>填数值 + 选单位（mm / 英寸），系统统一折算成 mm 存储</td></tr>
+          <tr><td>数量 / 单位</td><td>单位选「套」时系统按 1 套 = 2 支折算，右侧会实时显示折算后的支数</td></tr>
+          <tr><td>表面处理</td><td>选「无」= 镀锌板等不需要外发的产品，<strong>选「无」就不能开发坯单</strong>（见 2.1）</td></tr>
+          <tr><td>交货日期</td><td>台账的逾期判断、首页的临近交期提醒都看它，<strong>务必填准</strong></td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="subsection__title">部件组字段</h3>
+      <table class="field-table">
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>组类型</td><td>整品 / 外中轨 / 内轨 / 外轨 / 中轨。<strong>同一个产品下不能重复</strong></td></tr>
+          <tr><td>生产图号</td><td>内部技术图纸号。<strong>填了会自动带出对应的开单信息（工艺）</strong>，省得手抄</td></tr>
+          <tr><td>版本号</td><td>如 <code>1.1</code></td></tr>
+          <tr><td>料厚</td><td>整品填「外×中×内」，外中轨填「外×中」，内轨填单值</td></tr>
+          <tr><td>组支数</td><td>不填则默认等于产品支数</td></tr>
+        </tbody>
+      </table>
+
+      <div class="alert alert--info">
+        订单里<strong>没有「装配车间」这个字段</strong>。装配在哪个车间做，是计划员在录装配批次时才定的（见 3.2）。
+      </div>
+
+      <h2 class="section__title" id="ch1-3">1.3 部件组怎么拆</h2>
+      <p><strong>部件组是整个系统的跟踪单位</strong>：外发、装配、入库、出库、台账的每一行，都锚定在部件组上。</p>
+      <ul>
+        <li><strong>多数产品一个组就够</strong>：组类型选「整品」，四个数按整套滑轨算。</li>
+        <li><strong>需要分开跟踪时才拆</strong>：比如缓冲类产品的外中轨和内轨图号不同、料厚不同、外发批次也不同，那就拆成「外中轨」+「内轨」两组，各自独立跟踪。</li>
+        <li><strong>拆组不拆数量</strong>：各组的支数默认都等于产品支数，不是把总数分摊到各组。</li>
+      </ul>
+      <div class="alert alert--tip">
+        <strong>省事技巧：</strong>同一产品的几个组往往只有组类型不同，图号/版本/料厚/支数都一样。点部件组表格上方的<strong>「复制上一行」</strong>，会把上一组的内容全抄过来，只把组类型自动换成下一个还没用过的，改改图号就行。
+      </div>
+
+      <h2 class="section__title" id="ch1-4">1.4 订单列表常用操作</h2>
+      <table class="field-table">
+        <thead><tr><th>操作</th><th>什么时候能用</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>编辑</td><td>未被下游单据引用时</td><td>已开过发坯单/装配批次/出入库单的订单不能改，要改先把下游单据处理掉</td></tr>
+          <tr><td>完结</td><td>进行中的订单</td><td>表示不再跟踪。<strong>完结不锁单据</strong>，已完结订单照样可以继续出入库</td></tr>
+          <tr><td>重开</td><td>已完结的订单</td><td>客户追加提货时用</td></tr>
+          <tr><td>删除</td><td>未被下游单据引用时</td><td><strong>连同产品行、部件组、部件明细一起删掉，不可恢复</strong>。谁删的系统有记录</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--warning">
+        <strong>为什么是「删除」不是「作废」：</strong>能作废的单据本来就是还没走下游流程的空单，留一条「已作废」记录对账没有意义，只会让列表越积越脏，所以直接删干净。已经走过流程的订单，系统会拦住不让删。
+      </div>
+      <p>展开列表行前面的箭头，可以看到该订单下每个产品的部件组明细（客户图号、型号、规格、图号、料厚、交期）。</p>
+    </section>
+
+    <!-- ============ 第2章 ============ -->
+    <section class="chapter" id="ch2">
+      <h1 class="chapter__title">第2章 第二步：部件外发（可选）</h1>
+      <p>菜单位置：<strong>生产管理 → 外发管理</strong>。单据名称叫<strong>发坯单</strong>。</p>
+
+      <h2 class="section__title" id="ch2-1">2.1 什么时候要外发</h2>
+      <p>产品需要做表面处理（电镀、电泳、喷涂、封漆、平滑漆…）时，把半成品部件发给外协加工厂处理，处理完再收回来。</p>
+      <div class="alert alert--info">
+        产品的<strong>表面处理选「无」（镀锌板等）就不需要外发</strong>，这类部件组不会出现在发坯单的选择列表里。
+      </div>
+
+      <h2 class="section__title" id="ch2-2">2.2 新建发坯单</h2>
+      <ol class="steps">
+        <li>点「新增发坯单」，填<strong>加工商</strong>、<strong>表面处理</strong>（必填）、颜色、计划发外日期、要求回货日期。</li>
+        <li>点「添加部件组」，选择器只会列出<strong>表面处理与单头一致</strong>的部件组。可以搜订单号/客户/生产单号/型号/图号，一次可多选。</li>
+        <li>逐行填<strong>发出重量</strong>（磅秤实测，kg）。<strong>单重</strong>会从部件信息自动带出，没有就手工填。</li>
+        <li>填完重量，<strong>发出数量会自动算出来</strong>（数量 = 重量 ÷ 单重，四舍五入），需要微调也可以直接改。</li>
+        <li>点「保存」。系统自动生成 7 位发坯单号，显示成 <code>No.0000123</code>。</li>
+      </ol>
+      <div class="alert alert--warning">
+        <strong>发出数量为什么不自动填订单数量：</strong>订单数是「应该发多少」，发坯单要记的是「实际发了多少」。如果拿订单数当默认值，很容易顺手保存成一个没过磅的假数，等回货对账时才发现对不上。所以选完部件组，重量和数量都是空的，<strong>必须过磅后录入</strong>。<br />
+        发出数量必须大于 0，保存时会逐行检查。
+      </div>
+
+      <h2 class="section__title" id="ch2-3">2.3 登记发出</h2>
+      <p>货真的拉走了，回列表点「登记发出」，填<strong>实际发外日期</strong>。单据状态从「待发出」变成「已发出」。</p>
+      <div class="alert alert--info">
+        登记发出之前单据还能整单编辑；<strong>登记发出之后要改数量，走列表的「回货登记」页里的数量修正</strong>（只能改重量/单重/数量/备注，不能加减行、不能换部件组）。
+      </div>
+
+      <h2 class="section__title" id="ch2-4">2.4 回货登记</h2>
+      <ol class="steps">
+        <li>加工厂送货回来，点「回货登记」。</li>
+        <li>按明细行填<strong>回货日期</strong>、<strong>收回重量</strong>，数量同样自动折算，可微调。</li>
+        <li><strong>一行可以分多次回货</strong>，每次登记一条记录，系统自动累计。</li>
+        <li>所有明细行都回齐（累计回货 ≥ 发出数），单据自动变成「已回齐」。</li>
+      </ol>
+      <ul>
+        <li><strong>允许回货数超过发出数</strong>：重量折算本来就有误差，系统只给黄色提示不拦截。</li>
+        <li>登记错了可以<strong>撤销回货登记</strong>，撤销后累计数和单据状态会自动退回去。</li>
+      </ul>
+      <p>单据状态流转：</p>
+      <div class="flow">
+        <span class="flow__node">1 待发出</span><span class="flow__arrow">→</span>
+        <span class="flow__node">2 已发出</span><span class="flow__arrow">→</span>
+        <span class="flow__node">3 部分回货</span><span class="flow__arrow">→</span>
+        <span class="flow__node">4 已回齐</span>
+      </div>
+
+      <h2 class="section__title" id="ch2-5">2.5 关闭尾数与作废</h2>
+      <table class="field-table">
+        <thead><tr><th>操作</th><th>什么时候用</th><th>限制</th></tr></thead>
+        <tbody>
+          <tr><td>关闭</td><td>尾数不回了、损耗核销，想把单子结掉</td><td>从「部分回货」进入，<strong>必须填关闭原因</strong>，结果变成「已回齐」</td></tr>
+          <tr><td>作废</td><td>整单开错了</td><td><strong>只有「待发出」的单能作废</strong>。已经发出去的货不能当没发生过，要处理尾数请用「关闭」</td></tr>
+        </tbody>
+      </table>
+
+      <h2 class="section__title" id="ch2-6">2.6 打印《电镀发外加工单》</h2>
+      <p>在发坯单详情/表单页点「打印」，会按<strong>公司现行的四联单版式</strong>输出，尺寸 240mm × 150mm。</p>
+      <ul>
+        <li><strong>不是 A4</strong>，请在打印机里换成四联单纸，纸装对了直接打就能对齐。</li>
+        <li>每页固定 11 行明细，超过自动续页。</li>
+        <li>抬头是公司全称「中山市海宝精密五金有限公司」。</li>
+        <li>「包装方式」列系统里没有对应字段，留空供手写。</li>
+      </ul>
+    </section>
+
+    <!-- ============ 第3章 ============ -->
+    <section class="chapter" id="ch3">
+      <h1 class="chapter__title">第3章 第三步：装配</h1>
+      <p>菜单位置：<strong>生产管理 → 装配管理</strong></p>
+
+      <h2 class="section__title" id="ch3-1">3.1 装配批次是什么</h2>
+      <p>装配是<strong>唯一纳入系统的生产工序</strong>，但只做轻量跟踪：计划员按部件组录几条「批次」记录，写清楚<strong>打算什么时候装、装多少、实际什么时候装完的</strong>。不做工序报工、不记机台工时。</p>
+      <ul>
+        <li>装配管理列表<strong>按部件组一行</strong>，显示批次数、已录量、已完成量、最早未完成的计划日、是否逾期。</li>
+        <li>点「装配批次」按钮打开弹窗，在里面看该组已有的批次并录新批次。</li>
+        <li><strong>一个组可以分多批装配</strong>，比如先装 500 支入库交货，剩下的下周再装。</li>
+        <li>卡口产品要<strong>选边别（左/右）</strong>，左右分开算；非卡口产品不用选。</li>
+      </ul>
+
+      <h2 class="section__title" id="ch3-2">3.2 录入装配批次</h2>
+      <table class="field-table">
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>边别</td><td>仅卡口产品需要，左 / 右</td></tr>
+          <tr><td>装配车间</td><td>装一~装八。<strong>在这里选</strong>——订单环节不安排车间。默认沿用该组上一批次的车间，可逐批改</td></tr>
+          <tr><td>计划开始</td><td>预计什么时候开工</td></tr>
+          <tr><td>计划完成</td><td>预计什么时候装完</td></tr>
+          <tr><td>实际完成</td><td><strong>留空 = 这批还在计划中；填了 = 这批已完成</strong></td></tr>
+          <tr><td>装配数量</td><td>这一批装多少支</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--warning">
+        <strong>最关键的一条：只有填了「实际完成」的批次才算完工</strong>，才会计入可入库量。计划开始和计划完成纯粹是排程用的，填了也不代表做完了。<br />
+        约束：计划开始不能晚于计划完成；计划完成和实际完成<strong>至少填一个</strong>。
+      </div>
+      <p>录多了、录错了可以编辑或删除，但要受 3.3 的闸门约束。<strong>部件组和边别不能改</strong>——改了等于换了个组，会把原来那组的额度悄悄抽走。要换组只能删掉重录。</p>
+
+      <h2 class="section__title" id="ch3-3">3.3 可入库量：入库闸门</h2>
+      <p>成品入库<strong>必须先有装配</strong>。系统按下面这个式子卡：</p>
+      <div class="alert alert--info" style="font-size:15px">
+        <strong>可入库量 = Σ 已完成装配量 − Σ 已入库量</strong>（卡口产品左右分别算）
+      </div>
+      <p>装配批次弹窗上方会直接显示每个边别的「已录 / 已完成 / 已入库 / 可入库」四个数，一眼就知道还能入多少。成品入库单选行时也会显示该组的可入库量。</p>
+      <ul>
+        <li><strong>支持部分装配部分入库</strong>：装完 500 支就能先入库 500 支，不用等全部装完。</li>
+        <li><strong>期初录入的入库不受这个闸门约束</strong>（上线前的存量本来就没有装配过程，见 7.2）。</li>
+        <li>删批次、下调数量、把已完成退回计划中，这三种操作系统都会复核可入库量，<strong>会导致为负就整笔拒绝</strong>，提示先去红字冲销对应的入库单。</li>
+      </ul>
+      <p>超装配（装的比订单数还多）是<strong>允许</strong>的，只给黄色提示。</p>
+    </section>
+
+    <!-- ============ 第4章 ============ -->
+    <section class="chapter" id="ch4">
+      <h1 class="chapter__title">第4章 第四步：成品入库与出库</h1>
+      <p>菜单位置：<strong>物料管理 → 成品出入库</strong></p>
+
+      <h2 class="section__title" id="ch4-1">4.1 成品入库</h2>
+      <ol class="steps">
+        <li>点「新增」，业务类型选<strong>生产入库</strong>，填单据日期。</li>
+        <li>点「添加明细」选部件组。选择器会显示每个组的<strong>可入库量</strong>，心里有数。</li>
+        <li>填入库数量（卡口产品按左右分行）。</li>
+        <li>保存 → 单据是<strong>草稿</strong>状态，此时还能改、能作废。</li>
+        <li>核对无误点<strong>「确认」</strong>。确认这一步才真正增加库存、并检查装配闸门。</li>
+      </ol>
+      <div class="alert alert--warning">
+        确认时如果提示「超过可入库量」，说明装配那边还没录够。回到装配管理，把已经装完的批次填上「实际完成」日期。
+      </div>
+
+      <h2 class="section__title" id="ch4-2">4.2 销售出库</h2>
+      <p>同样的操作，业务类型选<strong>销售出库</strong>。确认时会检查库存，<strong>不够扣会直接拒绝</strong>。</p>
+      <p>出库确认后，台账的「发货欠数」立刻减少；如果这张订单所有部件组的发货欠数都清零了，<strong>订单会自动完结</strong>（见 5.4）。</p>
+
+      <h2 class="section__title" id="ch4-3">4.3 单据做错了：红字冲销</h2>
+      <div class="alert alert--warning">
+        <strong>已确认的单据不能编辑、不能删除、不能作废。</strong>这是财务口径的要求——单据一旦生效就得留痕，改数字等于篡改历史。做错了走「红字冲销」。
+      </div>
+      <ol class="steps">
+        <li>在列表找到那张已确认的单，点<strong>「红字冲销」</strong>。</li>
+        <li>可以<strong>整单冲销，也可以按行部分冲销</strong>（比如只有一行数量填错了）。</li>
+        <li>系统生成一张红字单（单号 <code>FGR</code> 开头），方向与原单相反，<strong>建好立即生效</strong>。</li>
+        <li>原单原样保留，红字单上能追溯到被冲的是哪张单哪一行。</li>
+        <li>冲销完再重新开一张正确的单。</li>
+      </ol>
+      <p>草稿状态的单据不用这么麻烦，直接编辑或作废即可。</p>
+
+      <h2 class="section__title" id="ch4-4">4.4 库存查询</h2>
+      <p>菜单位置：<strong>物料管理 → 库存查询</strong>。按部件组（卡口分左右）显示当前结存，可按客户、订单、型号等筛选。</p>
+      <p>单号前缀速查：</p>
+      <table class="field-table">
+        <thead><tr><th>前缀</th><th>单据</th></tr></thead>
+        <tbody>
+          <tr><td>FGI</td><td>成品入库单</td></tr>
+          <tr><td>FGO</td><td>成品出库单（销售出库、期初录入）</td></tr>
+          <tr><td>FGR</td><td>红字冲销单</td></tr>
+          <tr><td>No.</td><td>发坯单（7 位纯数字）</td></tr>
+          <tr><td>ORD</td><td>系统订单号（内部定位用，业务上看生产单号）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============ 第5章 ============ -->
+    <section class="chapter" id="ch5">
+      <h1 class="chapter__title">第5章 订单跟踪台账（核心）</h1>
+      <p>菜单位置：<strong>订单跟踪台账</strong>（一级菜单，在最上面）</p>
+      <p>这是整个系统的核心产出，对应车间原来手工维护的那张 Excel 跟踪表。<strong>按部件组一行</strong>。</p>
+
+      <h2 class="section__title" id="ch5-1">5.1 四个数怎么读</h2>
+      <table class="field-table">
+        <thead><tr><th>列</th><th>怎么来的</th></tr></thead>
+        <tbody>
+          <tr><td>订单数</td><td>该部件组的订购支数</td></tr>
+          <tr><td>成品入库</td><td>累计已确认的入库数（<strong>含期初</strong>）− 对应红字冲销</td></tr>
+          <tr><td>成品出货</td><td>累计已确认的销售出库数 − 对应红字冲销</td></tr>
+          <tr><td>库存数</td><td>该组当前结存</td></tr>
+          <tr><td>外发已回货</td><td>该组所有未作废发坯单的累计回货数</td></tr>
+          <tr><td>装配完成</td><td>已填「实际完成」的批次合计</td></tr>
+          <tr><td>订单编号</td><td>显示的是<strong>生产单号</strong></td></tr>
+          <tr><td>装配车间</td><td>该组各装配批次的车间；分在不同车间会并列显示（如「装二/装五」）</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--info">
+        所有数字都是<strong>实时算出来的</strong>，不存冗余字段。所以只要单据对，台账就一定对，不存在「数据没同步」的情况。
+      </div>
+
+      <h2 class="section__title" id="ch5-2">5.2 两个欠数的区别</h2>
+      <table class="field-table">
+        <thead><tr><th>欠数</th><th>算法</th><th>回答的问题</th></tr></thead>
+        <tbody>
+          <tr><td>生产欠数</td><td>订单数 − 成品入库</td><td>生产视角：<strong>还差多少没做完</strong></td></tr>
+          <tr><td>发货欠数</td><td>订单数 − 成品出货</td><td>销售视角：<strong>还欠客户多少货</strong></td></tr>
+        </tbody>
+      </table>
+      <p>举例：订单 1000 支，已入库 1000 支、已出库 600 支 → 生产欠数 0（车间做完了），发货欠数 400（客户还没提完）。</p>
+      <p>欠数<strong>可以是负数</strong>：超产就是负的生产欠数，超发就是负的发货欠数，系统照实显示不截断。</p>
+
+      <h2 class="section__title" id="ch5-3">5.3 筛选、展开与合并行</h2>
+      <ul>
+        <li><strong>筛选</strong>：关键字（订单号/客户/生产单号/型号/货号）、业务员、跟单员、表面处理、装配车间、产品类型、交期区间，另有两个常用开关——<strong>只看有欠数</strong>、<strong>只看逾期</strong>。</li>
+        <li><strong>汇总卡</strong>：顶部六张卡是<strong>当前筛选口径</strong>的整体合计，不受分页影响。</li>
+        <li><strong>展开看流水</strong>：点行首箭头展开，能看到这个部件组的三条流水——成品出入库、外发（发出/回货）、装配批次。查「这批货到底走到哪一步了」不用来回切菜单。</li>
+        <li><strong>合并单元格</strong>：同一个产品拆成多个部件组时，产品级的列（客户、订单编号、规格、交期等）会跨行合并成一格，跟手工台账的观感一致。</li>
+        <li><strong>状态标签</strong>：逾期（红）= 交期已过且还欠发货；已交清（绿）= 发货欠数 ≤ 0；跟进中（黄）= 其余。</li>
+      </ul>
+
+      <h2 class="section__title" id="ch5-4">5.4 订单自动完结与重开</h2>
+      <ul>
+        <li>出入库确认或冲销后，系统会自动检查：这张订单<strong>所有部件组的发货欠数都 ≤ 0</strong> → 订单<strong>自动完结</strong>。</li>
+        <li>反过来，已完结的订单如果因为冲销让某个组的发货欠数又变正了 → <strong>自动重开</strong>。</li>
+        <li>也可以在订单列表手工点「完结」/「重开」。</li>
+      </ul>
+      <div class="alert alert--tip">
+        完结只是「不再跟踪」的台账口径，<strong>不锁单据</strong>。客户临时追加提货，已完结订单照样可以出库。
+      </div>
+    </section>
+
+    <!-- ============ 第6章 ============ -->
+    <section class="chapter" id="ch6">
+      <h1 class="chapter__title">第6章 首页看板</h1>
+      <p>登录后的落地页，销售视角的待办汇总。<strong>只统计「进行中」的订单</strong>——已完结的不再跟踪，不该占用注意力。</p>
+
+      <h3 class="subsection__title">四张汇总卡</h3>
+      <table class="field-table">
+        <thead><tr><th>卡片</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>进行中订单</td><td>当前还在跟的订单张数</td></tr>
+          <tr><td>总生产欠数</td><td>所有进行中订单还差多少支没做完</td></tr>
+          <tr><td>总发货欠数</td><td>所有进行中订单还欠客户多少支</td></tr>
+          <tr><td>逾期订单</td><td>交期已过且还欠发货的订单张数</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--info">
+        看板的欠数<strong>只累加欠的部分</strong>，某个组超发了不会去抵消另一个组欠的量——B 客户的货没到，不会因为 A 客户多发了就算平。台账的汇总卡是净额口径，两者服务的问题不同，数字对不上是正常的。
+      </div>
+
+      <h3 class="subsection__title">三张待办列表</h3>
+      <ul>
+        <li><strong>逾期未发货</strong>：交期已过且还欠货，逾期最久的排最前。</li>
+        <li><strong>临近交期</strong>：今天起 7 天内到期且还欠货，剩 2 天内的标红。</li>
+        <li><strong>外发超期未回齐</strong>：要求回货日期已过、单子还停在「已发出」或「部分回货」。已回齐（含手工关闭）和已作废的不算。</li>
+      </ul>
+      <p>每张列表最多显示 10 条，超过会提示「仅显示前 10 条」，点右上角可跳到台账或外发管理看全量。</p>
+    </section>
+
+    <!-- ============ 第7章 ============ -->
+    <section class="chapter" id="ch7">
+      <h1 class="chapter__title">第7章 上线准备：期初录入</h1>
+      <p>菜单位置：<strong>物料管理 → 期初录入</strong></p>
+      <p>系统刚上线时，车间和仓库已经有一堆在做的订单和现成的库存。期初录入就是把这些「上线之前就存在的数」一次性搬进系统，之后台账才对得上。</p>
+      <div class="alert alert--warning">
+        这一章是<strong>上线阶段的一次性工作</strong>，日常业务用不到。做之前先跟管理员确认好口径。
+      </div>
+
+      <h2 class="section__title" id="ch7-1">7.1 先补录未完结的历史订单</h2>
+      <ol class="steps">
+        <li>把还没交完的历史订单，按第 1 章的方式正常录进系统。</li>
+        <li>录的时候把订单信息里的<strong>「期初补录」开关打开</strong>——这样会免掉下单来源、附件之类非关键项的必填校验，四个数的口径与正常订单完全一样。</li>
+        <li>录完之后再来挂期初库存。</li>
+      </ol>
+
+      <h2 class="section__title" id="ch7-2">7.2 成品期初</h2>
+      <p>期初录入页有两个成品页签：</p>
+      <table class="field-table">
+        <thead><tr><th>类型</th><th>什么时候用</th><th>效果</th></tr></thead>
+        <tbody>
+          <tr><td>挂订单</td><td>这批库存属于某张<strong>还没交完</strong>的订单</td><td>选具体的部件组录数量，<strong>会计入该订单的完成数与欠数</strong></td></tr>
+          <tr><td>不挂订单</td><td>订单早已完结，只是仓库还剩一些货</td><td>只按货号、规格等属性登记，<strong>只增加库存数，不影响任何订单的欠数</strong></td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>期初单据走成品出入库通道，单号是 <code>FGO</code> 开头，<strong>保存即生效</strong>（不需要再点确认）。</li>
+        <li><strong>期初不受装配闸门约束</strong>——上线前的存货本来就没在系统里走过装配。</li>
+        <li>录错了同样可以红字冲销。</li>
+      </ul>
+
+      <h2 class="section__title" id="ch7-3">7.3 部件期初</h2>
+      <p>还没装配成成品的半成品部件（外轨/中轨/内轨），录在「部件期初」页签。</p>
+      <p>部件不挂订单，<strong>按七个属性归集</strong>：部件类型、边别、货号、节数、产品类型、料厚、规格。属性完全一致的会累加到同一条余量记录上。</p>
+      <div class="alert alert--warning">
+        部件期初是<strong>整批全有全无</strong>：一批里只要有一行填错，整批都不入库，改完重新提交。这样设计是因为部件台账是累加的——如果部分成功，你改完错行再交一次，正确的那些行就会被<strong>重复累加</strong>。
+      </div>
+
+      <h2 class="section__title" id="ch7-4">7.4 部件台账</h2>
+      <p>菜单位置：<strong>物料管理 → 部件台账</strong>。查半成品部件的当前余量。</p>
+      <ul>
+        <li>余量的<strong>唯一修改方式是「调整」</strong>：填增减数量 + 原因，系统留一条流水。没有「直接把余量改成 X」这种操作。</li>
+        <li>点余量行可以下钻看它的全部变动流水（期初 / 手工调整，各条都有人和原因）。</li>
+      </ul>
+      <div class="alert alert--info">
+        <strong>当前版本部件台账是一本「参考账」</strong>：只有期初和手工调整，<strong>不会跟着外发、入库自动加减</strong>。因为系统不做车间报工，部件的产出没有采集点。需要用它对账时，请配合人工盘点。
+      </div>
+    </section>
+
+    <!-- ============ 第8章 ============ -->
+    <section class="chapter" id="ch8">
+      <h1 class="chapter__title">第8章 基础数据</h1>
+      <p>业务单据引用的主数据。<strong>录订单之前先把这些维护好</strong>，后面能少填很多字。</p>
+      <table class="field-table">
+        <thead><tr><th>模块</th><th>菜单位置</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td>客户资料</td><td>基础数据 → 客户资料</td><td>客户代码/名称/联系人，还有<strong>默认业务员、跟单员、交货地址</strong>——录订单选中客户就自动带出。支持 Excel 批量导入</td></tr>
+          <tr><td>部门信息</td><td>基础数据 → 部门信息</td><td>组织架构，账号归属部门</td></tr>
+          <tr><td>部件信息</td><td>基础数据 → 部件信息</td><td>产品主数据：货号、名称、产品类型、规格、<strong>单重</strong>（开发坯单时自动带出）等</td></tr>
+          <tr><td>开单信息</td><td>工艺管理 → 开单信息</td><td>按<strong>生产图号</strong>维护的工艺资料：机台、长度要求、特殊要求、模具号、工艺更新说明与附图。<strong>录订单填了生产图号就自动带入</strong>。支持批量导入导出</td></tr>
+          <tr><td>设备信息</td><td>设备管理 → 设备信息</td><td>机台档案</td></tr>
+        </tbody>
+      </table>
+      <div class="alert alert--info">
+        <strong>基础数据改了不会影响已有单据</strong>：单据在创建时就把关键字段抄了一份快照。比如客户改名，历史订单上显示的还是当时的名字——这是有意的，否则历史单据会失真。
+      </div>
+      <p>批量导入的通用规则：先下载模板 → 按模板填 → 上传。<strong>整批校验全部通过才入库</strong>，任何一行有问题都会列出行号和原因，一行都不会入。</p>
+    </section>
+
+    <!-- ============ 第9章 ============ -->
+    <section class="chapter" id="ch9">
+      <h1 class="chapter__title">第9章 管理员篇</h1>
+
+      <h3 class="subsection__title">给新员工开账号</h3>
+      <ol class="steps">
+        <li>系统管理 → 用户管理 → 新增，填账号、姓名、部门、手机号。</li>
+        <li>勾选角色。系统内置 17 个岗位角色（总经理、业务员、跟单员、计划员、仓管员…）。</li>
+        <li>保存后把初始密码给本人，<strong>首次登录会强制改密</strong>。</li>
+      </ol>
+
+      <h3 class="subsection__title">角色与权限</h3>
+      <ul>
+        <li>系统管理 → 角色管理，勾选该角色能看的菜单和能点的按钮。</li>
+        <li><strong>改完权限，相关用户必须重新登录才生效</strong>（权限写在登录令牌里）。</li>
+        <li>内置角色不能删除，但可以改权限、可以临时停用。</li>
+        <li><code>admin</code> 恒定拥有全部权限，不需要也不应该手工配。</li>
+      </ul>
+
+      <h3 class="subsection__title">数据字典</h3>
+      <p>系统管理 → 数据字典。<strong>表面处理、装配车间、产品类型</strong>这些下拉选项都在这里维护，业务上新增一种表面处理不需要改代码。</p>
+      <div class="alert alert--warning">
+        表面处理里的<strong>「无」是保留值，不能删也不能改它的键值</strong>——系统靠它判断产品需不需要外发。
+      </div>
+
+      <h3 class="subsection__title">日志与配置</h3>
+      <ul>
+        <li><strong>操作日志</strong>：谁在什么时候做了什么（新增/修改/删除/确认/冲销/导入都有记录），可按模块、人员、时间筛。出了争议先查这里。</li>
+        <li><strong>系统配置</strong>：系统名称、Logo、登录页背景等。</li>
+        <li><strong>更新日志</strong>：每次版本更新的内容，用户在这里看系统改了什么。</li>
+      </ul>
+    </section>
+
+    <!-- ============ 第10章 ============ -->
+    <section class="chapter" id="ch10">
+      <h1 class="chapter__title">第10章 常见问题 FAQ</h1>
+
+      <h3 class="subsection__title">订单</h3>
+      <p><strong>Q：订单为什么不能编辑/删除？</strong><br />
+      A：它已经被发坯单、装配批次或出入库单引用了。提示里会说明被几条什么单据引用。要改先把下游单据冲销或作废掉。</p>
+
+      <p><strong>Q：生产单号填在哪？我在产品行里找不到了。</strong><br />
+      A：生产单号是<strong>订单级</strong>字段，在订单信息区、PO# 旁边。一张订单只有一个生产单号。</p>
+
+      <p><strong>Q：客户图号和生产图号有什么区别？</strong><br />
+      A：客户图号是客户来图上的编号，填在产品行；生产图号是我们内部转化的技术图纸编号，填在部件组，而且填了会自动带出开单信息。</p>
+
+      <p><strong>Q：订单里怎么没有装配车间了？</strong><br />
+      A：已经取消了。车间在录装配批次的时候选，那时候才知道排给谁做。</p>
+
+      <h3 class="subsection__title">外发</h3>
+      <p><strong>Q：选完部件组，发出数量是 0，怎么不自动填？</strong><br />
+      A：这是有意的。发出数量必须由过磅重量算出来（重量 ÷ 单重），拿订单数当默认值容易存下没过磅的假数。填了重量数量就自动出来了。</p>
+
+      <p><strong>Q：保存提示「第 N 行发出数量必须大于 0」。</strong><br />
+      A：那一行的重量或单重没填。单重没有的话去「基础数据 → 部件信息」补上，或者直接在这一行手工填。</p>
+
+      <p><strong>Q：为什么发坯单不能作废？</strong><br />
+      A：已经发出去的单不能作废。尾数不回请用「关闭」并填原因，单据会结成「已回齐」。</p>
+
+      <h3 class="subsection__title">装配与入库</h3>
+      <p><strong>Q：入库确认时提示超过可入库量。</strong><br />
+      A：可入库量 = 已完成装配量 − 已入库量。多半是装配批次录了但<strong>没填「实际完成」日期</strong>，系统就不认为它装完了。</p>
+
+      <p><strong>Q：装配批次删不掉。</strong><br />
+      A：删了会让可入库量变成负数，说明这批已经被入库消耗了。要先把对应的入库单红字冲销。</p>
+
+      <p><strong>Q：期初入库为什么不用管装配？</strong><br />
+      A：上线之前的存货本来就没在系统里走过装配流程，硬卡会让这个组永远入不了库。</p>
+
+      <h3 class="subsection__title">台账与看板</h3>
+      <p><strong>Q：台账的合计和首页看板的数字对不上。</strong><br />
+      A：正常。看板只算「进行中」订单且只累加欠的部分；台账算的是当前筛选范围的净额（含超产超发抵扣）。两者回答的是不同问题。</p>
+
+      <p><strong>Q：订单明明还没发完，怎么自动完结了？</strong><br />
+      A：完结看的是<strong>发货欠数</strong>。如果所有部件组都已出库达到订单数就会完结。要继续跟踪点「重开」即可，完结也不影响继续出入库。</p>
+
+      <p><strong>Q：台账某行的装配车间是空的。</strong><br />
+      A：这个部件组还没录任何装配批次。车间来自批次，没批次自然没车间。</p>
+
+      <h3 class="subsection__title">其它</h3>
+      <p><strong>Q：菜单少了几项 / 按钮点了提示没权限。</strong><br />
+      A：角色权限问题，找管理员加。<strong>加完要重新登录</strong>。</p>
+
+      <p><strong>Q：页面按钮点了没反应。</strong><br />
+      A：多半是系统刚更新过、你的页面还是旧版本。刷新一次（Ctrl+F5）即可。</p>
+
+      <p><strong>Q：数字算错了怎么办？</strong><br />
+      A：台账所有数字都是从单据实时算出来的，不存在算错但单据对的情况。先展开台账行看三条流水，一般能定位到是哪张单录错了，然后红字冲销更正。</p>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  function jump(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (window.innerWidth <= 768) document.querySelector('.sidebar').classList.remove('open');
+  }
+
+  // 搜索过滤 TOC
+  function filterToc(keyword) {
+    const items = document.querySelectorAll('.toc-item, .toc-sub');
+    const kw = keyword.trim().toLowerCase();
+    items.forEach(function (item) {
+      if (!kw) { item.style.display = ''; return; }
+      const text = (item.textContent + ' ' + (item.dataset.key || '')).toLowerCase();
+      item.style.display = text.indexOf(kw) >= 0 ? '' : 'none';
+    });
+  }
+
+  // 滚动高亮当前章节
+  (function () {
+    const items = document.querySelectorAll('.toc-item, .toc-sub');
+    const anchors = document.querySelectorAll('.chapter, .section__title');
+    window.addEventListener('scroll', function () {
+      let current = '';
+      anchors.forEach(function (a) {
+        if (a.id && a.getBoundingClientRect().top <= 80) current = a.id;
+      });
+      items.forEach(function (item) { item.classList.remove('active'); });
+      items.forEach(function (item) {
+        const oc = item.getAttribute('onclick') || '';
+        if (current && oc.indexOf("'" + current + "'") >= 0) item.classList.add('active');
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
