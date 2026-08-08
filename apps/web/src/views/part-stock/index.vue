@@ -175,7 +175,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="料厚">
-              <el-input v-model="form.materialThickness" :disabled="!!editRow" placeholder="如 1.2×1.0×1.2" />
+              <el-input v-model="form.materialThickness" :disabled="!!editRow" placeholder="如 1.2" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
