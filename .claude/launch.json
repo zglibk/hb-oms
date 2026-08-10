@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hb-oms-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@hb-oms/server", "dev"],
+      "port": 8100
+    },
+    {
+      "name": "hb-oms-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@hb-oms/web", "dev"],
+      "port": 5174
+    }
+  ]
+}

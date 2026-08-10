@@ -85,7 +85,12 @@ export class OrderService {
   }
 
   async findOne(id: number) {
-    const order = await this.orderRepo.findOne({ where: { id } });
+    // otherReq 实体上标了 select:false（列表不拉富文本正文），详情须显式补选
+    const order = await this.orderRepo
+      .createQueryBuilder('o')
+      .addSelect('o.otherReq')
+      .where('o.id = :id', { id })
+      .getOne();
     if (!order) throw new NotFoundException('订单不存在');
     const products = await this.productRepo.find({ where: { orderId: id }, order: { sort: 'ASC', id: 'ASC' } });
     const groups = await this.groupRepo.find({ where: { orderId: id }, order: { sort: 'ASC', id: 'ASC' } });
@@ -127,6 +132,7 @@ export class OrderService {
           attachmentIds: dto.attachmentIds ?? null,
           isOpening: dto.isOpening ?? 0,
           remark: dto.remark ?? null,
+          otherReq: dto.otherReq ?? null,
           status: ORDER_STATUS.ACTIVE,
           ...auditOnCreate(user),
         }),
@@ -161,6 +167,7 @@ export class OrderService {
         attachmentIds: dto.attachmentIds ?? null,
         isOpening: dto.isOpening ?? order.isOpening,
         remark: dto.remark ?? null,
+        otherReq: dto.otherReq ?? null,
         ...auditOnUpdate(user),
       });
       await mgr.getRepository(OrderPart).delete({ orderId: id });

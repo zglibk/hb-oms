@@ -78,6 +78,8 @@ export interface OrderItem {
   status: number;
   isOpening: number;
   remark: string | null;
+  /** 订单备注（图文混排 HTML）；列表接口不返回，仅详情带出 */
+  otherReq?: string | null;
   creatorName?: string | null;
   updaterName?: string | null;
   createdAt?: string;
@@ -145,6 +147,8 @@ export interface OrderPayload {
   attachmentIds?: string;
   isOpening?: number;
   remark?: string;
+  /** 订单备注（图文混排 HTML，wangEditor 输出） */
+  otherReq?: string;
   products: OrderProductPayload[];
 }
 
@@ -153,6 +157,10 @@ export const getOrderList = (params: OrderQuery) =>
 
 export const getOrderDetail = (id: number) =>
   request.get<any, OrderItem>(`/api/order/${id}`);
+
+/** 导出总计划（按当前筛选全量导出，一行=一个产品行；四数与台账同口径） */
+export const exportTotalPlan = (params: Omit<OrderQuery, 'page' | 'pageSize'>) =>
+  request.get<any, Blob>('/api/order/export/total-plan', { params, responseType: 'blob' });
 
 export const createOrder = (data: OrderPayload) =>
   request.post<any, { id: number; orderNo: string }>('/api/order', data);

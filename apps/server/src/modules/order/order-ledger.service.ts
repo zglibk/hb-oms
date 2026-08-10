@@ -10,6 +10,7 @@ import {
   UNIT_OPTIONS,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
+import { QueryOrderDto } from './dto/order.dto';
 // 单据族 SQL 与参数是台账与订单自动完结共用的欠数口径，唯一事实源在 order-owed.util
 import {
   INBOUND_FAMILY_PARAMS,
@@ -136,6 +137,14 @@ export class OrderLedgerService {
     if (query.deliveryTo) {
       where.push('p.delivery_date <= ?');
       params.push(query.deliveryTo);
+    }
+    if (query.orderDateFrom) {
+      where.push('o.order_date >= ?');
+      params.push(query.orderDateFrom);
+    }
+    if (query.orderDateTo) {
+      where.push('o.order_date <= ?');
+      params.push(query.orderDateTo);
     }
     if (query.surfaceType) {
       where.push('p.surface_type = ?');
@@ -574,6 +583,254 @@ export class OrderLedgerService {
 
     // 分隔符用半角，全角空格会被 eslint no-irregular-whitespace 拦下
     ws.getCell(`A${ws.rowCount + 2}`).value = `导出时间：${today} | 导出行数：${list.length}`;
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  /**
+   * ===== 导出总计划（订单列表页，对齐 hb-mes 的「总计划」）=====
+   *
+   * 行粒度 = **订单产品行**（一行一个产品），与台账导出的部件组粒度互补：
+   * 总计划给业务/PMC 看"这张单的这个产品做到哪了"，台账给车间看逐组明细。
+   *
+   * **四数不另写聚合 SQL**：直接调 findLedger 拿部件组行再按 orderProductId 汇总，
+   * 与台账页、订单自动完结共用同一份口径（§5.6）。一个产品跨多个部件组时，
+   * 组级字段（生产图号/版本/料厚/组类型）去重后用「/」并列。
+   */
+  async exportTotalPlan(query: QueryOrderDto): Promise<Buffer> {
+    // 台账口径本就排除作废单；按作废筛选再导出只会得到空文件，不如直说
+    if (query.status === ORDER_STATUS.CANCELLED) {
+      throw new BadRequestException('已作废订单不纳入总计划，请改选其他状态后再导出');
+    }
+
+    const { list, total } = await this.findLedger({
+      keyword: query.keyword,
+      orderStatus: query.status,
+      orderDateFrom: query.dateFrom,
+      orderDateTo: query.dateTo,
+      page: 1,
+      pageSize: EXPORT_MAX_ROWS,
+    });
+    if (!total) {
+      throw new BadRequestException('当前筛选条件下没有订单数据，未生成导出文件');
+    }
+    if (total > EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `当前筛选结果 ${total} 个部件组，超过单次导出上限 ${EXPORT_MAX_ROWS}；` +
+          '请先按关键字 / 状态 / 下单日期区间缩小范围再导出',
+      );
+    }
+
+    // 1) 按产品行汇总（保持 findLedger 的排序：交期升序）
+    interface PlanRow {
+      first: LedgerRow;
+      groupTypes: string[];
+      drawingNos: string[];
+      drawingVersions: string[];
+      thicknesses: string[];
+      qtyPcs: number;
+      inQty: number;
+      outQty: number;
+      stockQty: number;
+      returnedQty: number;
+      assembledQty: number;
+      workshops: string[];
+      overdue: boolean;
+    }
+    // 先按产品分桶（Map 保留首次出现顺序 = findLedger 的交期排序）
+    const groupsByProduct = new Map<number, LedgerRow[]>();
+    for (const r of list) {
+      const arr = groupsByProduct.get(r.orderProductId) ?? [];
+      arr.push(r);
+      groupsByProduct.set(r.orderProductId, arr);
+    }
+    const pushUniq = (arr: string[], v: string | null) => {
+      if (v && !arr.includes(v)) arr.push(v);
+    };
+    const planRows: PlanRow[] = [];
+    for (const groups of groupsByProduct.values()) {
+      // 组级字段并列时按**组序正序**（台账排序是 g.id DESC，直接拼会得到
+      // 「内轨/外中轨」这种与订单表单相反的顺序，看表的人要多想一步）
+      const ordered = [...groups].sort((a, b) => a.orderPartGroupId - b.orderPartGroupId);
+      const row: PlanRow = {
+        first: ordered[0],
+        groupTypes: [], drawingNos: [], drawingVersions: [], thicknesses: [],
+        qtyPcs: 0, inQty: 0, outQty: 0, stockQty: 0, returnedQty: 0, assembledQty: 0,
+        workshops: [], overdue: false,
+      };
+      for (const r of ordered) {
+        pushUniq(row.groupTypes, r.groupType);
+        pushUniq(row.drawingNos, r.drawingNo);
+        pushUniq(row.drawingVersions, r.drawingVersion);
+        pushUniq(row.thicknesses, r.materialThickness);
+        r.assemblyWorkshops.forEach((w) => pushUniq(row.workshops, w));
+        row.qtyPcs += r.qtyPcs;
+        row.inQty += r.inQty;
+        row.outQty += r.outQty;
+        row.stockQty += r.stockQty;
+        row.returnedQty += r.returnedQty;
+        row.assembledQty += r.assembledQty;
+        row.overdue = row.overdue || r.overdue;
+      }
+      planRows.push(row);
+    }
+
+    // 2) 台账行不含的产品/订单侧列，单独平选一次（纯取列，无聚合，不涉口径）
+    const productIds = [...groupsByProduct.keys()];
+    const extraRows: any[] = await this.dataSource.query(
+      `SELECT p.id            AS productId,
+              p.product_name  AS productName,
+              p.customer_drawing_no AS customerDrawingNo,
+              p.sheet_material AS sheetMaterial,
+              p.is_new_order  AS isNewOrder,
+              p.remark        AS remark,
+              o.po_no         AS poNo,
+              o.status        AS orderStatus
+         FROM t_order_product p
+         JOIN t_order o ON o.id = p.order_id
+        WHERE p.id IN (${productIds.map(() => '?').join(',')})`,
+      productIds,
+    );
+    const extraMap = new Map<number, any>(
+      extraRows.map((r) => [Number(r.productId), r]),
+    );
+
+    const dict = await this.loadDictLabels([
+      'surface_type', 'assembly_workshop', 'product_type', 'rail_section', 'part_group_type',
+    ]);
+    const label = (type: string, v: string | null) =>
+      v ? (dict.get(`${type}:${v}`) ?? v) : '';
+    /** 多值（逗号串或数组）逐个转中文，用 / 并列 */
+    const labels = (type: string, vs: string[] | string | null) => {
+      const arr = Array.isArray(vs) ? vs : this.splitList(vs);
+      return arr.map((v) => label(type, v)).filter(Boolean).join('/');
+    };
+    const unitLabel = (v: string | null) =>
+      UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
+    const statusText = (s: number) =>
+      s === ORDER_STATUS.FINISHED ? '已完结' : s === ORDER_STATUS.CANCELLED ? '已作废' : '进行中';
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('总计划');
+    const columns: Array<{ header: string; width: number }> = [
+      { header: '下单日期', width: 12 },
+      { header: '业务员', width: 10 },
+      { header: '跟单员', width: 10 },
+      { header: '客户', width: 20 },
+      { header: '订单编号', width: 16 },
+      { header: 'PO#', width: 14 },
+      { header: '货号', width: 10 },
+      { header: '产品编码', width: 14 },
+      { header: '产品名称', width: 16 },
+      { header: '客户图号', width: 14 },
+      { header: '产品类型', width: 12 },
+      { header: '产品类别', width: 10 },
+      { header: '部件组', width: 12 },
+      { header: '规格', width: 12 },
+      { header: '订单数量', width: 10 },
+      { header: '单位', width: 7 },
+      { header: '订单数(支)', width: 11 },
+      { header: '表面处理', width: 11 },
+      { header: '颜色', width: 10 },
+      { header: '材质', width: 10 },
+      { header: '生产图号', width: 16 },
+      { header: '版本', width: 8 },
+      { header: '料厚', width: 14 },
+      { header: '外发已回货', width: 11 },
+      { header: '装配车间', width: 12 },
+      { header: '装配完成', width: 10 },
+      { header: '成品入库', width: 10 },
+      { header: '生产欠数', width: 10 },
+      { header: '成品出货', width: 10 },
+      { header: '发货欠数', width: 10 },
+      { header: '库存数', width: 10 },
+      { header: '订单交期', width: 12 },
+      { header: '是否新单', width: 10 },
+      { header: '出口国家', width: 12 },
+      { header: '订单状态', width: 10 },
+      { header: '交付情况', width: 10 },
+      { header: '备注', width: 20 },
+    ];
+    ws.columns = columns.map((c) => ({ header: c.header, width: c.width }));
+    const head = ws.getRow(1);
+    head.font = { bold: true };
+    head.alignment = { vertical: 'middle', horizontal: 'center' };
+    head.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+
+    let sumQtyPcs = 0, sumIn = 0, sumOut = 0, sumStock = 0;
+    planRows.forEach((r) => {
+      const f = r.first;
+      const ex = extraMap.get(f.orderProductId) ?? {};
+      const productionOwed = r.qtyPcs - r.inQty;
+      const deliveryOwed = r.qtyPcs - r.outQty;
+      sumQtyPcs += r.qtyPcs;
+      sumIn += r.inQty;
+      sumOut += r.outQty;
+      sumStock += r.stockQty;
+      ws.addRow([
+        f.orderDate ?? '',
+        f.salesman ?? '',
+        f.merchandiser ?? '',
+        f.customerName ?? '',
+        f.productionNo || f.orderNo || '',
+        ex.poNo ?? '',
+        f.itemNo ?? '',
+        f.materialCode ?? '',
+        ex.productName ?? '',
+        ex.customerDrawingNo ?? '',
+        labels('product_type', f.productType),
+        label('rail_section', f.railSection),
+        labels('part_group_type', r.groupTypes),
+        f.dimensionText ?? '',
+        f.orderQty,
+        unitLabel(f.unit),
+        r.qtyPcs,
+        label('surface_type', f.surfaceType),
+        f.color ?? '',
+        ex.sheetMaterial ?? '',
+        r.drawingNos.join('/'),
+        r.drawingVersions.join('/'),
+        r.thicknesses.join('/'),
+        r.returnedQty,
+        labels('assembly_workshop', r.workshops),
+        r.assembledQty,
+        r.inQty,
+        productionOwed,
+        r.outQty,
+        deliveryOwed,
+        r.stockQty,
+        f.deliveryDate ?? '',
+        Number(ex.isNewOrder) === 1 ? '是' : '否',
+        f.isExport ? (f.exportCountry ?? '出口') : '',
+        statusText(Number(ex.orderStatus)),
+        r.overdue ? '逾期' : deliveryOwed <= 0 ? '已交清' : '跟进中',
+        ex.remark ?? '',
+      ]);
+    });
+
+    // 汇总行：口径与上面逐行一致（合计四数），列位对齐
+    const totalRow = ws.addRow([
+      '合计', '', '', `${planRows.length} 个产品`, '', '', '', '', '', '', '', '', '', '', '', '',
+      sumQtyPcs,
+      '', '', '', '', '', '', '', '', '',
+      sumIn,
+      sumQtyPcs - sumIn,
+      sumOut,
+      sumQtyPcs - sumOut,
+      sumStock,
+      '', '', '', '', '', '',
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    ws.getCell(`A${ws.rowCount + 2}`).value =
+      `导出时间：${today} | 产品行数：${planRows.length} | 部件组行数：${list.length}`;
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 

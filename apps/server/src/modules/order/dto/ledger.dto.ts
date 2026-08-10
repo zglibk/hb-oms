@@ -26,6 +26,15 @@ export class QueryLedgerDto {
 
   @IsOptional() @IsDateString() deliveryTo?: string;
 
+  /**
+   * 下单日期区间。台账页暂未用，由「导出总计划」复用本查询时传入——
+   * 订单列表按下单日期筛选，总计划的四数又必须走台账这一份口径，
+   * 故把筛选条件补进来，而不是在导出侧另写一份聚合 SQL。
+   */
+  @IsOptional() @IsDateString() orderDateFrom?: string;
+
+  @IsOptional() @IsDateString() orderDateTo?: string;
+
   /** 表面处理（字典 surface_type） */
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 

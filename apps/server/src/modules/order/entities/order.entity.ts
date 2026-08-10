@@ -73,6 +73,24 @@ export class Order {
   @Column({ type: 'varchar', length: 255, nullable: true, comment: '备注' })
   remark: string | null;
 
+  /**
+   * 订单备注（图文混排）：wangEditor 输出的 HTML，图片已上传为真实 URL。
+   * 与上面的纯文本 remark 并存——remark 是一句话摘要（列表列宽有限），
+   * 本字段承载客户来函要求、包装示意图等需要图文说明的内容。
+   */
+  /**
+   * `select: false`：列表页一次拉 20 张单，富文本正文（含多张图片的 <img> 标签）
+   * 白白撑大响应体，而列表根本不展示它。详情接口用 addSelect('o.otherReq') 显式补选。
+   */
+  @Column({
+    name: 'other_req',
+    type: 'text',
+    nullable: true,
+    select: false,
+    comment: '订单备注（图文混排HTML，wangEditor 输出）',
+  })
+  otherReq: string | null;
+
   @Column({ name: 'creator_id', type: 'int', nullable: true, comment: '创建人ID' })
   creatorId: number | null;
 

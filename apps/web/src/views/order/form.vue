@@ -106,10 +106,28 @@
           </el-col>
           <el-col :xs="24" :md="8">
             <el-form-item label="备注">
-              <el-input v-model="form.remark" />
+              <el-input v-model="form.remark" placeholder="一句话摘要，列表可见" />
             </el-form-item>
           </el-col>
         </el-row>
+
+        <!-- 订单备注（图文混排）：承载客户来函要求、包装示意图等
+             需要配图说明的内容；上面的「备注」是列表可见的一句话摘要 -->
+        <div class="req-block">
+          <div class="req-label">
+            <span class="req-label__text">订单备注</span>
+            <el-button
+              link
+              size="small"
+              type="info"
+              :icon="reqCollapsed ? ArrowDown : ArrowUp"
+              @click="reqCollapsed = !reqCollapsed"
+            >{{ reqCollapsed ? '展开' : '收起' }}</el-button>
+          </div>
+          <div v-show="!reqCollapsed">
+            <rich-editor ref="richEditorRef" v-model="form.otherReq" />
+          </div>
+        </div>
 
         <div class="section-title">
           产品明细
@@ -312,7 +330,7 @@
 import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type UploadFile } from 'element-plus';
-import { Back, Plus, Delete, Upload, CopyDocument, QuestionFilled } from '@element-plus/icons-vue';
+import { Back, Plus, Delete, Upload, CopyDocument, QuestionFilled, ArrowDown, ArrowUp } from '@element-plus/icons-vue';
 import {
   createOrder,
   getOrderDetail,
@@ -323,6 +341,7 @@ import {
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { getProcessInfoByDrawing } from '@/api/process-info';
 import { uploadFile } from '@/api/file';
+import RichEditor from '@/components/RichEditor.vue';
 import {
   ORDER_SOURCE,
   ORDER_TYPE,
@@ -446,8 +465,14 @@ const form = reactive({
   /** 期初补录标记：0正常 1期初补录（免非关键必填校验，四数口径不变，§4.8） */
   isOpening: 0,
   remark: '',
+  /** 订单备注（图文混排 HTML，wangEditor 输出） */
+  otherReq: '',
   products: [emptyProduct()] as ProductRow[],
 });
+
+/** 订单备注版块折叠态：新建时展开引导填写，编辑时有内容才展开 */
+const reqCollapsed = ref(false);
+const richEditorRef = ref<InstanceType<typeof RichEditor>>();
 /** el-switch 需要独立的读写代理，直接绑 form.isOpening 在 reactive 上也可，此处保持显式 */
 const isOpeningOrder = computed({
   get: () => form.isOpening,
@@ -525,6 +550,7 @@ async function init() {
         orderSource: row.orderSource ?? '',
         isOpening: row.isOpening ?? 0,
         remark: row.remark ?? '',
+        otherReq: row.otherReq ?? '',
         products: row.products.map((p) => ({
           _key: nextKey(),
           _types: parseProductTypes(p.productType),
@@ -680,6 +706,9 @@ function openAttachment(url: string) {
 /* ===== 保存 ===== */
 async function onSave() {
   await formRef.value?.validate();
+  // 富文本里插入的图片此前只是本地 blob 预览，保存前统一上传并把 blob URL 换成真实
+  // URL；不 flush 就提交，落库的 HTML 里全是刷新即失效的 blob 地址。
+  await richEditorRef.value?.flushUploads();
   const payload: OrderPayload = {
     poNo: form.poNo || undefined,
     productionNo: form.productionNo || undefined,
@@ -691,6 +720,7 @@ async function onSave() {
     orderSource: form.orderSource || undefined,
     attachmentIds: JSON.stringify(attachments.value),
     remark: form.remark || undefined,
+    otherReq: form.otherReq || undefined,
     products: form.products.map<OrderProductPayload>((p, i) => ({
       orderType: p.orderType,
       isNewOrder: p.isNewOrder,
@@ -787,6 +817,18 @@ export default { name: 'OrderForm' };
   .ml12 { margin-left: 12px; }
 }
 .order-form { max-width: 1280px; }
+
+/* 订单备注（富文本）版块：标题条与 .section-title 同视觉语言，但带折叠按钮 */
+.req-block { margin-top: 8px; }
+.req-label {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px;
+  .req-label__text {
+    font-size: 14px; font-weight: 600; color: var(--el-text-color-primary);
+    border-left: 4px solid var(--el-color-primary);
+    padding-left: 10px; line-height: 1.3;
+  }
+}
 .product-card {
   margin-bottom: 14px;
   border: 1px solid var(--el-border-color);

@@ -154,6 +154,13 @@ export class CreateOrderDto {
 
   @IsOptional() @IsString() @MaxLength(255) remark?: string;
 
+  /**
+   * 订单备注（图文混排 HTML，wangEditor 输出）。
+   * 上限 64KB 对齐 MySQL TEXT 容量——不限长的话一张图直接内联 base64 就能把
+   * INSERT 顶爆（图片本身走上传接口存 URL，正文里只该有 <img src>）。
+   */
+  @IsOptional() @IsString() @MaxLength(65535, { message: '订单备注内容过长' }) otherReq?: string;
+
   @IsArray({ message: '产品行必须为数组' })
   @ArrayNotEmpty({ message: '至少需要一条产品行' })
   @ArrayMaxSize(50, { message: '单张订单产品行不能超过 50 条' })

@@ -37,6 +37,15 @@
     <el-card shadow="never">
       <div class="toolbar">
         <el-button size="small" v-permission="'order:create'" type="primary" :icon="Plus" @click="openCreate">新增订单</el-button>
+        <el-button
+          size="small"
+          v-permission="'order:export'"
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="exporting"
+          @click="onExportTotalPlan"
+        >导出总计划</el-button>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
         <el-table-column type="expand" width="36" fixed="left">
@@ -146,12 +155,13 @@
 import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft, Download } from '@element-plus/icons-vue';
 import {
   getOrderList,
   finishOrder,
   reopenOrder,
   deleteOrder,
+  exportTotalPlan,
   type OrderItem,
   type OrderProductItem,
 } from '@/api/order';
@@ -198,6 +208,39 @@ async function load() {
 }
 load();
 onActivated(load);
+
+/* ===== 导出总计划 =====
+ * 一行 = 一个产品行；四数走台账口径（后端复用 findLedger，不另写聚合）。
+ * 导的是**当前筛选的全量**，不是当前这一页，故导出前把条数摆给用户确认。 */
+const exporting = ref(false);
+async function onExportTotalPlan() {
+  if (!total.value) {
+    ElMessage.warning('当前筛选无订单数据，无需导出');
+    return;
+  }
+  await ElMessageBox.confirm(
+    `将按当前筛选条件导出全部总计划到 Excel，共 <strong style="color:#f56c6c;">${total.value}</strong> 张订单，产品明细逐行展开。`,
+    '导出确认',
+    { type: 'info', dangerouslyUseHTMLString: true, confirmButtonText: '导出', cancelButtonText: '取消' },
+  );
+  exporting.value = true;
+  try {
+    const blob = await exportTotalPlan({
+      keyword: query.keyword || undefined,
+      status: query.status,
+      dateFrom: dateRange.value?.[0],
+      dateTo: dateRange.value?.[1],
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `总计划_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    exporting.value = false;
+  }
+}
 
 function openCreate() {
   router.push({ name: 'OrderForm' });

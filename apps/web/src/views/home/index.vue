@@ -15,7 +15,7 @@
   <div class="page" v-loading="loading">
     <el-card shadow="never" class="welcome-card">
       <div class="welcome__text">
-        <h2>{{ greeting }}，{{ politeName }}</h2>
+        <h2 class="welcome-greet" :class="`is-${greetingTone}`">{{ greeting }}，{{ politeName }}</h2>
         <div class="welcome-cal" aria-label="今日日历">
           <span class="cal-chip cal-chip--solar">
             <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -40,17 +40,14 @@
               <circle cx="12.4" cy="13.8" r="0.7" fill="currentColor" />
             </svg>
             <el-tag size="small" effect="plain" round class="cal-tag--lunar">农历</el-tag>
-            <b>{{ cal.lunarText }}</b>
-          </span>
-
-          <span class="cal-chip cal-chip--year">
-            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 3h10v4.2c0 1.4-.7 2.7-1.9 3.4L12 13l-3.1-2.4A4 4 0 0 1 7 7.2V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-              <path d="M7 21h10v-4.2c0-1.4-.7-2.7-1.9-3.4L12 11l-3.1 2.4A4 4 0 0 0 7 16.8V21z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-              <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-            <el-tag size="small" effect="plain" type="warning" round>年余</el-tag>
-            <b>{{ cal.year }} 年还剩 <em>{{ cal.yearLeftDays }}</em> 天</b>
+            <b>
+              {{ cal.lunarText }}
+              <template v-if="cal.nextJieQi">
+                <span class="cal-sep">·</span>
+                <template v-if="cal.nextJieQi.daysLeft === 0">今天{{ cal.nextJieQi.name }}</template>
+                <template v-else>距{{ cal.nextJieQi.name }}还有 <em>{{ cal.nextJieQi.daysLeft }}</em> 天</template>
+              </template>
+            </b>
           </span>
 
           <span class="cal-chip cal-chip--holiday">
@@ -66,6 +63,16 @@
               <template v-else>距{{ cal.nextHoliday.name }}还有 <em>{{ cal.nextHoliday.daysLeft }}</em> 天</template>
             </b>
             <b v-else>近期暂无法定节假日</b>
+          </span>
+
+          <span class="cal-chip cal-chip--year">
+            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 3h10v4.2c0 1.4-.7 2.7-1.9 3.4L12 13l-3.1-2.4A4 4 0 0 1 7 7.2V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M7 21h10v-4.2c0-1.4-.7-2.7-1.9-3.4L12 11l-3.1 2.4A4 4 0 0 0 7 16.8V21z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <el-tag size="small" effect="plain" type="warning" round>年余</el-tag>
+            <b>{{ cal.year }} 年还剩 <em>{{ cal.yearLeftDays }}</em> 天 <em class="cal-hms">{{ cal.yearLeftHms }}</em></b>
           </span>
         </div>
       </div>
@@ -228,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, ref } from 'vue';
+import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
@@ -284,29 +291,51 @@ loadDict('surface_type').then((rows: any[]) => {
   surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
-const greeting = computed(() => {
-  const h = new Date().getHours();
-  if (h < 6) return '夜深了';
-  if (h < 9) return '早上好';
-  if (h < 12) return '上午好';
-  if (h < 14) return '中午好';
-  if (h < 18) return '下午好';
-  return '晚上好';
+/** 每秒刷新：驱动年余 hh:mm:ss 与时段欢迎色 */
+const nowTick = ref(Date.now());
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
+});
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer);
 });
 
-/** 欢迎称呼：有性别时用「姓+先生/女士」，未知性别仍用姓名，避免误称 */
+type GreetingTone = 'night' | 'morning' | 'forenoon' | 'noon' | 'afternoon' | 'evening';
+
+const greetingMeta = computed(() => {
+  void nowTick.value;
+  const h = new Date().getHours();
+  if (h < 6) return { text: '夜深了', tone: 'night' as GreetingTone };
+  if (h < 9) return { text: '早上好', tone: 'morning' as GreetingTone };
+  if (h < 12) return { text: '上午好', tone: 'forenoon' as GreetingTone };
+  if (h < 14) return { text: '中午好', tone: 'noon' as GreetingTone };
+  if (h < 18) return { text: '下午好', tone: 'afternoon' as GreetingTone };
+  return { text: '晚上好', tone: 'evening' as GreetingTone };
+});
+const greeting = computed(() => greetingMeta.value.text);
+const greetingTone = computed(() => greetingMeta.value.tone);
+
+/**
+ * 欢迎称呼：
+ * - 姓名为「管理员」或以「管理员」结尾（如系统管理员）→ 原样显示，不做「X先生/女士」
+ * - 其余有性别时用「姓+先生/女士」
+ */
 const politeName = computed(() => {
   const u = userStore.userInfo;
   const name = (u?.realName || '').trim();
   if (!name) return u?.username || '用户';
+  if (name === '管理员' || /管理员$/.test(name)) return name;
   const surname = name.charAt(0);
   if (u?.gender === 1) return `${surname}先生`;
   if (u?.gender === 2) return `${surname}女士`;
   return name;
 });
 
-/** 欢迎区日历摘要（公历 / 农历 / 年余 / 下一法定假日） */
-const cal = computed(() => getCalendarBrief());
+/** 欢迎区日历摘要（公历 / 农历+节气 / 节假 / 年余倒计时） */
+const cal = computed(() => getCalendarBrief(new Date(nowTick.value)));
 
 async function load() {
   if (!canDashboard.value) return; // 无权限：不请求，避免整页 403 提示
@@ -344,7 +373,20 @@ export default { name: 'HomeDashboard' };
 .welcome-card {
   margin-bottom: 12px;
   .welcome__text {
-    h2 { margin: 0 0 12px; font-size: 20px; }
+    .welcome-greet {
+      margin: 0 0 12px;
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      transition: color 0.35s ease;
+
+      &.is-night { color: #64748b; }
+      &.is-morning { color: #ea580c; }
+      &.is-forenoon { color: #0284c7; }
+      &.is-noon { color: #d97706; }
+      &.is-afternoon { color: #0d9488; }
+      &.is-evening { color: #4f46e5; }
+    }
   }
 }
 
@@ -383,6 +425,18 @@ export default { name: 'HomeDashboard' };
     color: inherit;
   }
 
+  .cal-sep {
+    margin: 0 0.25em;
+    opacity: 0.45;
+    font-weight: 400;
+  }
+
+  .cal-hms {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    letter-spacing: 0.02em;
+  }
+
   &__icon {
     width: 18px;
     height: 18px;
@@ -395,7 +449,10 @@ export default { name: 'HomeDashboard' };
   }
   &--lunar {
     .cal-chip__icon { color: #0d9488; }
-    b { color: #0f766e; }
+    b {
+      color: #0f766e;
+      white-space: normal;
+    }
   }
   &--year {
     .cal-chip__icon { color: var(--el-color-warning); }

@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS t_order (
   status         TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1进行中 2已完结 9已作废',
   is_opening     TINYINT      NOT NULL DEFAULT 0 COMMENT '期初补录标记：0正常 1期初补录（免非关键必填校验）',
   remark         VARCHAR(255) NULL COMMENT '备注',
+  other_req      TEXT         NULL COMMENT '订单备注（图文混排HTML，wangEditor 输出；与 remark 一句话摘要并存）',
   creator_id     INT          NULL COMMENT '创建人ID',
   creator_name   VARCHAR(64)  NULL COMMENT '创建人姓名快照',
   updated_by     INT          NULL COMMENT '最后更新人ID',

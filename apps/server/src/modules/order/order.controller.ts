@@ -78,6 +78,27 @@ export class OrderController {
     res.send(buf);
   }
 
+  /**
+   * 导出总计划（订单列表页，对齐 hb-mes）：按当前筛选全量导出，一行 = 一个产品行。
+   * 同样**必须在 `:id` 之前**注册，否则被参数路由吞掉（ParseIntPipe 直接 400）。
+   * 四数复用台账口径（见 order-ledger.service）；只读导出，按 §4.3 不标 @OperationLog。
+   */
+  @Get('export/total-plan')
+  @RequirePermissions('order:export')
+  @SkipTransform()
+  async exportTotalPlan(@Query() query: QueryOrderDto, @Res() res: Response) {
+    const buf = await this.ledgerService.exportTotalPlan(query);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent('总计划.xlsx')}"`,
+    );
+    res.send(buf);
+  }
+
   @Get(':id')
   @RequirePermissions('order')
   async detail(@Param('id', ParseIntPipe) id: number) {

@@ -49,6 +49,8 @@ const MIGRATIONS: string[] = [
   'migration-drop-deprecated-order-cols.sql',
   // 审计追溯六件套补齐 + t_permission.access_type（查看/操作）+ stat:dashboard
   'migration-audit-trace-and-view-perm.sql',
+  // 订单备注（图文混排 HTML）
+  'migration-order-other-req.sql',
 ];
 
 /**
@@ -151,6 +153,8 @@ const expectedColumns = [
   't_file.creator_name',
   // 查看权限（只读角色）
   't_permission.access_type',
+  // 订单备注（图文混排）
+  't_order.other_req',
 ];
 
 async function main() {
