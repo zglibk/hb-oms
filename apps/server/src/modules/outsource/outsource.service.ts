@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { ORDER_STATUS, SURFACE_NONE, formatDimension, needsOutsource } from '@hb-oms/shared';
+import {
+  ORDER_STATUS,
+  SURFACE_NONE,
+  formatDimension,
+  needsOutsource,
+  partGroupParts,
+} from '@hb-oms/shared';
 import { OutsourcePart } from './entities/outsource-part.entity';
 import {
   CreateOutsourcePartDto,
@@ -132,7 +138,9 @@ export class OutsourceService {
               p.order_qty          AS orderQty,
               p.unit               AS unit,
               g.qty_pcs            AS qtyPcs,
-              m.unit_weight        AS unitWeight,
+              g.group_type         AS groupType,
+              p.item_no            AS itemNo,
+              m.unit_weight        AS productUnitWeight,
               (SELECT MIN(pt.cycle_code) FROM t_order_part pt
                 WHERE pt.part_group_id = g.id AND pt.cycle_code IS NOT NULL AND pt.cycle_code <> '')
                                    AS cycleCode,
@@ -148,6 +156,8 @@ export class OutsourceService {
         LIMIT ?`,
       params,
     );
+
+    const partWeight = await this.loadPartUnitWeights(rows);
 
     return rows.map((r) => ({
       orderPartGroupId: Number(r.orderPartGroupId),
@@ -167,8 +177,55 @@ export class OutsourceService {
       unit: r.unit ?? null,
       drawingNo: r.drawingNo ?? null,
       materialThickness: r.materialThickness ?? null,
-      unitWeight: Number(r.unitWeight) || 0,
+      // 优先按「组对应的部件」取单重，取不到再回落产品级——回厂过的是部件，
+      // 外轨和内轨的单重本就不同，拿产品级一个值折算数量会系统性偏差
+      unitWeight:
+        partWeight.get(`${r.itemNo ?? ''}|${partGroupParts(r.groupType)[0] ?? ''}`) ??
+        (Number(r.productUnitWeight) || 0),
     }));
+  }
+
+  /**
+   * 批量取「货号 + 部件」对应的单重，键为 `${itemNo}|${partType}`。
+   *
+   * 部件信息（t_material）是**按部件建档**的：同一货号下外轨/中轨/内轨各一条，
+   * 单重不同。部件组拆到部件粒度后（2026-08-10 起订单默认按节数铺开外/中/内轨），
+   * 必须按组对应的部件取单重，否则三个组都拿产品行 material_id 那一条的值。
+   *
+   * 组 → 部件用共享包 `partGroupParts(组类型)[0]`（首部件），与订单表单按图号
+   * 带工艺版本的取法一致：外中轨组取外轨、整品组取外轨。这两种组本就混着多个
+   * 部件，单重只能给个默认值，录入时按实际过磅手改。
+   *
+   * 同货号同部件建了多条（不同规格/料厚）时取 id 最小的一条：单重只是折算默认值，
+   * 允许人工修改，没必要为选哪条再引入一套匹配规则。
+   */
+  private async loadPartUnitWeights(rows: any[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const itemNos = [...new Set(rows.map((r) => r.itemNo).filter((v) => v))];
+    if (!itemNos.length) return map;
+    const parts = [
+      ...new Set(rows.map((r) => partGroupParts(r.groupType)[0]).filter((v) => v)),
+    ];
+    if (!parts.length) return map;
+    const found: any[] = await this.dataSource.query(
+      `SELECT item_no, part_type, unit_weight
+         FROM t_material
+        WHERE status = 1
+          AND item_no IN (${itemNos.map(() => '?').join(',')})
+          AND part_type IN (${parts.map(() => '?').join(',')})
+          AND unit_weight IS NOT NULL
+        ORDER BY id ASC`,
+      [...itemNos, ...parts],
+    );
+    for (const f of found) {
+      const key = `${f.item_no}|${f.part_type}`;
+      // ORDER BY id ASC + 只认首次出现 = 取最早建档的一条
+      if (!map.has(key)) {
+        const w = Number(f.unit_weight);
+        if (w > 0) map.set(key, w);
+      }
+    }
+    return map;
   }
 
   /* ==================== 录入 ==================== */

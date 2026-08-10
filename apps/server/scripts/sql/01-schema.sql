@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS t_material (
   spec          VARCHAR(128) NULL COMMENT '规格',
   product_type  VARCHAR(32)  NULL COMMENT '产品类型：standard普通款 buffer缓冲款 socket卡口等',
   rail_section  VARCHAR(32)  NULL COMMENT '默认产品类别：two_section二节轨 three_section三节轨',
-  part_type     VARCHAR(32)  NULL COMMENT '部件：outer_rail外轨 middle_rail中轨 inner_rail内轨',
+  part_type     VARCHAR(32)  NULL COMMENT '部件（字典 part_type）：outer外轨 middle中轨 inner内轨',
   drawing_no    VARCHAR(64)  NULL COMMENT '图号',
   unit          VARCHAR(16)  NULL COMMENT '单位',
   safety_stock  DECIMAL(14,2) NULL COMMENT '安全库存(预留)',

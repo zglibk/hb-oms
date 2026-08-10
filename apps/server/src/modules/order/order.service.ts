@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import {
   ORDER_STATUS,
+  defaultGroupTypes,
   expandPartRows,
   formatProductModel,
   hasSocket,
@@ -233,8 +234,11 @@ export class OrderService {
         }),
       );
 
-      // 部件组：缺省 = 一个整品组；组类型同产品行内唯一
-      const groupDtos = p.partGroups?.length ? p.partGroups : [{ groupType: 'whole' } as any];
+      // 部件组：缺省 = 按节数逐部件铺开（三节轨 外/中/内、二节轨 外/内），
+      // 与订单表单默认值共用共享包 defaultGroupTypes，避免两端分叉；组类型同产品行内唯一
+      const groupDtos = p.partGroups?.length
+        ? p.partGroups
+        : defaultGroupTypes(p.railSection).map((groupType) => ({ groupType }) as any);
       const seenTypes = new Set<string>();
       for (let gi = 0; gi < groupDtos.length; gi++) {
         const g = groupDtos[gi];

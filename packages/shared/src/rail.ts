@@ -42,6 +42,23 @@ export const PART_GROUP_OPTIONS: Array<{
 
 const PART_GROUP_MAP = new Map(PART_GROUP_OPTIONS.map((o) => [o.value, o]));
 
+/**
+ * 新建产品行时的**默认部件组序列**（2026-08-10 起按部件维度跟踪）：
+ *   三节轨 → 外轨 / 中轨 / 内轨；二节轨 → 外轨 / 内轨（二节轨无中轨）
+ *
+ * 从前默认单个「整品」组，跟踪粒度到不了部件；改成按节数铺开部件组后，
+ * 外发回厂、装配、出入库、台账都能逐部件核算。
+ *
+ * **必须按节数返回**：中轨组在二节轨下 expandPartRows 展开为空，
+ * 服务端会直接拒绝保存（"当前节数下无可展开部件"），所以二节轨不能带中轨。
+ * 前端表单默认值与服务端兜底共用此函数，避免两端分叉。
+ */
+export function defaultGroupTypes(railSection: string | null | undefined): string[] {
+  return railSection === 'two_section'
+    ? ['outer', 'inner']
+    : ['outer', 'middle', 'inner'];
+}
+
 /** 部件组类型 → 选择展示名（未知值原样输出） */
 export function partGroupLabel(v: string | null | undefined): string {
   return (v && PART_GROUP_MAP.get(v)?.label) || v || '';

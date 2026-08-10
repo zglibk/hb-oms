@@ -77,6 +77,7 @@ export {
   partGroupLabel,
   partGroupSuffix,
   partGroupParts,
+  defaultGroupTypes,
   expandPartRows,
   // 版本号文本型小数
   normalizeVersion,

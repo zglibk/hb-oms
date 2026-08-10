@@ -177,7 +177,8 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="轨道节数" label-width="80px">
-                <el-select v-model="p.railSection" style="width: 100%">
+                <!-- 改节数要同步部件组：二节轨无中轨，留着中轨组保存必被服务端拒 -->
+                <el-select v-model="p.railSection" style="width: 100%" @change="onRailSectionChange(p)">
                   <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
@@ -270,13 +271,19 @@
 
           <!-- 部件组（跟踪/台账锚点） -->
           <div class="group-title">
-            部件组（跟踪粒度；多数产品一个「整品」组，缓冲类可拆 外中轨+内轨）
-            <el-button size="small" link type="primary" :icon="Plus" @click="addGroup(p)">添加部件组</el-button>
-            <!-- 同一产品的几个组常常只有组类型不同，图号/版本/料厚/支数都一样，故提供复制 -->
+            部件组（跟踪粒度；默认按节数逐部件铺开：三节轨 外/中/内轨，二节轨 外/内轨）
+            <el-button
+              size="small" link type="primary" :icon="Plus"
+              :disabled="!canAddGroup(p)" @click="addGroup(p)"
+            >添加部件组</el-button>
+            <!-- 部件组已按节数一次性铺开，几组之间通常只有组类型不同（同一张生产图、
+                 同版本、同支数），故提供"以第一行为模板灌满其余行" -->
             <el-button
               size="small" link type="primary" :icon="CopyDocument"
-              :disabled="!canAddGroup(p)" @click="copyLastGroup(p)"
-            >复制上一行</el-button>
+              :disabled="!canFillFromFirst(p)"
+              title="把第一行的图号/版本/料厚/支数/备注填到其余各组，组类型不变"
+              @click="fillFromFirst(p)"
+            >按第一行填充</el-button>
           </div>
           <table class="group-grid">
             <thead>
@@ -299,7 +306,7 @@
                       :key="o.value"
                       :label="o.label"
                       :value="o.value"
-                      :disabled="p.partGroups.some((x) => x !== g && x.groupType === o.value)"
+                      :disabled="p.partGroups.some((x) => x !== g && x.groupType === o.value) || groupTypeUnavailable(p, o.value)"
                     />
                   </el-select>
                 </td>
@@ -333,7 +340,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage, type FormInstance, type UploadFile } from 'element-plus';
+import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'element-plus';
 import { Back, Plus, Delete, Upload, CopyDocument, QuestionFilled, ArrowDown, ArrowUp } from '@element-plus/icons-vue';
 import {
   createOrder,
@@ -355,6 +362,8 @@ import {
   DIMENSION_UNIT_OPTIONS,
   expandPartRows,
   partGroupParts,
+  partGroupLabel,
+  defaultGroupTypes,
   formatProductModel,
   hasSocket,
   normalizeVersion,
@@ -425,15 +434,18 @@ interface ProductRow {
   partGroups: GroupRow[];
 }
 
-const emptyGroup = (): GroupRow => ({
+const emptyGroup = (groupType = 'outer'): GroupRow => ({
   _key: nextKey(),
-  groupType: 'whole',
+  groupType,
   drawingNo: '',
   drawingVersion: '',
   materialThickness: '',
   qtyPcs: undefined,
   remark: '',
 });
+/** 按节数铺开默认部件组（三节轨 外/中/内、二节轨 外/内），与服务端兜底共用共享包口径 */
+const defaultGroups = (railSection: string): GroupRow[] =>
+  defaultGroupTypes(railSection).map((t) => emptyGroup(t));
 const emptyProduct = (): ProductRow => ({
   _key: nextKey(),
   _types: ['standard'],
@@ -457,7 +469,7 @@ const emptyProduct = (): ProductRow => ({
   deliveryDate: '',
   deliveryAddress: '',
   remark: '',
-  partGroups: [emptyGroup()],
+  partGroups: defaultGroups('three_section'),
 });
 
 const form = reactive({
@@ -623,10 +635,27 @@ function copyProduct(pi: number) {
 function removeProduct(pi: number) {
   form.products.splice(pi, 1);
 }
-/** 下一个还没被占用的组类型（同产品行内 groupType 唯一，见 uk_product_group） */
+/**
+ * 该组类型在当前节数/卡口下展不展得出部件行。展不出的（如二节轨的中轨组）
+ * 服务端会直接拒绝保存，前端提前挡掉，别把错误留到点保存时才炸。
+ * 判定复用共享包蓝图，不另写节数规则——以后加新组类型自动正确。
+ */
+function groupTypeUnavailable(p: ProductRow, groupType: string): boolean {
+  return expandPartRows(groupType, p.railSection, hasSocket(p._types), 1).length === 0;
+}
+
+/**
+ * 补组优先序：先补还没用的**单部件组**，组合型（外中轨 / 整品）排最后。
+ * 默认已按部件铺开，再叠一个整品组会把同一批部件重复计量一次，放后面减少误选。
+ */
+const ADD_GROUP_ORDER = ['outer', 'middle', 'inner', 'outer_middle', 'whole'];
+
+/** 下一个还没被占用、且当前节数下可用的组类型（同产品行内 groupType 唯一，见 uk_product_group） */
 function nextFreeGroupType(p: ProductRow): string | undefined {
   const used = new Set(p.partGroups.map((g) => g.groupType));
-  return PART_GROUP_OPTIONS.find((o) => !used.has(o.value))?.value;
+  const ok = (v: string) => !used.has(v) && !groupTypeUnavailable(p, v);
+  // 末尾兜底：共享包若新增组类型而未登记进 ADD_GROUP_ORDER，仍能被补上
+  return ADD_GROUP_ORDER.find(ok) ?? PART_GROUP_OPTIONS.find((o) => ok(o.value))?.value;
 }
 function canAddGroup(p: ProductRow): boolean {
   return !!p.partGroups.length && !!nextFreeGroupType(p);
@@ -641,22 +670,108 @@ function addGroup(p: ProductRow) {
   g.groupType = next;
   p.partGroups.push(g);
 }
+/** 第一行填过内容、且后面还有行可填时才可用 */
+function canFillFromFirst(p: ProductRow): boolean {
+  return p.partGroups.length >= 2 && !groupIsBlank(p.partGroups[0]);
+}
+
 /**
- * 复制上一行：沿用最后一组的图号/版本/料厚/支数/备注，只把组类型换成下一个未占用的。
- * 组类型不能照抄——同产品行内唯一（uk_product_group），抄了保存就撞唯一键。
+ * 按第一行填充：把第一组的图号/料厚/支数/备注灌到后面每一组，**组类型保持不变**。
+ *
+ * 部件组现在按节数一次性铺开（外/中/内），几组之间通常只有组类型不同——同一张
+ * 生产图、同支数，逐行重敲纯属浪费。原先的「复制上一行」是配合逐行添加的，
+ * 一次性生成后已无用武之地，故替换掉。
+ *
+ * ⚠️ **版本号不能照抄**：开单信息的版本是**部件级**的（外/中/内三个版本号），
+ * 直接抄第一行会把外轨的版本安到内轨上。所以填完图号后按图号查一次工艺，
+ * 给每组取它自己首部件对应的版本；查不到才回落用第一行的值。
+ *
+ * 料厚同样可能逐部件不同（外 1.2 / 中 1.0），这里先照填，用户按需再改——
+ * 多数产品三个部件料厚一致，填了比不填省事。
  */
-function copyLastGroup(p: ProductRow) {
-  const src = p.partGroups[p.partGroups.length - 1];
-  if (!src) {
-    addGroup(p);
+async function fillFromFirst(p: ProductRow) {
+  const src = p.partGroups[0];
+  const targets = p.partGroups.slice(1);
+  if (!src || !targets.length) return;
+
+  // 后面的行已经录过内容就先问一句，别静默盖掉别人填的东西
+  if (targets.some((g) => !groupIsBlank(g))) {
+    try {
+      await ElMessageBox.confirm(
+        `将用第一行「${partGroupLabel(src.groupType)}」的图号 / 版本 / 料厚 / 支数 / 备注覆盖后面 ${targets.length} 个部件组（组类型不变）。已填写的内容会被覆盖，确定继续？`,
+        '按第一行填充',
+        { type: 'warning', confirmButtonText: '填充', cancelButtonText: '取消' },
+      );
+    } catch {
+      return;
+    }
+  }
+
+  targets.forEach((g) => {
+    g.drawingNo = src.drawingNo;
+    g.drawingVersion = src.drawingVersion;
+    g.materialThickness = src.materialThickness;
+    g.qtyPcs = src.qtyPcs;
+    g.remark = src.remark;
+  });
+
+  // 版本按各组首部件重取（只查一次工艺，避免逐行发请求）
+  const dn = src.drawingNo?.trim();
+  if (dn) {
+    const info = await getProcessInfoByDrawing(dn).catch(() => null);
+    if (info) {
+      targets.forEach((g) => {
+        const firstPart = partGroupParts(g.groupType)[0];
+        const ver =
+          firstPart === 'inner' ? info.drawingVersionInner :
+          firstPart === 'middle' ? info.drawingVersionMiddle : info.drawingVersionOuter;
+        if (ver) g.drawingVersion = normalizeVersion(ver) ?? g.drawingVersion;
+      });
+    }
+  }
+  ElMessage.success(`已按第一行填充 ${targets.length} 个部件组`);
+}
+
+/** 该组是否被填过内容——用于判断自动增删组会不会弄丢用户录入 */
+function groupIsBlank(g: GroupRow): boolean {
+  return !g.drawingNo && !g.drawingVersion && !g.materialThickness && !g.remark && !g.qtyPcs;
+}
+
+/**
+ * 切换轨道节数时同步部件组：**二节轨没有中轨**，中轨组在二节轨下
+ * expandPartRows 展开为空、服务端直接拒绝保存，所以必须把它摘掉。
+ *
+ * - 三节轨 → 二节轨：移除中轨组（填过内容先确认，避免静默丢录入）；
+ * - 二节轨 → 三节轨：**仅当**当前正好是二节轨的默认形态 {外轨,内轨} 时补回中轨组。
+ *   限定这个条件是为了不打扰已经手工改过组结构的人——比如有人特意只留一个整品组，
+ *   切个节数就凭空多出一个中轨组会很莫名其妙。
+ */
+async function onRailSectionChange(p: ProductRow) {
+  const types = p.partGroups.map((g) => g.groupType);
+  if (p.railSection === 'two_section') {
+    const mi = types.indexOf('middle');
+    if (mi < 0) return;
+    if (!groupIsBlank(p.partGroups[mi])) {
+      try {
+        await ElMessageBox.confirm(
+          '二节轨没有中轨，需要移除已填写的「中轨」部件组。确定继续？',
+          '提示',
+          { type: 'warning', confirmButtonText: '移除', cancelButtonText: '改回三节轨' },
+        );
+      } catch {
+        p.railSection = 'three_section'; // 用户反悔：节数回滚，组保持原样
+        return;
+      }
+    }
+    p.partGroups.splice(mi, 1);
+    ElMessage.info('二节轨无中轨，已移除「中轨」部件组');
     return;
   }
-  const next = nextFreeGroupType(p);
-  if (!next) {
-    ElMessage.warning('组类型已用尽');
-    return;
+  // 三节轨：只补默认形态，其余结构不动
+  if (types.length === 2 && types.includes('outer') && types.includes('inner')) {
+    p.partGroups.splice(types.indexOf('outer') + 1, 0, emptyGroup('middle'));
+    ElMessage.info('三节轨已补充「中轨」部件组');
   }
-  p.partGroups.push({ ...src, _key: nextKey(), groupType: next });
 }
 
 /* ===== 展示/换算辅助 ===== */
@@ -669,9 +784,10 @@ function productTitle(p: ProductRow): string {
 function syncDimension(p: ProductRow) {
   p.dimensionMm = p.dimensionRaw ? toMm(Number(p.dimensionRaw), p.dimensionUnit) : null;
 }
+/** 料厚格式随组含几个部件而变：单部件组填单值，外中轨两段，整品三段 */
 function thicknessPlaceholder(groupType: string): string {
   if (groupType === 'outer_middle') return '外×中，如 1.2×1.2';
-  if (groupType === 'inner') return '单值，如 1.5';
+  if (partGroupParts(groupType).length === 1) return '单值，如 1.5';
   return '外×中×内，如 2.0×2.0×2.0';
 }
 function partsPreview(p: ProductRow, g: GroupRow): string {

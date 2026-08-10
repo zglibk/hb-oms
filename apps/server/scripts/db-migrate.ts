@@ -57,6 +57,8 @@ const MIGRATIONS: string[] = [
   'migration-outsource-rebuild-part.sql',
   // 业务字段全局启用开关（系统配置 → 业务字段）：颜色 / 客户图号
   'migration-field-switches.sql',
+  // 修正 t_material.part_type 列注释（原注释的 *_rail 取值从未在库中出现）
+  'migration-material-part-type-comment.sql',
 ];
 
 /**
