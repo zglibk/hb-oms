@@ -104,19 +104,19 @@ export interface LedgerFinishedRow {
 }
 
 /** 外发流水（排除已作废发坯单） */
+/** 外发回厂流水行（2026-08-10：外发已收敛为回厂记录，无单号无状态） */
 export interface LedgerOutsourceRow {
-  blankNo: string | null;
+  id: number;
+  /** 实际回厂日期 */
+  backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;
   color: string | null;
-  status: number;
-  /** 计划回货日期 */
-  requireBackDate: string | null;
-  /** 最后一次回货日期（实际回货按明细行分批登记） */
-  lastReturnDate: string | null;
-  planReturnQty: number;
-  returnedQty: number;
-  pendingQty: number;
+  returnWeight: number;
+  unitWeight: number;
+  returnQty: number;
+  remark: string | null;
+  creatorName: string | null;
 }
 
 /** 装配批次 */

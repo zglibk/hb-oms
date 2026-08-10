@@ -29,35 +29,30 @@ export interface DashboardOwedRow {
   deliveryOwed: number;
 }
 
-/** 外发超期未回齐行 */
+/** 近期外发回厂行（原「超期未回齐」——不再登记计划回厂时间后已无超期基准） */
 export interface DashboardOutsourceRow {
-  docId: number;
-  blankNo: string | null;
+  id: number;
+  backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;
   color: string | null;
-  requireBackDate: string | null;
-  /** 超期天数 */
-  days: number;
-  status: number;
-  /** 应回数量（本单各明细行合计） */
-  planReturnQty: number;
-  returnedQty: number;
-  pendingQty: number;
+  productModel: string | null;
+  productionNo: string | null;
+  returnQty: number;
 }
 
 /** 三张待办列表的真实总条数（列表被 topLimit 截断，角标用这个而不是 list.length） */
 export interface DashboardCounts {
   overdueOrders: number;
   upcomingOrders: number;
-  overdueOutsource: number;
+  recentOutsource: number;
 }
 
 export interface DashboardSummary {
   cards: DashboardCards;
   overdueOrders: DashboardOwedRow[];
   upcomingOrders: DashboardOwedRow[];
-  overdueOutsource: DashboardOutsourceRow[];
+  recentOutsource: DashboardOutsourceRow[];
   counts: DashboardCounts;
   /** 列表区截断条数，界面据此提示「仅显示前 N 条」 */
   topLimit: number;

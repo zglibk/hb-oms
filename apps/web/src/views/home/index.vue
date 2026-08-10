@@ -178,54 +178,45 @@
         </el-card>
       </el-col>
 
-      <!-- 右：外发超期未回齐（原来在最下方通栏，移到这里与左卡并排）。
-           为压缩宽度去掉「颜色 / 要求回货 / 发出」三列：超期天数已表达了要求回货日期，
-           发出量由「已回 + 未回」可推。**接口返回不变**，日后要加回来只是模板的事。 -->
+      <!-- 右：近期外发回厂。
+           2026-08-10 外发取消发坯单、不再登记计划回厂时间后，「超期未回齐」失去判定
+           基准（没有计划日、也没有"还在外面没回"的记录），这张卡改为展示最近几条回厂
+           流水，位置与布局不变。 -->
       <el-col :xs="24" :lg="12">
         <el-card shadow="never" class="list-card" :class="{ 'is-empty': !hasOutsource }">
           <template #header>
             <div class="list-card__head">
               <span class="list-card__title">
-                <el-icon :class="hasOutsource ? 'is-danger' : 'is-muted'"><Van /></el-icon>
-                外发超期未回齐
+                <el-icon :class="hasOutsource ? 'is-primary' : 'is-muted'"><Van /></el-icon>
+                近期外发回厂
                 <el-tag
                   size="small" round effect="plain"
-                  :type="counts.overdueOutsource ? 'danger' : 'info'"
-                >{{ counts.overdueOutsource }}</el-tag>
+                  :type="counts.recentOutsource ? 'primary' : 'info'"
+                >{{ counts.recentOutsource }}</el-tag>
               </span>
               <el-button v-if="canOutsource" link type="primary" @click="go('/outsource')">查看外发</el-button>
             </div>
           </template>
           <div v-if="!hasOutsource" class="list-empty">
             <el-icon><CircleCheck /></el-icon>
-            <span>无超期外发单，加工厂回货正常</span>
+            <span>暂无外发回厂记录</span>
           </div>
           <template v-else>
-            <el-table :data="summary.overdueOutsource" size="small">
-              <el-table-column label="发坯单号" width="112">
-                <template #default="{ row }">{{ formatBlankNo(row.blankNo) || '—' }}</template>
+            <el-table :data="summary.recentOutsource" size="small">
+              <el-table-column label="回厂日期" width="105">
+                <template #default="{ row }">{{ row.backDate || '—' }}</template>
               </el-table-column>
               <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip />
+              <el-table-column label="产品型号" prop="productModel" min-width="130" show-overflow-tooltip />
               <el-table-column label="表面处理" width="90" align="center">
                 <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
               </el-table-column>
-              <el-table-column label="超期" width="70" align="center">
-                <template #default="{ row }"><el-tag size="small" type="danger">{{ row.days }} 天</el-tag></template>
-              </el-table-column>
-              <el-table-column label="状态" width="86" align="center">
-                <template #default="{ row }">
-                  <el-tag size="small" :type="tagTypeOf(OUTSOURCE_STATUS, row.status) as any">
-                    {{ labelOf(OUTSOURCE_STATUS, row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="已回" width="64" align="center" prop="returnedQty" />
-              <el-table-column label="未回" width="64" align="center">
-                <template #default="{ row }"><span class="num-owed">{{ row.pendingQty }}</span></template>
+              <el-table-column label="数量(支)" width="86" align="center">
+                <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
               </el-table-column>
             </el-table>
-            <div v-if="summary.overdueOutsource.length >= summary.topLimit" class="list-card__more">
-              共 {{ counts.overdueOutsource }} 条，仅显示超期最久的前 {{ summary.topLimit }} 条
+            <div v-if="summary.recentOutsource.length >= summary.topLimit" class="list-card__more">
+              共 {{ counts.recentOutsource }} 条，仅显示最近 {{ summary.topLimit }} 条
             </div>
           </template>
         </el-card>
@@ -241,7 +232,7 @@ import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { loadDict } from '@/composables/useDict';
-import { OUTSOURCE_STATUS, formatBlankNo, labelOf, tagTypeOf } from '@/constants/dict';
+
 import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
 
@@ -253,8 +244,8 @@ const summary = ref<DashboardSummary>({
   cards: { activeOrders: 0, productionOwed: 0, deliveryOwed: 0, overdueOrders: 0 },
   overdueOrders: [],
   upcomingOrders: [],
-  overdueOutsource: [],
-  counts: { overdueOrders: 0, upcomingOrders: 0, overdueOutsource: 0 },
+  recentOutsource: [],
+  counts: { overdueOrders: 0, upcomingOrders: 0, recentOutsource: 0 },
   topLimit: 10,
   upcomingDays: 7,
 });
@@ -270,7 +261,7 @@ const canLedger = computed(() => userStore.hasPermission('ledger'));
 /** 看板数据权限：无此权限则整块汇总不请求也不渲染 */
 const canDashboard = computed(() => userStore.hasPermission('stat:dashboard'));
 const canOutsource = computed(() => userStore.hasPermission('outsource'));
-const hasOutsource = computed(() => summary.value.overdueOutsource.length > 0);
+const hasOutsource = computed(() => summary.value.recentOutsource.length > 0);
 
 /* ===== 逾期 / 临近交期 页签 ===== */
 const owedTab = ref<'overdue' | 'upcoming'>('overdue');

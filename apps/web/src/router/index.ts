@@ -64,14 +64,9 @@ const constantRoutes: RouteRecordRaw[] = [
         path: 'outsource/form',
         name: 'OutsourceForm',
         component: () => import('@/views/outsource/form.vue'),
-        meta: { title: '发坯单录入', activeMenu: '/outsource' },
+        meta: { title: '登记外发件回厂', activeMenu: '/outsource' },
       },
-      {
-        path: 'outsource/print',
-        name: 'OutsourcePrint',
-        component: () => import('@/views/outsource/print.vue'),
-        meta: { title: '发坯单打印', activeMenu: '/outsource' },
-      },
+      // 2026-08-10：发坯单打印页随发坯单一并下线（加工单改回纯手工）
       {
         path: 'finished-stock/form',
         name: 'FinishedStockForm',

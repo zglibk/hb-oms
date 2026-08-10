@@ -67,34 +67,15 @@ export function needsOutsource(surfaceType: string | null | undefined): boolean 
   return !!surfaceType && surfaceType !== SURFACE_NONE;
 }
 
-/* ===================== 外发（发坯单） ===================== */
+/* ===================== 外发 ===================== */
 
 /**
- * 外发单状态：1待回货 3部分回货 4已回齐 9已作废（设计文档 §3.2）。
+ * 外发**没有状态枚举**（2026-08-10）。
  *
- * 2026-08-10：**发出环节整体取消**——使用部门发货不过磅、不留发出数量记录，
- * 外发单只跟踪「发去做表面处理 → 计划何时回 → 实际何时回、回了多少」。
- * 故建单即「待回货」，登记回货后自动推进 3 → 4。
- *
- * `SENT = 2` **弃用不再产生**，枚举与展示映射保留：万一还有历史行落在 2，
- * 界面照旧显示中文而不是一个裸数字（同 ORDER_STATUS.CANCELLED 的处理）。
+ * 模块两轮简化后只剩「外发件回厂流水」：一行 = 一次回厂，记录存在即已回厂，
+ * 派生不出第二种状态。原 OUTSOURCE_STATUS（待发出/已发出/部分回货/已回齐/已作废）
+ * 连同发坯单一并删除——留一个恒定值的状态列只会误导后来人。
  */
-export const OUTSOURCE_STATUS = {
-  PENDING: 1,
-  /** @deprecated 发出环节已取消，不再产生此状态；仅为兼容历史数据保留 */
-  SENT: 2,
-  PARTIAL_RETURNED: 3,
-  RETURNED_ALL: 4,
-  CANCELLED: 9,
-} as const;
-
-export const OUTSOURCE_STATUS_OPTIONS: StatusOption[] = [
-  { label: '待回货', value: OUTSOURCE_STATUS.PENDING, type: 'info' },
-  { label: '已发出', value: OUTSOURCE_STATUS.SENT, type: 'primary' },
-  { label: '部分回货', value: OUTSOURCE_STATUS.PARTIAL_RETURNED, type: 'warning' },
-  { label: '已回齐', value: OUTSOURCE_STATUS.RETURNED_ALL, type: 'success' },
-  { label: '已作废', value: OUTSOURCE_STATUS.CANCELLED, type: 'danger' },
-];
 
 /* ===================== 装配 ===================== */
 

@@ -4,7 +4,6 @@ import * as ExcelJS from 'exceljs';
 import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
-  OUTSOURCE_STATUS,
   formatDimension,
   hasSocket,
   UNIT_OPTIONS,
@@ -192,12 +191,9 @@ export class OrderLedgerService {
                GROUP BY order_part_group_id
              ) bal ON bal.gid = g.id
         LEFT JOIN (
-              SELECT oi.order_part_group_id AS gid, SUM(orr.return_qty) AS return_qty
-                FROM t_outsource_return orr
-                JOIN t_outsource_item oi ON oi.id = orr.item_id
-                JOIN t_outsource_doc od ON od.id = oi.doc_id
-               WHERE od.status <> ?
-               GROUP BY oi.order_part_group_id
+              SELECT order_part_group_id AS gid, SUM(return_qty) AS return_qty
+                FROM t_outsource_part
+               GROUP BY order_part_group_id
              ) ret ON ret.gid = g.id
         LEFT JOIN (
               SELECT order_part_group_id AS gid,
@@ -210,13 +206,12 @@ export class OrderLedgerService {
              ) asm ON asm.gid = g.id
        WHERE ${where.join(' AND ')}`;
 
-    // 派生表参数在 WHERE 参数之前（SQL 里 JOIN 先于 WHERE 出现）
+    // 派生表参数在 WHERE 参数之前（SQL 里 JOIN 先于 WHERE 出现）。
+    // 外发已无单据与状态可言（只剩回厂流水），故不再需要排除作废单的参数。
     const joinParams: Array<string | number> = [
       ...INBOUND_FAMILY_PARAMS,
       ...OUTBOUND_FAMILY_PARAMS,
       FINISHED_DOC_STATUS.CONFIRMED,
-      // 外发：已作废单不计回货
-      OUTSOURCE_STATUS.CANCELLED,
     ];
 
     // 只看有欠数 / 只看逾期：依赖聚合结果，放 HAVING 之后的外层条件里
@@ -376,17 +371,14 @@ export class OrderLedgerService {
         [orderPartGroupId, FINISHED_DOC_STATUS.CONFIRMED],
       ),
       this.dataSource.query(
-        `SELECT od.blank_no AS blankNo, od.processor_name AS processorName,
-                od.surface_type AS surfaceType, od.color AS color, od.status AS status,
-                od.require_back_date AS requireBackDate,
-                oi.plan_return_qty AS planReturnQty, oi.returned_qty AS returnedQty,
-                (SELECT MAX(orr.back_date) FROM t_outsource_return orr
-                  WHERE orr.item_id = oi.id) AS lastReturnDate
-           FROM t_outsource_item oi
-           JOIN t_outsource_doc od ON od.id = oi.doc_id
-          WHERE oi.order_part_group_id = ? AND od.status <> ?
-          ORDER BY od.id ASC`,
-        [orderPartGroupId, OUTSOURCE_STATUS.CANCELLED],
+        `SELECT id, back_date AS backDate, processor_name AS processorName,
+                surface_type AS surfaceType, color AS color,
+                return_weight AS returnWeight, unit_weight AS unitWeight,
+                return_qty AS returnQty, remark, creator_name AS creatorName
+           FROM t_outsource_part
+          WHERE order_part_group_id = ?
+          ORDER BY back_date ASC, id ASC`,
+        [orderPartGroupId],
       ),
       this.dataSource.query(
         `SELECT id, side, workshop, plan_start_date AS planStartDate, plan_date AS planDate,
@@ -413,16 +405,16 @@ export class OrderLedgerService {
         remark: r.remark ?? null,
       })),
       outsource: outsource.map((r: any) => ({
-        blankNo: r.blankNo ?? null,
+        id: Number(r.id),
+        backDate: this.dateText(r.backDate),
         processorName: r.processorName ?? null,
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
-        status: Number(r.status) || 0,
-        requireBackDate: this.dateText(r.requireBackDate),
-        lastReturnDate: this.dateText(r.lastReturnDate),
-        planReturnQty: Number(r.planReturnQty) || 0,
-        returnedQty: Number(r.returnedQty) || 0,
-        pendingQty: (Number(r.planReturnQty) || 0) - (Number(r.returnedQty) || 0),
+        returnWeight: Number(r.returnWeight) || 0,
+        unitWeight: Number(r.unitWeight) || 0,
+        returnQty: Number(r.returnQty) || 0,
+        remark: r.remark ?? null,
+        creatorName: r.creatorName ?? null,
       })),
       assembly: assembly.map((r: any) => ({
         id: Number(r.id),

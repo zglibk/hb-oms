@@ -374,32 +374,13 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   KEY idx_singleton (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统配置表(单行)';
 
--- ========== M3 外发（发坯单）：单头 / 发出明细 / 回货登记（设计文档 §4.3）==========
-
-CREATE TABLE IF NOT EXISTS t_outsource_doc (
-  id                INT AUTO_INCREMENT PRIMARY KEY,
-  blank_no          VARCHAR(16)  NOT NULL COMMENT '发坯单号：7位定长纯数字全局序号（generatePaddedSequence 采番），展示层拼 No. 前缀',
-  processor_name    VARCHAR(128) NOT NULL COMMENT '加工商（外协厂）',
-  surface_type      VARCHAR(32)  NOT NULL COMMENT '表面处理（字典 surface_type）：seal_paint封漆 electrophoresis电泳 spray喷涂 smooth_paint平滑漆…；保留值 none 不可外发',
-  color             VARCHAR(64)  NULL COMMENT '颜色',
-  require_back_date DATE         NULL COMMENT '计划回货日期',
-  status            TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1待回货 3部分回货 4已回齐 9已作废（2已发出为弃用值，发出环节已取消）',
-  close_reason      VARCHAR(255) NULL COMMENT '手工关闭原因（3部分回货 → 4已回齐 时必填，尾数不回/损耗核销场景）',
-  remark            TEXT         NULL COMMENT '备注',
-  creator_id        INT          NULL COMMENT '创建人ID',
-  creator_name      VARCHAR(64)  NULL COMMENT '创建人姓名快照',
-  updated_by        INT          NULL COMMENT '最后更新人ID',
-  updater_name      VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
-  created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_blank_no (blank_no),
-  KEY idx_status (status),
-  KEY idx_processor (processor_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发（发坯）单头（2026-08-10 取消发出环节，只跟踪回货）';
-
-CREATE TABLE IF NOT EXISTS t_outsource_item (
+-- ========== M3 外发件回厂记录（设计文档 §4.3）==========
+-- 2026-08-10 两轮简化定型：先取消「发出」环节，再取消发坯单本身。
+-- 现在只有一张流水表：货回厂时录一条，记「哪个部件组、谁做的、什么时候回、回了多少」。
+-- 无单据号（不采番，同装配批次属轻量记账行 §4.7）、无状态列（记录存在即已回厂）、
+-- 不登记计划回厂时间（业务不跟踪还在外面的货）。
+CREATE TABLE IF NOT EXISTS t_outsource_part (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
-  doc_id              INT           NOT NULL COMMENT '所属发坯单',
   order_id            INT           NOT NULL COMMENT '冗余订单ID（订单下游引用探测按此列）',
   order_product_id    INT           NOT NULL COMMENT '冗余订单产品行ID',
   order_part_group_id INT           NOT NULL COMMENT '锚点：订单部件组（跟踪/台账粒度）',
@@ -409,37 +390,29 @@ CREATE TABLE IF NOT EXISTS t_outsource_item (
   product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（自部件组 = 货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
   dimension_text      VARCHAR(64)   NULL COMMENT '规格展示快照（如 350mm）',
   cycle_code          VARCHAR(64)   NULL COMMENT '周期码快照（自部件行追溯码）',
-  plan_return_qty     INT           NOT NULL DEFAULT 0 COMMENT '应回数量（支）：本单该部件组预计回多少，回货数≥此数即该行回齐',
-  returned_qty        INT           NOT NULL DEFAULT 0 COMMENT '累计回货数量（支）：由回货登记汇总维护，允许超过应回数（重量折算误差）',
+  order_qty           INT           NOT NULL DEFAULT 0 COMMENT '订单数量快照（产品行原始录入口径，配合 unit 看）',
+  unit                VARCHAR(16)   NULL COMMENT '订单单位快照：set套 piece支（1套=2支）',
+  drawing_no          VARCHAR(128)  NULL COMMENT '生产图号快照（自部件组）',
+  material_thickness  VARCHAR(32)   NULL COMMENT '材料厚度快照（自部件组）',
+  processor_name      VARCHAR(128)  NOT NULL COMMENT '加工商（外协厂）',
+  surface_type        VARCHAR(32)   NULL COMMENT '表面处理（字典 surface_type）：自订单带出，可改；保留值 none 不外发',
+  color               VARCHAR(64)   NULL COMMENT '颜色：自订单带出，可改',
+  back_date           DATE          NOT NULL COMMENT '实际回厂日期（必填——记录存在即代表已回厂）',
+  return_weight       DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '回厂重量（kg）',
+  unit_weight         DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '单重（kg/支）：默认自部件信息 t_material.unit_weight 带出，可改',
+  return_qty          INT           NOT NULL DEFAULT 0 COMMENT '回厂数量（支）= 回厂重量 ÷ 单重 四舍五入，允许人工微调',
   remark              VARCHAR(255)  NULL COMMENT '备注',
-  sort                INT           NOT NULL DEFAULT 0 COMMENT '行序',
   creator_id          INT           NULL COMMENT '创建人ID',
-  creator_name        VARCHAR(64)   NULL COMMENT '创建人姓名快照（编辑=整体重建，沿用单头创建人）',
-  updated_by          INT           NULL COMMENT '最后更新人ID（应回数量修正记于此）',
+  creator_name        VARCHAR(64)   NULL COMMENT '创建人姓名快照',
+  updated_by          INT           NULL COMMENT '最后更新人ID',
   updater_name        VARCHAR(64)   NULL COMMENT '最后更新人姓名快照',
   created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY idx_doc (doc_id),
   KEY idx_order (order_id),
-  KEY idx_part_group (order_part_group_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发明细（锚定订单部件组；2026-08-10 取消发出侧过磅字段）';
-
-CREATE TABLE IF NOT EXISTS t_outsource_return (
-  id             INT AUTO_INCREMENT PRIMARY KEY,
-  doc_id         INT           NOT NULL COMMENT '冗余发坯单ID',
-  item_id        INT           NOT NULL COMMENT '所属发出明细行（一行可多条 = 分批回货）',
-  back_date      DATE          NOT NULL COMMENT '回货日期',
-  return_weight  DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '收回重量（kg）',
-  unit_weight    DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '单重（kg/支），默认带出发出行单重，可改',
-  return_qty     INT           NOT NULL DEFAULT 0 COMMENT '收回数量（支）= 收回重量 ÷ 单重 四舍五入，允许人工微调',
-  remark         VARCHAR(255)  NULL COMMENT '备注',
-  creator_id     INT           NULL COMMENT '创建人ID',
-  creator_name   VARCHAR(64)   NULL COMMENT '创建人姓名快照',
-  created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_doc (doc_id),
-  KEY idx_item (item_id),
+  KEY idx_part_group (order_part_group_id),
+  KEY idx_processor (processor_name),
   KEY idx_back_date (back_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发回货登记（一发出明细行可多条，支持分批回货与撤销）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发件回厂记录（一行=一次回厂；无单据号、无状态）';
 
 -- 装配批次（设计文档 §3.4 / §4.4）：按订单部件组 + 边别录多批装配
 -- 「实际完成时间已填」即视为该批完成，其数量参与成品入库闸门（§4.5 / §7.13~7.15）

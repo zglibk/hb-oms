@@ -23,13 +23,9 @@ export {
   // 表面处理（字典驱动，页面经 useDict('surface_type') 取选项；此处仅哨兵与判断函数）
   SURFACE_NONE,
   needsOutsource,
-  // 外发
-  OUTSOURCE_STATUS_OPTIONS as OUTSOURCE_STATUS,
-  OUTSOURCE_STATUS as OUTSOURCE_STATUS_VALUE,
-  formatBlankNo,
+  // 外发：2026-08-10 收敛为「回厂流水」后，只剩重量→数量折算
+  // （状态枚举、发坯单号、回齐判定随发坯单一并下线）
   qtyFromWeight,
-  isItemFullyReturned,
-  deriveOutsourceStatus,
   // 装配
   ASSEMBLY_STATUS_OPTIONS as ASSEMBLY_STATUS,
   ASSEMBLY_STATUS as ASSEMBLY_STATUS_VALUE,

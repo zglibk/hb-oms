@@ -43,6 +43,13 @@ export interface PartGroupSnapshot {
   itemNo: string | null;
   materialCode: string | null;
   deliveryDate: string | null;
+  /** 订单数量与单位（产品行原始录入口径：set 套 / piece 支） */
+  orderQty: number;
+  unit: string | null;
+  /** 生产图号（部件组级，内部技术图纸号；区别于产品行的客户图号） */
+  drawingNo: string | null;
+  /** 材料厚度（部件组级） */
+  materialThickness: string | null;
 }
 
 @Injectable()
@@ -81,6 +88,10 @@ export class PartGroupSnapshotService {
               g.group_type        AS group_type,
               g.product_model     AS product_model,
               g.qty_pcs           AS qty_pcs,
+              g.drawing_no        AS drawing_no,
+              g.material_thickness AS material_thickness,
+              p.order_qty         AS order_qty,
+              p.unit              AS unit,
               o.status            AS order_status,
               o.order_no          AS order_no,
               o.customer_name     AS customer_name,
@@ -127,6 +138,10 @@ export class PartGroupSnapshotService {
         itemNo: r.item_no ?? null,
         materialCode: r.material_code ?? null,
         deliveryDate: r.delivery_date ?? null,
+        orderQty: Number(r.order_qty) || 0,
+        unit: r.unit ?? null,
+        drawingNo: r.drawing_no ?? null,
+        materialThickness: r.material_thickness ?? null,
       });
     });
     return map;

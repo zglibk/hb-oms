@@ -11,7 +11,7 @@ import { ref } from 'vue';
  */
 // v2（2026-08-08）：引导由「首页/基础数据/系统管理」三步扩成完整业务主线十步，
 // 并补上操作手册入口，内容与旧版差别很大，故递增版本号让老用户再看一遍。
-const TOUR_DONE_KEY = 'hb_mes_tour_done_v2';
+const TOUR_DONE_KEY = 'hb_mes_tour_done_v3';
 
 const tourOpen = ref(false);
 

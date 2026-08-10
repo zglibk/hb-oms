@@ -53,6 +53,8 @@ const MIGRATIONS: string[] = [
   'migration-order-other-req.sql',
   // 外发取消发出环节：删发外日期与发出重量/单重，发出数量改应回数量
   'migration-outsource-drop-send.sql',
+  // 外发再简化：三张表塌缩为「外发件回厂记录」单表
+  'migration-outsource-rebuild-part.sql',
 ];
 
 /**
@@ -63,12 +65,11 @@ const MIGRATIONS: string[] = [
 const forbiddenColumns = [
   't_order_product.production_no', // 已上移 t_order.production_no
   't_order_product.assembly_workshop', // 已下沉 t_assembly_batch.workshop
-  // 外发发出环节已取消（2026-08-10），这些列不得被旧版 schema 重建复活
-  't_outsource_doc.plan_send_date',
-  't_outsource_doc.actual_send_date',
-  't_outsource_item.send_qty',
-  't_outsource_item.send_weight',
-  't_outsource_item.unit_weight',
+  // 外发三张旧表（发坯单头/明细/回货流水）已于 2026-08-10 整体删除，
+  // 盯住任一列即可发现"旧版 schema 把表重建复活"的情况
+  't_outsource_doc.blank_no',
+  't_outsource_item.doc_id',
+  't_outsource_return.item_id',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -100,15 +101,13 @@ const expectedColumns = [
   't_material.unit_weight',
   't_process_info.dimension',
   't_process_info.drawing_version_outer',
-  // M3 外发（发坯单）——2026-08-10 发出环节取消，原先盯的 actual_send_date /
-  // send_qty 已改由下方 forbiddenColumns 盯住"不得复活"
-  't_outsource_doc.blank_no',
-  't_outsource_doc.require_back_date',
-  't_outsource_doc.close_reason',
-  't_outsource_item.order_part_group_id',
-  't_outsource_item.returned_qty',
-  't_outsource_return.item_id',
-  't_outsource_return.return_qty',
+  // M3 外发——2026-08-10 收敛为「外发件回厂记录」单表（发坯单三表已删）
+  't_outsource_part.order_part_group_id',
+  't_outsource_part.processor_name',
+  't_outsource_part.back_date',
+  't_outsource_part.return_qty',
+  't_outsource_part.order_qty',
+  't_outsource_part.drawing_no',
   // M3.5 装配批次
   't_assembly_batch.order_part_group_id',
   't_assembly_batch.side',
@@ -156,15 +155,13 @@ const expectedColumns = [
   't_changelog.creator_name',
   't_order_product.creator_name',
   't_order_part_group.creator_name',
-  't_outsource_item.updater_name',
+  't_outsource_part.updater_name',
   't_system_config.updater_name',
   't_file.creator_name',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）
   't_order.other_req',
-  // 外发改为只跟踪回货：应回数量是回齐判定基准
-  't_outsource_item.plan_return_qty',
 ];
 
 async function main() {

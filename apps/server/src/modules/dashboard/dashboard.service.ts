@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { FINISHED_DOC_STATUS, ORDER_STATUS, OUTSOURCE_STATUS } from '@hb-oms/shared';
+import { FINISHED_DOC_STATUS, ORDER_STATUS } from '@hb-oms/shared';
 // 欠数口径的唯一事实源在 order-owed.util —— 台账、订单自动完结、本看板三处共用同一份
 // 单据族 SQL，禁止在此另写一份 biz_type 判定（分叉后首页与台账数字对不上，最难查）
 import {
@@ -54,22 +54,21 @@ export interface DashboardOwedRow {
   deliveryOwed: number;
 }
 
-/** 外发超期未回齐行 */
+/**
+ * 近期外发回厂行。
+ *
+ * 2026-08-10 外发取消发坯单、不再登记计划回厂时间后，「超期未回齐」失去判定
+ * 基准（没有计划日、也没有"在外面没回"的记录），本卡改为展示**最近几条回厂流水**。
+ */
 export interface DashboardOutsourceRow {
-  docId: number;
-  blankNo: string | null;
+  id: number;
+  backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;
   color: string | null;
-  requireBackDate: string | null;
-  /** 超期天数 */
-  days: number;
-  status: number;
-  /** 应回数量（本单各明细行合计） */
-  planReturnQty: number;
-  returnedQty: number;
-  /** 未回数量 = 应回 − 已回 */
-  pendingQty: number;
+  productModel: string | null;
+  productionNo: string | null;
+  returnQty: number;
 }
 
 @Injectable()
@@ -116,11 +115,11 @@ export class DashboardService {
               g.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
 
   async summary() {
-    const [cards, overdueOrders, upcomingOrders, overdueOutsource, counts] = await Promise.all([
+    const [cards, overdueOrders, upcomingOrders, recentOutsource, counts] = await Promise.all([
       this.loadCards(),
       this.loadOverdueOrders(),
       this.loadUpcomingOrders(),
-      this.loadOverdueOutsource(),
+      this.loadRecentOutsource(),
       this.loadListCounts(),
     ]);
 
@@ -130,8 +129,8 @@ export class DashboardService {
       overdueOrders,
       /** 临近交期（含今天起 7 天内） */
       upcomingOrders,
-      /** 外发超期未回齐 */
-      overdueOutsource,
+      /** 近期外发回厂（最近几条回厂流水） */
+      recentOutsource,
       /** 三张列表的**真实总条数**（列表被 TOP_LIMIT 截断，角标要显示总数） */
       counts,
       /** 列表区统一截断条数，供界面提示「仅显示前 N 条」 */
@@ -163,23 +162,13 @@ export class DashboardService {
          ${this.activeGroupsFrom}`,
         [UPCOMING_DAYS, ...this.activeGroupsParams],
       ),
-      this.dataSource.query(
-        `SELECT COUNT(*) AS cnt FROM (
-           SELECT d.id
-             FROM t_outsource_doc d
-             JOIN t_outsource_item i ON i.doc_id = d.id
-            WHERE d.status IN (?, ?)
-              AND d.require_back_date IS NOT NULL
-              AND d.require_back_date < CURDATE()
-            GROUP BY d.id
-           HAVING SUM(i.returned_qty) < SUM(i.plan_return_qty)) x`,
-        [OUTSOURCE_STATUS.PENDING, OUTSOURCE_STATUS.PARTIAL_RETURNED],
-      ),
+      // 外发回厂流水总条数（列表被 TOP_LIMIT 截断，角标要显示总数）
+      this.dataSource.query('SELECT COUNT(*) AS cnt FROM t_outsource_part'),
     ]);
     return {
       overdueOrders: Number(owedRows?.[0]?.overdueCnt) || 0,
       upcomingOrders: Number(owedRows?.[0]?.upcomingCnt) || 0,
-      overdueOutsource: Number(osRows?.[0]?.cnt) || 0,
+      recentOutsource: Number(osRows?.[0]?.cnt) || 0,
     };
   }
 
@@ -239,48 +228,32 @@ export class DashboardService {
   }
 
   /**
-   * 外发超期未回齐：**计划回货日期**已过、单头仍处于「待回货 / 部分回货」。
-   * 已回齐（含手工关闭尾数）与已作废不算超期。
-   * 2026-08-10 发出环节取消后，建单即待回货（1）——它现在就是"发出去还没回来"
-   * 的正常态，必须纳入超期统计；原先排除 1、统计「已发出(2)」的口径同步作废。
+   * 近期外发回厂：最近 TOP_LIMIT 条回厂流水（回厂日期倒序）。
+   *
+   * 取代原「外发超期未回齐」——不再登记计划回厂时间后，系统里既没有超期基准、
+   * 也没有"还在外面没回"的记录，那张卡已无法计算（见 DashboardOutsourceRow 注释）。
    */
-  private async loadOverdueOutsource(): Promise<DashboardOutsourceRow[]> {
+  private async loadRecentOutsource(): Promise<DashboardOutsourceRow[]> {
     const rows: any[] = await this.dataSource.query(
-      `SELECT d.id AS docId, d.blank_no AS blankNo, d.processor_name AS processorName,
-              d.surface_type AS surfaceType, d.color AS color,
-              d.require_back_date AS requireBackDate, d.status AS status,
-              DATEDIFF(CURDATE(), d.require_back_date) AS days,
-              IFNULL(SUM(i.plan_return_qty), 0) AS planReturnQty,
-              IFNULL(SUM(i.returned_qty), 0)    AS returnedQty
-         FROM t_outsource_doc d
-         JOIN t_outsource_item i ON i.doc_id = d.id
-        WHERE d.status IN (?, ?)
-          AND d.require_back_date IS NOT NULL
-          AND d.require_back_date < CURDATE()
-        GROUP BY d.id, d.blank_no, d.processor_name, d.surface_type, d.color,
-                 d.require_back_date, d.status
-       HAVING SUM(i.returned_qty) < SUM(i.plan_return_qty)
-        ORDER BY d.require_back_date ASC, d.id ASC
+      `SELECT id, back_date AS backDate, processor_name AS processorName,
+              surface_type AS surfaceType, color AS color,
+              product_model AS productModel, production_no AS productionNo,
+              return_qty AS returnQty
+         FROM t_outsource_part
+        ORDER BY back_date DESC, id DESC
         LIMIT ?`,
-      [OUTSOURCE_STATUS.PENDING, OUTSOURCE_STATUS.PARTIAL_RETURNED, TOP_LIMIT],
+      [TOP_LIMIT],
     );
-    return rows.map((r) => {
-      const planReturnQty = Number(r.planReturnQty) || 0;
-      const returnedQty = Number(r.returnedQty) || 0;
-      return {
-        docId: Number(r.docId),
-        blankNo: r.blankNo ?? null,
-        processorName: r.processorName ?? null,
-        surfaceType: r.surfaceType ?? null,
-        color: r.color ?? null,
-        requireBackDate: this.dateText(r.requireBackDate),
-        days: Number(r.days) || 0,
-        status: Number(r.status),
-        planReturnQty,
-        returnedQty,
-        pendingQty: planReturnQty - returnedQty,
-      };
-    });
+    return rows.map((r) => ({
+      id: Number(r.id),
+      backDate: this.dateText(r.backDate),
+      processorName: r.processorName ?? null,
+      surfaceType: r.surfaceType ?? null,
+      color: r.color ?? null,
+      productModel: r.productModel ?? null,
+      productionNo: r.productionNo ?? null,
+      returnQty: Number(r.returnQty) || 0,
+    }));
   }
 
   private toOwedRow(r: any): DashboardOwedRow {

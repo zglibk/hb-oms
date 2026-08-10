@@ -1,36 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { ORDER_STATUS, SURFACE_NONE, formatDimension, needsOutsource } from '@hb-oms/shared';
+import { OutsourcePart } from './entities/outsource-part.entity';
 import {
-  BLANK_NO_WIDTH,
-  ORDER_STATUS,
-  OUTSOURCE_STATUS,
-  SURFACE_NONE,
-  deriveOutsourceStatus,
-  formatDimension,
-  needsOutsource,
-} from '@hb-oms/shared';
-import { OutsourceDoc } from './entities/outsource-doc.entity';
-import { OutsourceItem } from './entities/outsource-item.entity';
-import { OutsourceReturn } from './entities/outsource-return.entity';
-import {
-  CloseOutsourceDto,
-  CreateOutsourceDto,
-  CreateOutsourceReturnDto,
-  QueryOutsourceDto,
+  CreateOutsourcePartDto,
+  QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
-  UpdateOutsourceDto,
-  UpdateOutsourceItemDto,
+  UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import { auditOnCreate, auditOnUpdate, auditDisplayName } from '../../common/utils/audit.util';
-import { NumberGeneratorService } from '../../common/services/number-generator.service';
+import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 
-/** 发坯单号采番 key：全局序号、不按日期重置（设计文档 §4.7） */
-const BLANK_NO_SEQ_KEY = 'BLANK_NO';
-
-/** 可发外部件组行（供表单选择器） */
+/** 可外发部件组行（供录入表单的选择器） */
 export interface PartGroupOption {
   orderPartGroupId: number;
   orderId: number;
@@ -43,185 +26,82 @@ export interface PartGroupOption {
   cycleCode: string | null;
   surfaceType: string;
   color: string | null;
-  /** 组需求支数 */
+  /** 组需求支数（订单口径，参考用——回厂数不与它做校验） */
   qtyPcs: number;
-  /** 他单已安排应回支数（全部未作废发坯单合计） */
-  arrangedQty: number;
-  /** 剩余应安排支数 = 组需求 − 已安排（可为 0，界面照常可选以支持超发场景） */
-  remainQty: number;
-  /** 单重（kg/支）：自部件信息（t_material.unit_weight）带出，无则 0；回货登记折算用 */
+  /** 该组累计已回厂支数（全部回厂记录合计） */
+  returnedQty: number;
+  /** 订单数量与单位（展示用） */
+  orderQty: number;
+  unit: string | null;
+  /** 生产图号 / 材料厚度（自部件组） */
+  drawingNo: string | null;
+  materialThickness: string | null;
+  /** 单重（kg/支）：自部件信息带出，回厂折算默认值 */
   unitWeight: number;
 }
 
+/**
+ * ===== 外发件回厂记录（设计文档 §4.3）=====
+ *
+ * 2026-08-10 起本模块只做一件事：**记录外发件什么时候回厂、回了多少**。
+ * 没有发坯单、没有单据号、没有状态机——货回来了录一条流水，就这么简单。
+ *
+ * 台账「外发已回货」直接聚合本表 return_qty；订单是否被外发引用也按本表探测。
+ */
 @Injectable()
 export class OutsourceService {
   constructor(
-    @InjectRepository(OutsourceDoc) private readonly docRepo: Repository<OutsourceDoc>,
-    @InjectRepository(OutsourceItem) private readonly itemRepo: Repository<OutsourceItem>,
-    @InjectRepository(OutsourceReturn) private readonly returnRepo: Repository<OutsourceReturn>,
+    @InjectRepository(OutsourcePart)
+    private readonly partRepo: Repository<OutsourcePart>,
     private readonly dataSource: DataSource,
-    private readonly numberGenerator: NumberGeneratorService,
     private readonly partGroupSnapshot: PartGroupSnapshotService,
   ) {}
 
   /* ==================== 查询 ==================== */
 
-  async findList(query: QueryOutsourceDto) {
+  async findList(query: QueryOutsourcePartDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const qb = this.docRepo.createQueryBuilder('d');
-    if (query.status != null) qb.andWhere('d.status = :st', { st: query.status });
-    if (query.surfaceType) qb.andWhere('d.surfaceType = :sf', { sf: query.surfaceType });
-    // 发出环节取消后，列表日期筛选改按**计划回货日期**
-    if (query.dateFrom) qb.andWhere('d.requireBackDate >= :df', { df: query.dateFrom });
-    if (query.dateTo) qb.andWhere('d.requireBackDate <= :dt', { dt: query.dateTo });
+    const qb = this.partRepo.createQueryBuilder('r');
+    if (query.processorName) {
+      qb.andWhere('r.processorName = :pn', { pn: query.processorName });
+    }
+    if (query.surfaceType) qb.andWhere('r.surfaceType = :sf', { sf: query.surfaceType });
+    if (query.dateFrom) qb.andWhere('r.backDate >= :df', { df: query.dateFrom });
+    if (query.dateTo) qb.andWhere('r.backDate <= :dt', { dt: query.dateTo });
     if (query.keyword) {
-      // 生产单号/产品型号在明细行，用子查询命中后回联单头
       qb.andWhere(
-        `(d.blankNo LIKE :kw OR d.processorName LIKE :kw OR d.color LIKE :kw
-          OR d.id IN (SELECT i.doc_id FROM t_outsource_item i
-                      WHERE i.production_no LIKE :kw OR i.product_model LIKE :kw OR i.order_no LIKE :kw))`,
+        `(r.processorName LIKE :kw OR r.orderNo LIKE :kw OR r.productionNo LIKE :kw
+          OR r.productModel LIKE :kw OR r.drawingNo LIKE :kw)`,
         { kw: `%${query.keyword}%` },
       );
     }
-    qb.orderBy('d.id', 'DESC').skip((page - 1) * pageSize).take(pageSize);
-    const [docs, total] = await qb.getManyAndCount();
-
-    // 批量挂明细汇总（列表展开行与进度列用）
-    const docIds = docs.map((d) => d.id);
-    const items = docIds.length
-      ? await this.itemRepo.find({ where: { docId: In(docIds) }, order: { sort: 'ASC', id: 'ASC' } })
-      : [];
-    const itemsByDoc = new Map<number, OutsourceItem[]>();
-    items.forEach((it) => {
-      const arr = itemsByDoc.get(it.docId) ?? [];
-      arr.push(it);
-      itemsByDoc.set(it.docId, arr);
-    });
-
-    // 「实际回货」是分批登记的、落在流水行上；列表需要一个单头层面的口径，
-    // 取该单最后一次回货日期（未回货则空）。
-    const lastReturnByDoc = new Map<number, string | null>();
-    if (docIds.length) {
-      const rows: Array<{ docId: number; lastDate: string | null }> = await this.dataSource.query(
-        `SELECT doc_id AS docId, MAX(back_date) AS lastDate
-           FROM t_outsource_return
-          WHERE doc_id IN (${docIds.map(() => '?').join(',')})
-          GROUP BY doc_id`,
-        docIds,
-      );
-      rows.forEach((r) => lastReturnByDoc.set(Number(r.docId), this.dateText(r.lastDate)));
-    }
-
-    return {
-      list: docs.map((d) => {
-        const its = itemsByDoc.get(d.id) ?? [];
-        return Object.assign(d, {
-          items: its,
-          itemCount: its.length,
-          totalPlanReturnQty: its.reduce((s, it) => s + (it.planReturnQty || 0), 0),
-          totalReturnedQty: its.reduce((s, it) => s + (it.returnedQty || 0), 0),
-          lastReturnDate: lastReturnByDoc.get(d.id) ?? null,
-        });
-      }),
-      total,
-      page,
-      pageSize,
-    };
+    // 回厂日期倒序：最近回来的排最前，符合「看今天回了什么」的使用习惯
+    qb.orderBy('r.backDate', 'DESC')
+      .addOrderBy('r.id', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+    const [list, total] = await qb.getManyAndCount();
+    return { list, total, page, pageSize };
   }
 
   async findOne(id: number) {
-    const doc = await this.docRepo.findOne({ where: { id } });
-    if (!doc) throw new NotFoundException('发坯单不存在');
-    const items = await this.itemRepo.find({ where: { docId: id }, order: { sort: 'ASC', id: 'ASC' } });
-    const returns = await this.returnRepo.find({ where: { docId: id }, order: { backDate: 'ASC', id: 'ASC' } });
-    const returnsByItem = new Map<number, OutsourceReturn[]>();
-    returns.forEach((r) => {
-      const arr = returnsByItem.get(r.itemId) ?? [];
-      arr.push(r);
-      returnsByItem.set(r.itemId, arr);
-    });
-    // 组需求量与「他单已安排数」：编辑表单需要这两个数才能对照超量，
-    // 口径与选择器 findPartGroupOptions 一致（排除本单，已作废单不占额度）
-    const quota = await this.loadGroupSendQuota(
-      items.map((it) => it.orderPartGroupId),
-      id,
-    );
-    return Object.assign(doc, {
-      items: items.map((it) => {
-        const q = quota.get(it.orderPartGroupId);
-        return Object.assign(it, {
-          returns: returnsByItem.get(it.id) ?? [],
-          qtyPcs: q?.qtyPcs ?? 0,
-          arrangedQty: q?.arrangedQty ?? 0,
-          unitWeight: q?.unitWeight ?? 0,
-        });
-      }),
-    });
+    const row = await this.partRepo.findOne({ where: { id } });
+    if (!row) throw new NotFoundException('外发回厂记录不存在');
+    return row;
   }
 
   /**
-   * 部件组的「组需求支数」与「他单已安排应回支数」。
-   * excludeDocId 排除本单自身的明细，避免编辑时自己挤占自己的额度
-   * （与 findPartGroupOptions 的 excludeDocId 同一口径）。
-   */
-  private async loadGroupSendQuota(groupIds: number[], excludeDocId?: number) {
-    const map = new Map<
-      number,
-      { qtyPcs: number; arrangedQty: number; unitWeight: number }
-    >();
-    const ids = [...new Set(groupIds.filter((v) => Number.isInteger(v) && v > 0))];
-    if (!ids.length) return map;
-    const params: Array<number | string> = [OUTSOURCE_STATUS.CANCELLED];
-    let excludeSql = '';
-    if (excludeDocId) {
-      excludeSql = ' AND oi.doc_id <> ?';
-      params.push(excludeDocId);
-    }
-    params.push(...ids);
-    const rows: any[] = await this.dataSource.query(
-      `SELECT g.id           AS group_id,
-              g.qty_pcs      AS qty_pcs,
-              m.unit_weight  AS unit_weight,
-              COALESCE((SELECT SUM(oi.plan_return_qty) FROM t_outsource_item oi
-                         JOIN t_outsource_doc od ON od.id = oi.doc_id
-                        WHERE oi.order_part_group_id = g.id AND od.status <> ?${excludeSql}), 0)
-                        AS arranged_qty
-         FROM t_order_part_group g
-         JOIN t_order_product p ON p.id = g.order_product_id
-         LEFT JOIN t_material m ON m.id = p.material_id
-        WHERE g.id IN (${ids.map(() => '?').join(',')})`,
-      params,
-    );
-    rows.forEach((r) => {
-      map.set(Number(r.group_id), {
-        qtyPcs: Number(r.qty_pcs) || 0,
-        arrangedQty: Number(r.arranged_qty) || 0,
-        // 回货登记要按单重折算支数；明细行的发出侧单重已删，改从部件信息带出
-        unitWeight: Number(r.unit_weight) || 0,
-      });
-    });
-    return map;
-  }
-
-  /**
-   * 可发外部件组：表面处理非 none 的订单产品行下的部件组，
-   * 附他单已安排的应回数量（全部未作废发坯单合计）与剩余应安排数、
-   * 单重（自部件信息带出，供回货登记折算）。
-   * 已作废单（status=9）不占用额度；编辑时可用 excludeDocId 排除本单旧明细。
+   * 可外发部件组：表面处理非 none 的订单产品行下的部件组。
+   *
+   * 不再有「已安排 / 剩余可发」的额度概念（应回数量已随发坯单一并取消），
+   * 改附**组需求支数**与**该组累计已回厂**供录入时参照；同一组可反复选，
+   * 分批回厂本来就要录多条。
    */
   async findPartGroupOptions(query: QueryPartGroupOptionDto): Promise<PartGroupOption[]> {
     const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
-    const params: any[] = [OUTSOURCE_STATUS.CANCELLED];
-    let excludeSql = '';
-    if (query.excludeDocId) {
-      excludeSql = ' AND oi.doc_id <> ?';
-      params.push(query.excludeDocId);
-    }
-    // 订单状态：仅进行中/已完结可发外，已作废订单排除
-    params.push(ORDER_STATUS.CANCELLED);
+    const params: any[] = [ORDER_STATUS.CANCELLED, SURFACE_NONE];
     let where = ' WHERE o.status <> ? AND p.surface_type <> ?';
-    params.push(SURFACE_NONE);
     if (query.surfaceType) {
       where += ' AND p.surface_type = ?';
       params.push(query.surfaceType);
@@ -235,27 +115,30 @@ export class OutsourceService {
     params.push(limit);
 
     const rows: any[] = await this.dataSource.query(
-      `SELECT g.id                AS orderPartGroupId,
-              g.order_id          AS orderId,
-              g.order_product_id  AS orderProductId,
-              o.order_no          AS orderNo,
-              o.customer_name     AS customerName,
-              o.production_no     AS productionNo,
-              g.product_model     AS productModel,
-              p.dimension_raw     AS dimensionRaw,
-              p.dimension_unit    AS dimensionUnit,
-              p.dimension_mm      AS dimensionMm,
-              p.surface_type      AS surfaceType,
-              p.color             AS color,
-              g.qty_pcs           AS qtyPcs,
-              m.unit_weight       AS unitWeight,
+      `SELECT g.id                 AS orderPartGroupId,
+              g.order_id           AS orderId,
+              g.order_product_id   AS orderProductId,
+              o.order_no           AS orderNo,
+              o.customer_name      AS customerName,
+              o.production_no      AS productionNo,
+              g.product_model      AS productModel,
+              g.drawing_no         AS drawingNo,
+              g.material_thickness AS materialThickness,
+              p.dimension_raw      AS dimensionRaw,
+              p.dimension_unit     AS dimensionUnit,
+              p.dimension_mm       AS dimensionMm,
+              p.surface_type       AS surfaceType,
+              p.color              AS color,
+              p.order_qty          AS orderQty,
+              p.unit               AS unit,
+              g.qty_pcs            AS qtyPcs,
+              m.unit_weight        AS unitWeight,
               (SELECT MIN(pt.cycle_code) FROM t_order_part pt
                 WHERE pt.part_group_id = g.id AND pt.cycle_code IS NOT NULL AND pt.cycle_code <> '')
-                                  AS cycleCode,
-              COALESCE((SELECT SUM(oi.plan_return_qty) FROM t_outsource_item oi
-                         JOIN t_outsource_doc od ON od.id = oi.doc_id
-                        WHERE oi.order_part_group_id = g.id AND od.status <> ?${excludeSql}), 0)
-                                  AS arrangedQty
+                                   AS cycleCode,
+              COALESCE((SELECT SUM(op.return_qty) FROM t_outsource_part op
+                         WHERE op.order_part_group_id = g.id), 0)
+                                   AS returnedQty
          FROM t_order_part_group g
          JOIN t_order_product p ON p.id = g.order_product_id
          JOIN t_order o         ON o.id = g.order_id
@@ -266,165 +149,54 @@ export class OutsourceService {
       params,
     );
 
-    return rows.map((r) => {
-      const qtyPcs = Number(r.qtyPcs) || 0;
-      const arrangedQty = Number(r.arrangedQty) || 0;
-      return {
-        orderPartGroupId: Number(r.orderPartGroupId),
-        orderId: Number(r.orderId),
-        orderProductId: Number(r.orderProductId),
-        orderNo: r.orderNo ?? null,
-        customerName: r.customerName ?? null,
-        productionNo: r.productionNo ?? null,
-        productModel: r.productModel ?? null,
-        dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
-        cycleCode: r.cycleCode ?? null,
-        surfaceType: r.surfaceType ?? SURFACE_NONE,
-        color: r.color ?? null,
-        qtyPcs,
-        arrangedQty,
-        remainQty: Math.max(qtyPcs - arrangedQty, 0),
-        unitWeight: Number(r.unitWeight) || 0,
-      };
-    });
+    return rows.map((r) => ({
+      orderPartGroupId: Number(r.orderPartGroupId),
+      orderId: Number(r.orderId),
+      orderProductId: Number(r.orderProductId),
+      orderNo: r.orderNo ?? null,
+      customerName: r.customerName ?? null,
+      productionNo: r.productionNo ?? null,
+      productModel: r.productModel ?? null,
+      dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
+      cycleCode: r.cycleCode ?? null,
+      surfaceType: r.surfaceType ?? SURFACE_NONE,
+      color: r.color ?? null,
+      qtyPcs: Number(r.qtyPcs) || 0,
+      returnedQty: Number(r.returnedQty) || 0,
+      orderQty: Number(r.orderQty) || 0,
+      unit: r.unit ?? null,
+      drawingNo: r.drawingNo ?? null,
+      materialThickness: r.materialThickness ?? null,
+      unitWeight: Number(r.unitWeight) || 0,
+    }));
   }
+
+  /* ==================== 录入 ==================== */
 
   /**
-   * 打印数据：单头 + 明细 + 合计（前端按四联单版式渲染）。
-   * 发出重量已随发出环节取消，打印页的「重量/单重」两列留空由发货人手写，
-   * 故此处不再返回重量合计。
+   * 登记回厂：一次可录多行（勾选多个部件组，共用加工商与回厂日期）。
+   * 展示快照一律服务端从订单侧读取，不采信客户端传值。
    */
-  async findPrintData(id: number) {
-    const doc = await this.findOne(id);
-    const items = (doc as any).items as OutsourceItem[];
-    return Object.assign(doc, {
-      totalPlanReturnQty: items.reduce((s, it) => s + (it.planReturnQty || 0), 0),
-    });
-  }
+  async create(dto: CreateOutsourcePartDto, user: CurrentUserPayload) {
+    const groupIds = dto.items.map((it) => it.orderPartGroupId);
+    const snapshots = await this.partGroupSnapshot.load(null, groupIds);
+    const audit = auditOnCreate(user);
 
-  /* ==================== 建单 / 编辑 ==================== */
-
-  async create(dto: CreateOutsourceDto, user: CurrentUserPayload) {
-    this.assertSurfaceType(dto.surfaceType);
-    return this.dataSource.transaction(async (mgr) => {
-      const blankNo = await this.numberGenerator.generatePaddedSequence(
-        BLANK_NO_SEQ_KEY,
-        BLANK_NO_WIDTH,
-        mgr,
-      );
-      const doc = await mgr.getRepository(OutsourceDoc).save(
-        mgr.getRepository(OutsourceDoc).create({
-          blankNo,
-          processorName: dto.processorName,
-          surfaceType: dto.surfaceType,
-          color: dto.color ?? null,
-          requireBackDate: dto.requireBackDate ?? null,
-          // 发出环节已取消：建单即「待回货」，后续由回货登记推进状态
-          status: OUTSOURCE_STATUS.PENDING,
-          remark: dto.remark ?? null,
-          ...auditOnCreate(user),
-        }),
-      );
-      await this.writeItems(mgr, doc.id, dto.items, auditOnCreate(user));
-      return { id: doc.id, blankNo };
-    });
-  }
-
-  /**
-   * 编辑：仅「待回货」可改。明细是整体重建（先删后写），一旦有回货登记，
-   * 重建会把回货流水挂到已被删除的明细行上，故有回货即禁编辑；
-   * 要纠正应回数量走 updateItem（行级修正，不动锚点）。
-   */
-  async update(id: number, dto: UpdateOutsourceDto, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    if (doc.status !== OUTSOURCE_STATUS.PENDING) {
-      throw new BadRequestException(
-        '仅「待回货」状态的发坯单可整单编辑；已有回货的单请用行级「修正应回数量」，或先撤销回货登记',
-      );
-    }
-    this.assertSurfaceType(dto.surfaceType);
-    return this.dataSource.transaction(async (mgr) => {
-      await mgr.getRepository(OutsourceDoc).update(id, {
-        processorName: dto.processorName,
-        surfaceType: dto.surfaceType,
-        color: dto.color ?? null,
-        requireBackDate: dto.requireBackDate ?? null,
-        remark: dto.remark ?? null,
-        ...auditOnUpdate(user),
-      });
-      await mgr.getRepository(OutsourceItem).delete({ docId: id });
-      // 明细整体重建：创建人沿用单头（谁开的这张单），更新人记本次编辑者
-      await this.writeItems(mgr, id, dto.items, {
-        creatorId: doc.creatorId,
-        creatorName: doc.creatorName,
-        ...auditOnUpdate(user),
-      });
-      return { id };
-    });
-  }
-
-  /**
-   * 应回数量修正（设计文档 §7.3）：已有回货、整单不可编辑后的纠错通道。
-   * 只改应回数量与备注（不动锚点、不增删行），改完立即重算回齐状态——
-   * 下调应回数可能使原「部分回货」变为「已回齐」，上调则反向回退。
-   */
-  async updateItem(itemId: number, dto: UpdateOutsourceItemDto, user: CurrentUserPayload) {
-    return this.dataSource.transaction(async (mgr) => {
-      const item = await mgr
-        .getRepository(OutsourceItem)
-        .createQueryBuilder('i')
-        .setLock('pessimistic_write')
-        .where('i.id = :id', { id: itemId })
-        .getOne();
-      if (!item) throw new NotFoundException('外发明细行不存在');
-
-      const doc = await this.mustGet(item.docId, mgr);
-      if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-        throw new BadRequestException('发坯单已作废，不能修改应回数量');
-      }
-      // 行级人工改数：只动更新人（这行是谁修正的），保留原录入人
-      await mgr.getRepository(OutsourceItem).update(itemId, {
-        ...auditOnUpdate(user),
-        planReturnQty: dto.planReturnQty,
-        remark: dto.remark ?? null,
-      });
-      await this.refreshItemAndDoc(mgr, item.docId, itemId, user);
-      return { docId: item.docId, itemId };
-    });
-  }
-
-  /** 明细落库：展示快照一律服务端从订单侧读取，不采信客户端传值 */
-  private async writeItems(
-    mgr: EntityManager,
-    docId: number,
-    items: CreateOutsourceDto['items'],
-    audit: {
-      creatorId: number | null;
-      creatorName: string | null;
-      updaterId: number;
-      updaterName: string | null;
-    },
-  ) {
-    const groupIds = items.map((it) => it.orderPartGroupId);
-    const dupe = groupIds.find((gid, i) => groupIds.indexOf(gid) !== i);
-    if (dupe) {
-      throw new BadRequestException('同一张发坯单内同一部件组不能重复添加，请合并该行数量');
-    }
-    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds);
-    const rows = items.map((it, i) => {
+    const rows = dto.items.map((it, i) => {
       const snap = snapshots.get(it.orderPartGroupId);
       if (!snap) {
-        throw new BadRequestException(`第 ${i + 1} 行明细：订单部件组不存在或订单已作废`);
+        throw new BadRequestException(`第 ${i + 1} 行：订单部件组不存在或订单已作废`);
       }
-      // 表面处理为空/none 均视为不外发（共享包 needsOutsource 唯一口径）
-      if (!needsOutsource(snap.surfaceType)) {
+      // 表面处理为空/none 均视为不外发（共享包 needsOutsource 唯一口径）；
+      // 允许行内覆盖表面处理，但覆盖值同样不能是「无」
+      const surfaceType = it.surfaceType || snap.surfaceType;
+      if (!needsOutsource(surfaceType)) {
         throw new BadRequestException(
-          `第 ${i + 1} 行明细：产品「${snap.productModel ?? ''}」表面处理为「无」，无需外发`,
+          `第 ${i + 1} 行：产品「${snap.productModel ?? ''}」表面处理为「无」，不需要外发`,
         );
       }
-      return mgr.getRepository(OutsourceItem).create({
+      return this.partRepo.create({
         ...audit,
-        docId,
         orderId: snap.orderId,
         orderProductId: snap.orderProductId,
         orderPartGroupId: it.orderPartGroupId,
@@ -434,183 +206,53 @@ export class OutsourceService {
         productModel: snap.productModel,
         dimensionText: snap.dimensionText,
         cycleCode: snap.cycleCode,
-        planReturnQty: it.planReturnQty,
-        returnedQty: 0,
+        orderQty: snap.orderQty,
+        unit: snap.unit,
+        drawingNo: snap.drawingNo,
+        materialThickness: snap.materialThickness,
+        processorName: dto.processorName,
+        surfaceType,
+        color: it.color ?? snap.color,
+        backDate: dto.backDate,
+        returnWeight: String(it.returnWeight ?? 0),
+        unitWeight: String(it.unitWeight ?? 0),
+        returnQty: it.returnQty,
         remark: it.remark ?? null,
-        sort: it.sort ?? i,
       });
     });
-    await mgr.getRepository(OutsourceItem).save(rows);
+
+    const saved = await this.partRepo.save(rows);
+    return { count: saved.length, ids: saved.map((r) => r.id) };
   }
 
-  private assertSurfaceType(surfaceType: string) {
-    if (!surfaceType || surfaceType === SURFACE_NONE) {
-      throw new BadRequestException('表面处理不能为「无」，外发单必须指定表面处理方式');
+  /** 编辑单条：锚点与订单侧快照不可改，只改加工商/日期/表面处理/颜色/数量口径/备注 */
+  async update(id: number, dto: UpdateOutsourcePartDto, user: CurrentUserPayload) {
+    const row = await this.findOne(id);
+    const surfaceType = dto.surfaceType || row.surfaceType;
+    if (!needsOutsource(surfaceType)) {
+      throw new BadRequestException('表面处理不能为「无」——不外发的产品不该有回厂记录');
     }
-  }
-
-  /* ==================== 状态机 ==================== */
-
-  // 2026-08-10：send()（登记实际发外日期，1→2）已随发出环节整体删除。
-  // 建单即「待回货」，状态只由回货登记推进。
-
-  /** 手工关闭：3部分回货 → 4已回齐（尾数不回/损耗核销），原因必填 */
-  async close(id: number, dto: CloseOutsourceDto, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    if (doc.status !== OUTSOURCE_STATUS.PARTIAL_RETURNED) {
-      throw new BadRequestException('仅「部分回货」状态的发坯单可手工关闭为已回齐');
-    }
-    await this.docRepo.update(id, {
-      status: OUTSOURCE_STATUS.RETURNED_ALL,
-      closeReason: dto.closeReason,
+    await this.partRepo.update(id, {
       ...auditOnUpdate(user),
+      processorName: dto.processorName,
+      backDate: dto.backDate,
+      surfaceType,
+      color: dto.color ?? row.color,
+      returnWeight: String(dto.returnWeight ?? 0),
+      unitWeight: String(dto.unitWeight ?? 0),
+      returnQty: dto.returnQty,
+      remark: dto.remark ?? null,
     });
-    return { id, status: OUTSOURCE_STATUS.RETURNED_ALL };
-  }
-
-  /** 作废：仅「待回货」且无任何回货登记时允许（§7.3） */
-  async cancel(id: number, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-      throw new BadRequestException('发坯单已作废');
-    }
-    const returnCount = await this.returnRepo.count({ where: { docId: id } });
-    if (returnCount > 0) {
-      throw new BadRequestException(
-        `该发坯单已有 ${returnCount} 条回货登记，禁止作废；请先撤销全部回货登记`,
-      );
-    }
-    if (doc.status !== OUTSOURCE_STATUS.PENDING) {
-      throw new BadRequestException('已有回货的发坯单不能作废；如需处理尾数请使用「关闭」');
-    }
-    await this.docRepo.update(id, { status: OUTSOURCE_STATUS.CANCELLED, ...auditOnUpdate(user) });
-    return { id, status: OUTSOURCE_STATUS.CANCELLED };
-  }
-
-  /* ==================== 回货登记 ==================== */
-
-  /**
-   * 登记一条回货：写流水 → 回写明细累计回货数 → 重算单头状态（1→3→4）。
-   * 回货数允许超过应回数（重量折算误差，§7.6），后端不拦截，由界面提示。
-   * 全程在事务内并对明细行加锁，防并发重复登记导致累计数错乱。
-   */
-  async createReturn(itemId: number, dto: CreateOutsourceReturnDto, user: CurrentUserPayload) {
-    return this.dataSource.transaction(async (mgr) => {
-      const item = await mgr
-        .getRepository(OutsourceItem)
-        .createQueryBuilder('i')
-        .setLock('pessimistic_write')
-        .where('i.id = :id', { id: itemId })
-        .getOne();
-      if (!item) throw new NotFoundException('外发明细行不存在');
-
-      const doc = await this.mustGet(item.docId, mgr);
-      if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-        throw new BadRequestException('发坯单已作废，不能登记回货');
-      }
-      // 发出环节取消后「待回货」就是等货回来的正常态，不再有前置的发出校验；
-      // 只有作废单拦住（其余状态含已回齐都允许补登尾数）。
-
-      await mgr.getRepository(OutsourceReturn).save(
-        mgr.getRepository(OutsourceReturn).create({
-          docId: item.docId,
-          itemId: item.id,
-          backDate: dto.backDate,
-          returnWeight: String(dto.returnWeight ?? 0),
-          unitWeight: String(dto.unitWeight ?? 0),
-          returnQty: dto.returnQty,
-          remark: dto.remark ?? null,
-          creatorId: user.id,
-          creatorName: auditDisplayName(user) || null,
-        }),
-      );
-      await this.refreshItemAndDoc(mgr, item.docId, item.id, user);
-      return { docId: item.docId, itemId: item.id };
-    });
-  }
-
-  /** 撤销回货登记：删流水 → 回写累计数 → 状态自动回退（§7.6） */
-  async removeReturn(returnId: number, user: CurrentUserPayload) {
-    return this.dataSource.transaction(async (mgr) => {
-      const row = await mgr.getRepository(OutsourceReturn).findOne({ where: { id: returnId } });
-      if (!row) throw new NotFoundException('回货登记不存在');
-      const doc = await this.mustGet(row.docId, mgr);
-      if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-        throw new BadRequestException('发坯单已作废，不能撤销回货登记');
-      }
-      await mgr.getRepository(OutsourceReturn).delete(returnId);
-      await this.refreshItemAndDoc(mgr, row.docId, row.itemId, user);
-      return { docId: row.docId, itemId: row.itemId };
-    });
+    return { id };
   }
 
   /**
-   * 重算明细累计回货数与单头状态。
-   * 单头状态一律由共享包 deriveOutsourceStatus 派生（前后端同一口径）；
-   * 手工关闭（closeReason 非空）时不因回货撤销而回退到部分回货——
-   * 关闭是人工决定的终态，只有回货被全部撤销到零才解除。
+   * 删除：录错了直接删（本表是流水记账行，无下游引用——台账每次实时聚合，
+   * 删掉即刻反映）。删除动作靠 @OperationLog 留痕，行已物理删除写不了审计列。
    */
-  private async refreshItemAndDoc(
-    mgr: EntityManager,
-    docId: number,
-    itemId: number,
-    user: CurrentUserPayload,
-  ) {
-    const sum: Array<{ total: string | null }> = await mgr.query(
-      'SELECT SUM(return_qty) AS total FROM t_outsource_return WHERE item_id = ?',
-      [itemId],
-    );
-    const returnedQty = Number(sum?.[0]?.total ?? 0) || 0;
-    await mgr.getRepository(OutsourceItem).update(itemId, { returnedQty });
-
-    const doc = await mgr.getRepository(OutsourceDoc).findOne({ where: { id: docId } });
-    if (!doc) return;
-    const items = await mgr.getRepository(OutsourceItem).find({ where: { docId } });
-    const derived = deriveOutsourceStatus(
-      items.map((it) => ({
-        planReturnQty: it.planReturnQty,
-        returnedQty: it.returnedQty,
-      })),
-    );
-    const hadManualClose = !!doc.closeReason;
-    // 人工关闭后又新增回货：仍保持已回齐；回货全撤销（派生回落待回货）才清除关闭原因
-    const nextStatus =
-      hadManualClose && derived === OUTSOURCE_STATUS.PARTIAL_RETURNED
-        ? OUTSOURCE_STATUS.RETURNED_ALL
-        : derived;
-    const clearClose = hadManualClose && derived === OUTSOURCE_STATUS.PENDING;
-    await mgr.getRepository(OutsourceDoc).update(docId, {
-      status: nextStatus,
-      ...(clearClose ? { closeReason: null } : {}),
-      ...auditOnUpdate(user),
-    });
-  }
-
-  /* ==================== 工具 ==================== */
-
-  private async mustGet(id: number, mgr?: EntityManager): Promise<OutsourceDoc> {
-    const repo = mgr ? mgr.getRepository(OutsourceDoc) : this.docRepo;
-    const doc = await repo.findOne({ where: { id } });
-    if (!doc) throw new NotFoundException('发坯单不存在');
-    return doc;
-  }
-
-  /** decimal 列（TypeORM 返回字符串）求和，保留两位小数 */
-  private sumDecimal(values: Array<string | number | null | undefined>): number {
-    const sum = values.reduce<number>((s, v) => s + (Number(v) || 0), 0);
-    return Math.round(sum * 100) / 100;
-  }
-
-  /**
-   * DATE 列 → 'YYYY-MM-DD'。原生 query 走 mysql2 时 DATE 可能回 Date 对象，
-   * 直接 toISOString 会因时区把日期减一天，故按本地年月日拼。
-   */
-  private dateText(v: any): string | null {
-    if (!v) return null;
-    if (v instanceof Date) {
-      const p = (n: number) => String(n).padStart(2, '0');
-      return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
-    }
-    return String(v).slice(0, 10);
+  async remove(id: number) {
+    await this.findOne(id);
+    await this.partRepo.delete(id);
+    return { id };
   }
 }

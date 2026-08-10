@@ -57,7 +57,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
 - `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、`PartGroupSnapshotService`（订单部件组快照，外发/装配/成品出入库统一从它读订单侧展示字段，禁止各模块再写一份 SQL）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发发坯单）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
@@ -157,7 +157,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **新增/修改状态只改共享包一处**。凡前后端都要用、且必须口径一致的纯常量/纯函数一律进共享包，禁止两端各写一份；依赖 NestJS/Vue/Element Plus 的代码不得进共享包。
 - **禁止在 service SQL、前端模板中出现裸的状态数字**（如 `status = 2`、`row.status === 1`），一律引用命名常量。注意跨表状态不可混用（订单状态用 `ORDER_STATUS`、外发状态用 `OUTSOURCE_STATUS`，即便数值恰好相同）。
 
-共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（发坯单号宽度与 `formatBlankNo`、重量→数量折算 `qtyFromWeight`、回齐判定、单头状态派生 `deriveOutsourceStatus`）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）。
+共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（**仅剩**重量→数量折算 `qtyFromWeight`——发坯单号、回齐判定、状态派生已随发坯单一并删除）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）。
 
 ### 4.2 数据库字段注释强制
 
@@ -236,13 +236,12 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | 前缀 | 单据 | 格式 | 采番位置 |
 |---|---|---|---|
 | ORD | 销售订单 | `ORD + yymmdd + '-' + 4位当日序号` | order.service |
-| （无前缀） | **发坯单**（外发） | 7 位定长纯数字全局序号，展示层拼 `No.` | outsource.service（`generatePaddedSequence`，key `BLANK_NO`，宽度取共享包 `BLANK_NO_WIDTH`） |
 | FGI | 成品**生产入库**单 | 同 ORD | finished-stock.service（`prefixOf()`） |
 | FGO | 成品**出库**单 + **期初**（`opening_balance` 虽是入向但走 FGO 序列，§4.7 明文） | 同 ORD | 同上 |
 | FGR | 成品**红字冲销**单 | 同 ORD | 同上 |
 | FILE | 文件上传 | 同 ORD | file.service |
 
-**不采番的业务行**：装配批次、部件调整流水属轻量记账行，无单据号（主键 id 即可）。
+**不采番的业务行**：**外发件回厂记录**、装配批次、部件调整流水属轻量记账行，无单据号（主键 id 即可）。
 
 ### 5.5 基础数据 vs 业务流水
 
@@ -278,24 +277,21 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - 一个产品跨多组时，组级字段（组类型/生产图号/版本/料厚）**按组序正序**去重并列——台账排序是 `g.id DESC`，直接拼会得到「内轨/外中轨」这种与订单表单相反的顺序。
   - 上限同台账 5000 行，超限与无数据一律**拒绝而非静默给空表**；按「已作废」筛选时直接提示作废单不进总计划（台账口径本就排除作废）。
 
-**外发发坯单（M3）**
+**外发件回厂记录（M3）**
 
-> ⚠️ **2026-08-10：发出环节整体取消**。使用部门反馈发货不过磅、不留发出数量记录，这套数据没人填准也没人看。外发单改为只跟踪「哪些部件组发去做表面处理 → 计划何时回 → 实际何时回、回了多少」。已删：单头 `plan_send_date` / `actual_send_date`、明细 `send_weight` / `unit_weight`、`POST /outsource/:id/send` 接口、权限点 `outsource:send`；`send_qty` 改名 `plan_return_qty`（应回数量）。**新代码不得再引入发出侧概念**。
+> ⚠️ **2026-08-10：外发模块经两轮简化定型**。第一轮取消「发出」环节（发货不过磅、不留发出数量），第二轮**连发坯单也取消**——使用部门只需要记「外发件回厂了什么、回了多少」。三张表（单头/明细/回货流水）已塌缩为单表 `t_outsource_part`，`t_outsource_doc` / `t_outsource_item` / `t_outsource_return` **已删除**。**新代码不得再引入发坯单、发出、应回数量、回齐等概念。**
 
-- 状态机：`1待回货 --有回货登记--> 3部分回货 --全部行回齐/手工关闭--> 4已回齐`；`9已作废`仅从待回货进入。建单即待回货。
-  - `OUTSOURCE_STATUS.SENT = 2`（已发出）**弃用不再产生**，枚举与展示映射保留：万一有历史行落在 2，界面照旧显示中文而不是裸数字。**不要为了"看着整齐"重新编号 3/4**——遗留行会被静默误读。
-- 单头状态**一律由共享包 `deriveOutsourceStatus(items)` 派生**（前后端同口径），不在业务代码里散写判断。该函数已去掉 `hasActualSendDate` 入参。
-- 明细锚定部件组，**同一张单内同一部件组不可重复添加**；表面处理为 `none` 的产品不可入明细；单头表面处理不可为 `none`。
-- **回齐判定基准是明细行的「应回数量」`plan_return_qty`**（回货数 ≥ 应回数即该行回齐）。建单时默认带出「组需求 − 他单已安排」，允许人工改——同一部件组可拆多张单外发，各单应回数相加即该组总安排量。若改用「部件组订单需求数」当基准，拆单场景每张都回不齐，只能靠手工关闭收尾，故不这么做。
-- **仅「待回货」可整单编辑**（明细整体重建，有回货就会把流水挂到已删除的行上）；已有回货后纠正应回数走行级「修正应回数量」接口（只改应回数量/备注，不动锚点、不增删行），改完**自动双向重算回齐状态**。
-- **有回货登记禁作废**（尾数不回走「关闭」，须填原因）。
-- **回货允许超过应回数**（重量折算误差）：后端不拦截，前端黄色提示；撤销回货后累计数与状态**自动回退**，回退到零时清除手工关闭原因。
-- 回货登记、应回数修正均在事务内对明细行加**悲观锁**后汇总重算，防并发错乱。
-- 重量→数量折算：`数量 = 重量 ÷ 单重` 四舍五入（共享包 `qtyFromWeight`），**现在只服务于回货登记**（收回重量 ÷ 单重），仅作默认值可人工微调。单重自部件信息（`t_material.unit_weight`）带出——明细行的发出侧单重已删，详情接口改从部件信息取值随行返回。
-- 「计划回货日期」列名仍是 **`require_back_date`**（只改注释与界面文案，不改列名——内部标识稳定约定，改列名要牵动索引、看板 SQL、前端字段名）。「实际回货」按明细行分批登记在 `t_outsource_return` 上；列表与台账展开需要单头层面口径时取 `MAX(back_date)`（`lastReturnDate`）。
-- 看板「外发超期未回齐」= 计划回货日已过 且 状态 ∈ {待回货, 部分回货}。**待回货现在就是"发出去还没回来"的正常态，必须纳入**；原先排除 1、只统计 2 的口径已随发出环节作废。
-- **打印用《电镀发外加工单》版式**（`views/outsource/print.vue`，2026-08-07 自 hb-mes `subcontract/SubcontractPrint.vue` 移植）：纸张是 **240mm × 150mm 四联单，不是 A4**，尺寸/列宽百分比/行高/联次竖排文字均按原单照搬，换纸即可对齐——**不要改成 A4，也不要动列宽**。每页固定 11 行（表体 101mm − 表头 13mm，行高 8mm），多明细自动续页并补空行。抬头固定为公司**全称**常量 `COMPANY_FULL_NAME`（中山市海宝精密五金有限公司），**刻意不取系统配置的 `companyName`**——那是登录页/标题栏的品牌短名，而本单是交给加工商的对外正式单据，抬头须用营业执照全称，两者用途不同不应互相牵制；公司更名时改该常量。与 MES 的两处差异：单头第二格因 hb-oms 无「委托单号」改印**表面处理**；「包装方式」列 hb-oms 无对应字段，留空供手写。**「重量（KG）」「单重」两列自 2026-08-10 起打印留空**，由发货人现场过磅手写——系统内已无发出重量，但对外单据的版式与列宽一律不动。单据日期改取**建单日期**（原取实际/计划发外日期，两者已删）。
-- 明细快照经 `PartGroupSnapshotService` 统一读取；详情接口附带 `qtyPcs`（组需求）、`arrangedQty`（**他单**已安排，已排除本单）与 `unitWeight`（部件信息单重），供编辑表单对照超量、回货弹窗折算。
+- **一行 = 一次回厂**。锚定订单部件组；同一组可有多行（分批回厂），不做唯一约束。
+- **没有状态列**（记录存在即已回厂，派生不出第二种状态）、**没有单据号**（不采番，与装配批次同属「轻量记账行」，见 §5.4）、**不登记计划回厂时间**（业务不跟踪还在外面的货）。共享包的 `OUTSOURCE_STATUS` / `deriveOutsourceStatus` / `isItemFullyReturned` / `BLANK_NO_WIDTH` / `formatBlankNo` 均已删除，`outsource.ts` 只剩 `qtyFromWeight`。
+- 字段分两类：**订单侧快照只读带出**（生产单号/产品型号/规格/订单数量+单位/生产图号/材料厚度/周期码/订单号/客户）、**人工录入**（加工商、表面处理+颜色、实际回厂日期、重量、单重、数量、备注）。快照一律由服务端经 `PartGroupSnapshotService` 读取落库，不采信客户端传值。
+  - 为此给 `PartGroupSnapshot` 补了 `orderQty` / `unit` / `drawingNo` / `materialThickness` 四个字段——**下游模块要新的快照列一律加在这个服务里**，禁止各模块自写 SQL（§一 后端架构）。
+- **表面处理与颜色自订单带出、允许改**（实际做的与订单登记的可能不同）；但改写值同样不能是 `none`——不外发的产品不该有回厂记录。
+- 重量→数量折算 `qtyFromWeight`（重量 ÷ 单重 四舍五入）仅作默认值可微调；单重自部件信息 `t_material.unit_weight` 带出。选中部件组时**重量与数量留 0**，等过磅实测录入——拿订单数预填会让人顺手存下一个没过磅的假数。
+- 录入支持**一次多行**：勾选多个部件组共用同一加工商与回厂日期（车间一次拉回一批货，逐条重填加工商和日期纯属折磨人）。编辑只能改单条，且**锚点不可改**（改锚点等于换部件组，要换只能删了重录）。
+- 接口只剩 `GET /` `GET /part-group-options` `GET /:id` `POST /` `PUT /:id` `DELETE /:id`；权限点只剩 `outsource`（菜单）+ `outsource:create` / `:update` / `:delete`。原 send / close / cancel / return / return-cancel / print 与《电镀发外加工单》打印页一并下线，加工单改回纯手工。
+- **台账「外发已回货」= `SUM(t_outsource_part.return_qty)`**（按部件组聚合），展开行的外发流水直接列本表记录。
+- **首页右卡是「近期外发回厂」**（最近 N 条流水），不是超期提醒——不登记计划回厂时间就没有超期基准，也没有"还在外面没回"的记录，那张卡已无法计算。
+
 
 **装配批次（M3.5）**
 
@@ -364,7 +360,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 |---|---|---|
 | M1 骨架 | monorepo、登录/权限/菜单、基础数据（客户资料含批量导入、开单信息、部件信息、字典）、共享包 | ✅ 已完成 |
 | M2 订单 | 订单四级 CRUD、附件、组按类型自动展开部件、图号带入工艺、状态机 | ✅ 已完成 |
-| M3 外发 | 发坯单单头+明细、发出/回货登记、状态自动推进、数量修正、打印 | ✅ 已完成 |
+| M3 外发 | ~~发坯单~~ → **外发件回厂记录**（2026-08-10 两轮简化定型：一行=一次回厂，无单据无状态） | ✅ 已完成 |
 | M3.5 装配 | 装配批次 CRUD（一组多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
 | M4 出入库+台账 | 出入库单、确认/红字冲销（支持部分冲销）、**装配入库闸门**（复用 `assembly-quota.util.ts`）、balance、成品库存、**订单跟踪台账** + 口径核算脚本 | ✅ 已完成 |
 | M5 期初+看板 | 补录订单、成品/部件期初、部件台账、首页看板、台账展开与合并、台账 Excel 导出、新手引导、操作手册**全部完成** | ✅ 已完成 |
@@ -434,6 +430,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2i | 审计追溯全面补齐 | 六件套补到 t_dict/t_department/t_role/t_permission/t_user/t_changelog/t_order_product/t_order_part_group/t_outsource_item，写入统一走 audit.util；新增全局组件 AuditInfo（列表悬浮图标 + 详情审计条）。豁免表与整体重建型子表口径见 §5.5 | ✅ 已完成（2026-08-08） |
 | 2j | 查看权限 / 只读角色 | 各模块 GET 接口挂菜单权限点（此前全裸）、新增 `access_type`、角色树改 check-strictly + 仅授只读、`normalizePermissionIds` 服务端兜底、看板加 `stat:dashboard`。口径见 §2.1 | ✅ 已完成（2026-08-08） |
 | 2k | 外发取消发出环节 | 使用部门要求：发货不过磅、不留发出记录，外发单只跟踪计划/实际回货与回货数量。删发外日期两列与发出重量/单重，发出数量改「应回数量」作回齐基准；状态机改 1待回货→3部分回货→4已回齐；`outsource:send` 权限点下线。口径见 §5.6 | ✅ 已完成（2026-08-10） |
+| 2l | 外发收敛为回厂流水 | 第二轮简化：连发坯单也取消，三表塌缩为 `t_outsource_part`（一行=一次回厂）。删打印页/单号采番/6 个权限点；首页右卡改「近期外发回厂」。口径见 §5.6 | ✅ 已完成（2026-08-10） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |
 | 5 | 外发回货验收(FQC) | V1 仅用备注承载，不独立建模 | 📘 V1 不做 |

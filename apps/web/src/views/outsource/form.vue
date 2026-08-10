@@ -1,85 +1,93 @@
 <template>
   <div class="page">
-    <el-card shadow="never" v-loading="pageLoading">
+    <el-card shadow="never">
       <div class="form-header">
         <div class="form-title">
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
-          <span class="title-text">{{ editId ? '编辑发坯单' : '新增发坯单' }}</span>
-          <span v-if="blankNo" class="title-sub">{{ formatBlankNo(blankNo) }}</span>
+          <span class="title-text">登记外发件回厂</span>
         </div>
         <div>
-          <!-- 已建单才可打印：新建态还没有发坯单号，印出来 No. 是空的 -->
-          <el-button
-            v-if="editId"
-            size="small" v-permission.disable="'outsource:print'" :icon="Printer"
-            @click="openPrint"
-          >打印发外单</el-button>
           <el-button size="small" @click="goBack">取消</el-button>
           <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
         </div>
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
-        <div class="section-title">单据信息</div>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="加工商" prop="processorName">
-              <el-input v-model="form.processorName" placeholder="外协加工厂名称" />
+              <el-input v-model="form.processorName" placeholder="做表面处理的外协厂" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="表面处理" prop="surfaceType">
-              <el-select v-model="form.surfaceType" placeholder="选择表面处理" style="width: 100%" @change="onSurfaceChange">
-                <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
+            <el-form-item label="回厂日期" prop="backDate">
+              <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="颜色">
-              <el-input v-model="form.color" placeholder="如 黑色" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="计划回货">
-              <el-date-picker v-model="form.requireBackDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="18">
-            <el-form-item label="备注">
-              <el-input v-model="form.remark" />
-            </el-form-item>
+          <el-col :xs="24" :md="12">
+            <div class="head-tip">
+              加工商与回厂日期为本次录入的<b>各行共用</b>值；同一天从同一家回来的货，勾多个部件组一次录完。
+            </div>
           </el-col>
         </el-row>
 
         <div class="section-title">
-          外发明细
+          回厂明细
           <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
           <span class="sec-sum">
-            应回合计 <b>{{ totalQty }}</b> 支
+            合计 <b>{{ totalQty }}</b> 支 ／ <b>{{ totalWeight }}</b> kg
           </span>
         </div>
 
-        <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加部件组」选择要发外的产品">
+        <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加部件组」选择回厂的产品">
           <el-table-column type="index" label="#" width="46" align="center" />
-          <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
           <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
           <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
           <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
-          <el-table-column label="客户" prop="customerName" width="120" show-overflow-tooltip />
-          <el-table-column label="组需求/已安排" width="120" align="center">
-            <template #default="{ row }">{{ row.qtyPcs }} / {{ row.arrangedQty }}</template>
+          <el-table-column label="订单数量" width="100" align="center">
+            <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
           </el-table-column>
-          <!-- 应回数量默认带出「组需求 − 他单已安排」，可改；min 取 0，
-               「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
-          <el-table-column label="应回数量(支)" width="120" align="center">
+          <el-table-column label="生产图号" width="130" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.drawingNo || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="料厚" width="110" align="center">
+            <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="表面处理" width="120" align="center">
             <template #default="{ row }">
-              <el-input-number v-model="row.planReturnQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
+              <el-select v-model="row.surfaceType" clearable placeholder="按订单" style="width: 100%">
+                <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="颜色" width="100" align="center">
+            <template #default="{ row }"><el-input v-model="row.color" /></template>
+          </el-table-column>
+          <el-table-column label="回厂重量(kg)" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.returnWeight" :min="0" :precision="2" :step="1" :controls="false"
+                style="width: 100%" @change="() => syncQty(row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="单重(kg/支)" width="115" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.unitWeight" :min="0" :precision="4" :step="0.01" :controls="false"
+                style="width: 100%" @change="() => syncQty(row)"
+              />
+            </template>
+          </el-table-column>
+          <!-- 数量由重量÷单重自动折算（syncQty），仍允许人工微调；min 取 0 与重量列一致，
+               「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
+          <el-table-column label="回厂数量(支)" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number v-model="row.returnQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="120">
-            <template #default="{ row }">
-              <el-input v-model="row.remark" />
-            </template>
+            <template #default="{ row }"><el-input v-model="row.remark" /></template>
           </el-table-column>
           <el-table-column label="操作" width="70" align="center" fixed="right">
             <template #default="{ $index }">
@@ -90,29 +98,31 @@
       </el-form>
     </el-card>
 
-    <!-- 可发外部件组选择器 -->
-    <el-dialog v-model="pickerVisible" title="选择要发外的部件组" width="1000px" top="6vh" @open="loadOptions">
+    <!-- 可外发部件组选择器 -->
+    <el-dialog v-model="pickerVisible" title="选择回厂的部件组" width="1000px" top="6vh" @open="loadOptions">
       <div class="picker-bar">
         <el-input
           v-model="pickerKeyword"
           clearable
-          size="small"
           placeholder="订单号/客户/生产单号/产品型号/图号"
-          style="width: 280px"
-          @clear="loadOptions"
+          style="width: 320px"
           @keyup.enter="loadOptions"
+          @clear="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
-        <span class="picker-tip">仅列出表面处理非「无」的产品；已发数为全部未作废发坯单合计</span>
+        <span class="picker-tip">只列出需要表面处理（非「无」）的部件组；同一组分批回厂可重复选。</span>
       </div>
       <el-table
         ref="pickerTableRef"
         :data="options"
-        v-loading="pickerLoading"
-        border stripe size="small" height="52vh"
+        v-loading="optionsLoading"
+        border
+        stripe
+        size="small"
+        height="46vh"
         @selection-change="onPickChange"
       >
-        <el-table-column type="selection" width="42" :selectable="isSelectable" />
+        <el-table-column type="selection" width="46" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="120" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
@@ -122,12 +132,7 @@
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
         <el-table-column label="组需求(支)" prop="qtyPcs" width="100" align="center" />
-        <el-table-column label="已安排(支)" prop="arrangedQty" width="100" align="center" />
-        <el-table-column label="剩余(支)" width="90" align="center">
-          <template #default="{ row }">
-            <span :class="{ 'remain-zero': row.remainQty <= 0 }">{{ row.remainQty }}</span>
-          </template>
-        </el-table-column>
+        <el-table-column label="已回厂(支)" prop="returnedQty" width="100" align="center" />
       </el-table>
       <template #footer>
         <span class="picker-count">已选 {{ picked.length }} 条</span>
@@ -139,30 +144,24 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'OutsourceForm' });
+
 import { computed, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { Back, Plus, Delete, Search, Printer } from '@element-plus/icons-vue';
+import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
 import {
-  getOutsourceDetail,
+  createOutsourceParts,
   getPartGroupOptions,
-  createOutsource,
-  updateOutsource,
   type PartGroupOption,
 } from '@/api/outsource';
-import { SURFACE_NONE, formatBlankNo } from '@/constants/dict';
+import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 
-const route = useRoute();
 const router = useRouter();
-const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
-const blankNo = ref('');
-
-const pageLoading = ref(false);
-const saving = ref(false);
 const formRef = ref<FormInstance>();
+const saving = ref(false);
 
-/** 明细行（含选择器带来的展示字段，提交时只取锚点与数量口径） */
 interface ItemRow {
   orderPartGroupId: number;
   orderNo: string | null;
@@ -170,109 +169,71 @@ interface ItemRow {
   productionNo: string | null;
   productModel: string | null;
   dimensionText: string | null;
-  qtyPcs: number;
-  arrangedQty: number;
-  planReturnQty: number;
+  orderQty: number;
+  unit: string | null;
+  drawingNo: string | null;
+  materialThickness: string | null;
+  surfaceType: string;
+  color: string;
+  returnWeight: number;
+  unitWeight: number;
+  returnQty: number;
   remark: string;
 }
 
 const form = reactive({
   processorName: '',
-  surfaceType: '',
-  color: '',
-  /** 计划回货日期（后端列名 require_back_date） */
-  requireBackDate: '' as string | null,
-  remark: '',
+  /** 实际回厂日期，默认今天——本模块只记已回厂的件 */
+  backDate: new Date().toISOString().slice(0, 10),
   items: [] as ItemRow[],
 });
 
 const rules: FormRules = {
   processorName: [{ required: true, message: '请填写加工商', trigger: 'blur' }],
-  surfaceType: [{ required: true, message: '请选择表面处理', trigger: 'change' }],
+  backDate: [{ required: true, message: '请选择回厂日期', trigger: 'change' }],
 };
 
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('surface_type').then((rows: any[]) => {
   surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
-/** 外发可选表面处理 = 字典项去掉保留值 none（无表面处理不外发） */
 const outsourceSurfaces = computed(() => surfaceDict.value.filter((o) => o.value !== SURFACE_NONE));
 
-const totalQty = computed(() => form.items.reduce((s, it) => s + (it.planReturnQty || 0), 0));
+const totalQty = computed(() => form.items.reduce((s, it) => s + (it.returnQty || 0), 0));
+const totalWeight = computed(
+  () => Math.round(form.items.reduce((s, it) => s + (it.returnWeight || 0), 0) * 100) / 100,
+);
 
-async function init() {
-  if (!editId.value) return;
-  pageLoading.value = true;
-  try {
-    const doc = await getOutsourceDetail(editId.value);
-    blankNo.value = doc.blankNo;
-    form.processorName = doc.processorName;
-    form.surfaceType = doc.surfaceType;
-    form.color = doc.color ?? '';
-    form.requireBackDate = doc.requireBackDate ? String(doc.requireBackDate).slice(0, 10) : '';
-    form.remark = doc.remark ?? '';
-    form.items = (doc.items ?? []).map((it) => ({
-      orderPartGroupId: it.orderPartGroupId,
-      orderNo: it.orderNo,
-      customerName: it.customerName,
-      productionNo: it.productionNo,
-      productModel: it.productModel,
-      dimensionText: it.dimensionText,
-      // 组需求与「他单已安排」由详情接口带出（已排除本单，口径同选择器），供编辑时对照超量
-      qtyPcs: it.qtyPcs ?? 0,
-      arrangedQty: it.arrangedQty ?? 0,
-      planReturnQty: it.planReturnQty,
-      remark: it.remark ?? '',
-    }));
-  } finally {
-    pageLoading.value = false;
-  }
-}
-init();
-
-function onSurfaceChange() {
-  // 表面处理变了，选择器的候选集合随之变化，已选明细保留由用户自行核对
-  options.value = [];
+/** 重量或单重变化 → 自动折算数量（共享包同一口径，仍可人工微调） */
+function syncQty(row: ItemRow) {
+  const qty = qtyFromWeight(row.returnWeight, row.unitWeight);
+  if (qty > 0) row.returnQty = qty;
 }
 
-/* ===== 可发外部件组选择器 ===== */
+/* ===== 部件组选择器 ===== */
 const pickerVisible = ref(false);
-const pickerLoading = ref(false);
 const pickerKeyword = ref('');
-const options = ref<PartGroupOption[]>([]);
-const picked = ref<PartGroupOption[]>([]);
 const pickerTableRef = ref<any>();
+const options = ref<PartGroupOption[]>([]);
+const optionsLoading = ref(false);
+const picked = ref<PartGroupOption[]>([]);
 
 function openPicker() {
-  if (!form.surfaceType) {
-    ElMessage.warning('请先选择表面处理，再添加部件组');
-    return;
-  }
   pickerVisible.value = true;
 }
 async function loadOptions() {
-  pickerLoading.value = true;
+  optionsLoading.value = true;
   try {
-    options.value = await getPartGroupOptions({
-      keyword: pickerKeyword.value || undefined,
-      surfaceType: form.surfaceType || undefined,
-      excludeDocId: editId.value ?? undefined,
-      limit: 300,
-    });
+    options.value = await getPartGroupOptions({ keyword: pickerKeyword.value || undefined });
   } finally {
-    pickerLoading.value = false;
+    optionsLoading.value = false;
   }
-}
-/** 已在明细中的部件组不可重复选择 */
-function isSelectable(row: PartGroupOption): boolean {
-  return !form.items.some((it) => it.orderPartGroupId === row.orderPartGroupId);
 }
 function onPickChange(rows: PartGroupOption[]) {
   picked.value = rows;
 }
 function confirmPick() {
   picked.value.forEach((o) => {
-    if (form.items.some((it) => it.orderPartGroupId === o.orderPartGroupId)) return;
     form.items.push({
       orderPartGroupId: o.orderPartGroupId,
       orderNo: o.orderNo,
@@ -280,12 +241,18 @@ function confirmPick() {
       productionNo: o.productionNo,
       productModel: o.productModel,
       dimensionText: o.dimensionText,
-      qtyPcs: o.qtyPcs,
-      arrangedQty: o.arrangedQty,
-      // 应回数量默认 = 组需求 − 他单已安排（remainQty），可改。
-      // 发出环节取消后这是**计划值**而非过磅实测值，用剩余额度预填最省事；
-      // 同一部件组拆多张单外发时，各单的应回数相加即该组的总安排量。
-      planReturnQty: o.remainQty,
+      orderQty: o.orderQty,
+      unit: o.unit,
+      drawingNo: o.drawingNo,
+      materialThickness: o.materialThickness,
+      // 表面处理与颜色自订单带出，可改（实际做的与订单登记的可能不同）
+      surfaceType: o.surfaceType,
+      color: o.color ?? '',
+      // 单重自部件信息带出；重量与数量留空，等过磅实测录入——
+      // 拿订单数预填会让人顺手存下一个没过磅的假数，对账时才发现对不上
+      unitWeight: o.unitWeight,
+      returnWeight: 0,
+      returnQty: 0,
       remark: '',
     });
   });
@@ -298,49 +265,42 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
   if (!v) return '—';
   return opts.find((o) => o.value === v)?.label ?? v;
 }
+function unitLabel(v: string | null): string {
+  return UNIT_OPTIONS.find((o: any) => o.value === v)?.label ?? (v ?? '');
+}
 
 /* ===== 保存 ===== */
 async function onSave() {
   await formRef.value?.validate();
   if (!form.items.length) {
-    ElMessage.warning('请至少添加一条外发明细');
+    ElMessage.warning('请至少添加一条回厂明细');
     return;
   }
-  const bad = form.items.findIndex((it) => !it.planReturnQty || it.planReturnQty <= 0);
+  const bad = form.items.findIndex((it) => !it.returnQty || it.returnQty <= 0);
   if (bad >= 0) {
-    ElMessage.warning(`第 ${bad + 1} 行应回数量必须大于 0`);
+    ElMessage.warning(`第 ${bad + 1} 行回厂数量必须大于 0`);
     return;
   }
-  const payload = {
-    processorName: form.processorName,
-    surfaceType: form.surfaceType,
-    color: form.color || undefined,
-    requireBackDate: form.requireBackDate || undefined,
-    remark: form.remark || undefined,
-    items: form.items.map((it, i) => ({
-      orderPartGroupId: it.orderPartGroupId,
-      planReturnQty: it.planReturnQty,
-      remark: it.remark || undefined,
-      sort: i,
-    })),
-  };
   saving.value = true;
   try {
-    if (editId.value) {
-      await updateOutsource(editId.value, payload);
-      ElMessage.success('保存成功');
-    } else {
-      const res = await createOutsource(payload);
-      ElMessage.success(`发坯单 ${formatBlankNo(res.blankNo)} 创建成功`);
-    }
+    const res = await createOutsourceParts({
+      processorName: form.processorName.trim(),
+      backDate: form.backDate,
+      items: form.items.map((it) => ({
+        orderPartGroupId: it.orderPartGroupId,
+        returnWeight: it.returnWeight || 0,
+        unitWeight: it.unitWeight || 0,
+        returnQty: it.returnQty,
+        surfaceType: it.surfaceType || undefined,
+        color: it.color || undefined,
+        remark: it.remark || undefined,
+      })),
+    });
+    ElMessage.success(`已登记 ${res.count} 条回厂记录`);
     goBack();
   } finally {
     saving.value = false;
   }
-}
-
-function openPrint() {
-  router.push({ name: 'OutsourcePrint', query: { id: editId.value } });
 }
 
 function goBack() {
@@ -348,30 +308,53 @@ function goBack() {
 }
 </script>
 
-<script lang="ts">
-export default { name: 'OutsourceForm' };
-</script>
-
 <style scoped lang="scss">
 .form-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding-bottom: 14px; margin-bottom: 4px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  .form-title { display: flex; align-items: center; gap: 12px; }
-  .title-text { font-size: 16px; font-weight: 600; }
-  .title-sub { color: var(--el-text-color-secondary); font-size: 13px; }
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.form-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  .title-text { font-size: 15px; font-weight: 600; }
+}
+.head-tip {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 32px;
 }
 .section-title {
+  font-size: 14px; font-weight: 600; color: var(--el-text-color-primary);
+  border-left: 4px solid var(--el-color-primary);
+  padding-left: 10px; line-height: 1.3;
+  margin: 22px 0 14px;
   display: flex; align-items: center;
-  font-size: 14px; font-weight: 600; margin: 16px 0 12px;
-  padding-left: 8px; border-left: 3px solid var(--el-color-primary);
   .ml12 { margin-left: 12px; }
-  .sec-sum { margin-left: auto; font-weight: 400; font-size: 13px; color: var(--el-text-color-secondary); }
+}
+.sec-sum {
+  margin-left: 16px;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  b { color: var(--el-color-primary); }
 }
 .picker-bar {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  .picker-tip { color: var(--el-text-color-secondary); font-size: 12px; }
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
-.picker-count { margin-right: auto; float: left; color: var(--el-text-color-secondary); font-size: 13px; line-height: 24px; }
-.remain-zero { color: var(--el-color-warning); }
+.picker-tip {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.picker-count {
+  float: left;
+  line-height: 32px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
 </style>

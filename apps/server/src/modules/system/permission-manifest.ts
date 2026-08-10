@@ -67,15 +67,12 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'order:export', perm_name: '导出总计划', perm_type: 2, parent_code: 'order', sort: 5 },
 
   { perm_code: 'outsource', perm_name: '外发管理', perm_type: 1, parent_code: 'production', menu_path: '/outsource', component: 'outsource/index', icon: 'Van', sort: 2 },
-  { perm_code: 'outsource:create', perm_name: '新增发坯单', perm_type: 2, parent_code: 'outsource', sort: 1 },
-  { perm_code: 'outsource:update', perm_name: '编辑发坯单', perm_type: 2, parent_code: 'outsource', sort: 2 },
-  // 2026-08-10：发出环节整体取消，原 outsource:send「登记发出」权限点已下线，
-  // 库中残留行由 migration-outsource-drop-send.sql 清理（清单同步不删行）。
-  { perm_code: 'outsource:return', perm_name: '回货登记', perm_type: 2, parent_code: 'outsource', sort: 4 },
-  { perm_code: 'outsource:return-cancel', perm_name: '撤销回货登记', perm_type: 2, parent_code: 'outsource', sort: 5 },
-  { perm_code: 'outsource:close', perm_name: '关闭发坯单', perm_type: 2, parent_code: 'outsource', sort: 6 },
-  { perm_code: 'outsource:cancel', perm_name: '作废发坯单', perm_type: 2, parent_code: 'outsource', sort: 7 },
-  { perm_code: 'outsource:print', perm_name: '打印发坯单', perm_type: 2, parent_code: 'outsource', sort: 8 },
+  // 2026-08-10：外发两轮简化到「回厂流水」——发坯单连同 send / close / cancel /
+  // return / return-cancel / print 一并下线，只剩增删改。库中残留权限行由
+  // migration-outsource-rebuild-part.sql 清理（清单同步只增不删）。
+  { perm_code: 'outsource:create', perm_name: '登记外发件回厂', perm_type: 2, parent_code: 'outsource', sort: 1 },
+  { perm_code: 'outsource:update', perm_name: '编辑回厂记录', perm_type: 2, parent_code: 'outsource', sort: 2 },
+  { perm_code: 'outsource:delete', perm_name: '删除回厂记录', perm_type: 2, parent_code: 'outsource', sort: 3 },
 
   { perm_code: 'assembly', perm_name: '装配管理', perm_type: 1, parent_code: 'production', menu_path: '/assembly', component: 'assembly/index', icon: 'Tools', sort: 3 },
   { perm_code: 'assembly:create', perm_name: '新增装配批次', perm_type: 2, parent_code: 'assembly', sort: 1 },

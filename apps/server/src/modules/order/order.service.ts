@@ -351,7 +351,7 @@ export class OrderService {
    */
   private async assertNoDownstreamRefs(orderId: number, action: string) {
     const probes: Array<{ table: string; label: string }> = [
-      { table: 't_outsource_item', label: '外发单' },
+      { table: 't_outsource_part', label: '外发回厂记录' },
       { table: 't_assembly_batch', label: '装配批次' },
       { table: 't_finished_item', label: '成品出入库单' },
     ];
@@ -368,7 +368,7 @@ export class OrderService {
       }
       if (cnt > 0) {
         throw new BadRequestException(
-          `订单已被 ${cnt} 条${probe.label}引用，禁止${action}；请先冲销/作废对应下游单据`,
+          `订单已被 ${cnt} 条${probe.label}引用，禁止${action}；请先删除或冲销对应的下游记录`,
         );
       }
     }

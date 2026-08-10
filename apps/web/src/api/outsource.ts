@@ -1,74 +1,43 @@
 import request from '@/utils/request';
 import type { PageResult } from './customer';
 
-/** 回货登记（一条 = 一次分批回货） */
-export interface OutsourceReturnItem {
+/**
+ * 外发件回厂记录（2026-08-10 形态）。
+ * 一行 = 一次回厂；没有发坯单、没有单据号、没有状态。
+ */
+export interface OutsourcePartRow {
   id: number;
-  docId: number;
-  itemId: number;
-  backDate: string;
-  returnWeight: string;
-  unitWeight: string;
-  returnQty: number;
-  remark: string | null;
-  creatorName: string | null;
-  createdAt: string;
-}
-
-/** 外发明细行（锚定订单部件组） */
-export interface OutsourceItemRow {
-  id: number;
-  docId: number;
   orderId: number;
   orderProductId: number;
   orderPartGroupId: number;
+  /** ===== 订单侧快照（只读展示） ===== */
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
   productModel: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
-  /** 应回数量（支）：回齐判定基准 */
-  planReturnQty: number;
-  /** 累计回货数（服务端汇总维护） */
-  returnedQty: number;
-  remark: string | null;
-  sort: number;
-  returns?: OutsourceReturnItem[];
-  /** 详情接口附带：所属部件组的组需求支数 */
-  qtyPcs?: number;
-  /** 详情接口附带：该部件组「他单已安排」支数（已排除本单，口径同选择器） */
-  arrangedQty?: number;
-  /** 详情接口附带：单重（kg/支，自部件信息），回货登记折算默认值 */
-  unitWeight?: number;
-}
-
-/** 发坯单（单头 + 明细汇总） */
-export interface OutsourceDocItem {
-  id: number;
-  blankNo: string;
+  orderQty: number;
+  unit: string | null;
+  drawingNo: string | null;
+  materialThickness: string | null;
+  /** ===== 录入项 ===== */
   processorName: string;
-  surfaceType: string;
+  surfaceType: string | null;
   color: string | null;
-  /** 计划回货日期（后端列名仍为 require_back_date） */
-  requireBackDate: string | null;
-  status: number;
-  closeReason: string | null;
+  /** 实际回厂日期 */
+  backDate: string;
+  returnWeight: string;
+  unitWeight: string;
+  returnQty: number;
   remark: string | null;
-  creatorName: string | null;
-  updaterName: string | null;
-  createdAt: string;
-  updatedAt: string;
-  items?: OutsourceItemRow[];
-  /** 列表附带的汇总字段 */
-  itemCount?: number;
-  totalPlanReturnQty?: number;
-  totalReturnedQty?: number;
-  /** 最后一次回货日期（单头层面的「实际回货」口径，未回货为空） */
-  lastReturnDate?: string | null;
+  creatorName?: string | null;
+  updaterName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-/** 可发外部件组选项 */
+/** 可外发部件组选项（录入表单选择器） */
 export interface PartGroupOption {
   orderPartGroupId: number;
   orderId: number;
@@ -81,12 +50,15 @@ export interface PartGroupOption {
   cycleCode: string | null;
   surfaceType: string;
   color: string | null;
+  /** 组需求支数（参考用） */
   qtyPcs: number;
-  /** 他单已安排的应回支数 */
-  arrangedQty: number;
-  /** 剩余应安排 = 组需求 − 已安排 */
-  remainQty: number;
-  /** 单重（kg/支）：回货登记折算默认值 */
+  /** 该组累计已回厂支数 */
+  returnedQty: number;
+  orderQty: number;
+  unit: string | null;
+  drawingNo: string | null;
+  materialThickness: string | null;
+  /** 单重（kg/支）：回厂折算默认值 */
   unitWeight: number;
 }
 
@@ -94,76 +66,57 @@ export interface OutsourceQuery {
   page?: number;
   pageSize?: number;
   keyword?: string;
-  status?: number;
+  processorName?: string;
   surfaceType?: string;
   dateFrom?: string;
   dateTo?: string;
 }
 
-export interface OutsourceItemPayload {
+/** 登记回厂：一次可录多行（共用加工商与回厂日期） */
+export interface OutsourcePartItemPayload {
   orderPartGroupId: number;
-  planReturnQty: number;
-  remark?: string;
-  sort?: number;
-}
-
-export interface OutsourcePayload {
-  processorName: string;
-  surfaceType: string;
+  returnWeight: number;
+  unitWeight: number;
+  returnQty: number;
+  surfaceType?: string;
   color?: string;
-  /** 计划回货日期 */
-  requireBackDate?: string;
-  remark?: string;
-  items: OutsourceItemPayload[];
-}
-
-/** 应回数量修正（已有回货后的纠错通道，改完服务端自动重算回齐状态） */
-export interface OutsourceItemUpdatePayload {
-  planReturnQty: number;
   remark?: string;
 }
 
-export interface OutsourceReturnPayload {
+export interface OutsourcePartPayload {
+  processorName: string;
+  backDate: string;
+  items: OutsourcePartItemPayload[];
+}
+
+/** 编辑单条（锚点与订单侧快照不可改） */
+export interface OutsourcePartUpdatePayload {
+  processorName: string;
   backDate: string;
   returnWeight: number;
   unitWeight: number;
   returnQty: number;
+  surfaceType?: string;
+  color?: string;
   remark?: string;
 }
 
 export const getOutsourceList = (params: OutsourceQuery) =>
-  request.get<any, PageResult<OutsourceDocItem>>('/api/outsource', { params });
+  request.get<any, PageResult<OutsourcePartRow>>('/api/outsource', { params });
 
 export const getOutsourceDetail = (id: number) =>
-  request.get<any, OutsourceDocItem>(`/api/outsource/${id}`);
-
-export const getOutsourcePrintData = (id: number) =>
-  request.get<any, OutsourceDocItem & { totalPlanReturnQty: number }>(
-    `/api/outsource/print/${id}`,
-  );
+  request.get<any, OutsourcePartRow>(`/api/outsource/${id}`);
 
 export const getPartGroupOptions = (params: {
   keyword?: string;
   surfaceType?: string;
-  excludeDocId?: number;
   limit?: number;
 }) => request.get<any, PartGroupOption[]>('/api/outsource/part-group-options', { params });
 
-export const createOutsource = (data: OutsourcePayload) =>
-  request.post<any, { id: number; blankNo: string }>('/api/outsource', data);
+export const createOutsourceParts = (data: OutsourcePartPayload) =>
+  request.post<any, { count: number; ids: number[] }>('/api/outsource', data);
 
-export const updateOutsource = (id: number, data: OutsourcePayload) =>
+export const updateOutsourcePart = (id: number, data: OutsourcePartUpdatePayload) =>
   request.put(`/api/outsource/${id}`, data);
 
-export const closeOutsource = (id: number, closeReason: string) =>
-  request.post(`/api/outsource/${id}/close`, { closeReason });
-
-export const cancelOutsource = (id: number) => request.post(`/api/outsource/${id}/cancel`);
-
-export const updateOutsourceItem = (itemId: number, data: OutsourceItemUpdatePayload) =>
-  request.put(`/api/outsource/item/${itemId}`, data);
-
-export const createOutsourceReturn = (itemId: number, data: OutsourceReturnPayload) =>
-  request.post(`/api/outsource/item/${itemId}/return`, data);
-
-export const removeOutsourceReturn = (id: number) => request.delete(`/api/outsource/return/${id}`);
+export const removeOutsourcePart = (id: number) => request.delete(`/api/outsource/${id}`);

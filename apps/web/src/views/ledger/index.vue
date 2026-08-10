@@ -111,30 +111,25 @@
                 </div>
 
                 <div class="lg-detail__sec">
-                  <div class="lg-detail__title">外发流水（已作废发坯单不计）</div>
+                  <div class="lg-detail__title">外发回厂流水</div>
                   <table v-if="detailCache[row.orderPartGroupId].outsource.length" class="lg-grid">
                     <thead>
-                      <tr><th>发坯单号</th><th>加工商</th><th>表面处理/颜色</th><th>计划回货</th><th>实际回货</th><th>应回</th><th>已回</th><th>未回</th><th>状态</th></tr>
+                      <tr><th>回厂日期</th><th>加工商</th><th>表面处理/颜色</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
                     </thead>
                     <tbody>
                       <tr v-for="(o, i) in detailCache[row.orderPartGroupId].outsource" :key="i">
-                        <td>{{ formatBlankNo(o.blankNo) || '—' }}</td>
+                        <td class="lg-c">{{ o.backDate || '—' }}</td>
                         <td>{{ o.processorName || '—' }}</td>
                         <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), o.color].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
-                        <td class="lg-c">{{ o.requireBackDate || '—' }}</td>
-                        <td class="lg-c">{{ o.lastReturnDate || '—' }}</td>
-                        <td class="lg-c">{{ o.planReturnQty }}</td>
-                        <td class="lg-c">{{ o.returnedQty }}</td>
-                        <td class="lg-c"><span :class="o.pendingQty > 0 ? 'num-owed' : 'num-ok'">{{ o.pendingQty }}</span></td>
-                        <td class="lg-c">
-                          <el-tag size="small" :type="tagTypeOf(OUTSOURCE_STATUS, o.status) as any">
-                            {{ labelOf(OUTSOURCE_STATUS, o.status) }}
-                          </el-tag>
-                        </td>
+                        <td class="lg-c">{{ o.returnWeight }}</td>
+                        <td class="lg-c">{{ o.unitWeight }}</td>
+                        <td class="lg-c">{{ o.returnQty }}</td>
+                        <td class="lg-c">{{ o.creatorName || '—' }}</td>
+                        <td>{{ o.remark || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
-                  <div v-else class="lg-empty">该部件组无外发记录（不需要表面处理，或尚未发外）</div>
+                  <div v-else class="lg-empty">该部件组无外发回厂记录（不需要表面处理，或尚未回厂）</div>
                 </div>
 
                 <div class="lg-detail__sec">
@@ -272,12 +267,9 @@ import {
 import {
   PRODUCT_TYPE_OPTIONS,
   UNIT_OPTIONS,
-  OUTSOURCE_STATUS,
   FINISHED_BIZ_TYPE_OPTIONS,
-  formatBlankNo,
   sideLabel,
   labelOf,
-  tagTypeOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppTable from '@/components/AppTable.vue';

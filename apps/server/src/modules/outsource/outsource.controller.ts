@@ -11,40 +11,39 @@ import {
 } from '@nestjs/common';
 import { OutsourceService } from './outsource.service';
 import {
-  CloseOutsourceDto,
-  CreateOutsourceDto,
-  CreateOutsourceReturnDto,
-  QueryOutsourceDto,
+  CreateOutsourcePartDto,
+  QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
-  UpdateOutsourceDto,
-  UpdateOutsourceItemDto,
+  UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
-/** 读权限口径（§二）：全部只读接口用菜单权限点 `outsource`，打印另需 outsource:print */
+/**
+ * 外发件回厂记录接口。
+ *
+ * 2026-08-10 起本模块只有一种记录（回厂流水），因此接口也只剩增删改查——
+ * 原发坯单的 send / close / cancel / return / print 一并下线，
+ * 对应权限点由迁移从库中清除。
+ *
+ * 读权限口径（§二）：只读接口用菜单权限点 `outsource`。
+ */
 @Controller('outsource')
 export class OutsourceController {
   constructor(private readonly service: OutsourceService) {}
 
   @Get()
   @RequirePermissions('outsource')
-  async list(@Query() query: QueryOutsourceDto) {
+  async list(@Query() query: QueryOutsourcePartDto) {
     return this.service.findList(query);
   }
 
-  /** 可发外部件组选项（表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
+  /** 可外发部件组选项（录入表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('part-group-options')
   @RequirePermissions('outsource')
   async partGroupOptions(@Query() query: QueryPartGroupOptionDto) {
     return this.service.findPartGroupOptions(query);
-  }
-
-  @Get('print/:id')
-  @RequirePermissions('outsource:print')
-  async print(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findPrintData(id);
   }
 
   @Get(':id')
@@ -53,75 +52,32 @@ export class OutsourceController {
     return this.service.findOne(id);
   }
 
+  /** 登记回厂：一次可录多行（多个部件组共用加工商与回厂日期） */
   @Post()
   @RequirePermissions('outsource:create')
-  @OperationLog('外发管理', '新增发坯单')
-  async create(@Body() dto: CreateOutsourceDto, @CurrentUser() user: CurrentUserPayload) {
+  @OperationLog('外发管理', '登记外发件回厂')
+  async create(
+    @Body() dto: CreateOutsourcePartDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
     return this.service.create(dto, user);
   }
 
   @Put(':id')
   @RequirePermissions('outsource:update')
-  @OperationLog('外发管理', '编辑发坯单')
+  @OperationLog('外发管理', '编辑外发件回厂记录')
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateOutsourceDto,
+    @Body() dto: UpdateOutsourcePartDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
     return this.service.update(id, dto, user);
   }
 
-  // 2026-08-10：`POST :id/send`（登记发出）已随发出环节整体下线，
-  // 权限点 outsource:send 一并从清单删除、迁移清理库中残留行。
-
-  @Post(':id/close')
-  @RequirePermissions('outsource:close')
-  @OperationLog('外发管理', '关闭发坯单')
-  async close(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CloseOutsourceDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.service.close(id, dto, user);
-  }
-
-  @Post(':id/cancel')
-  @RequirePermissions('outsource:cancel')
-  @OperationLog('外发管理', '作废发坯单')
-  async cancel(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
-    return this.service.cancel(id, user);
-  }
-
-  /** 发出明细数量修正（已发出后磅秤复核纠错；改完自动重算回齐状态） */
-  @Put('item/:itemId')
-  @RequirePermissions('outsource:update')
-  @OperationLog('外发管理', '修正应回数量')
-  async updateItem(
-    @Param('itemId', ParseIntPipe) itemId: number,
-    @Body() dto: UpdateOutsourceItemDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.service.updateItem(itemId, dto, user);
-  }
-
-  @Post('item/:itemId/return')
-  @RequirePermissions('outsource:return')
-  @OperationLog('外发管理', '回货登记')
-  async createReturn(
-    @Param('itemId', ParseIntPipe) itemId: number,
-    @Body() dto: CreateOutsourceReturnDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.service.createReturn(itemId, dto, user);
-  }
-
-  @Delete('return/:id')
-  @RequirePermissions('outsource:return-cancel')
-  @OperationLog('外发管理', '撤销回货登记')
-  async removeReturn(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.service.removeReturn(id, user);
+  @Delete(':id')
+  @RequirePermissions('outsource:delete')
+  @OperationLog('外发管理', '删除外发件回厂记录')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(id);
   }
 }
