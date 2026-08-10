@@ -107,21 +107,16 @@ export default { name: 'AppStatCard' };
     gap: 4px;
   }
 
-  /* 数字：等宽数字 + 西文无衬线，避免雅黑数字发胖、字距不齐 */
+  /* 数字字体全局令牌见 styles/index.scss --hb-stat-num-*（Bahnschrift Light SemiCondensed） */
   &__value {
-    font-family:
-      'Segoe UI',
-      'DIN Alternate',
-      'Helvetica Neue',
-      Arial,
-      'PingFang SC',
-      'Microsoft YaHei',
-      sans-serif;
+    font-family: var(--hb-stat-num-font);
     font-size: clamp(22px, 1.65rem, 30px);
-    font-weight: 600;
+    font-weight: var(--hb-stat-num-weight);
+    font-stretch: var(--hb-stat-num-stretch);
+    font-variation-settings: 'wght' 300, 'wdth' 87.5;
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.01em;
     line-height: 1.15;
     color: var(--card-color);
     white-space: nowrap;

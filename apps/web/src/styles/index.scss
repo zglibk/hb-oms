@@ -43,6 +43,17 @@ html {
   --hb-card-padding: clamp(12px, 1.25rem, 22px);
   --hb-dialog-edge: clamp(16px, 1.25rem, 24px);
 
+  /*
+   * 统计卡数字字体（AppStatCard 等）
+   * - 本机有 Bahnschrift 时优先用「Light SemiCondensed」；
+   * - 否则用随包分发的 Barlow Semi Condensed 300（OFL，形制接近，保证无系统字体也能显示）。
+   *   微软字体不可随项目再分发，故不能把 Bahnschrift 文件打进仓库。
+   */
+  --hb-stat-num-font: 'Bahnschrift Light SemiCondensed', Bahnschrift, 'Barlow Semi Condensed',
+    'Segoe UI Semilight', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --hb-stat-num-weight: 300;
+  --hb-stat-num-stretch: 87.5%;
+
   /* 列表（el-table）：极浅灰硬编码，表头略深于隔行底，不随主题色变化 */
   --table-header-bg: #f0f2f5;
   /* 隔行底色：#fafafa 与白色(#fff)仅差 5/255 肉眼不可见，调为 #f5f7fa 保证可辨识 */

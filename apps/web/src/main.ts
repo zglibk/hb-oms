@@ -13,6 +13,8 @@ import AppTable from './components/AppTable.vue';
 import AppPagination from './components/AppPagination.vue';
 import AppActions from './components/AppActions.vue';
 import AuditInfo from './components/AuditInfo.vue';
+// 统计卡数字回退字体（无本机 Bahnschrift 时仍能显示相近的轻字宽无衬线）
+import '@fontsource/barlow-semi-condensed/300.css';
 import './styles/index.scss';
 import './styles/responsive.scss';
 import { applyCachedTitle } from './utils/document-meta';
