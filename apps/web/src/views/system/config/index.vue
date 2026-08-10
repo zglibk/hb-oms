@@ -158,7 +158,63 @@
 
         <!-- 审批管理不移植：OMS 无审核流（设计文档决策 #2） -->
 
-/el-tab-pane>
+        <!-- Tab3：业务字段（全局字段启用开关） -->
+        <el-tab-pane label="业务字段" name="fields">
+          <el-form
+            :model="form"
+            label-width="100px"
+            class="config-form"
+            v-loading="loading"
+          >
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              title="全局字段开关"
+              description="关闭后该字段在全系统的录入框、表格列与 Excel 导出列一并隐藏。这是「录入与展示」开关，不会删除已录入的数据——重新开启即原样恢复。"
+              style="margin-bottom: 16px"
+            />
+
+            <el-form-item label="颜色字段">
+              <el-switch
+                :model-value="form.colorFieldEnabled === 1"
+                active-text="启用"
+                inactive-text="停用"
+                @update:model-value="(v: any) => (form.colorFieldEnabled = v ? 1 : 0)"
+              />
+              <div class="switch-hint switch-hint--block">
+                与「表面处理」配套的业务字段。影响范围：订单表单、外发件回厂记录（登记 / 编辑 / 列表）、
+                期初录入、成品库存列表、订单跟踪台账展开行，以及台账导出与总计划导出的「颜色」列。
+              </div>
+            </el-form-item>
+
+            <el-form-item label="客户图号">
+              <el-switch
+                :model-value="form.customerDrawingNoEnabled === 1"
+                active-text="启用"
+                inactive-text="停用"
+                @update:model-value="(v: any) => (form.customerDrawingNoEnabled = v ? 1 : 0)"
+              />
+              <div class="switch-hint switch-hint--block">
+                客户来图上的图号，<strong>不是</strong>部件组的「生产图号」（后者不受此开关影响）。
+                影响范围：订单表单、订单列表展开行，以及总计划导出的「客户图号」列。
+              </div>
+            </el-form-item>
+
+            <el-form-item>
+              <el-button size="small"
+                v-permission="'config:update'"
+                type="primary"
+                :loading="saving"
+                @click="onSave"
+              >保存</el-button>
+            </el-form-item>
+          </el-form>
+
+          <div class="config-audit">
+            保存后本人立即生效；其他已登录用户刷新页面后生效。
+          </div>
+        </el-tab-pane>
 
         <!-- Tab4：危险操作（仅 admin 可见） -->
         <el-tab-pane
@@ -246,6 +302,7 @@ import {
 } from '@/api/system';
 import { formatDateTime } from '@/utils/date';
 import { useThemeStore } from '@/stores/theme';
+import { useFeatureStore } from '@/stores/feature';
 import { normalizeUploadUrl } from '@/utils/upload-url';
 import InlineImageCropper from '@/components/InlineImageCropper.vue';
 
@@ -253,7 +310,7 @@ const loading = ref(false);
 const saving = ref(false);
 const route = useRoute();
 const router = useRouter();
-const validTabs = ['company', 'loginBg', 'danger'] as const;
+const validTabs = ['company', 'loginBg', 'fields', 'danger'] as const;
 type TabName = (typeof validTabs)[number];
 const initialTab = validTabs.includes(route.query.tab as TabName)
   ? (route.query.tab as TabName)
@@ -266,6 +323,7 @@ watch(activeTab, (tab) => {
   }
 });
 const themeStore = useThemeStore();
+const featureStore = useFeatureStore();
 
 /* 危险操作：业务数据清理 */
 const cleanupConfirm = ref('');
@@ -316,6 +374,9 @@ const form = reactive<SystemConfig>({
   copyrightInfo: null,
   loginBgUrl: null,
   loginBgSetAsDefault: 0,
+  // 默认启用：接口回值前不该让页面先渲染成"已停用"
+  colorFieldEnabled: 1,
+  customerDrawingNoEnabled: 1,
 });
 
 /* 裁剪组件 ref */
@@ -419,6 +480,8 @@ async function onSave() {
     await load();
     // 立即同步到全局：logo（侧边栏顶部）+ favicon（浏览器标签）+ 登录背景
     themeStore.loadSystemConfig();
+    // 业务字段开关同步刷新，本人无需重登即可看到字段显隐生效
+    featureStore.load();
   } catch (err: any) {
     ElMessage.error(err?.message || '保存失败，请重试');
   } finally {
@@ -537,6 +600,15 @@ onActivated(() => {
   margin-left: 12px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+/* 影响范围这类长说明另起一行，跟在开关后面会把表单行撑得很宽 */
+.switch-hint--block {
+  display: block;
+  width: 100%;
+  margin-left: 0;
+  margin-top: 4px;
+  line-height: 1.6;
 }
 
 /* 危险操作区 */

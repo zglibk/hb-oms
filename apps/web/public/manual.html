@@ -157,7 +157,7 @@
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
     <a class="toc-item" data-key="基础数据 客户 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
-    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置" onclick="jump('ch9')">第9章 管理员篇</a>
+    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
 
@@ -276,7 +276,7 @@
         <thead><tr><th>字段</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>货号</td><td>如 <code>53#</code>，与产品类型组合起来就是产品型号</td></tr>
-          <tr><td>客户图号</td><td><strong>客户来图上的图号</strong>。注意与部件组里的「生产图号」不是一回事——生产图号是我们内部转化的技术图纸编号</td></tr>
+          <tr><td>客户图号</td><td><strong>客户来图上的图号</strong>。注意与部件组里的「生产图号」不是一回事——生产图号是我们内部转化的技术图纸编号。<strong>被管理员全局停用时不显示</strong>，见第9章「业务字段开关」</td></tr>
           <tr><td>产品类型</td><td><strong>可多选</strong>（如 普通 + 自锁）。<strong>只要选了「卡口」，后面全流程按左右分开算</strong></td></tr>
           <tr><td>轨道节数</td><td>三节轨 / 二节轨。决定自动展开几行部件（三节 = 外/中/内，二节 = 外/内无中轨）</td></tr>
           <tr><td>规格</td><td>填数值 + 选单位（mm / 英寸），系统统一折算成 mm 存储</td></tr>
@@ -361,7 +361,7 @@
         <li>点「添加部件组」，选择器只列出需要表面处理的部件组，可以搜订单号/客户/生产单号/型号/图号，<strong>一次可多选</strong>。</li>
         <li>逐行填<strong>回厂重量</strong>（磅秤实测，kg）。<strong>单重</strong>会从部件信息自动带出，没有就手工填。</li>
         <li>填完重量，<strong>数量会自动算出来</strong>（数量 = 重量 ÷ 单重，四舍五入），需要微调直接改。</li>
-        <li>表面处理和颜色按订单自动带出，实际做的不一样可以改。</li>
+        <li>表面处理和颜色按订单自动带出，实际做的不一样可以改（<strong>颜色字段被管理员全局停用时不显示</strong>，见第9章「业务字段开关」）。</li>
         <li>点「保存」。同一天从同一家回来的几种货，这样一次就录完了。</li>
       </ol>
       <div class="alert alert--warning">
@@ -375,7 +375,7 @@
       <table class="field-table">
         <thead><tr><th>操作</th><th>能改什么</th></tr></thead>
         <tbody>
-          <tr><td>编辑</td><td>加工商、回厂日期、表面处理、颜色、重量/单重/数量、备注。<strong>部件组不能改</strong>——换组等于换了一条记录，请删掉重录</td></tr>
+          <tr><td>编辑</td><td>加工商、回厂日期、表面处理、颜色（停用时不显示）、重量/单重/数量、备注。<strong>部件组不能改</strong>——换组等于换了一条记录，请删掉重录</td></tr>
           <tr><td>删除</td><td>整条删掉。<strong>台账的「外发已回货」会同步减少</strong>，谁删的系统有记录</td></tr>
         </tbody>
       </table>
@@ -702,10 +702,30 @@
         表面处理里的<strong>「无」是保留值，不能删也不能改它的键值</strong>——系统靠它判断产品需不需要外发。
       </div>
 
+      <h3 class="subsection__title">业务字段开关</h3>
+      <p>系统管理 → 系统配置 → <strong>业务字段</strong>。厂里用不到的字段可以在这里全局关掉，关掉后它在<strong>全系统的录入框、表格列和 Excel 导出列一起消失</strong>，录单的人不用再面对一堆空着不填的格子。各开关<strong>互不影响</strong>，可以只关其中一个。</p>
+      <table class="field-table">
+        <thead><tr><th>开关</th><th>关掉后哪些地方不再出现</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>颜色字段</strong><br />（跟「表面处理」配套的那个）</td>
+            <td>订单表单的「颜色」输入框；外发件回厂记录的登记页、编辑弹窗与列表；期初录入（不挂订单）；成品库存列表；订单跟踪台账展开行的「表面处理/颜色」；台账导出与总计划导出的「颜色」列</td>
+          </tr>
+          <tr>
+            <td><strong>客户图号</strong><br />（客户来图上的图号）</td>
+            <td>订单表单的「客户图号」输入框；订单列表展开行的「客户图号」列；总计划导出的「客户图号」列。<br /><strong>不影响部件组的「生产图号」</strong>——那是我们内部转化的技术图纸编号，是另一个字段</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="alert alert--info">
+        <strong>这是「录入与展示」开关，不是数据清理开关。</strong>关掉<strong>不会删除已经录进去的颜色</strong>，也不会因为你在关闭期间编辑了老单子就把它洗掉——重新开启，历史数据原样回来。<br />
+        改完点<strong>保存</strong>：你自己立刻生效；其他已经登录的人<strong>刷新一下页面</strong>才会看到变化。
+      </div>
+
       <h3 class="subsection__title">日志与配置</h3>
       <ul>
         <li><strong>操作日志</strong>：谁在什么时候做了什么（新增/修改/删除/确认/冲销/导入都有记录），可按模块、人员、时间筛。出了争议先查这里。</li>
-        <li><strong>系统配置</strong>：系统名称、Logo、登录页背景等。</li>
+        <li><strong>系统配置</strong>：系统名称、Logo、登录页背景、业务字段开关等。</li>
         <li><strong>更新日志</strong>：每次版本更新的内容，用户在这里看系统改了什么。</li>
       </ul>
     </section>
@@ -763,6 +783,9 @@
 
       <p><strong>Q：页面按钮点了没反应。</strong><br />
       A：多半是系统刚更新过、你的页面还是旧版本。刷新一次（Ctrl+F5）即可。</p>
+
+      <p><strong>Q：「颜色」或「客户图号」这一栏突然不见了，以前录的是不是没了？</strong><br />
+      A：没丢。管理员在「系统配置 → 业务字段」里把这个字段停用了，它只是不再显示与录入，<strong>库里的数据原封不动</strong>，重新开启就全回来了。要恢复找管理员打开开关，你这边刷新一下页面即可。</p>
 
       <p><strong>Q：数字算错了怎么办？</strong><br />
       A：台账所有数字都是从单据实时算出来的，不存在算错但单据对的情况。先展开台账行看三条流水，一般能定位到是哪张单录错了，然后红字冲销更正。</p>

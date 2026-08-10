@@ -60,7 +60,7 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="颜色" width="100" align="center">
+          <el-table-column v-if="colorEnabled" label="颜色" width="100" align="center">
             <template #default="{ row }"><el-input v-model="row.color" /></template>
           </el-table-column>
           <el-table-column label="回厂重量(kg)" width="120" align="center">
@@ -157,6 +157,10 @@ import {
 } from '@/api/outsource';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+
+/** 「颜色」字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const formRef = ref<FormInstance>();

@@ -17,6 +17,7 @@ import {
   OUTBOUND_FAMILY_PARAMS,
   OUTBOUND_FAMILY_SQL,
 } from './order-owed.util';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 /**
  * ===== 订单跟踪台账：本系统的核心产出（设计文档 §5.1）=====
@@ -102,7 +103,11 @@ export interface LedgerRow {
 
 @Injectable()
 export class OrderLedgerService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    // 导出文件由服务端生成，前端的字段显隐管不到，故导出列要自己读一次开关
+    private readonly systemConfig: SystemConfigService,
+  ) {}
 
   async findLedger(query: QueryLedgerDto) {
     const page = query.page ?? 1;
@@ -464,6 +469,8 @@ export class OrderLedgerService {
       v ? (dict.get(`${type}:${v}`) ?? v) : '';
     const unitLabel = (v: string | null) =>
       UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
+    // 「颜色」字段停用时整列不输出——台账页也不显示，导出留一列空值只是噪音
+    const { colorFieldEnabled: colorEnabled } = await this.systemConfig.getFeatureFlags();
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('订单跟踪台账');
@@ -480,7 +487,9 @@ export class OrderLedgerService {
       { header: '订单数量', width: 10, productLevel: true },
       { header: '单位', width: 7, productLevel: true },
       { header: '表面处理', width: 11, productLevel: true },
-      { header: '颜色', width: 10, productLevel: true },
+      ...(colorEnabled
+        ? [{ header: '颜色', width: 10, productLevel: true }]
+        : []),
       { header: '生产图号', width: 16 },
       { header: '版本', width: 8 },
       { header: '料厚', width: 14 },
@@ -520,7 +529,7 @@ export class OrderLedgerService {
         r.orderQty,
         unitLabel(r.unit),
         label('surface_type', r.surfaceType),
-        r.color ?? '',
+        ...(colorEnabled ? [r.color ?? ''] : []),
         r.drawingNo ?? '',
         r.drawingVersion ?? '',
         r.materialThickness ?? '',
@@ -555,18 +564,22 @@ export class OrderLedgerService {
       i = j + 1;
     }
 
-    // 汇总行：与页面顶部汇总卡同一口径（当前筛选的整体合计，不受分页影响）
-    const totalRow = ws.addRow([
-      '合计', '', '', `${summary.rows} 行`, '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-      summary.totalQty,
-      summary.totalIn,
-      summary.totalProductionOwed,
-      '',
-      summary.totalOut,
-      summary.totalDeliveryOwed,
-      summary.totalStock,
-      '',
-    ]);
+    // 汇总行：与页面顶部汇总卡同一口径（当前筛选的整体合计，不受分页影响）。
+    // 按表头名定位而不是数手写的空串——列数会随「颜色」开关变化，位置写死必错位。
+    const cells: Array<string | number> = new Array(columns.length).fill('');
+    const put = (header: string, v: string | number) => {
+      const i = columns.findIndex((c) => c.header === header);
+      if (i >= 0) cells[i] = v;
+    };
+    cells[0] = '合计';
+    put('客户', `${summary.rows} 行`);
+    put('订单数(支)', summary.totalQty);
+    put('成品入库', summary.totalIn);
+    put('生产欠数', summary.totalProductionOwed);
+    put('成品出货', summary.totalOut);
+    put('发货欠数', summary.totalDeliveryOwed);
+    put('库存数', summary.totalStock);
+    const totalRow = ws.addRow(cells);
     totalRow.font = { bold: true };
     totalRow.eachCell((cell) => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
@@ -699,6 +712,9 @@ export class OrderLedgerService {
       UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
     const statusText = (s: number) =>
       s === ORDER_STATUS.FINISHED ? '已完结' : s === ORDER_STATUS.CANCELLED ? '已作废' : '进行中';
+    // 业务字段开关：停用的字段整列不输出（同台账导出）
+    const { colorFieldEnabled: colorEnabled, customerDrawingNoEnabled: cdnEnabled } =
+      await this.systemConfig.getFeatureFlags();
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('总计划');
@@ -712,7 +728,7 @@ export class OrderLedgerService {
       { header: '货号', width: 10 },
       { header: '产品编码', width: 14 },
       { header: '产品名称', width: 16 },
-      { header: '客户图号', width: 14 },
+      ...(cdnEnabled ? [{ header: '客户图号', width: 14 }] : []),
       { header: '产品类型', width: 12 },
       { header: '产品类别', width: 10 },
       { header: '部件组', width: 12 },
@@ -721,7 +737,7 @@ export class OrderLedgerService {
       { header: '单位', width: 7 },
       { header: '订单数(支)', width: 11 },
       { header: '表面处理', width: 11 },
-      { header: '颜色', width: 10 },
+      ...(colorEnabled ? [{ header: '颜色', width: 10 }] : []),
       { header: '材质', width: 10 },
       { header: '生产图号', width: 16 },
       { header: '版本', width: 8 },
@@ -771,7 +787,7 @@ export class OrderLedgerService {
         f.itemNo ?? '',
         f.materialCode ?? '',
         ex.productName ?? '',
-        ex.customerDrawingNo ?? '',
+        ...(cdnEnabled ? [ex.customerDrawingNo ?? ''] : []),
         labels('product_type', f.productType),
         label('rail_section', f.railSection),
         labels('part_group_type', r.groupTypes),
@@ -780,7 +796,7 @@ export class OrderLedgerService {
         unitLabel(f.unit),
         r.qtyPcs,
         label('surface_type', f.surfaceType),
-        f.color ?? '',
+        ...(colorEnabled ? [f.color ?? ''] : []),
         ex.sheetMaterial ?? '',
         r.drawingNos.join('/'),
         r.drawingVersions.join('/'),
@@ -802,18 +818,22 @@ export class OrderLedgerService {
       ]);
     });
 
-    // 汇总行：口径与上面逐行一致（合计四数），列位对齐
-    const totalRow = ws.addRow([
-      '合计', '', '', `${planRows.length} 个产品`, '', '', '', '', '', '', '', '', '', '', '', '',
-      sumQtyPcs,
-      '', '', '', '', '', '', '', '', '',
-      sumIn,
-      sumQtyPcs - sumIn,
-      sumOut,
-      sumQtyPcs - sumOut,
-      sumStock,
-      '', '', '', '', '', '',
-    ]);
+    // 汇总行：口径与上面逐行一致（合计四数）。按表头名定位而不是数手写的空串
+    // ——列数会随「颜色」开关变化，位置写死必错位。
+    const cells: Array<string | number> = new Array(columns.length).fill('');
+    const put = (header: string, v: string | number) => {
+      const i = columns.findIndex((c) => c.header === header);
+      if (i >= 0) cells[i] = v;
+    };
+    cells[0] = '合计';
+    put('客户', `${planRows.length} 个产品`);
+    put('订单数(支)', sumQtyPcs);
+    put('成品入库', sumIn);
+    put('生产欠数', sumQtyPcs - sumIn);
+    put('成品出货', sumOut);
+    put('发货欠数', sumQtyPcs - sumOut);
+    put('库存数', sumStock);
+    const totalRow = ws.addRow(cells);
     totalRow.font = { bold: true };
     totalRow.eachCell((cell) => {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };

@@ -45,7 +45,7 @@
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
-        <el-table-column label="颜色" width="80" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
           <template #default="{ row }">{{ row.color || '—' }}</template>
         </el-table-column>
         <el-table-column label="边别" width="70" align="center">
@@ -80,8 +80,12 @@ import { Search, InfoFilled } from '@element-plus/icons-vue';
 import { getStockBalance, type BalanceRow } from '@/api/finished-stock';
 import { SIDE_OPTIONS, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
+
+/** 「颜色」字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled } = useFeatureFlags();
 
 const loading = ref(false);
 const list = ref<BalanceRow[]>([]);

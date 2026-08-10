@@ -152,8 +152,10 @@
                 <el-input v-model="p.itemNo" placeholder="如 53#" />
               </el-form-item>
             </el-col>
-            <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事 -->
-            <el-col :xs="24" :sm="12" :md="6">
+            <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
+                 可在「系统配置 → 业务字段」全局停用；停用时只是不显示输入框，
+                 p.customerDrawingNo 仍随表单原样回传，不洗掉历史值 -->
+            <el-col v-if="customerDrawingNoEnabled" :xs="24" :sm="12" :md="6">
               <el-form-item label="客户图号" label-width="80px">
                 <el-input
                   v-model="p.customerDrawingNo" placeholder="客户来图图号"
@@ -198,7 +200,9 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
+            <!-- 颜色字段可在「系统配置 → 业务字段」全局停用；
+                 停用时只是不显示输入框，p.color 仍随表单原样回传，不洗掉历史值 -->
+            <el-col v-if="colorEnabled" :xs="24" :sm="12" :md="6">
               <el-form-item label="颜色" label-width="80px">
                 <el-input v-model="p.color" />
               </el-form-item>
@@ -362,6 +366,10 @@ import {
   COUNTRY_OPTIONS,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+
+/** 业务字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled, customerDrawingNoEnabled } = useFeatureFlags();
 
 /* 输入自动大写：PO#/生产单号/材质/生产图号统一调用 */
 const upperFmt = (v: string) => (v ?? '').toUpperCase();

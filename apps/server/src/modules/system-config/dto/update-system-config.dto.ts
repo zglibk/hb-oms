@@ -20,4 +20,8 @@ export class UpdateSystemConfigDto {
   @IsOptional() @IsString() @MaxLength(255) copyrightInfo?: string | null;
   @IsOptional() @IsString() @MaxLength(512) loginBgUrl?: string | null;
   @IsOptional() @IsIn([0, 1]) loginBgSetAsDefault?: number;
+  /** 「颜色」字段全局启用开关：1启用 0停用 */
+  @IsOptional() @IsIn([0, 1], { message: '颜色字段开关只能是 0 或 1' }) colorFieldEnabled?: number;
+  /** 「客户图号」字段全局启用开关：1启用 0停用 */
+  @IsOptional() @IsIn([0, 1], { message: '客户图号字段开关只能是 0 或 1' }) customerDrawingNoEnabled?: number;
 }

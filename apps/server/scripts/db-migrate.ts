@@ -55,6 +55,8 @@ const MIGRATIONS: string[] = [
   'migration-outsource-drop-send.sql',
   // 外发再简化：三张表塌缩为「外发件回厂记录」单表
   'migration-outsource-rebuild-part.sql',
+  // 业务字段全局启用开关（系统配置 → 业务字段）：颜色 / 客户图号
+  'migration-field-switches.sql',
 ];
 
 /**
@@ -158,6 +160,9 @@ const expectedColumns = [
   't_outsource_part.updater_name',
   't_system_config.updater_name',
   't_file.creator_name',
+  // 业务字段开关
+  't_system_config.color_field_enabled',
+  't_system_config.customer_drawing_no_enabled',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）

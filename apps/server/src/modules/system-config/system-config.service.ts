@@ -34,10 +34,40 @@ export class SystemConfigService {
   async get(): Promise<SystemConfig> {
     let row = await this.repo.findOne({ where: { id: 1 } });
     if (!row) {
-      row = this.repo.create({ id: 1, loginBgSetAsDefault: 0 });
+      row = this.repo.create({
+        id: 1,
+        loginBgSetAsDefault: 0,
+        colorFieldEnabled: 1,
+        customerDrawingNoEnabled: 1,
+      });
       row = await this.repo.save(row);
     }
     return this.normalizeUploadFields(row);
+  }
+
+  /**
+   * 业务字段开关（仅需登录即可读，供各业务页与服务端导出决定字段显隐）。
+   *
+   * 与 getPublic() 分成两个接口而不是并进去：那个是**登录页免登**读的品牌信息
+   * （logo/favicon/公司名/背景），语义上属于"未登录也能看的门面"；业务字段开关
+   * 只有登录后的业务页要用，混在一起会让两边的口径都说不清。
+   *
+   * ⚠️ 服务端只用它决定**导出列**是否输出该字段（导出文件由服务端生成，前端隐藏不了），
+   * **刻意不在写入侧剥离字段值**：停用只是"不再录入/展示"，若写入侧强行置空，
+   * 用户在停用期间编辑一张老订单（订单更新是整体重建）就会把历史值永久洗掉。
+   * 停用期间前端不显示输入框但仍原样回传既有值，重新启用后数据完好。
+   *
+   * 新增开关照此加一个布尔即可（同时补 entity 列 + DTO + 迁移，见 CLAUDE.md §5.7）。
+   */
+  async getFeatureFlags(): Promise<{
+    colorFieldEnabled: boolean;
+    customerDrawingNoEnabled: boolean;
+  }> {
+    const row = await this.get();
+    return {
+      colorFieldEnabled: Number(row.colorFieldEnabled) === 1,
+      customerDrawingNoEnabled: Number(row.customerDrawingNoEnabled) === 1,
+    };
   }
 
   /** 更新配置（传入的字段覆盖现有值） */

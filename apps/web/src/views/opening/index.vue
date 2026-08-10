@@ -108,7 +108,7 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="颜色" width="100">
+            <el-table-column v-if="colorEnabled" label="颜色" width="100">
               <template #default="{ row }"><el-input v-model="row.color" /></template>
             </el-table-column>
             <el-table-column label="边别" width="100">
@@ -251,6 +251,10 @@ import {
   normalizeProductTypes,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+
+/** 「颜色」字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled } = useFeatureFlags();
 
 const tab = ref('group');
 const saving = ref(false);

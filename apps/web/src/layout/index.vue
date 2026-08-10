@@ -263,6 +263,7 @@ import { ElMessageBox, ElMessage } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { useTagsStore } from '@/stores/tags';
 import { useThemeStore } from '@/stores/theme';
+import { useFeatureStore } from '@/stores/feature';
 import { useResponsive } from '@/composables/useResponsive';
 import { useTour } from '@/composables/useTour';
 import type { MenuNode } from '@/api/auth';
@@ -276,6 +277,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const tagsStore = useTagsStore();
 const themeStore = useThemeStore();
+const featureStore = useFeatureStore();
 const { isMobile } = useResponsive();
 
 /** 手机端默认收起侧边栏；桌面端默认展开 */
@@ -376,6 +378,9 @@ onMounted(() => {
   collapsed.value = isMobile.value;
   // 拉取系统配置（logo + favicon + 默认登录背景），侧边栏顶部 logo 与浏览器标签 favicon 立即生效
   themeStore.loadSystemConfig();
+  // 拉取业务字段开关（如「颜色」是否启用），各业务页据此决定字段显隐。
+  // 首屏先用 localStorage 缓存值渲染，这里拿到真实值后再纠正，避免列闪现
+  featureStore.load();
   // 新手引导：首次登录自动弹出（看过则不再弹；小屏不打扰）。
   // 延时等待动态菜单渲染完成，避免 el-tour 定位不到目标元素
   if (shouldAutoStart()) {

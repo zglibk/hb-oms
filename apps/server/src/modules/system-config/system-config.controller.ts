@@ -15,6 +15,7 @@ import { SkipTransform } from '../../common/decorators/skip-transform.decorator'
  * 系统配置接口
  *   GET  /api/system/config             管理员读取完整配置
  *   PUT  /api/system/config             管理员更新配置
+ *   GET  /api/system/config/features    业务字段开关（仅需登录，各业务页读取决定字段显隐）
  *   GET  /api/system/config/public      公开接口（登录页免登读取 logo + favicon + 默认背景）
  *   GET  /api/system/config/share-html  公开接口（分享爬虫抓取，实时 og/twitter meta）
  */
@@ -39,6 +40,18 @@ export class SystemConfigController {
     @CurrentUser() user: CurrentUserPayload,
   ) {
     return this.service.update(dto, user);
+  }
+
+  /**
+   * 业务字段开关（订单/外发/期初/库存/台账各页据此决定字段显隐）。
+   *
+   * **刻意只要求登录、不挂菜单权限点**（§2.1 的跨页引用型只读接口）：录订单的人
+   * 没有「系统配置」菜单，挂 system:config 会让所有业务页 403。返回的只是几个
+   * 布尔开关，不含任何业务数据。
+   */
+  @Get('features')
+  getFeatureFlags() {
+    return this.service.getFeatureFlags();
   }
 
   /** 公开接口（登录页免登读取 logo + favicon + 默认背景） */

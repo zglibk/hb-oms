@@ -114,13 +114,13 @@
                   <div class="lg-detail__title">外发回厂流水</div>
                   <table v-if="detailCache[row.orderPartGroupId].outsource.length" class="lg-grid">
                     <thead>
-                      <tr><th>回厂日期</th><th>加工商</th><th>表面处理/颜色</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
+                      <tr><th>回厂日期</th><th>加工商</th><th>{{ colorEnabled ? '表面处理/颜色' : '表面处理' }}</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
                     </thead>
                     <tbody>
                       <tr v-for="(o, i) in detailCache[row.orderPartGroupId].outsource" :key="i">
                         <td class="lg-c">{{ o.backDate || '—' }}</td>
                         <td>{{ o.processorName || '—' }}</td>
-                        <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), o.color].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
+                        <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), colorEnabled ? o.color : ''].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
                         <td class="lg-c">{{ o.returnWeight }}</td>
                         <td class="lg-c">{{ o.unitWeight }}</td>
                         <td class="lg-c">{{ o.returnQty }}</td>
@@ -272,9 +272,13 @@ import {
   labelOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
+
+/** 「颜色」字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const loading = ref(false);

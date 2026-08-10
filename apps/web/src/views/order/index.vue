@@ -54,7 +54,8 @@
               <table class="expand-grid">
                 <thead>
                   <tr>
-                    <th>客户图号</th>
+                    <!-- 客户图号可在「系统配置 → 业务字段」全局停用，th 与 td 必须同条件 -->
+                    <th v-if="customerDrawingNoEnabled">客户图号</th>
                     <th>产品型号</th>
                     <th>规格</th>
                     <th>数量</th>
@@ -68,7 +69,7 @@
                 <tbody>
                   <template v-for="p in row.products" :key="p.id">
                     <tr v-for="(g, gi) in p.partGroups" :key="g.id">
-                      <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.customerDrawingNo || '—' }}</td>
+                      <td v-if="customerDrawingNoEnabled && gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.customerDrawingNo || '—' }}</td>
                       <td>{{ g.productModel || productLabel(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dimensionText(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.orderQty }} {{ unitLabel(p.unit) }}</td>
@@ -175,9 +176,13 @@ import {
   tagTypeOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+
+/** 业务字段全局开关（系统配置 → 业务字段） */
+const { customerDrawingNoEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const loading = ref(false);

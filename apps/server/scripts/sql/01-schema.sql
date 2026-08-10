@@ -366,6 +366,9 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   -- 登录页背景
   login_bg_url            VARCHAR(512) NULL COMMENT '登录页背景图相对路径',
   login_bg_set_as_default TINYINT      NOT NULL DEFAULT 0 COMMENT '是否设为默认背景：1是 0否',
+  -- 业务字段开关（录入与展示开关，关掉不删除既有数据）
+  color_field_enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '颜色字段启用开关：1启用 0停用（停用后全系统隐藏颜色的录入与展示，不删除既有数据）',
+  customer_drawing_no_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
   -- 元数据
   updated_by              INT          NULL COMMENT '最后更新人ID',
   updater_name            VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',

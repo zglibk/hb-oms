@@ -50,6 +50,33 @@ export class SystemConfig {
   @Column({ name: 'login_bg_set_as_default', type: 'tinyint', default: 0 })
   loginBgSetAsDefault: number;
 
+  // ===== 业务字段开关 =====
+  /**
+   * 「颜色」字段全局启用开关：1启用 0停用。
+   * **录入与展示**开关，不是数据清理开关——关掉只是全系统不再录入/展示颜色，
+   * 库中既有 color 值原样保留，重新打开即恢复可见。
+   */
+  @Column({
+    name: 'color_field_enabled',
+    type: 'tinyint',
+    default: 1,
+    comment: '颜色字段启用开关：1启用 0停用（停用后全系统隐藏颜色的录入与展示，不删除既有数据）',
+  })
+  colorFieldEnabled: number;
+
+  /**
+   * 「客户图号」字段全局启用开关：1启用 0停用。
+   * 语义同上（录入与展示开关，不删除既有数据）。
+   * 注意是产品级的**客户来图图号**，不是部件组的生产图号 drawing_no。
+   */
+  @Column({
+    name: 'customer_drawing_no_enabled',
+    type: 'tinyint',
+    default: 1,
+    comment: '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
+  })
+  customerDrawingNoEnabled: number;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

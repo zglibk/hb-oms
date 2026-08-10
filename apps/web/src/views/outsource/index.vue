@@ -65,7 +65,7 @@
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
-        <el-table-column label="颜色" width="80" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
           <template #default="{ row }">{{ row.color || '—' }}</template>
         </el-table-column>
         <el-table-column label="生产图号" width="130" show-overflow-tooltip>
@@ -126,7 +126,8 @@
             <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="颜色">
+        <!-- 停用时仅隐藏输入框，editForm.color 仍随提交原样回传，不洗掉历史值 -->
+        <el-form-item v-if="colorEnabled" label="颜色">
           <el-input v-model="editForm.color" />
         </el-form-item>
         <el-form-item label="回厂重量">
@@ -176,9 +177,13 @@ import {
 } from '@/api/outsource';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+
+/** 「颜色」字段全局开关（系统配置 → 业务字段） */
+const { colorEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const loading = ref(false);

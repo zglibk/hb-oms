@@ -269,9 +269,24 @@ export interface SystemConfig {
   copyrightInfo: string | null;
   loginBgUrl: string | null;
   loginBgSetAsDefault: number;
+  /** 「颜色」字段全局启用开关：1启用 0停用 */
+  colorFieldEnabled: number;
+  /** 「客户图号」字段全局启用开关：1启用 0停用 */
+  customerDrawingNoEnabled: number;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;
+}
+
+/**
+ * 业务字段开关（仅需登录即可读）：各业务页据此决定字段显隐。
+ * 与 PublicSystemConfig 分开——那个是登录页免登读的品牌信息，这个是登录后的业务开关。
+ */
+export interface FeatureFlags {
+  /** 「颜色」字段是否启用（与「表面处理」配套的业务字段，非主题色） */
+  colorFieldEnabled: boolean;
+  /** 「客户图号」字段是否启用（客户来图图号，非部件组的生产图号） */
+  customerDrawingNoEnabled: boolean;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */
@@ -294,6 +309,9 @@ export const updateSystemConfig = (data: Partial<SystemConfig>) =>
 /** 公开接口（登录页免登读取） */
 export const getPublicSystemConfig = () =>
   request.get<any, PublicSystemConfig>('/api/system/config/public');
+/** 业务字段开关（仅需登录，无需菜单权限） */
+export const getFeatureFlags = () =>
+  request.get<any, FeatureFlags>('/api/system/config/features');
 
 /* 审批管理不移植：OMS 无审核流（设计文档决策 #2） */
 
