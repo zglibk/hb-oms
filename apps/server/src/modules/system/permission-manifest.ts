@@ -69,7 +69,8 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'outsource', perm_name: '外发管理', perm_type: 1, parent_code: 'production', menu_path: '/outsource', component: 'outsource/index', icon: 'Van', sort: 2 },
   { perm_code: 'outsource:create', perm_name: '新增发坯单', perm_type: 2, parent_code: 'outsource', sort: 1 },
   { perm_code: 'outsource:update', perm_name: '编辑发坯单', perm_type: 2, parent_code: 'outsource', sort: 2 },
-  { perm_code: 'outsource:send', perm_name: '登记发出', perm_type: 2, parent_code: 'outsource', sort: 3 },
+  // 2026-08-10：发出环节整体取消，原 outsource:send「登记发出」权限点已下线，
+  // 库中残留行由 migration-outsource-drop-send.sql 清理（清单同步不删行）。
   { perm_code: 'outsource:return', perm_name: '回货登记', perm_type: 2, parent_code: 'outsource', sort: 4 },
   { perm_code: 'outsource:return-cancel', perm_name: '撤销回货登记', perm_type: 2, parent_code: 'outsource', sort: 5 },
   { perm_code: 'outsource:close', perm_name: '关闭发坯单', perm_type: 2, parent_code: 'outsource', sort: 6 },

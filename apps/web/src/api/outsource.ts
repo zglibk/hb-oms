@@ -15,7 +15,7 @@ export interface OutsourceReturnItem {
   createdAt: string;
 }
 
-/** 发出明细行（锚定订单部件组） */
+/** 外发明细行（锚定订单部件组） */
 export interface OutsourceItemRow {
   id: number;
   docId: number;
@@ -28,9 +28,8 @@ export interface OutsourceItemRow {
   productModel: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
-  sendWeight: string;
-  unitWeight: string;
-  sendQty: number;
+  /** 应回数量（支）：回齐判定基准 */
+  planReturnQty: number;
   /** 累计回货数（服务端汇总维护） */
   returnedQty: number;
   remark: string | null;
@@ -38,8 +37,10 @@ export interface OutsourceItemRow {
   returns?: OutsourceReturnItem[];
   /** 详情接口附带：所属部件组的组需求支数 */
   qtyPcs?: number;
-  /** 详情接口附带：该部件组「他单已发」支数（已排除本单，口径同可发外选择器） */
-  sentQty?: number;
+  /** 详情接口附带：该部件组「他单已安排」支数（已排除本单，口径同选择器） */
+  arrangedQty?: number;
+  /** 详情接口附带：单重（kg/支，自部件信息），回货登记折算默认值 */
+  unitWeight?: number;
 }
 
 /** 发坯单（单头 + 明细汇总） */
@@ -49,8 +50,7 @@ export interface OutsourceDocItem {
   processorName: string;
   surfaceType: string;
   color: string | null;
-  planSendDate: string | null;
-  actualSendDate: string | null;
+  /** 计划回货日期（后端列名仍为 require_back_date） */
   requireBackDate: string | null;
   status: number;
   closeReason: string | null;
@@ -62,9 +62,10 @@ export interface OutsourceDocItem {
   items?: OutsourceItemRow[];
   /** 列表附带的汇总字段 */
   itemCount?: number;
-  totalSendQty?: number;
+  totalPlanReturnQty?: number;
   totalReturnedQty?: number;
-  totalSendWeight?: number;
+  /** 最后一次回货日期（单头层面的「实际回货」口径，未回货为空） */
+  lastReturnDate?: string | null;
 }
 
 /** 可发外部件组选项 */
@@ -81,8 +82,11 @@ export interface PartGroupOption {
   surfaceType: string;
   color: string | null;
   qtyPcs: number;
-  sentQty: number;
+  /** 他单已安排的应回支数 */
+  arrangedQty: number;
+  /** 剩余应安排 = 组需求 − 已安排 */
   remainQty: number;
+  /** 单重（kg/支）：回货登记折算默认值 */
   unitWeight: number;
 }
 
@@ -98,9 +102,7 @@ export interface OutsourceQuery {
 
 export interface OutsourceItemPayload {
   orderPartGroupId: number;
-  sendWeight: number;
-  unitWeight: number;
-  sendQty: number;
+  planReturnQty: number;
   remark?: string;
   sort?: number;
 }
@@ -109,17 +111,15 @@ export interface OutsourcePayload {
   processorName: string;
   surfaceType: string;
   color?: string;
-  planSendDate?: string;
+  /** 计划回货日期 */
   requireBackDate?: string;
   remark?: string;
   items: OutsourceItemPayload[];
 }
 
-/** 发出明细数量修正（已发出后纠错，改完服务端自动重算回齐状态） */
+/** 应回数量修正（已有回货后的纠错通道，改完服务端自动重算回齐状态） */
 export interface OutsourceItemUpdatePayload {
-  sendWeight: number;
-  unitWeight: number;
-  sendQty: number;
+  planReturnQty: number;
   remark?: string;
 }
 
@@ -138,7 +138,7 @@ export const getOutsourceDetail = (id: number) =>
   request.get<any, OutsourceDocItem>(`/api/outsource/${id}`);
 
 export const getOutsourcePrintData = (id: number) =>
-  request.get<any, OutsourceDocItem & { totalSendQty: number; totalSendWeight: number }>(
+  request.get<any, OutsourceDocItem & { totalPlanReturnQty: number }>(
     `/api/outsource/print/${id}`,
   );
 
@@ -154,9 +154,6 @@ export const createOutsource = (data: OutsourcePayload) =>
 
 export const updateOutsource = (id: number, data: OutsourcePayload) =>
   request.put(`/api/outsource/${id}`, data);
-
-export const sendOutsource = (id: number, actualSendDate: string) =>
-  request.post(`/api/outsource/${id}/send`, { actualSendDate });
 
 export const closeOutsource = (id: number, closeReason: string) =>
   request.post(`/api/outsource/${id}/close`, { closeReason });

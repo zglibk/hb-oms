@@ -129,10 +129,9 @@
     <a class="toc-item" data-key="外发 发坯单 电镀 表面处理 第二步" onclick="jump('ch2')">第2章 第二步：部件外发（可选）</a>
     <a class="toc-item toc-sub" data-key="要不要外发 表面处理 无 镀锌" onclick="jump('ch2-1')">2.1 什么时候要外发</a>
     <a class="toc-item toc-sub" data-key="新建发坯单 重量 单重 发出数量 过磅" onclick="jump('ch2-2')">2.2 新建发坯单</a>
-    <a class="toc-item toc-sub" data-key="登记发出 实际发外日期" onclick="jump('ch2-3')">2.3 登记发出</a>
-    <a class="toc-item toc-sub" data-key="回货登记 分批 超回 撤销" onclick="jump('ch2-4')">2.4 回货登记</a>
-    <a class="toc-item toc-sub" data-key="关闭 尾数 作废 区别" onclick="jump('ch2-5')">2.5 关闭尾数与作废</a>
-    <a class="toc-item toc-sub" data-key="打印 电镀发外加工单 四联单" onclick="jump('ch2-6')">2.6 打印《电镀发外加工单》</a>
+    <a class="toc-item toc-sub" data-key="回货登记 分批 超回 撤销 实际回货 应回数量" onclick="jump('ch2-4')">2.3 回货登记</a>
+    <a class="toc-item toc-sub" data-key="关闭 尾数 作废 区别" onclick="jump('ch2-5')">2.4 关闭尾数与作废</a>
+    <a class="toc-item toc-sub" data-key="打印 电镀发外加工单 四联单" onclick="jump('ch2-6')">2.5 打印《电镀发外加工单》</a>
 
     <a class="toc-item" data-key="装配 批次 第三步 车间 闸门" onclick="jump('ch3')">第3章 第三步：装配</a>
     <a class="toc-item toc-sub" data-key="装配批次 是什么 部件组 边别" onclick="jump('ch3-1')">3.1 装配批次是什么</a>
@@ -353,59 +352,58 @@
       </div>
 
       <h2 class="section__title" id="ch2-2">2.2 新建发坯单</h2>
+      <div class="alert alert--info">
+        <strong>系统不记「发出」了。</strong>发货当天不用过磅、不用回系统点「登记发出」——发坯单建起来就等回货，
+        只要填清楚<strong>什么时候要回</strong>、<strong>该回多少</strong>就行。
+      </div>
       <ol class="steps">
-        <li>点「新增发坯单」，填<strong>加工商</strong>、<strong>表面处理</strong>（必填）、颜色、计划发外日期、要求回货日期。</li>
+        <li>点「新增发坯单」，填<strong>加工商</strong>、<strong>表面处理</strong>（必填）、颜色、<strong>计划回货日期</strong>。</li>
         <li>点「添加部件组」，选择器只会列出<strong>表面处理与单头一致</strong>的部件组。可以搜订单号/客户/生产单号/型号/图号，一次可多选。</li>
-        <li>逐行填<strong>发出重量</strong>（磅秤实测，kg）。<strong>单重</strong>会从部件信息自动带出，没有就手工填。</li>
-        <li>填完重量，<strong>发出数量会自动算出来</strong>（数量 = 重量 ÷ 单重，四舍五入），需要微调也可以直接改。</li>
+        <li>每行的<strong>应回数量</strong>会自动填上「组需求 − 其它单已安排」，觉得不对直接改。</li>
         <li>点「保存」。系统自动生成 7 位发坯单号，显示成 <code>No.0000123</code>。</li>
       </ol>
       <div class="alert alert--warning">
-        <strong>发出数量为什么不自动填订单数量：</strong>订单数是「应该发多少」，发坯单要记的是「实际发了多少」。如果拿订单数当默认值，很容易顺手保存成一个没过磅的假数，等回货对账时才发现对不上。所以选完部件组，重量和数量都是空的，<strong>必须过磅后录入</strong>。<br />
-        发出数量必须大于 0，保存时会逐行检查。
+        <strong>应回数量是干什么用的：</strong>它是判断「这单回齐没有」的标尺——某行累计回货 ≥ 应回数量，这行就算回齐；所有行都回齐，单据自动变「已回齐」。<br />
+        同一个部件组分几次发给不同加工厂时，<strong>每张单填各自那部分的应回数量</strong>，各算各的。应回数量必须大于 0，保存时逐行检查。
       </div>
 
-      <h2 class="section__title" id="ch2-3">2.3 登记发出</h2>
-      <p>货真的拉走了，回列表点「登记发出」，填<strong>实际发外日期</strong>。单据状态从「待发出」变成「已发出」。</p>
-      <div class="alert alert--info">
-        登记发出之前单据还能整单编辑；<strong>登记发出之后要改数量，走列表的「回货登记」页里的数量修正</strong>（只能改重量/单重/数量/备注，不能加减行、不能换部件组）。
-      </div>
-
-      <h2 class="section__title" id="ch2-4">2.4 回货登记</h2>
+      <h2 class="section__title" id="ch2-4">2.3 回货登记</h2>
       <ol class="steps">
         <li>加工厂送货回来，点「回货登记」。</li>
-        <li>按明细行填<strong>回货日期</strong>、<strong>收回重量</strong>，数量同样自动折算，可微调。</li>
+        <li>按明细行填<strong>回货日期</strong>（就是实际回货时间）、<strong>收回重量</strong>，数量会按单重自动折算，可微调。单重从部件信息带出，没有就手工填。</li>
         <li><strong>一行可以分多次回货</strong>，每次登记一条记录，系统自动累计。</li>
-        <li>所有明细行都回齐（累计回货 ≥ 发出数），单据自动变成「已回齐」。</li>
+        <li>所有明细行都回齐（累计回货 ≥ 应回数量），单据自动变成「已回齐」。</li>
       </ol>
       <ul>
-        <li><strong>允许回货数超过发出数</strong>：重量折算本来就有误差，系统只给黄色提示不拦截。</li>
+        <li><strong>允许回货数超过应回数</strong>：重量折算本来就有误差，系统只给黄色提示不拦截。</li>
         <li>登记错了可以<strong>撤销回货登记</strong>，撤销后累计数和单据状态会自动退回去。</li>
+        <li>应回数量填错了，在回货登记弹窗里每行都能<strong>直接修正应回数量</strong>（改完回齐状态自动重算）。整单编辑只在「还没有任何回货登记」时可用。</li>
       </ul>
       <p>单据状态流转：</p>
       <div class="flow">
-        <span class="flow__node">1 待发出</span><span class="flow__arrow">→</span>
-        <span class="flow__node">2 已发出</span><span class="flow__arrow">→</span>
+        <span class="flow__node">1 待回货</span><span class="flow__arrow">→</span>
         <span class="flow__node">3 部分回货</span><span class="flow__arrow">→</span>
         <span class="flow__node">4 已回齐</span>
       </div>
 
-      <h2 class="section__title" id="ch2-5">2.5 关闭尾数与作废</h2>
+      <h2 class="section__title" id="ch2-5">2.4 关闭尾数与作废</h2>
       <table class="field-table">
         <thead><tr><th>操作</th><th>什么时候用</th><th>限制</th></tr></thead>
         <tbody>
           <tr><td>关闭</td><td>尾数不回了、损耗核销，想把单子结掉</td><td>从「部分回货」进入，<strong>必须填关闭原因</strong>，结果变成「已回齐」</td></tr>
-          <tr><td>作废</td><td>整单开错了</td><td><strong>只有「待发出」的单能作废</strong>。已经发出去的货不能当没发生过，要处理尾数请用「关闭」</td></tr>
+          <tr><td>作废</td><td>整单开错了</td><td><strong>只有还没登记过任何回货的单能作废</strong>。已经回过货的不能当没发生过，要处理尾数请用「关闭」</td></tr>
         </tbody>
       </table>
 
-      <h2 class="section__title" id="ch2-6">2.6 打印《电镀发外加工单》</h2>
+      <h2 class="section__title" id="ch2-6">2.5 打印《电镀发外加工单》</h2>
       <p>在发坯单详情/表单页点「打印」，会按<strong>公司现行的四联单版式</strong>输出，尺寸 240mm × 150mm。</p>
       <ul>
         <li><strong>不是 A4</strong>，请在打印机里换成四联单纸，纸装对了直接打就能对齐。</li>
         <li>每页固定 11 行明细，超过自动续页。</li>
         <li>抬头是公司全称「中山市海宝精密五金有限公司」。</li>
         <li>「包装方式」列系统里没有对应字段，留空供手写。</li>
+        <li><strong>「重量（KG）」「单重」两列打印出来是空的</strong>，由发货人现场过磅手写——系统里已经不记发出重量了。</li>
+        <li>单据日期打的是<strong>建单日期</strong>。</li>
       </ul>
     </section>
 

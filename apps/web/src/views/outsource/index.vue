@@ -22,7 +22,7 @@
             <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="计划发外">
+        <el-form-item label="计划回货">
           <el-date-picker
             v-model="dateRange"
             type="daterange"
@@ -55,9 +55,7 @@
                     <th>产品型号</th>
                     <th>规格</th>
                     <th>周期码</th>
-                    <th>发出重量(kg)</th>
-                    <th>单重(kg/支)</th>
-                    <th>发出数(支)</th>
+                    <th>应回(支)</th>
                     <th>已回(支)</th>
                     <th>未回(支)</th>
                     <th>备注</th>
@@ -70,11 +68,9 @@
                     <td>{{ it.productModel || '—' }}</td>
                     <td class="eg-center">{{ it.dimensionText || '—' }}</td>
                     <td class="eg-center">{{ it.cycleCode || '—' }}</td>
-                    <td class="eg-center">{{ Number(it.sendWeight) }}</td>
-                    <td class="eg-center">{{ Number(it.unitWeight) }}</td>
-                    <td class="eg-center">{{ it.sendQty }}</td>
-                    <td class="eg-center" :class="{ 'eg-over': it.returnedQty > it.sendQty }">{{ it.returnedQty }}</td>
-                    <td class="eg-center">{{ Math.max(it.sendQty - it.returnedQty, 0) }}</td>
+                    <td class="eg-center">{{ it.planReturnQty }}</td>
+                    <td class="eg-center" :class="{ 'eg-over': it.returnedQty > it.planReturnQty }">{{ it.returnedQty }}</td>
+                    <td class="eg-center">{{ Math.max(it.planReturnQty - it.returnedQty, 0) }}</td>
                     <td>{{ it.remark || '—' }}</td>
                   </tr>
                 </tbody>
@@ -94,23 +90,21 @@
         <el-table-column label="颜色" prop="color" width="80">
           <template #default="{ row }">{{ row.color || '—' }}</template>
         </el-table-column>
-        <el-table-column label="计划发外" width="105">
-          <template #default="{ row }">{{ dateText(row.planSendDate) }}</template>
-        </el-table-column>
-        <el-table-column label="实际发外" width="105">
-          <template #default="{ row }">{{ dateText(row.actualSendDate) }}</template>
-        </el-table-column>
-        <el-table-column label="要求回货" width="105">
+        <el-table-column label="计划回货" width="105">
           <template #default="{ row }">{{ dateText(row.requireBackDate) }}</template>
+        </el-table-column>
+        <!-- 实际回货按明细行分批登记，单头这里取最后一次回货日期 -->
+        <el-table-column label="实际回货" width="105">
+          <template #default="{ row }">{{ dateText(row.lastReturnDate) }}</template>
         </el-table-column>
         <el-table-column label="明细" width="60">
           <template #default="{ row }">{{ row.itemCount ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="发出/回货(支)" width="120">
+        <el-table-column label="应回/已回(支)" width="120">
           <template #default="{ row }">
-            <span>{{ row.totalSendQty ?? 0 }}</span>
+            <span>{{ row.totalPlanReturnQty ?? 0 }}</span>
             <span class="sep">/</span>
-            <span :class="{ 'qty-over': (row.totalReturnedQty ?? 0) > (row.totalSendQty ?? 0) }">{{ row.totalReturnedQty ?? 0 }}</span>
+            <span :class="{ 'qty-over': (row.totalReturnedQty ?? 0) > (row.totalPlanReturnQty ?? 0) }">{{ row.totalReturnedQty ?? 0 }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90">
@@ -127,11 +121,6 @@
                 link type="primary" class="btn-edit" :icon="Edit"
                 @click="openEdit(row)"
               >编辑</el-button>
-              <el-button
-                v-if="row.status === OUTSOURCE_STATUS_VALUE.PENDING"
-                size="small" v-permission.disable="'outsource:send'" link type="success" :icon="Promotion"
-                @click="openSend(row)"
-              >登记发出</el-button>
               <el-button
                 v-if="canReturn(row)"
                 size="small" v-permission.disable="'outsource:return'" link type="warning" :icon="Box"
@@ -158,22 +147,6 @@
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
 
-    <!-- 登记发出：填实际发外日期 -->
-    <el-dialog v-model="sendVisible" title="登记发出" width="380px">
-      <el-form label-width="100px" size="small">
-        <el-form-item label="发坯单号">
-          <span>{{ formatBlankNo(sendRow?.blankNo) }}</span>
-        </el-form-item>
-        <el-form-item label="实际发外日期" required>
-          <el-date-picker v-model="sendDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button size="small" @click="sendVisible = false">取消</el-button>
-        <el-button size="small" type="primary" :loading="sendLoading" @click="onSendConfirm">确定</el-button>
-      </template>
-    </el-dialog>
-
     <return-dialog v-model="returnVisible" :doc-id="returnDocId" @changed="load" />
   </div>
 </template>
@@ -182,10 +155,9 @@
 import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCheck, Promotion, Box, Printer } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCheck, Box, Printer } from '@element-plus/icons-vue';
 import {
   getOutsourceList,
-  sendOutsource,
   closeOutsource,
   cancelOutsource,
   type OutsourceDocItem,
@@ -259,39 +231,16 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 function dateText(v: string | null): string {
   return v ? String(v).slice(0, 10) : '—';
 }
-/** 已发出~已回齐之间均可继续登记回货（已回齐后补登尾数亦允许） */
+/**
+ * 待回货~已回齐之间均可继续登记回货（已回齐后补登尾数亦允许）。
+ * 发出环节取消后建单即「待回货」，故 PENDING 也在其列。
+ */
 function canReturn(row: OutsourceDocItem): boolean {
   return [
-    OUTSOURCE_STATUS_VALUE.SENT,
+    OUTSOURCE_STATUS_VALUE.PENDING,
     OUTSOURCE_STATUS_VALUE.PARTIAL_RETURNED,
     OUTSOURCE_STATUS_VALUE.RETURNED_ALL,
   ].includes(row.status as never);
-}
-
-/* ===== 登记发出 ===== */
-const sendVisible = ref(false);
-const sendLoading = ref(false);
-const sendRow = ref<OutsourceDocItem | null>(null);
-const sendDate = ref<string>('');
-function openSend(row: OutsourceDocItem) {
-  sendRow.value = row;
-  sendDate.value = row.planSendDate ? String(row.planSendDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
-  sendVisible.value = true;
-}
-async function onSendConfirm() {
-  if (!sendRow.value || !sendDate.value) {
-    ElMessage.warning('请选择实际发外日期');
-    return;
-  }
-  sendLoading.value = true;
-  try {
-    await sendOutsource(sendRow.value.id, sendDate.value);
-    ElMessage.success('已登记发出');
-    sendVisible.value = false;
-    load();
-  } finally {
-    sendLoading.value = false;
-  }
 }
 
 /* ===== 回货登记 ===== */
@@ -325,7 +274,7 @@ async function onClose(row: OutsourceDocItem) {
 }
 async function onCancel(row: OutsourceDocItem) {
   await ElMessageBox.confirm(
-    `确定作废发坯单「${formatBlankNo(row.blankNo)}」吗？已登记发出或已有回货的单不可作废。`,
+    `确定作废发坯单「${formatBlankNo(row.blankNo)}」吗？已有回货登记的单不可作废。`,
     '作废发坯单',
     { type: 'warning', confirmButtonText: '作废', confirmButtonClass: 'el-button--danger' },
   );

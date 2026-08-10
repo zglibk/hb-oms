@@ -114,18 +114,16 @@
                   <div class="lg-detail__title">外发流水（已作废发坯单不计）</div>
                   <table v-if="detailCache[row.orderPartGroupId].outsource.length" class="lg-grid">
                     <thead>
-                      <tr><th>发坯单号</th><th>加工商</th><th>表面处理/颜色</th><th>发出日期</th><th>要求回货</th><th>发出重量</th><th>单重</th><th>发出</th><th>已回</th><th>未回</th><th>状态</th></tr>
+                      <tr><th>发坯单号</th><th>加工商</th><th>表面处理/颜色</th><th>计划回货</th><th>实际回货</th><th>应回</th><th>已回</th><th>未回</th><th>状态</th></tr>
                     </thead>
                     <tbody>
                       <tr v-for="(o, i) in detailCache[row.orderPartGroupId].outsource" :key="i">
                         <td>{{ formatBlankNo(o.blankNo) || '—' }}</td>
                         <td>{{ o.processorName || '—' }}</td>
                         <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), o.color].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
-                        <td class="lg-c">{{ o.sendDate || '—' }}</td>
                         <td class="lg-c">{{ o.requireBackDate || '—' }}</td>
-                        <td class="lg-c">{{ o.sendWeight }} kg</td>
-                        <td class="lg-c">{{ o.unitWeight }}</td>
-                        <td class="lg-c">{{ o.sendQty }}</td>
+                        <td class="lg-c">{{ o.lastReturnDate || '—' }}</td>
+                        <td class="lg-c">{{ o.planReturnQty }}</td>
                         <td class="lg-c">{{ o.returnedQty }}</td>
                         <td class="lg-c"><span :class="o.pendingQty > 0 ? 'num-owed' : 'num-ok'">{{ o.pendingQty }}</span></td>
                         <td class="lg-c">

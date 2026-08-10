@@ -382,10 +382,8 @@ CREATE TABLE IF NOT EXISTS t_outsource_doc (
   processor_name    VARCHAR(128) NOT NULL COMMENT '加工商（外协厂）',
   surface_type      VARCHAR(32)  NOT NULL COMMENT '表面处理（字典 surface_type）：seal_paint封漆 electrophoresis电泳 spray喷涂 smooth_paint平滑漆…；保留值 none 不可外发',
   color             VARCHAR(64)  NULL COMMENT '颜色',
-  plan_send_date    DATE         NULL COMMENT '计划发外日期',
-  actual_send_date  DATE         NULL COMMENT '实际发外日期（登记后状态推进为 2已发出）',
-  require_back_date DATE         NULL COMMENT '要求回货日期',
-  status            TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1待发出 2已发出 3部分回货 4已回齐 9已作废',
+  require_back_date DATE         NULL COMMENT '计划回货日期',
+  status            TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1待回货 3部分回货 4已回齐 9已作废（2已发出为弃用值，发出环节已取消）',
   close_reason      VARCHAR(255) NULL COMMENT '手工关闭原因（3部分回货 → 4已回齐 时必填，尾数不回/损耗核销场景）',
   remark            TEXT         NULL COMMENT '备注',
   creator_id        INT          NULL COMMENT '创建人ID',
@@ -396,10 +394,8 @@ CREATE TABLE IF NOT EXISTS t_outsource_doc (
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_blank_no (blank_no),
   KEY idx_status (status),
-  KEY idx_processor (processor_name),
-  KEY idx_plan_send_date (plan_send_date),
-  KEY idx_actual_send_date (actual_send_date)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发（发坯）单头';
+  KEY idx_processor (processor_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发（发坯）单头（2026-08-10 取消发出环节，只跟踪回货）';
 
 CREATE TABLE IF NOT EXISTS t_outsource_item (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
@@ -413,22 +409,20 @@ CREATE TABLE IF NOT EXISTS t_outsource_item (
   product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（自部件组 = 货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
   dimension_text      VARCHAR(64)   NULL COMMENT '规格展示快照（如 350mm）',
   cycle_code          VARCHAR(64)   NULL COMMENT '周期码快照（自部件行追溯码）',
-  send_weight         DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '发出重量（kg）',
-  unit_weight         DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '单重（kg/支），默认自部件信息带出，可改',
-  send_qty            INT           NOT NULL DEFAULT 0 COMMENT '发出数量（支）= 发出重量 ÷ 单重 四舍五入，允许人工微调',
-  returned_qty        INT           NOT NULL DEFAULT 0 COMMENT '累计回货数量（支）：由回货登记汇总维护，允许超过发出数（重量折算误差）',
+  plan_return_qty     INT           NOT NULL DEFAULT 0 COMMENT '应回数量（支）：本单该部件组预计回多少，回货数≥此数即该行回齐',
+  returned_qty        INT           NOT NULL DEFAULT 0 COMMENT '累计回货数量（支）：由回货登记汇总维护，允许超过应回数（重量折算误差）',
   remark              VARCHAR(255)  NULL COMMENT '备注',
   sort                INT           NOT NULL DEFAULT 0 COMMENT '行序',
   creator_id          INT           NULL COMMENT '创建人ID',
   creator_name        VARCHAR(64)   NULL COMMENT '创建人姓名快照（编辑=整体重建，沿用单头创建人）',
-  updated_by          INT           NULL COMMENT '最后更新人ID（发出数量修正记于此）',
+  updated_by          INT           NULL COMMENT '最后更新人ID（应回数量修正记于此）',
   updater_name        VARCHAR(64)   NULL COMMENT '最后更新人姓名快照',
   created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_doc (doc_id),
   KEY idx_order (order_id),
   KEY idx_part_group (order_part_group_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发发出明细（锚定订单部件组）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发明细（锚定订单部件组；2026-08-10 取消发出侧过磅字段）';
 
 CREATE TABLE IF NOT EXISTS t_outsource_return (
   id             INT AUTO_INCREMENT PRIMARY KEY,

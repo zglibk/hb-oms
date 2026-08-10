@@ -65,9 +65,10 @@ export interface DashboardOutsourceRow {
   /** 超期天数 */
   days: number;
   status: number;
-  sendQty: number;
+  /** 应回数量（本单各明细行合计） */
+  planReturnQty: number;
   returnedQty: number;
-  /** 未回数量 = 发出 − 已回 */
+  /** 未回数量 = 应回 − 已回 */
   pendingQty: number;
 }
 
@@ -171,8 +172,8 @@ export class DashboardService {
               AND d.require_back_date IS NOT NULL
               AND d.require_back_date < CURDATE()
             GROUP BY d.id
-           HAVING SUM(i.returned_qty) < SUM(i.send_qty)) x`,
-        [OUTSOURCE_STATUS.SENT, OUTSOURCE_STATUS.PARTIAL_RETURNED],
+           HAVING SUM(i.returned_qty) < SUM(i.plan_return_qty)) x`,
+        [OUTSOURCE_STATUS.PENDING, OUTSOURCE_STATUS.PARTIAL_RETURNED],
       ),
     ]);
     return {
@@ -238,9 +239,10 @@ export class DashboardService {
   }
 
   /**
-   * 外发超期未回齐：要求回货日期已过、单头仍处于「已发出 / 部分回货」。
-   * 已回齐（含手工关闭尾数）与已作废不算超期；待发出（1）尚未进入外发环节，
-   * 按设计文档 §5.2「未回齐」的状态机含义不纳入。
+   * 外发超期未回齐：**计划回货日期**已过、单头仍处于「待回货 / 部分回货」。
+   * 已回齐（含手工关闭尾数）与已作废不算超期。
+   * 2026-08-10 发出环节取消后，建单即待回货（1）——它现在就是"发出去还没回来"
+   * 的正常态，必须纳入超期统计；原先排除 1、统计「已发出(2)」的口径同步作废。
    */
   private async loadOverdueOutsource(): Promise<DashboardOutsourceRow[]> {
     const rows: any[] = await this.dataSource.query(
@@ -248,8 +250,8 @@ export class DashboardService {
               d.surface_type AS surfaceType, d.color AS color,
               d.require_back_date AS requireBackDate, d.status AS status,
               DATEDIFF(CURDATE(), d.require_back_date) AS days,
-              IFNULL(SUM(i.send_qty), 0)     AS sendQty,
-              IFNULL(SUM(i.returned_qty), 0) AS returnedQty
+              IFNULL(SUM(i.plan_return_qty), 0) AS planReturnQty,
+              IFNULL(SUM(i.returned_qty), 0)    AS returnedQty
          FROM t_outsource_doc d
          JOIN t_outsource_item i ON i.doc_id = d.id
         WHERE d.status IN (?, ?)
@@ -257,13 +259,13 @@ export class DashboardService {
           AND d.require_back_date < CURDATE()
         GROUP BY d.id, d.blank_no, d.processor_name, d.surface_type, d.color,
                  d.require_back_date, d.status
-       HAVING SUM(i.returned_qty) < SUM(i.send_qty)
+       HAVING SUM(i.returned_qty) < SUM(i.plan_return_qty)
         ORDER BY d.require_back_date ASC, d.id ASC
         LIMIT ?`,
-      [OUTSOURCE_STATUS.SENT, OUTSOURCE_STATUS.PARTIAL_RETURNED, TOP_LIMIT],
+      [OUTSOURCE_STATUS.PENDING, OUTSOURCE_STATUS.PARTIAL_RETURNED, TOP_LIMIT],
     );
     return rows.map((r) => {
-      const sendQty = Number(r.sendQty) || 0;
+      const planReturnQty = Number(r.planReturnQty) || 0;
       const returnedQty = Number(r.returnedQty) || 0;
       return {
         docId: Number(r.docId),
@@ -274,9 +276,9 @@ export class DashboardService {
         requireBackDate: this.dateText(r.requireBackDate),
         days: Number(r.days) || 0,
         status: Number(r.status),
-        sendQty,
+        planReturnQty,
         returnedQty,
-        pendingQty: sendQty - returnedQty,
+        pendingQty: planReturnQty - returnedQty,
       };
     });
   }

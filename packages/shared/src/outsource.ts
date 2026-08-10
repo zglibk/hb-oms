@@ -1,8 +1,10 @@
 /**
  * 外发（发坯单）口径——前后端唯一事实源（设计文档 §3.2 / §4.3）。
  *
- * 外发按**重量**结算、按**支数**跟踪：发出与回货都录重量，数量由单重折算得出，
- * 折算规则必须两端一致（前端表单自动带出、后端落库兜底），故下沉本包。
+ * **回货**按重量结算、按支数跟踪：收回重量 ÷ 单重折算出支数，折算规则必须两端
+ * 一致（前端弹窗自动带出、后端落库兜底），故下沉本包。
+ * 发出侧的过磅折算已随「取消发出环节」下线（2026-08-10），`qtyFromWeight`
+ * 现在只服务于回货登记。
  * 状态枚举本身在 business-status.ts（OUTSOURCE_STATUS），本文件只放派生规则。
  */
 
@@ -34,33 +36,36 @@ export function qtyFromWeight(
   return Math.round(w / u);
 }
 
-/** 行级回齐判定：累计回货数 ≥ 发出数（允许超回，见 §7.6） */
+/** 行级回齐判定：累计回货数 ≥ 应回数（允许超回，见 §7.6） */
 export function isItemFullyReturned(
-  sendQty: number | null | undefined,
+  planReturnQty: number | null | undefined,
   returnedQty: number | null | undefined,
 ): boolean {
-  return (Number(returnedQty) || 0) >= (Number(sendQty) || 0);
+  return (Number(returnedQty) || 0) >= (Number(planReturnQty) || 0);
 }
 
 /**
  * 单头状态派生（设计文档 §3.2 状态机）：
- * - 未登记实际发外日期 → 1 待发出；
- * - 已发出且无任何回货 → 2 已发出；
- * - 全部明细行回齐 → 4 已回齐；
+ * - 无明细行、或尚无任何回货 → 1 待回货；
+ * - 全部明细行回齐（累计回货 ≥ 应回数）→ 4 已回齐；
  * - 其余（部分行回齐 / 行内部分回货）→ 3 部分回货。
  *
  * 作废（9）与手工关闭（3→4，尾数不回场景）不由本函数派生，属显式操作。
- * 无明细行时保持「已发出」，避免空单被误判回齐。
+ *
+ * 2026-08-10：**发出环节取消**后本函数不再需要 `hasActualSendDate` 入参——
+ * 建单即待回货，状态只由回货登记推进。空单保持待回货而非回齐，避免
+ * 「一条明细都没有的单被判成已回齐」。
  */
 export function deriveOutsourceStatus(
-  hasActualSendDate: boolean,
-  items: Array<{ sendQty: number | null | undefined; returnedQty: number | null | undefined }>,
+  items: Array<{
+    planReturnQty: number | null | undefined;
+    returnedQty: number | null | undefined;
+  }>,
 ): number {
-  if (!hasActualSendDate) return OUTSOURCE_STATUS.PENDING;
-  if (!items.length) return OUTSOURCE_STATUS.SENT;
+  if (!items.length) return OUTSOURCE_STATUS.PENDING;
   const totalReturned = items.reduce((sum, it) => sum + (Number(it.returnedQty) || 0), 0);
-  if (totalReturned <= 0) return OUTSOURCE_STATUS.SENT;
-  return items.every((it) => isItemFullyReturned(it.sendQty, it.returnedQty))
+  if (totalReturned <= 0) return OUTSOURCE_STATUS.PENDING;
+  return items.every((it) => isItemFullyReturned(it.planReturnQty, it.returnedQty))
     ? OUTSOURCE_STATUS.RETURNED_ALL
     : OUTSOURCE_STATUS.PARTIAL_RETURNED;
 }

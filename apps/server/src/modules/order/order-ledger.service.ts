@@ -378,9 +378,10 @@ export class OrderLedgerService {
       this.dataSource.query(
         `SELECT od.blank_no AS blankNo, od.processor_name AS processorName,
                 od.surface_type AS surfaceType, od.color AS color, od.status AS status,
-                od.actual_send_date AS sendDate, od.require_back_date AS requireBackDate,
-                oi.send_weight AS sendWeight, oi.unit_weight AS unitWeight,
-                oi.send_qty AS sendQty, oi.returned_qty AS returnedQty
+                od.require_back_date AS requireBackDate,
+                oi.plan_return_qty AS planReturnQty, oi.returned_qty AS returnedQty,
+                (SELECT MAX(orr.back_date) FROM t_outsource_return orr
+                  WHERE orr.item_id = oi.id) AS lastReturnDate
            FROM t_outsource_item oi
            JOIN t_outsource_doc od ON od.id = oi.doc_id
           WHERE oi.order_part_group_id = ? AND od.status <> ?
@@ -417,13 +418,11 @@ export class OrderLedgerService {
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
         status: Number(r.status) || 0,
-        sendDate: this.dateText(r.sendDate),
         requireBackDate: this.dateText(r.requireBackDate),
-        sendWeight: Number(r.sendWeight) || 0,
-        unitWeight: Number(r.unitWeight) || 0,
-        sendQty: Number(r.sendQty) || 0,
+        lastReturnDate: this.dateText(r.lastReturnDate),
+        planReturnQty: Number(r.planReturnQty) || 0,
         returnedQty: Number(r.returnedQty) || 0,
-        pendingQty: (Number(r.sendQty) || 0) - (Number(r.returnedQty) || 0),
+        pendingQty: (Number(r.planReturnQty) || 0) - (Number(r.returnedQty) || 0),
       })),
       assembly: assembly.map((r: any) => ({
         id: Number(r.id),

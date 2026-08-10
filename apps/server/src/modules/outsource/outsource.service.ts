@@ -19,7 +19,6 @@ import {
   CreateOutsourceReturnDto,
   QueryOutsourceDto,
   QueryPartGroupOptionDto,
-  SendOutsourceDto,
   UpdateOutsourceDto,
   UpdateOutsourceItemDto,
 } from './dto/outsource.dto';
@@ -46,11 +45,11 @@ export interface PartGroupOption {
   color: string | null;
   /** 组需求支数 */
   qtyPcs: number;
-  /** 已发外支数（全部未作废发坯单合计） */
-  sentQty: number;
-  /** 剩余可发支数 = 组需求 − 已发外（可为 0，界面照常可选以支持超发场景） */
+  /** 他单已安排应回支数（全部未作废发坯单合计） */
+  arrangedQty: number;
+  /** 剩余应安排支数 = 组需求 − 已安排（可为 0，界面照常可选以支持超发场景） */
   remainQty: number;
-  /** 单重（kg/支）：自部件信息（t_material.unit_weight）带出，无则 0 */
+  /** 单重（kg/支）：自部件信息（t_material.unit_weight）带出，无则 0；回货登记折算用 */
   unitWeight: number;
 }
 
@@ -73,8 +72,9 @@ export class OutsourceService {
     const qb = this.docRepo.createQueryBuilder('d');
     if (query.status != null) qb.andWhere('d.status = :st', { st: query.status });
     if (query.surfaceType) qb.andWhere('d.surfaceType = :sf', { sf: query.surfaceType });
-    if (query.dateFrom) qb.andWhere('d.planSendDate >= :df', { df: query.dateFrom });
-    if (query.dateTo) qb.andWhere('d.planSendDate <= :dt', { dt: query.dateTo });
+    // 发出环节取消后，列表日期筛选改按**计划回货日期**
+    if (query.dateFrom) qb.andWhere('d.requireBackDate >= :df', { df: query.dateFrom });
+    if (query.dateTo) qb.andWhere('d.requireBackDate <= :dt', { dt: query.dateTo });
     if (query.keyword) {
       // 生产单号/产品型号在明细行，用子查询命中后回联单头
       qb.andWhere(
@@ -99,15 +99,29 @@ export class OutsourceService {
       itemsByDoc.set(it.docId, arr);
     });
 
+    // 「实际回货」是分批登记的、落在流水行上；列表需要一个单头层面的口径，
+    // 取该单最后一次回货日期（未回货则空）。
+    const lastReturnByDoc = new Map<number, string | null>();
+    if (docIds.length) {
+      const rows: Array<{ docId: number; lastDate: string | null }> = await this.dataSource.query(
+        `SELECT doc_id AS docId, MAX(back_date) AS lastDate
+           FROM t_outsource_return
+          WHERE doc_id IN (${docIds.map(() => '?').join(',')})
+          GROUP BY doc_id`,
+        docIds,
+      );
+      rows.forEach((r) => lastReturnByDoc.set(Number(r.docId), this.dateText(r.lastDate)));
+    }
+
     return {
       list: docs.map((d) => {
         const its = itemsByDoc.get(d.id) ?? [];
         return Object.assign(d, {
           items: its,
           itemCount: its.length,
-          totalSendQty: its.reduce((s, it) => s + (it.sendQty || 0), 0),
+          totalPlanReturnQty: its.reduce((s, it) => s + (it.planReturnQty || 0), 0),
           totalReturnedQty: its.reduce((s, it) => s + (it.returnedQty || 0), 0),
-          totalSendWeight: this.sumDecimal(its.map((it) => it.sendWeight)),
+          lastReturnDate: lastReturnByDoc.get(d.id) ?? null,
         });
       }),
       total,
@@ -127,7 +141,7 @@ export class OutsourceService {
       arr.push(r);
       returnsByItem.set(r.itemId, arr);
     });
-    // 组需求量与「他单已发数」：编辑表单需要这两个数才能对照超发，
+    // 组需求量与「他单已安排数」：编辑表单需要这两个数才能对照超量，
     // 口径与选择器 findPartGroupOptions 一致（排除本单，已作废单不占额度）
     const quota = await this.loadGroupSendQuota(
       items.map((it) => it.orderPartGroupId),
@@ -139,19 +153,23 @@ export class OutsourceService {
         return Object.assign(it, {
           returns: returnsByItem.get(it.id) ?? [],
           qtyPcs: q?.qtyPcs ?? 0,
-          sentQty: q?.sentQty ?? 0,
+          arrangedQty: q?.arrangedQty ?? 0,
+          unitWeight: q?.unitWeight ?? 0,
         });
       }),
     });
   }
 
   /**
-   * 部件组的「组需求支数」与「他单已发支数」。
+   * 部件组的「组需求支数」与「他单已安排应回支数」。
    * excludeDocId 排除本单自身的明细，避免编辑时自己挤占自己的额度
    * （与 findPartGroupOptions 的 excludeDocId 同一口径）。
    */
   private async loadGroupSendQuota(groupIds: number[], excludeDocId?: number) {
-    const map = new Map<number, { qtyPcs: number; sentQty: number }>();
+    const map = new Map<
+      number,
+      { qtyPcs: number; arrangedQty: number; unitWeight: number }
+    >();
     const ids = [...new Set(groupIds.filter((v) => Number.isInteger(v) && v > 0))];
     if (!ids.length) return map;
     const params: Array<number | string> = [OUTSOURCE_STATUS.CANCELLED];
@@ -162,20 +180,25 @@ export class OutsourceService {
     }
     params.push(...ids);
     const rows: any[] = await this.dataSource.query(
-      `SELECT g.id      AS group_id,
-              g.qty_pcs AS qty_pcs,
-              COALESCE((SELECT SUM(oi.send_qty) FROM t_outsource_item oi
+      `SELECT g.id           AS group_id,
+              g.qty_pcs      AS qty_pcs,
+              m.unit_weight  AS unit_weight,
+              COALESCE((SELECT SUM(oi.plan_return_qty) FROM t_outsource_item oi
                          JOIN t_outsource_doc od ON od.id = oi.doc_id
                         WHERE oi.order_part_group_id = g.id AND od.status <> ?${excludeSql}), 0)
-                        AS sent_qty
+                        AS arranged_qty
          FROM t_order_part_group g
+         JOIN t_order_product p ON p.id = g.order_product_id
+         LEFT JOIN t_material m ON m.id = p.material_id
         WHERE g.id IN (${ids.map(() => '?').join(',')})`,
       params,
     );
     rows.forEach((r) => {
       map.set(Number(r.group_id), {
         qtyPcs: Number(r.qty_pcs) || 0,
-        sentQty: Number(r.sent_qty) || 0,
+        arrangedQty: Number(r.arranged_qty) || 0,
+        // 回货登记要按单重折算支数；明细行的发出侧单重已删，改从部件信息带出
+        unitWeight: Number(r.unit_weight) || 0,
       });
     });
     return map;
@@ -183,7 +206,8 @@ export class OutsourceService {
 
   /**
    * 可发外部件组：表面处理非 none 的订单产品行下的部件组，
-   * 附已发外数量（全部未作废发坯单合计）与剩余可发数、单重（自部件信息带出）。
+   * 附他单已安排的应回数量（全部未作废发坯单合计）与剩余应安排数、
+   * 单重（自部件信息带出，供回货登记折算）。
    * 已作废单（status=9）不占用额度；编辑时可用 excludeDocId 排除本单旧明细。
    */
   async findPartGroupOptions(query: QueryPartGroupOptionDto): Promise<PartGroupOption[]> {
@@ -228,10 +252,10 @@ export class OutsourceService {
               (SELECT MIN(pt.cycle_code) FROM t_order_part pt
                 WHERE pt.part_group_id = g.id AND pt.cycle_code IS NOT NULL AND pt.cycle_code <> '')
                                   AS cycleCode,
-              COALESCE((SELECT SUM(oi.send_qty) FROM t_outsource_item oi
+              COALESCE((SELECT SUM(oi.plan_return_qty) FROM t_outsource_item oi
                          JOIN t_outsource_doc od ON od.id = oi.doc_id
                         WHERE oi.order_part_group_id = g.id AND od.status <> ?${excludeSql}), 0)
-                                  AS sentQty
+                                  AS arrangedQty
          FROM t_order_part_group g
          JOIN t_order_product p ON p.id = g.order_product_id
          JOIN t_order o         ON o.id = g.order_id
@@ -244,7 +268,7 @@ export class OutsourceService {
 
     return rows.map((r) => {
       const qtyPcs = Number(r.qtyPcs) || 0;
-      const sentQty = Number(r.sentQty) || 0;
+      const arrangedQty = Number(r.arrangedQty) || 0;
       return {
         orderPartGroupId: Number(r.orderPartGroupId),
         orderId: Number(r.orderId),
@@ -258,20 +282,23 @@ export class OutsourceService {
         surfaceType: r.surfaceType ?? SURFACE_NONE,
         color: r.color ?? null,
         qtyPcs,
-        sentQty,
-        remainQty: Math.max(qtyPcs - sentQty, 0),
+        arrangedQty,
+        remainQty: Math.max(qtyPcs - arrangedQty, 0),
         unitWeight: Number(r.unitWeight) || 0,
       };
     });
   }
 
-  /** 打印数据：单头 + 明细 + 合计（前端 A4 排版渲染） */
+  /**
+   * 打印数据：单头 + 明细 + 合计（前端按四联单版式渲染）。
+   * 发出重量已随发出环节取消，打印页的「重量/单重」两列留空由发货人手写，
+   * 故此处不再返回重量合计。
+   */
   async findPrintData(id: number) {
     const doc = await this.findOne(id);
     const items = (doc as any).items as OutsourceItem[];
     return Object.assign(doc, {
-      totalSendQty: items.reduce((s, it) => s + (it.sendQty || 0), 0),
-      totalSendWeight: this.sumDecimal(items.map((it) => it.sendWeight)),
+      totalPlanReturnQty: items.reduce((s, it) => s + (it.planReturnQty || 0), 0),
     });
   }
 
@@ -291,9 +318,8 @@ export class OutsourceService {
           processorName: dto.processorName,
           surfaceType: dto.surfaceType,
           color: dto.color ?? null,
-          planSendDate: dto.planSendDate ?? null,
           requireBackDate: dto.requireBackDate ?? null,
-          actualSendDate: null,
+          // 发出环节已取消：建单即「待回货」，后续由回货登记推进状态
           status: OUTSOURCE_STATUS.PENDING,
           remark: dto.remark ?? null,
           ...auditOnCreate(user),
@@ -305,13 +331,16 @@ export class OutsourceService {
   }
 
   /**
-   * 编辑：仅「待发出」可改（已发出后明细数量变动会破坏回货口径，须先作废重开单）。
-   * 明细整体重建，故已有回货登记的单不可能走到这里（有回货必已发出）。
+   * 编辑：仅「待回货」可改。明细是整体重建（先删后写），一旦有回货登记，
+   * 重建会把回货流水挂到已被删除的明细行上，故有回货即禁编辑；
+   * 要纠正应回数量走 updateItem（行级修正，不动锚点）。
    */
   async update(id: number, dto: UpdateOutsourceDto, user: CurrentUserPayload) {
     const doc = await this.mustGet(id);
     if (doc.status !== OUTSOURCE_STATUS.PENDING) {
-      throw new BadRequestException('仅「待发出」状态的发坯单可编辑；已发出的单请先作废后重新建单');
+      throw new BadRequestException(
+        '仅「待回货」状态的发坯单可整单编辑；已有回货的单请用行级「修正应回数量」，或先撤销回货登记',
+      );
     }
     this.assertSurfaceType(dto.surfaceType);
     return this.dataSource.transaction(async (mgr) => {
@@ -319,7 +348,6 @@ export class OutsourceService {
         processorName: dto.processorName,
         surfaceType: dto.surfaceType,
         color: dto.color ?? null,
-        planSendDate: dto.planSendDate ?? null,
         requireBackDate: dto.requireBackDate ?? null,
         remark: dto.remark ?? null,
         ...auditOnUpdate(user),
@@ -336,9 +364,9 @@ export class OutsourceService {
   }
 
   /**
-   * 发出明细数量修正（设计文档 §7.3）：已发出后磅秤复核、折算纠错的场景。
-   * 只改数量口径与备注（不动锚点、不增删行），改完立即重算回齐状态——
-   * 下调发出数可能使原「部分回货」变为「已回齐」，上调则反向回退。
+   * 应回数量修正（设计文档 §7.3）：已有回货、整单不可编辑后的纠错通道。
+   * 只改应回数量与备注（不动锚点、不增删行），改完立即重算回齐状态——
+   * 下调应回数可能使原「部分回货」变为「已回齐」，上调则反向回退。
    */
   async updateItem(itemId: number, dto: UpdateOutsourceItemDto, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
@@ -348,18 +376,16 @@ export class OutsourceService {
         .setLock('pessimistic_write')
         .where('i.id = :id', { id: itemId })
         .getOne();
-      if (!item) throw new NotFoundException('发出明细行不存在');
+      if (!item) throw new NotFoundException('外发明细行不存在');
 
       const doc = await this.mustGet(item.docId, mgr);
       if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-        throw new BadRequestException('发坯单已作废，不能修改发出数量');
+        throw new BadRequestException('发坯单已作废，不能修改应回数量');
       }
       // 行级人工改数：只动更新人（这行是谁修正的），保留原录入人
       await mgr.getRepository(OutsourceItem).update(itemId, {
         ...auditOnUpdate(user),
-        sendWeight: String(dto.sendWeight ?? 0),
-        unitWeight: String(dto.unitWeight ?? 0),
-        sendQty: dto.sendQty,
+        planReturnQty: dto.planReturnQty,
         remark: dto.remark ?? null,
       });
       await this.refreshItemAndDoc(mgr, item.docId, itemId, user);
@@ -408,9 +434,7 @@ export class OutsourceService {
         productModel: snap.productModel,
         dimensionText: snap.dimensionText,
         cycleCode: snap.cycleCode,
-        sendWeight: String(it.sendWeight ?? 0),
-        unitWeight: String(it.unitWeight ?? 0),
-        sendQty: it.sendQty,
+        planReturnQty: it.planReturnQty,
         returnedQty: 0,
         remark: it.remark ?? null,
         sort: it.sort ?? i,
@@ -427,24 +451,8 @@ export class OutsourceService {
 
   /* ==================== 状态机 ==================== */
 
-  /** 登记实际发外日期：1待发出 → 2已发出 */
-  async send(id: number, dto: SendOutsourceDto, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
-      throw new BadRequestException('发坯单已作废，不能登记发出');
-    }
-    if (doc.status !== OUTSOURCE_STATUS.PENDING) {
-      throw new BadRequestException('该发坯单已登记发出，不能重复登记');
-    }
-    const itemCount = await this.itemRepo.count({ where: { docId: id } });
-    if (!itemCount) throw new BadRequestException('发坯单没有发出明细，不能登记发出');
-    await this.docRepo.update(id, {
-      actualSendDate: dto.actualSendDate,
-      status: OUTSOURCE_STATUS.SENT,
-      ...auditOnUpdate(user),
-    });
-    return { id, status: OUTSOURCE_STATUS.SENT };
-  }
+  // 2026-08-10：send()（登记实际发外日期，1→2）已随发出环节整体删除。
+  // 建单即「待回货」，状态只由回货登记推进。
 
   /** 手工关闭：3部分回货 → 4已回齐（尾数不回/损耗核销），原因必填 */
   async close(id: number, dto: CloseOutsourceDto, user: CurrentUserPayload) {
@@ -460,7 +468,7 @@ export class OutsourceService {
     return { id, status: OUTSOURCE_STATUS.RETURNED_ALL };
   }
 
-  /** 作废：仅未发出且无回货登记时允许（§7.3） */
+  /** 作废：仅「待回货」且无任何回货登记时允许（§7.3） */
   async cancel(id: number, user: CurrentUserPayload) {
     const doc = await this.mustGet(id);
     if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
@@ -473,7 +481,7 @@ export class OutsourceService {
       );
     }
     if (doc.status !== OUTSOURCE_STATUS.PENDING) {
-      throw new BadRequestException('已发出的发坯单不能作废；如需处理尾数请使用「关闭」');
+      throw new BadRequestException('已有回货的发坯单不能作废；如需处理尾数请使用「关闭」');
     }
     await this.docRepo.update(id, { status: OUTSOURCE_STATUS.CANCELLED, ...auditOnUpdate(user) });
     return { id, status: OUTSOURCE_STATUS.CANCELLED };
@@ -482,8 +490,8 @@ export class OutsourceService {
   /* ==================== 回货登记 ==================== */
 
   /**
-   * 登记一条回货：写流水 → 回写明细累计回货数 → 重算单头状态（2→3→4）。
-   * 回货数允许超过发出数（重量折算误差，§7.6），后端不拦截，由界面提示。
+   * 登记一条回货：写流水 → 回写明细累计回货数 → 重算单头状态（1→3→4）。
+   * 回货数允许超过应回数（重量折算误差，§7.6），后端不拦截，由界面提示。
    * 全程在事务内并对明细行加锁，防并发重复登记导致累计数错乱。
    */
   async createReturn(itemId: number, dto: CreateOutsourceReturnDto, user: CurrentUserPayload) {
@@ -494,15 +502,14 @@ export class OutsourceService {
         .setLock('pessimistic_write')
         .where('i.id = :id', { id: itemId })
         .getOne();
-      if (!item) throw new NotFoundException('发出明细行不存在');
+      if (!item) throw new NotFoundException('外发明细行不存在');
 
       const doc = await this.mustGet(item.docId, mgr);
       if (doc.status === OUTSOURCE_STATUS.CANCELLED) {
         throw new BadRequestException('发坯单已作废，不能登记回货');
       }
-      if (doc.status === OUTSOURCE_STATUS.PENDING) {
-        throw new BadRequestException('发坯单尚未登记发出，不能登记回货');
-      }
+      // 发出环节取消后「待回货」就是等货回来的正常态，不再有前置的发出校验；
+      // 只有作废单拦住（其余状态含已回齐都允许补登尾数）。
 
       await mgr.getRepository(OutsourceReturn).save(
         mgr.getRepository(OutsourceReturn).create({
@@ -560,16 +567,18 @@ export class OutsourceService {
     if (!doc) return;
     const items = await mgr.getRepository(OutsourceItem).find({ where: { docId } });
     const derived = deriveOutsourceStatus(
-      !!doc.actualSendDate,
-      items.map((it) => ({ sendQty: it.sendQty, returnedQty: it.returnedQty })),
+      items.map((it) => ({
+        planReturnQty: it.planReturnQty,
+        returnedQty: it.returnedQty,
+      })),
     );
     const hadManualClose = !!doc.closeReason;
-    // 人工关闭后又新增回货：仍保持已回齐；回货全撤销（派生回落已发出）才清除关闭原因
+    // 人工关闭后又新增回货：仍保持已回齐；回货全撤销（派生回落待回货）才清除关闭原因
     const nextStatus =
       hadManualClose && derived === OUTSOURCE_STATUS.PARTIAL_RETURNED
         ? OUTSOURCE_STATUS.RETURNED_ALL
         : derived;
-    const clearClose = hadManualClose && derived === OUTSOURCE_STATUS.SENT;
+    const clearClose = hadManualClose && derived === OUTSOURCE_STATUS.PENDING;
     await mgr.getRepository(OutsourceDoc).update(docId, {
       status: nextStatus,
       ...(clearClose ? { closeReason: null } : {}),
@@ -590,5 +599,18 @@ export class OutsourceService {
   private sumDecimal(values: Array<string | number | null | undefined>): number {
     const sum = values.reduce<number>((s, v) => s + (Number(v) || 0), 0);
     return Math.round(sum * 100) / 100;
+  }
+
+  /**
+   * DATE 列 → 'YYYY-MM-DD'。原生 query 走 mysql2 时 DATE 可能回 Date 对象，
+   * 直接 toISOString 会因时区把日期减一天，故按本地年月日拼。
+   */
+  private dateText(v: any): string | null {
+    if (!v) return null;
+    if (v instanceof Date) {
+      const p = (n: number) => String(n).padStart(2, '0');
+      return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+    }
+    return String(v).slice(0, 10);
   }
 }

@@ -110,11 +110,11 @@ export interface LedgerOutsourceRow {
   surfaceType: string | null;
   color: string | null;
   status: number;
-  sendDate: string | null;
+  /** 计划回货日期 */
   requireBackDate: string | null;
-  sendWeight: number;
-  unitWeight: number;
-  sendQty: number;
+  /** 最后一次回货日期（实际回货按明细行分批登记） */
+  lastReturnDate: string | null;
+  planReturnQty: number;
   returnedQty: number;
   pendingQty: number;
 }

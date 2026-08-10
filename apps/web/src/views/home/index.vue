@@ -370,8 +370,26 @@ export default { name: 'HomeDashboard' };
 </script>
 
 <style scoped lang="scss">
+/*
+ * 覆盖 layout `.main > * { min-height: 0 }`：手机端主区为 flex 列时，
+ * 首页若被压成视口高度，欢迎卡内容溢出就会在卡片内出现垂直滚动条。
+ */
+.page {
+  min-height: min-content;
+  height: auto;
+  overflow: visible;
+}
+
 .welcome-card {
+  flex-shrink: 0;
   margin-bottom: 12px;
+  overflow: visible;
+
+  :deep(.el-card__body) {
+    overflow: visible;
+    max-height: none;
+  }
+
   .welcome__text {
     .welcome-greet {
       margin: 0 0 12px;
@@ -394,6 +412,7 @@ export default { name: 'HomeDashboard' };
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
+  overflow: visible;
 }
 
 .cal-chip {
@@ -471,10 +490,19 @@ export default { name: 'HomeDashboard' };
 }
 
 @media (max-width: 768px) {
+  .welcome-greet {
+    font-size: 18px !important; /* 覆盖全局 h2 压缩，与卡片协调 */
+  }
+
   .cal-chip {
     border-radius: 10px;
     width: 100%;
-    b { white-space: normal; }
+    box-sizing: border-box;
+    overflow: visible;
+    b {
+      white-space: normal;
+      word-break: break-word;
+    }
   }
 }
 .no-stat {

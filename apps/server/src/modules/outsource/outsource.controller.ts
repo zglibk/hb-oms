@@ -16,7 +16,6 @@ import {
   CreateOutsourceReturnDto,
   QueryOutsourceDto,
   QueryPartGroupOptionDto,
-  SendOutsourceDto,
   UpdateOutsourceDto,
   UpdateOutsourceItemDto,
 } from './dto/outsource.dto';
@@ -72,16 +71,8 @@ export class OutsourceController {
     return this.service.update(id, dto, user);
   }
 
-  @Post(':id/send')
-  @RequirePermissions('outsource:send')
-  @OperationLog('外发管理', '登记发出')
-  async send(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: SendOutsourceDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.service.send(id, dto, user);
-  }
+  // 2026-08-10：`POST :id/send`（登记发出）已随发出环节整体下线，
+  // 权限点 outsource:send 一并从清单删除、迁移清理库中残留行。
 
   @Post(':id/close')
   @RequirePermissions('outsource:close')
@@ -104,7 +95,7 @@ export class OutsourceController {
   /** 发出明细数量修正（已发出后磅秤复核纠错；改完自动重算回齐状态） */
   @Put('item/:itemId')
   @RequirePermissions('outsource:update')
-  @OperationLog('外发管理', '修正发出数量')
+  @OperationLog('外发管理', '修正应回数量')
   async updateItem(
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() dto: UpdateOutsourceItemDto,

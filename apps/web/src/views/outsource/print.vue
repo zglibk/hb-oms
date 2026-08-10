@@ -110,6 +110,10 @@ import { loadDict } from '@/composables/useDict';
  *    已印在右上 No. 处，故该格改印**表面处理**——电镀/电泳/喷涂对加工商是关键信息。
  * 2. MES 一张单只有一个产品（1 行 + 10 空行）；hb-oms 发坯单是多明细，
  *    故按每页 11 行分页，不足补空行保持版式，超出自动续页。
+ *
+ * 2026-08-10 系统取消发出环节（发货不过磅、不留发出数量记录）后，
+ * 「重量（KG）」与「单重」两列**刻意留空**，由发货人现场过磅手写。
+ * 版式与列宽一律不动——这是交给加工商的对外单据，换纸即对齐，不随系统内简化而改。
  */
 
 const ROWS_PER_PAGE = 11; // 表体 101mm − 表头 13mm，每行 8mm
@@ -153,9 +157,12 @@ const surfaceLabel = computed(() => {
   return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
 });
 
-/** 优先实际发外日期，未登记发出时用计划发外日期 */
+/**
+ * 单据日期取**建单日期**。原先取实际/计划发外日期，两者已随发出环节删除；
+ * 建单日期在实务上就是发货当天，且重复打印结果稳定不变。
+ */
 const documentDate = computed(() => {
-  const date = doc.value?.actualSendDate || doc.value?.planSendDate || '';
+  const date = doc.value?.createdAt || '';
   const [year = '', month = '', day = ''] = String(date).slice(0, 10).split('-');
   return { year, month, day };
 });
@@ -175,8 +182,9 @@ const pages = computed<PrintRow[][]>(() => {
     color,
     // hb-oms 无包装方式字段，留空供手写
     packaging: '',
-    weightKg: displayNumber(it.sendWeight),
-    unitWeight: displayNumber(it.unitWeight),
+    // 发出环节已取消，系统内不再有发出重量/单重：两列留空供现场过磅手写
+    weightKg: '',
+    unitWeight: '',
     remark: it.remark || '',
   }));
   const total = Math.max(Math.ceil(rows.length / ROWS_PER_PAGE), 1);
@@ -188,12 +196,6 @@ const pages = computed<PrintRow[][]>(() => {
     ];
   });
 });
-
-function displayNumber(value?: string | number | null) {
-  if (value === null || value === undefined || value === '') return '';
-  const n = Number(value);
-  return Number.isFinite(n) ? String(n) : String(value);
-}
 
 async function init() {
   if (!id) {

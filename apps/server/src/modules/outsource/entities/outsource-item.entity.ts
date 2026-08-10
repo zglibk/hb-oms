@@ -8,10 +8,13 @@ import {
 } from 'typeorm';
 
 /**
- * 外发发出明细行（设计文档 §4.3）。
+ * 外发明细行（设计文档 §4.3）。
  * 锚点是**订单部件组**（order_part_group_id）——外发按组整体发外，不分左右边别；
  * 其余订单字段为展示快照，订单侧后续修改不回写本表（§5.5 业务流水快照原则）。
- * decimal 列经 TypeORM 返回字符串，服务层统一 Number() 折算。
+ *
+ * 2026-08-10 发出环节取消：删发出重量/单重两列（过磅折算已下线），
+ * 「发出数量」改名「应回数量」作为回齐判定基准。回货侧的重量/单重仍在
+ * t_outsource_return 上，回货登记照旧折算。
  */
 @Entity('t_outsource_item')
 export class OutsourceItem {
@@ -57,39 +60,25 @@ export class OutsourceItem {
   @Column({ name: 'cycle_code', type: 'varchar', length: 64, nullable: true, comment: '周期码快照（自部件行追溯码）' })
   cycleCode: string | null;
 
+  /**
+   * 应回数量（支）：本单该部件组预计要回多少，**回齐判定的基准**。
+   * 建单时默认带出「组需求 − 他单已安排」，允许人工改（同一部件组可拆多张单外发）。
+   * 2026-08-10 由原「发出数量」改名而来——发出环节取消后不再有过磅折算，
+   * 这个数是计划值而非实测值。
+   */
   @Column({
-    name: 'send_weight',
-    type: 'decimal',
-    precision: 10,
-    scale: 2,
-    default: 0,
-    comment: '发出重量（kg）',
-  })
-  sendWeight: string;
-
-  @Column({
-    name: 'unit_weight',
-    type: 'decimal',
-    precision: 10,
-    scale: 4,
-    default: 0,
-    comment: '单重（kg/支），默认自部件信息带出，可改',
-  })
-  unitWeight: string;
-
-  @Column({
-    name: 'send_qty',
+    name: 'plan_return_qty',
     type: 'int',
     default: 0,
-    comment: '发出数量（支）= 发出重量 ÷ 单重 四舍五入，允许人工微调',
+    comment: '应回数量（支）：本单该部件组预计回多少，回货数≥此数即该行回齐',
   })
-  sendQty: number;
+  planReturnQty: number;
 
   @Column({
     name: 'returned_qty',
     type: 'int',
     default: 0,
-    comment: '累计回货数量（支）：由回货登记汇总维护，允许超过发出数（重量折算误差）',
+    comment: '累计回货数量（支）：由回货登记汇总维护，允许超过应回数（重量折算误差）',
   })
   returnedQty: number;
 

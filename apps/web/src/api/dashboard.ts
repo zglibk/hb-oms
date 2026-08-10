@@ -40,7 +40,8 @@ export interface DashboardOutsourceRow {
   /** 超期天数 */
   days: number;
   status: number;
-  sendQty: number;
+  /** 应回数量（本单各明细行合计） */
+  planReturnQty: number;
   returnedQty: number;
   pendingQty: number;
 }

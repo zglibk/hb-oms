@@ -40,12 +40,7 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="计划发外">
-              <el-date-picker v-model="form.planSendDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="要求回货">
+            <el-form-item label="计划回货">
               <el-date-picker v-model="form.requireBackDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
@@ -57,10 +52,10 @@
         </el-row>
 
         <div class="section-title">
-          发出明细
+          外发明细
           <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
           <span class="sec-sum">
-            合计 <b>{{ totalQty }}</b> 支 ／ <b>{{ totalWeight }}</b> kg
+            应回合计 <b>{{ totalQty }}</b> 支
           </span>
         </div>
 
@@ -71,30 +66,14 @@
           <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
           <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
           <el-table-column label="客户" prop="customerName" width="120" show-overflow-tooltip />
-          <el-table-column label="组需求/已发" width="110" align="center">
-            <template #default="{ row }">{{ row.qtyPcs }} / {{ row.sentQty }}</template>
+          <el-table-column label="组需求/已安排" width="120" align="center">
+            <template #default="{ row }">{{ row.qtyPcs }} / {{ row.arrangedQty }}</template>
           </el-table-column>
-          <el-table-column label="发出重量(kg)" width="120" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.sendWeight" :min="0" :precision="2" :step="1" :controls="false"
-                style="width: 100%" @change="() => syncQty(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="单重(kg/支)" width="115" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.unitWeight" :min="0" :precision="4" :step="0.01" :controls="false"
-                style="width: 100%" @change="() => syncQty(row)"
-              />
-            </template>
-          </el-table-column>
-          <!-- 发出数量由重量÷单重自动折算（syncQty），仍允许人工微调；min 取 0 与重量列一致，
+          <!-- 应回数量默认带出「组需求 − 他单已安排」，可改；min 取 0，
                「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
-          <el-table-column label="发出数量(支)" width="120" align="center">
+          <el-table-column label="应回数量(支)" width="120" align="center">
             <template #default="{ row }">
-              <el-input-number v-model="row.sendQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
+              <el-input-number v-model="row.planReturnQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="120">
@@ -143,7 +122,7 @@
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
         <el-table-column label="组需求(支)" prop="qtyPcs" width="100" align="center" />
-        <el-table-column label="已发(支)" prop="sentQty" width="90" align="center" />
+        <el-table-column label="已安排(支)" prop="arrangedQty" width="100" align="center" />
         <el-table-column label="剩余(支)" width="90" align="center">
           <template #default="{ row }">
             <span :class="{ 'remain-zero': row.remainQty <= 0 }">{{ row.remainQty }}</span>
@@ -171,7 +150,7 @@ import {
   updateOutsource,
   type PartGroupOption,
 } from '@/api/outsource';
-import { SURFACE_NONE, formatBlankNo, qtyFromWeight } from '@/constants/dict';
+import { SURFACE_NONE, formatBlankNo } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 
 const route = useRoute();
@@ -192,10 +171,8 @@ interface ItemRow {
   productModel: string | null;
   dimensionText: string | null;
   qtyPcs: number;
-  sentQty: number;
-  sendWeight: number;
-  unitWeight: number;
-  sendQty: number;
+  arrangedQty: number;
+  planReturnQty: number;
   remark: string;
 }
 
@@ -203,7 +180,7 @@ const form = reactive({
   processorName: '',
   surfaceType: '',
   color: '',
-  planSendDate: '' as string | null,
+  /** 计划回货日期（后端列名 require_back_date） */
   requireBackDate: '' as string | null,
   remark: '',
   items: [] as ItemRow[],
@@ -221,10 +198,7 @@ loadDict('surface_type').then((rows: any[]) => {
 /** 外发可选表面处理 = 字典项去掉保留值 none（无表面处理不外发） */
 const outsourceSurfaces = computed(() => surfaceDict.value.filter((o) => o.value !== SURFACE_NONE));
 
-const totalQty = computed(() => form.items.reduce((s, it) => s + (it.sendQty || 0), 0));
-const totalWeight = computed(
-  () => Math.round(form.items.reduce((s, it) => s + (it.sendWeight || 0), 0) * 100) / 100,
-);
+const totalQty = computed(() => form.items.reduce((s, it) => s + (it.planReturnQty || 0), 0));
 
 async function init() {
   if (!editId.value) return;
@@ -235,7 +209,6 @@ async function init() {
     form.processorName = doc.processorName;
     form.surfaceType = doc.surfaceType;
     form.color = doc.color ?? '';
-    form.planSendDate = doc.planSendDate ? String(doc.planSendDate).slice(0, 10) : '';
     form.requireBackDate = doc.requireBackDate ? String(doc.requireBackDate).slice(0, 10) : '';
     form.remark = doc.remark ?? '';
     form.items = (doc.items ?? []).map((it) => ({
@@ -245,12 +218,10 @@ async function init() {
       productionNo: it.productionNo,
       productModel: it.productModel,
       dimensionText: it.dimensionText,
-      // 组需求与「他单已发」由详情接口带出（已排除本单，口径同选择器），供编辑时对照超发
+      // 组需求与「他单已安排」由详情接口带出（已排除本单，口径同选择器），供编辑时对照超量
       qtyPcs: it.qtyPcs ?? 0,
-      sentQty: it.sentQty ?? 0,
-      sendWeight: Number(it.sendWeight) || 0,
-      unitWeight: Number(it.unitWeight) || 0,
-      sendQty: it.sendQty,
+      arrangedQty: it.arrangedQty ?? 0,
+      planReturnQty: it.planReturnQty,
       remark: it.remark ?? '',
     }));
   } finally {
@@ -258,12 +229,6 @@ async function init() {
   }
 }
 init();
-
-/** 重量或单重变化 → 自动折算发出数量（共享包同一口径，仍可人工微调） */
-function syncQty(row: ItemRow) {
-  const qty = qtyFromWeight(row.sendWeight, row.unitWeight);
-  if (qty > 0) row.sendQty = qty;
-}
 
 function onSurfaceChange() {
   // 表面处理变了，选择器的候选集合随之变化，已选明细保留由用户自行核对
@@ -316,14 +281,11 @@ function confirmPick() {
       productModel: o.productModel,
       dimensionText: o.dimensionText,
       qtyPcs: o.qtyPcs,
-      sentQty: o.sentQty,
-      // 单重自部件信息带出，可改；重量与数量都留空由过磅实测录入
-      unitWeight: o.unitWeight,
-      // 外发按**实际过磅重量**结算：发出数量 = 发出重量 ÷ 单重（syncQty 自动折算）。
-      // 这里刻意**不**用订单数量预填——订单数是"应该发多少"，发坯单要记的是"实际发了多少"，
-      // 拿订单数当默认值会让人顺手保存成一个没过磅的假数，回货对账时才发现对不上。
-      sendWeight: 0,
-      sendQty: 0,
+      arrangedQty: o.arrangedQty,
+      // 应回数量默认 = 组需求 − 他单已安排（remainQty），可改。
+      // 发出环节取消后这是**计划值**而非过磅实测值，用剩余额度预填最省事；
+      // 同一部件组拆多张单外发时，各单的应回数相加即该组的总安排量。
+      planReturnQty: o.remainQty,
       remark: '',
     });
   });
@@ -341,26 +303,23 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 async function onSave() {
   await formRef.value?.validate();
   if (!form.items.length) {
-    ElMessage.warning('请至少添加一条发出明细');
+    ElMessage.warning('请至少添加一条外发明细');
     return;
   }
-  const bad = form.items.findIndex((it) => !it.sendQty || it.sendQty <= 0);
+  const bad = form.items.findIndex((it) => !it.planReturnQty || it.planReturnQty <= 0);
   if (bad >= 0) {
-    ElMessage.warning(`第 ${bad + 1} 行发出数量必须大于 0`);
+    ElMessage.warning(`第 ${bad + 1} 行应回数量必须大于 0`);
     return;
   }
   const payload = {
     processorName: form.processorName,
     surfaceType: form.surfaceType,
     color: form.color || undefined,
-    planSendDate: form.planSendDate || undefined,
     requireBackDate: form.requireBackDate || undefined,
     remark: form.remark || undefined,
     items: form.items.map((it, i) => ({
       orderPartGroupId: it.orderPartGroupId,
-      sendWeight: it.sendWeight || 0,
-      unitWeight: it.unitWeight || 0,
-      sendQty: it.sendQty,
+      planReturnQty: it.planReturnQty,
       remark: it.remark || undefined,
       sort: i,
     })),

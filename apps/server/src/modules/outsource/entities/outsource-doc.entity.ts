@@ -11,7 +11,10 @@ import {
  * 外发（发坯）单头（设计文档 §4.3）。
  * 一张单 = 一次发给同一加工商、同一表面处理+颜色的一批半成品；
  * 明细行锚定订单部件组，回货登记挂在明细行下（支持分批回货）。
- * 状态由回货登记自动推进 2→3→4，也可从 3 手工关闭为 4（须填原因）。
+ *
+ * 2026-08-10：**取消发出环节**（使用部门发货不过磅、不留发出记录），
+ * 单头不再有计划/实际发外日期，建单即「待回货」；状态由回货登记自动
+ * 推进 1→3→4，也可从 3 手工关闭为 4（须填原因）。
  */
 @Entity('t_outsource_doc')
 export class OutsourceDoc {
@@ -41,27 +44,18 @@ export class OutsourceDoc {
   @Column({ type: 'varchar', length: 64, nullable: true, comment: '颜色' })
   color: string | null;
 
-  @Index('idx_plan_send_date')
-  @Column({ name: 'plan_send_date', type: 'date', nullable: true, comment: '计划发外日期' })
-  planSendDate: string | null;
-
-  @Index('idx_actual_send_date')
-  @Column({
-    name: 'actual_send_date',
-    type: 'date',
-    nullable: true,
-    comment: '实际发外日期（登记后状态推进为 2已发出）',
-  })
-  actualSendDate: string | null;
-
-  @Column({ name: 'require_back_date', type: 'date', nullable: true, comment: '要求回货日期' })
+  /**
+   * 计划回货日期（列名 require_back_date 保持不变——内部标识稳定约定，
+   * 避免为了改个叫法牵动迁移/索引/看板 SQL）。看板「外发超期未回齐」按它判定。
+   */
+  @Column({ name: 'require_back_date', type: 'date', nullable: true, comment: '计划回货日期' })
   requireBackDate: string | null;
 
   @Index('idx_status')
   @Column({
     type: 'tinyint',
     default: 1,
-    comment: '状态：1待发出 2已发出 3部分回货 4已回齐 9已作废',
+    comment: '状态：1待回货 3部分回货 4已回齐 9已作废（2已发出为弃用值，发出环节已取消）',
   })
   status: number;
 
