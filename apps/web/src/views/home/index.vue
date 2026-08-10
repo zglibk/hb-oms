@@ -362,6 +362,28 @@ export default { name: 'HomeDashboard' };
 
 <style scoped lang="scss">
 /*
+ * 欢迎词专用中文楷书（马善政楷书 Ma Shan Zheng）。
+ *
+ * **声明放在首页组件里而不是全局样式**：字体文件 2.6MB，全站只有欢迎词这一处用。
+ * @font-face 是懒加载的——浏览器只在真正有元素用到这个 family 时才去下它，
+ * 放这里能保证除首页外的页面一个字节都不下。（scoped 只作用于选择器，
+ * @font-face 这类 at-rule 不受影响，照常全局生效。）
+ *
+ * **不做字体子集化**：欢迎词是「问候语 + 用户姓名」，姓名是任意汉字、无法预先
+ * 枚举，砍字集会让某些人的名字缺字变成豆腐块，所以只能带完整中文字体。
+ *
+ * **font-display: swap**：2.6MB 在外网可能要几秒，期间先用系统楷体/默认字体把字
+ * 显示出来，字体到了再换。不加的话浏览器默认 block，欢迎词会先空白一段时间。
+ */
+@font-face {
+  font-family: 'Ma Shan Zheng';
+  src: url('../../assets/fonts/ma-shan-zheng-zh.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
  * 覆盖 layout `.main > * { min-height: 0 }`：手机端主区为 flex 列时，
  * 首页若被压成视口高度，欢迎卡内容溢出就会在卡片内出现垂直滚动条。
  */
@@ -384,9 +406,13 @@ export default { name: 'HomeDashboard' };
   .welcome__text {
     .welcome-greet {
       margin: 0 0 12px;
-      font-size: 20px;
+      /* 回退链：自带楷书 → 系统楷体（Win 楷体 / macOS 楷体）→ 通用衬线，
+         字体没下完或加载失败时仍是楷味，不会突兀地掉成黑体 */
+      font-family: 'Ma Shan Zheng', KaiTi, STKaiti, '楷体', serif;
+      /* 楷书字面比黑体小一圈，同字号看着偏弱，故略放大并收紧字距 */
+      font-size: 24px;
       font-weight: 400;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       transition: color 0.35s ease;
 
       &.is-night { color: #64748b; }
@@ -482,7 +508,7 @@ export default { name: 'HomeDashboard' };
 
 @media (max-width: 768px) {
   .welcome-greet {
-    font-size: 18px !important; /* 覆盖全局 h2 压缩，与卡片协调 */
+    font-size: 21px !important; /* 覆盖全局 h2 压缩；楷书字面偏小，比原 18px 略放大 */
   }
 
   .cal-chip {
