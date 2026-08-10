@@ -57,10 +57,10 @@ export class QueryLedgerDto {
   @IsOptional() @Transform(toBoolean) onlyOverdue?: boolean;
 }
 
-/** 台账行内展开：查某部件组的出入库/外发/装配三条流水 */
+/** 台账行内展开：查某产品行的出入库/外发/装配三条流水 */
 export class QueryLedgerDetailDto {
   @Type(() => Number)
-  @IsInt({ message: '部件组ID必须是整数' })
-  @Min(1, { message: '部件组ID不合法' })
-  orderPartGroupId: number;
+  @IsInt({ message: '产品行ID必须是整数' })
+  @Min(1, { message: '产品行ID不合法' })
+  orderProductId: number;
 }

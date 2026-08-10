@@ -18,15 +18,15 @@ const SIDE_VALUES = ['', 'left', 'right'];
 
 /**
  * 成品期初明细行（设计文档 §4.8）：**两种形态二选一**
- * - 挂订单：填 `orderPartGroupId`，其余展示字段由服务端从订单侧快照读取（客户端传了也不采信）；
- * - 纯属性（不挂订单）：省略 `orderPartGroupId`，改填货号等属性，只进库存数、不参与订单欠数。
+ * - 挂订单：填 `orderProductId`，其余展示字段由服务端从订单侧快照读取（客户端传了也不采信）；
+ * - 纯属性（不挂订单）：省略 `orderProductId`，改填货号等属性，只进库存数、不参与订单欠数。
  *
  * 这里不用 class-validator 表达"二选一"（写出来晦涩且报错难懂），
  * 改由 service 逐行判定并给出明确中文提示。
  */
 export class OpeningFinishedItemDto {
-  /** 挂订单时填部件组ID；省略或 0 = 纯属性行 */
-  @IsOptional() @Type(() => Number) @IsInt({ message: '部件组ID必须为整数' }) orderPartGroupId?: number;
+  /** 挂订单时填产品行ID；省略或 0 = 纯属性行 */
+  @IsOptional() @Type(() => Number) @IsInt({ message: '产品行ID必须为整数' }) orderProductId?: number;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 

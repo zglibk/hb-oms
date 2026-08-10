@@ -76,6 +76,10 @@
             {{ row.docNo }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
+        <!-- 生产单号取自明细快照：一张单可以跨多张订单，故去重后并列（明细见展开行） -->
+        <el-table-column label="生产单号" width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ productionNos(row) }}</template>
+        </el-table-column>
         <el-table-column label="业务类型" width="110" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="tagTypeOf(FINISHED_BIZ_TYPE_OPTIONS, row.bizType)">
@@ -293,6 +297,16 @@ async function onReverse(row: FinishedDocRow) {
 
 function dateText(v: string | null): string {
   return v ? String(v).slice(0, 10) : '—';
+}
+
+/**
+ * 单据头的生产单号：由明细快照去重并列。
+ * 单头本身不存生产单号（一张单可以跨多张订单，存单头就得二选一），
+ * 明细里每行都带订单侧快照，去重后并列即可；不挂订单的纯属性期初行没有此号，跳过。
+ */
+function productionNos(row: FinishedDocRow): string {
+  const vs = [...new Set((row.items ?? []).map((it) => it.productionNo).filter(Boolean))];
+  return vs.length ? vs.join('/') : '—';
 }
 </script>
 

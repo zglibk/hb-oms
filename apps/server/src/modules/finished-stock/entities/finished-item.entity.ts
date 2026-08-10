@@ -10,10 +10,12 @@ import {
 /**
  * 成品出入库明细（设计文档 §4.5）。
  *
- * 锚点是**订单部件组 + 边别**；含卡口组合的产品按左右分行，闸门与结存按 side 分别核算。
+ * 锚点是**订单产品行 + 边别**（2026-08-10 由部件组升级：装配产出的是整套滑轨，
+ * 入库对象就是这一整套，不该再拆回外轨/内轨分别入库）；含卡口组合的产品按左右分行，
+ * 闸门与结存按 side 分别核算。
  * `quantity` **恒为正**，出入方向由单头 direction 表达——聚合时统一 `direction × quantity`，
  * 红字单方向与原单相反，因此天然抵扣、无需特判。
- * 锚点三列为 0 表示「不挂订单的纯属性期初行」（只计库存数，不参与任何订单欠数，§7.9）。
+ * 锚点两列为 0 表示「不挂订单的纯属性期初行」（只计库存数，不参与任何订单欠数，§7.9）。
  */
 @Entity('t_finished_item')
 export class FinishedItem {
@@ -33,17 +35,14 @@ export class FinishedItem {
   })
   orderId: number;
 
-  @Column({ name: 'order_product_id', type: 'int', default: 0, comment: '冗余订单产品行ID；0=纯属性期初行' })
-  orderProductId: number;
-
-  @Index('idx_part_group')
+  @Index('idx_product')
   @Column({
-    name: 'order_part_group_id',
+    name: 'order_product_id',
     type: 'int',
     default: 0,
-    comment: '锚点：订单部件组（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
+    comment: '锚点：订单产品行（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
   })
-  orderPartGroupId: number;
+  orderProductId: number;
 
   @Column({ name: 'order_no', type: 'varchar', length: 32, nullable: true, comment: '订单号快照' })
   orderNo: string | null;

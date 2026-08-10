@@ -11,8 +11,8 @@ import {
 /**
  * 成品库存余额（设计文档 §4.5）。
  *
- * 唯一键 `(order_part_group_id, side, batch_no, attr_key)`：
- * - 挂订单的行由「部件组 + 边别 + 批次」唯一，`attr_key` 恒为空串；
+ * 唯一键 `(order_product_id, side, batch_no, attr_key)`：
+ * - 挂订单的行由「产品行 + 边别 + 批次」唯一，`attr_key` 恒为空串；
  * - 不挂订单的纯属性期初行锚点列为 0，改由 `attr_key`（属性指纹）兜底唯一。
  *   设计文档原写「应用层保证」，但并发下应用层判重挡不住重复行，故下沉到数据库唯一键。
  *
@@ -20,7 +20,7 @@ import {
  * 任何业务代码都不得直接改 quantity（§4.5 / §7.8）。
  */
 @Entity('t_finished_balance')
-@Unique('uk_balance', ['orderPartGroupId', 'side', 'batchNo', 'attrKey'])
+@Unique('uk_balance', ['orderProductId', 'side', 'batchNo', 'attrKey'])
 export class FinishedBalance {
   @PrimaryGeneratedColumn()
   id: number;
@@ -29,16 +29,13 @@ export class FinishedBalance {
   @Column({ name: 'order_id', type: 'int', default: 0, comment: '冗余订单ID；0=不挂订单的纯属性期初行' })
   orderId: number;
 
-  @Column({ name: 'order_product_id', type: 'int', default: 0, comment: '冗余订单产品行ID；0=纯属性期初行' })
-  orderProductId: number;
-
   @Column({
-    name: 'order_part_group_id',
+    name: 'order_product_id',
     type: 'int',
     default: 0,
-    comment: '锚点：订单部件组；0=纯属性期初行（只计库存数，不参与任何订单欠数）',
+    comment: '锚点：订单产品行；0=纯属性期初行（只计库存数，不参与任何订单欠数）',
   })
-  orderPartGroupId: number;
+  orderProductId: number;
 
   @Index('idx_item_no')
   @Column({ name: 'item_no', type: 'varchar', length: 64, default: '', comment: '货号（属性快照，纯属性行的匹配依据）' })

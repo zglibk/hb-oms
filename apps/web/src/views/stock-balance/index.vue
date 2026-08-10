@@ -31,7 +31,7 @@
     <el-card shadow="never">
       <div class="tip-bar">
         <el-icon><InfoFilled /></el-icon>
-        库存只由出入库单据的<b>确认</b>与<b>红字冲销</b>驱动，不能直接修改；结存按「部件组 + 边别 + 批次」分行。
+        库存只由出入库单据的<b>确认</b>与<b>红字冲销</b>驱动，不能直接修改；结存按「产品 + 边别 + 批次」分行。
         <span class="total">当前筛选结存合计 <b>{{ totalQty }}</b> 支</span>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">

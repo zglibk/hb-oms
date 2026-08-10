@@ -1,19 +1,19 @@
 import request from '@/utils/request';
 import type { PageResult } from './customer';
 
-/** 出入库明细行 */
+/** 出入库明细行（锚定订单**产品行** + 边别） */
 export interface FinishedItemRow {
   id: number;
   docId: number;
   orderId: number;
   orderProductId: number;
-  orderPartGroupId: number;
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
   itemNo: string | null;
   productModel: string | null;
   productType: string | null;
+  /** 部件组类型：挂订单的成品是整套滑轨故恒为 null，仅纯属性期初行可能有值 */
   groupType: string | null;
   railSection: string | null;
   dimensionText: string | null;
@@ -55,12 +55,11 @@ export interface FinishedDocRow {
   totalQty?: number;
 }
 
-/** 库存余额行 */
+/** 库存余额行（锚定订单**产品行** + 边别 + 批次；不挂订单的纯属性行锚点为 0） */
 export interface BalanceRow {
   id: number;
   orderId: number;
   orderProductId: number;
-  orderPartGroupId: number;
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
@@ -78,7 +77,7 @@ export interface BalanceRow {
   quantity: number;
 }
 
-/** 部件组的某个边别：入库看 quota、出库看 stockQty */
+/** 产品行的某个边别：入库看 quota、出库看 stockQty */
 export interface StockSideInfo {
   side: string;
   sideLabel: string;
@@ -90,20 +89,20 @@ export interface StockSideInfo {
   stockQty: number;
 }
 
+/** 可出入库的**产品行**选项（2026-08-10 由部件组升级——入库对象是装配产出的整套滑轨） */
 export interface StockGroupOption {
-  orderPartGroupId: number;
-  orderId: number;
   orderProductId: number;
+  orderId: number;
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
   itemNo: string | null;
   productModel: string | null;
   productType: string | null;
-  groupType: string | null;
   dimensionText: string | null;
   surfaceType: string | null;
   color: string | null;
+  /** 产品支数（订单数口径） */
   qtyPcs: number;
   socket: boolean;
   sides: StockSideInfo[];
@@ -121,7 +120,7 @@ export interface FinishedDocQuery {
 }
 
 export interface FinishedItemPayload {
-  orderPartGroupId: number;
+  orderProductId: number;
   side?: string;
   batchNo?: string;
   quantity: number;
@@ -155,7 +154,7 @@ export const getStockBalance = (params: {
   page?: number;
   pageSize?: number;
   keyword?: string;
-  orderPartGroupId?: number;
+  orderProductId?: number;
   side?: string;
   surfaceType?: string;
   onlyInStock?: boolean;

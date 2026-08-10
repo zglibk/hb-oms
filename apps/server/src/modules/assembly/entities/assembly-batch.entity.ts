@@ -10,14 +10,16 @@ import {
 /**
  * 装配批次（设计文档 §3.4 / §4.4）。
  *
- * 锚点是**订单部件组 + 边别**（order_part_group_id + side）——含卡口组合的产品
- * 左右各自独立卡量，闸门按 side 分别核算，左右不串量（§7.15）。
- * 一组可多批；`actual_date` 已填即视为该批完成，其 qty 计入成品入库可入库量。
+ * 锚点是**订单产品行 + 边别**（order_product_id + side）——2026-08-10 由部件组升级：
+ * 装配的动作是把各部件组装成整套滑轨，本就是产品级活动，一条产线不会按外轨/中轨/
+ * 内轨分别排产。含卡口组合的产品左右各自独立卡量，闸门按 side 分别核算，
+ * 左右不串量（§7.15）。
+ * 一个产品可多批；`actual_date` 已填即视为该批完成，其 qty 计入成品入库可入库量。
  * status 为派生列，只能由共享包 `deriveAssemblyStatus(actualDate)` 赋值。
  * 其余订单字段为展示快照，订单侧后续修改不回写本表（§5.5 业务流水快照原则）。
  */
 @Entity('t_assembly_batch')
-@Index('idx_group_side', ['orderPartGroupId', 'side'])
+@Index('idx_product_side', ['orderProductId', 'side'])
 export class AssemblyBatch {
   @PrimaryGeneratedColumn()
   id: number;
@@ -27,11 +29,8 @@ export class AssemblyBatch {
   orderId: number;
 
   @Index('idx_product')
-  @Column({ name: 'order_product_id', type: 'int', comment: '冗余订单产品行ID' })
+  @Column({ name: 'order_product_id', type: 'int', comment: '锚点：订单产品行（排产/台账粒度）' })
   orderProductId: number;
-
-  @Column({ name: 'order_part_group_id', type: 'int', comment: '锚点：订单部件组（跟踪/台账粒度）' })
-  orderPartGroupId: number;
 
   @Column({
     name: 'side',
@@ -115,7 +114,7 @@ export class AssemblyBatch {
     type: 'varchar',
     length: 128,
     nullable: true,
-    comment: '产品型号快照（自部件组 = 货号+产品类型组合+组后缀，如 45#缓冲外中轨）',
+    comment: '产品型号快照（自订单产品行 = 货号+产品类型组合，如 53#普通滑轨）',
   })
   productModel: string | null;
 

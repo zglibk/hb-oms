@@ -2,11 +2,11 @@ import request from '@/utils/request';
 
 /**
  * 成品期初明细行：**两种形态二选一**
- * - 挂订单：填 orderPartGroupId，展示字段由服务端从订单侧快照读取；
- * - 纯属性（不挂订单）：省略 orderPartGroupId，改填货号等属性，只进库存数、不参与订单欠数。
+ * - 挂订单：填 orderProductId，展示字段由服务端从订单侧快照读取；
+ * - 纯属性（不挂订单）：省略 orderProductId，改填货号等属性，只进库存数、不参与订单欠数。
  */
 export interface OpeningFinishedItemPayload {
-  orderPartGroupId?: number;
+  orderProductId?: number;
   side?: string;
   batchNo?: string;
   quantity: number;

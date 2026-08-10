@@ -1,12 +1,11 @@
 import request from '@/utils/request';
 import type { PageResult } from './customer';
 
-/** 装配批次行（锚定订单部件组 + 边别） */
+/** 装配批次行（锚定订单**产品行** + 边别） */
 export interface AssemblyBatchRow {
   id: number;
   orderId: number;
   orderProductId: number;
-  orderPartGroupId: number;
   /** 边别：含卡口 left/right，其余 '' */
   side: string;
   workshop: string | null;
@@ -31,11 +30,10 @@ export interface AssemblyBatchRow {
   updatedAt: string;
 }
 
-/** 装配管理列表行：按部件组一行 */
+/** 装配管理列表行：按**订单产品行**一行（排产是产品级活动） */
 export interface AssemblyGroupRow {
-  orderPartGroupId: number;
-  orderId: number;
   orderProductId: number;
+  orderId: number;
   orderNo: string | null;
   customerName: string | null;
   orderDate: string | null;
@@ -44,13 +42,12 @@ export interface AssemblyGroupRow {
   materialCode: string | null;
   productModel: string | null;
   productType: string | null;
-  groupType: string | null;
   railSection: string | null;
   dimensionText: string | null;
-  /** 该部件组各装配批次的车间（去重）；订单环节不再安排装配车间 */
+  /** 该产品各装配批次的车间（去重）；订单环节不再安排装配车间 */
   assemblyWorkshops: string[];
   deliveryDate: string | null;
-  /** 组支数（订单数口径） */
+  /** 产品支数（订单数口径，也是排产数量默认值） */
   qtyPcs: number;
   /** 是否含卡口（批次与闸门按左右分开核算） */
   socket: boolean;
@@ -59,7 +56,7 @@ export interface AssemblyGroupRow {
   plannedQty: number;
   /** 已完成装配量 */
   doneQty: number;
-  /** 未装配量 = 组支数 − 已完成装配量，可为负（超装配） */
+  /** 未装配量 = 产品支数 − 已完成装配量，可为负（超装配） */
   pendingQty: number;
   nextPlanDate: string | null;
   lastActualDate: string | null;
@@ -68,7 +65,7 @@ export interface AssemblyGroupRow {
 
 /** 可入库量（§4.4 闸门口径） */
 export interface InboundQuotaRow {
-  orderPartGroupId: number;
+  orderProductId: number;
   side: string;
   /** Σ已完成装配量 */
   assembledQty: number;
@@ -86,14 +83,13 @@ export interface AssemblySideSummary extends InboundQuotaRow {
 }
 
 export interface AssemblyBatchesResult {
-  group: {
-    orderPartGroupId: number;
+  product: {
+    orderProductId: number;
     orderNo: string | null;
     customerName: string | null;
     productionNo: string | null;
     productModel: string | null;
     dimensionText: string | null;
-    groupType: string | null;
     qtyPcs: number;
     socket: boolean;
   } | null;
@@ -113,7 +109,7 @@ export interface AssemblyQuery {
 }
 
 export interface AssemblyBatchPayload {
-  orderPartGroupId: number;
+  orderProductId: number;
   side?: string;
   workshop?: string;
   planStartDate?: string | null;
@@ -123,19 +119,18 @@ export interface AssemblyBatchPayload {
   remark?: string;
 }
 
-/** 编辑不含锚点：部件组与边别不可改（改锚点等于换组，应删除后重录） */
-export type AssemblyBatchUpdatePayload = Omit<AssemblyBatchPayload, 'orderPartGroupId' | 'side'>;
+/** 编辑不含锚点：产品行与边别不可改（改锚点等于换产品，应删除后重录） */
+export type AssemblyBatchUpdatePayload = Omit<AssemblyBatchPayload, 'orderProductId' | 'side'>;
 
 export const getAssemblyList = (params: AssemblyQuery) =>
   request.get<any, PageResult<AssemblyGroupRow>>('/api/assembly', { params });
 
 export const getAssemblyBatches = (params: {
-  orderPartGroupId?: number;
-  orderProductId?: number;
+  orderProductId: number;
   side?: string;
 }) => request.get<any, AssemblyBatchesResult>('/api/assembly/batch', { params });
 
-export const getInboundQuota = (params: { orderPartGroupId: number; side?: string }) =>
+export const getInboundQuota = (params: { orderProductId: number; side?: string }) =>
   request.get<any, InboundQuotaRow>('/api/assembly/inbound-quota', { params });
 
 export const createAssemblyBatch = (data: AssemblyBatchPayload) =>

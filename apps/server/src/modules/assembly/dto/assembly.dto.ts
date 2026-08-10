@@ -21,10 +21,10 @@ const SIDE_VALUES = ['', 'left', 'right'];
  * 客户端只传锚点 + 计划/实际完成时间 + 数量（§5.5 防伪造快照）。
  */
 export class CreateAssemblyBatchDto {
-  /** 锚点：订单部件组ID */
+  /** 锚点：订单产品行ID（装配是产品级活动，2026-08-10 由部件组升级） */
   @Type(() => Number)
-  @IsInt({ message: '请选择订单部件组' })
-  orderPartGroupId: number;
+  @IsInt({ message: '请选择订单产品' })
+  orderProductId: number;
 
   /** 边别：含卡口组合必填 left/right，非卡口必须留空 */
   @IsOptional()
@@ -62,8 +62,8 @@ export class CreateAssemblyBatchDto {
 }
 
 /**
- * 编辑装配批次：**不含锚点**——部件组与边别不可改（改锚点等于换组，应删除后重录，
- * 否则原组的可入库量会被静默抽走）。按整行覆盖语义：未传 actualDate 即视为清空
+ * 编辑装配批次：**不含锚点**——产品行与边别不可改（改锚点等于换产品，应删除后重录，
+ * 否则原产品的可入库量会被静默抽走）。按整行覆盖语义：未传 actualDate 即视为清空
  * （退回「计划中」），清空后可入库量不得低于已入库量（§7.14）。
  */
 export class UpdateAssemblyBatchDto {
@@ -92,7 +92,7 @@ export class UpdateAssemblyBatchDto {
   @IsOptional() @IsString() @MaxLength(255) remark?: string;
 }
 
-/** 装配管理列表查询：按**部件组**一行，聚合该组的装配进度 */
+/** 装配管理列表查询：按**订单产品行**一行，聚合该产品的装配进度 */
 export class QueryAssemblyDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
 
@@ -101,7 +101,7 @@ export class QueryAssemblyDto {
   /** 关键字：订单号/客户/生产单号/产品型号/货号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
-  /** 装配车间（字典 assembly_workshop）：匹配该部件组各装配批次的实际车间 */
+  /** 装配车间（字典 assembly_workshop）：匹配该产品各装配批次的实际车间 */
   @IsOptional() @IsString() @MaxLength(32) workshop?: string;
 
   /** 交货日期区间 */
@@ -109,32 +109,30 @@ export class QueryAssemblyDto {
 
   @IsOptional() @IsDateString() deliveryTo?: string;
 
-  /** 只看装配未完成（已完成装配量 < 组支数） */
+  /** 只看装配未完成（已完成装配量 < 产品支数） */
   @IsOptional() @Transform(toBoolean) @IsBoolean() onlyUnfinished?: boolean;
 
   /** 只看逾期（存在未完成批次且其计划完成时间已过） */
   @IsOptional() @Transform(toBoolean) @IsBoolean() onlyOverdue?: boolean;
 }
 
-/** 某部件组（可再按边别）下的装配批次明细 */
+/** 某产品行（可再按边别）下的装配批次明细 */
 export class QueryAssemblyBatchDto {
-  @IsOptional() @Type(() => Number) @IsInt() orderPartGroupId?: number;
-
   @IsOptional() @Type(() => Number) @IsInt() orderProductId?: number;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 }
 
-/** 可入库量查询（供 M4 成品入库表单校验前置展示） */
+/** 可入库量查询（供成品入库表单校验前置展示） */
 export class QueryInboundQuotaDto {
   @Type(() => Number)
-  @IsInt({ message: '请指定订单部件组' })
-  orderPartGroupId: number;
+  @IsInt({ message: '请指定订单产品' })
+  orderProductId: number;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 }
 
-/** 可装配部件组选项（新增批次时选组） */
+/** 可装配产品选项（新增批次时选产品） */
 export class QueryAssemblyGroupOptionDto {
   @IsOptional() @IsString() keyword?: string;
 

@@ -56,7 +56,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 全局守卫：先 `JwtAuthGuard` 后 `PermissionGuard`；开放接口用 `@Public()` 装饰器。
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
-- `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、`PartGroupSnapshotService`（订单部件组快照，外发/装配/成品出入库统一从它读订单侧展示字段，禁止各模块再写一份 SQL）等公共服务；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
+- `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、**两个订单侧快照服务**（下游建单统一从它们读展示字段，禁止各模块再写一份 SQL）——`ProductSnapshotService`（产品级，给装配/成品出入库/成品期初）与 `PartGroupSnapshotService`（部件组级，给外发件回厂），分层理由见 §5.2；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
 - 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
@@ -69,7 +69,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 状态用 Pinia（`stores/user.ts` 含 token/权限/菜单）。
 - **懒加载 chunk 失效兜底**（`router/index.ts` 的 `router.onError`）：部署脚本会 `rm -rf web-dist/assets` 再解包新产物，**发版前打开的页面**持有的旧哈希 chunk 全部消失；此时请求老 chunk 会被 Nginx 的 SPA 规则回吐 `index.html`（`Content-Type: text/html`），动态 import 因 MIME 不符而 reject，vue-router **中止导航、页面原地不动**，用户以为按钮失灵（2026-08-06 发版后实测复现，退出按钮首当其冲）。兜底逻辑识别到 chunk 加载失败即带目标路径硬跳转一次，sessionStorage 打标防死循环，导航成功后清标。**新增懒加载路由无需额外处理；但不要删掉这段 onError**。
 - 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart`、`AppStatCard` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
-- **新手引导与操作手册是一对，改功能要一起改**：引导（`layout/index.vue` 的 `TOUR_STEP_DEFS`，el-tour，按业务主线高亮侧栏菜单，步骤按用户可见菜单动态过滤）与手册（`apps/web/public/manual.html`，纯静态、按业务时间线分章）**章节顺序一一对应**，引导最后一步就指向手册。**任何改动用户操作方式的功能，必须同步更新手册对应章节**；引导内容大改时递增 `useTour.ts` 的 `TOUR_DONE_KEY` 版本号（当前 `hb_mes_tour_done_v2`）让老用户重看。手册链接一律用 `${import.meta.env.BASE_URL}manual.html` 拼，**别写死**（生产 base 是 `/oms/admin/`、开发是 `/`）。
+- **新手引导与操作手册是一对，改功能要一起改**：引导（`layout/index.vue` 的 `TOUR_STEP_DEFS`，el-tour，按业务主线高亮侧栏菜单，步骤按用户可见菜单动态过滤）与手册（`apps/web/public/manual.html`，纯静态、按业务时间线分章）**章节顺序一一对应**，引导最后一步就指向手册。**任何改动用户操作方式的功能，必须同步更新手册对应章节**；引导内容大改时递增 `useTour.ts` 的 `TOUR_DONE_KEY` 版本号（当前 `hb_mes_tour_done_v4`）让老用户重看，并在该文件的版本注释里记一行原因。手册链接一律用 `${import.meta.env.BASE_URL}manual.html` 拼，**别写死**（生产 base 是 `/oms/admin/`、开发是 `/`）。
 - `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
 - 主题：侧栏固定深色（底 `#1E293B`、logo 区 `#16202E`、子菜单 `#192433`、hover `#263349`、激活 `#1C3462` + 左侧 4.5px `#165DFF` 竖条），标题行下分隔线 `#334155`；「更换主题」只影响 Element 主色，不改侧栏配色。
 
@@ -133,7 +133,15 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
    - 删列后同步：`expectedColumns` 移除该列、`forbiddenColumns` 加上它（盯住不得被旧版 schema 重建复活）。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（截至内置角色统一共 19 个）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_doc` / `t_outsource_item` / `t_outsource_return` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（截至锚点分层共 26 个，末条为 `migration-product-level-tracking.sql`）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+
+> **一次性清数据的迁移必须做成「只生效一次」**（`migration-product-level-tracking.sql` 的写法，抄它）：`db:migrate` 每次跑**全量清单**，直接写 `DELETE FROM` 会让上线后任何一次重跑都清空生产数据。做法是用「被删的旧列是否还存在」当守卫——
+> ```sql
+> SET @c := (SELECT COUNT(*) FROM information_schema.columns
+>   WHERE table_schema=DATABASE() AND table_name='t_assembly_batch' AND column_name='order_part_group_id');
+> SET @s := IF(@c = 1, 'DELETE FROM t_assembly_batch', 'SELECT 1');
+> ```
+> 列删掉后第二次跑即 `SELECT 1`，永不再清。**验收方式**：造几行业务数据 → 重跑 `db:migrate` → 数据仍在（已实测）。
 
 ---
 
@@ -207,14 +215,27 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 ```
 销售订单(order) → 外发表面处理(outsource，可选) → 装配(assembly) → 成品入库 → 成品出库
+       └ 部件组锚点 ┘                          └────────── 产品行锚点 ──────────┘
                                                           ↘ 部件台账(part-stock，V1 仅参考台账)
 ```
 
-### 5.2 订单四级结构与跟踪锚点
+### 5.2 订单四级结构与跟踪锚点分层（2026-08-10 定型）
 
-`t_order`（订单）→ `t_order_product`（产品行）→ **`t_order_part_group`（部件组 = 跟踪/台账锚点）** → `t_order_part`（部件行）。
+`t_order`（订单）→ **`t_order_product`（产品行 = 装配/成品/台账锚点）** → **`t_order_part_group`（部件组 = 外发锚点 + 工艺属性载体）** → `t_order_part`（部件行）。
 
-- **部件组是一切下游单据的锚点**：外发明细、装配批次、成品出入库明细、台账行一律锚定 `order_part_group_id`。
+- **锚点分两层，别再"一刀切"**（改错方向会让四数直接失真）：
+
+  | 环节 | 锚点 | 为什么 |
+  |---|---|---|
+  | 外发件回厂 `t_outsource_part` | **部件组** | 部件确实是分开送去表面处理、分批回厂的 |
+  | 装配 `t_assembly_batch` | **产品行 + side** | 装配的动作是把各部件组装成整套滑轨，本就是产品级活动 |
+  | 成品明细 `t_finished_item` | **产品行 + side** | 入库对象是装配产出的整套滑轨，拆回外/中/内入库与实物不符 |
+  | 成品余额 `t_finished_balance` | **(产品行, side, 批次, attr_key)** | 同上，唯一键随明细走 |
+  | 入库闸门 | **(产品行, side)** | 两侧必须同维度，否则额度与入库量对不上 |
+  | 台账主行 | **产品行** | 四数在产品级；部件组降为展开明细 |
+
+- **部件组保留的职责**（不要因为"降级"就误删）：订单四级结构、部件行展开依据、生产图号/版本/料厚的载体、外发回厂锚点、台账展开子表。
+- **闸门变松是有意的**：产品级闸门只卡总量，不再约束"入到哪个部件组"——成品本身已无组的概念，入库对象就是产品。
 - **字段归属（2026-08-07 调整，勿再挪回去）**：
   - `po_no`（PO#，客户订单文件上的订单编号）与 `production_no`（生产单号）**都在订单级 `t_order`，一对一**——一张订单不会有两个生产单号。台账「订单编号」列取的就是 `t_order.production_no`，下游单据的 `production_no` 快照也一律自订单取。
   - 产品级新增 `customer_drawing_no`（**客户图号**，客户来图上的图号），与部件组的 `drawing_no`（**生产图号**，内部转化的技术图纸）是两个字段，别混。
@@ -277,16 +298,16 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **订单备注双字段（2026-08-08，移植自 hb-mes）**：`remark` VARCHAR(255) 是列表可见的一句话摘要；`other_req` TEXT 是**图文混排**的「订单备注」（wangEditor 输出 HTML，图片走 `/upload/editor-image` 存真实 URL，正文只留 `<img src>`）。两者用途不同，勿合并。
   - 实体上 `other_req` 标了 **`select: false`**：列表一次 20 张单，把富文本正文全拉回来白白撑大响应体，而列表根本不展示它；详情接口用 `addSelect('o.otherReq')` 显式补选，改列表投影时别忘了这一条。
   - 前端保存前**必须 `await richEditorRef.flushUploads()`**：编辑器里插入的图片在 flush 前只是本地 blob 预览，不 flush 就提交，落库 HTML 里全是刷新即失效的 blob 地址。
-- **导出总计划（2026-08-08）**：`GET /order/export/total-plan`（权限 `order:export`，`@SkipTransform` 返回文件流，**必须注册在 `:id` 之前**）。行粒度 = **订单产品行**，与台账导出的部件组粒度互补（总计划给业务/PMC 看单子做到哪了，台账给车间看逐组明细）。
-  - **四数不另写聚合 SQL**：内部调 `findLedger` 拿部件组行再按 `orderProductId` 汇总，与台账页、订单自动完结共用同一口径。为此给 `QueryLedgerDto` 补了 `orderDateFrom/To`（订单列表按下单日期筛选）。
-  - 一个产品跨多组时，组级字段（组类型/生产图号/版本/料厚）**按组序正序**去重并列——台账排序是 `g.id DESC`，直接拼会得到「内轨/外中轨」这种与订单表单相反的顺序。
+- **导出总计划（2026-08-08）**：`GET /order/export/total-plan`（权限 `order:export`，`@SkipTransform` 返回文件流，**必须注册在 `:id` 之前**）。行粒度 = **订单产品行**，字段比台账导出更全（PO#/产品名称/材质/是否新单/出口国家/订单状态）。
+  - **四数不另写聚合 SQL**：内部调 `findLedger`，与台账页、订单自动完结共用同一口径。为此给 `QueryLedgerDto` 补了 `orderDateFrom/To`（订单列表按下单日期筛选）。台账主行升产品级后 `findLedger` 直接返回产品级行，原先「按 orderProductId 分桶再汇总」的整段逻辑已删除。
+  - 一个产品跨多组时，组级字段（组类型/生产图号/版本/料厚）由 `joinGroupField` **按组序正序**去重并列——组明细的 `ORDER BY g.sort, g.id` 保证得到「外轨/中轨/内轨」这种与订单表单一致的顺序。
   - 上限同台账 5000 行，超限与无数据一律**拒绝而非静默给空表**；按「已作废」筛选时直接提示作废单不进总计划（台账口径本就排除作废）。
 
 **外发件回厂记录（M3）**
 
 > ⚠️ **2026-08-10：外发模块经两轮简化定型**。第一轮取消「发出」环节（发货不过磅、不留发出数量），第二轮**连发坯单也取消**——使用部门只需要记「外发件回厂了什么、回了多少」。三张表（单头/明细/回货流水）已塌缩为单表 `t_outsource_part`，`t_outsource_doc` / `t_outsource_item` / `t_outsource_return` **已删除**。**新代码不得再引入发坯单、发出、应回数量、回齐等概念。**
 
-- **一行 = 一次回厂**。锚定订单部件组；同一组可有多行（分批回厂），不做唯一约束。
+- **一行 = 一次回厂**。锚定订单部件组；同一组可有多行（分批回厂），不做唯一约束。**外发是唯一仍锚部件组的环节**（装配/成品/台账已升产品级，§5.2）——部件确实分开送去表面处理、分批回厂，这层不能跟着升。
 - **没有状态列**（记录存在即已回厂，派生不出第二种状态）、**没有单据号**（不采番，与装配批次同属「轻量记账行」，见 §5.4）、**不登记计划回厂时间**（业务不跟踪还在外面的货）。共享包的 `OUTSOURCE_STATUS` / `deriveOutsourceStatus` / `isItemFullyReturned` / `BLANK_NO_WIDTH` / `formatBlankNo` 均已删除，`outsource.ts` 只剩 `qtyFromWeight`。
 - 字段分两类：**订单侧快照只读带出**（生产单号/产品型号/规格/订单数量+单位/生产图号/材料厚度/周期码/订单号/客户）、**人工录入**（加工商、表面处理+颜色、实际回厂日期、重量、单重、数量、备注）。快照一律由服务端经 `PartGroupSnapshotService` 读取落库，不采信客户端传值。
   - 为此给 `PartGroupSnapshot` 补了 `orderQty` / `unit` / `drawingNo` / `materialThickness` 四个字段——**下游模块要新的快照列一律加在这个服务里**，禁止各模块自写 SQL（§一 后端架构）。
@@ -297,42 +318,53 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - ⚠️ `t_material.part_type` 的列注释一度写成 `outer_rail/middle_rail/inner_rail`，与实际取值不符，已随本次改动修正（`migration-material-part-type-comment.sql`）。
 - 录入支持**一次多行**：勾选多个部件组共用同一加工商与回厂日期（车间一次拉回一批货，逐条重填加工商和日期纯属折磨人）。编辑只能改单条，且**锚点不可改**（改锚点等于换部件组，要换只能删了重录）。
 - 接口只剩 `GET /` `GET /part-group-options` `GET /:id` `POST /` `PUT /:id` `DELETE /:id`；权限点只剩 `outsource`（菜单）+ `outsource:create` / `:update` / `:delete`。原 send / close / cancel / return / return-cancel / print 与《电镀发外加工单》打印页一并下线，加工单改回纯手工。
-- **台账「外发已回货」= `SUM(t_outsource_part.return_qty)`**（按部件组聚合），展开行的外发流水直接列本表记录。
+- **台账「外发已回货」**：主行是**该产品下各部件组之和**（`JOIN t_order_part_group` 按 `order_product_id` 聚合），展开行的 `partGroups[]` 再给出逐组明细；展开行的外发流水直接列本表记录、带 `groupType` 标明是哪个部件回的厂。
+- **台账「外发欠数」= 应外发量 − 已回货量，应外发量是 `Σ组支数` 而不是产品订单数**（2026-08-10 新增列，位于「外发已回货」与「装配车间」之间）。
+  - ⚠️ 这条最容易写错：外发锚部件组，一个三节轨 20 支的产品拆成外/中/内三组各 20 支，**实际要送出去 60 支零件**。用产品订单数去减各组回货合计（20 − 32）会得到 −12 这种废数（已用 E2E 实证）。
+  - **表面处理 = `none` 的产品为 `null`**（共享包 `needsOutsource` 判定），界面显示灰色「—」、导出留空——它压根不走外发，显示 0 会和「已全部回厂」混淆。
+  - 组级 `partGroups[].outsourceOwed` 同口径（组支数 − 该组回货），主行即各组之和；「哪个部件还没回来」看展开行。
+  - 计算落在 `attachPartGroups` 里（那里才同时拿得到组支数与组回货），**不要挪到主 SQL 的 `ret` 派生表**——那张表只按组求和回货量，没有组支数。
 - **首页右卡是「近期外发回厂」**（最近 N 条流水），不是超期提醒——不登记计划回厂时间就没有超期基准，也没有"还在外面没回"的记录，那张卡已无法计算。
 
 
 **装配批次（M3.5）**
 
-- 锚点是**部件组 + 边别**（`order_part_group_id` + `side`）：含卡口组合必须落 `left`/`right`，非卡口必须为空串；闸门按 side 分别核算，**左右不串量**（§7.15）。建单时由服务端按 `hasSocket(产品类型)` 硬校验，填错直接拒绝。
+- 锚点是**订单产品行 + 边别**（`order_product_id` + `side`，2026-08-10 由部件组升级）：含卡口组合必须落 `left`/`right`，非卡口必须为空串；闸门按 side 分别核算，**左右不串量**（§7.15）。建单时由服务端按 `hasSocket(产品类型)` 硬校验，填错直接拒绝。
+- 订单侧展示字段（订单号/生产单号/产品型号/规格/支数）一律经 [ProductSnapshotService](apps/server/src/common/services/product-snapshot.service.ts) 读取落库，**禁止各模块自写 SQL**。它与组级的 `PartGroupSnapshotService` 并存、各管一层：产品级服务给装配/成品/期初，组级服务给外发。
 - 时间三件套：`plan_start_date`（计划开始）/ `plan_date`（计划完成）为计划员录入的**预计装配区间**，纯计划属性、**不参与闸门**；`actual_date`（实际完成）才是完工与闸门的唯一依据。
-- 一组可多批；`plan_date` 与 `actual_date` **至少填一个**（只有计划开始的批次跟踪不到完工）；`plan_start_date` 不得晚于 `plan_date`，前后端双向校验。
+- 一个产品可多批；`plan_date` 与 `actual_date` **至少填一个**（只有计划开始的批次跟踪不到完工）；`plan_start_date` 不得晚于 `plan_date`，前后端双向校验。
 - 状态 `status` 落库但为**派生值**，只能由共享包 `deriveAssemblyStatus(actualDate)` 赋值：`actual_date` 空=1计划中、非空=2已完成。聚合已完成装配量时一律按 `actual_date IS NOT NULL` 判定，**不依赖 status 列**（防历史脏数据让闸门失准）。
-- **装配车间只存在于批次级 `t_assembly_batch.workshop`**（2026-08-07 起）：订单环节不再安排装配车间，产品行 `assembly_workshop` 已弃用。装配列表与订单跟踪台账的「装配车间」列改为**聚合该部件组各批次的车间**（`GROUP_CONCAT(DISTINCT …)`，一组多批可分属不同车间，界面并列显示），筛选改为 `EXISTS` 匹配批次车间。新建批次的默认车间取该组最近一条批次的车间，不再从订单继承。
-- **入库闸门口径的唯一实现在 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)，M4 成品入库确认必须复用，禁止另写第二份 SQL**：
-  `可入库量(部件组, side) = Σ已完成装配量 − Σ已入库量`。
-  已入库量只统计**已确认的入库方向单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单按 direction 计负；**期初 `opening_balance` 与销售出库 `sale_outbound` 均不参与**（期初无装配过程、§4.5 明文豁免闸门，若计入会让该组额度永久为负而挡死后续入库；出库参与则会凭空放大额度），冲销期初的红字单同理排除。成品三表在 M4 才建，表不存在时已入库量按 0 计，建表后自动生效。
-- **不得使可入库量为负**（§7.14）：删除批次、下调 qty、退回「计划中」三条路径改完都要复核，为负则**整笔事务回滚**并提示先红字冲销对应入库单。锁顺序统一为「先锁该部件组全部批次行（`FOR UPDATE`）→ 再改本行 → 复核」，与 M4 入库确认保持一致，避免交叉等待死锁。
-- 编辑接口**不含锚点**：部件组与边别不可改（改锚点等于换组，会把原组额度静默抽走），要换组只能删除后重录。
-- 超装配（Σ装配量 > 组支数）**允许**，前端黄色提示不拦截；台账「装配未完成量」可为负。
+- **装配车间只存在于批次级 `t_assembly_batch.workshop`**（2026-08-07 起）：订单环节不再安排装配车间，产品行 `assembly_workshop` 已弃用。装配列表与订单跟踪台账的「装配车间」列改为**聚合该产品各批次的车间**（`GROUP_CONCAT(DISTINCT …)`，一个产品多批可分属不同车间，界面并列显示），筛选改为 `EXISTS` 匹配批次车间。新建批次的默认车间取该产品最近一条批次的车间，不再从订单继承。
+- **前端排产数量默认 = 该边别未排产量**：非卡口目标为产品订单数，含卡口左右各半且**奇数支左边多一支**（`Math.ceil` / 减法，与共享包 `expandPartRows` 同口径，保证左右合计守恒）。
+- **入库闸门口径的唯一实现在 [assembly-quota.util.ts](apps/server/src/modules/assembly/assembly-quota.util.ts)，成品入库确认必须复用，禁止另写第二份 SQL**：
+  `可入库量(产品行, side) = Σ已完成装配量 − Σ已入库量`。
+  已入库量只统计**已确认的入库方向单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单按 direction 计负；**期初 `opening_balance` 与销售出库 `sale_outbound` 均不参与**（期初无装配过程、§4.5 明文豁免闸门，若计入会让该产品额度永久为负而挡死后续入库；出库参与则会凭空放大额度），冲销期初的红字单同理排除。
+- **不得使可入库量为负**（§7.14）：删除批次、下调 qty、退回「计划中」三条路径改完都要复核，为负则**整笔事务回滚**并提示先红字冲销对应入库单。锁顺序统一为「先锁该产品行全部批次行（`FOR UPDATE`）→ 再改本行 → 复核」，与入库确认保持一致，避免交叉等待死锁。
+- 编辑接口**不含锚点**：产品行与边别不可改（改锚点等于换产品，会把原产品额度静默抽走），要换只能删除后重录。
+- 超装配（Σ装配量 > 产品支数）**允许**，前端黄色提示不拦截；台账「装配未完成量」可为负。
 - 批次是轻量记账行，**不采番、无单据号**（§5.4）。
+- ⚠️ 批次弹窗的「含卡口」`el-tag` 必须带 `disable-transitions`：弹窗是复用的，换产品时 `v-if` 在弹窗隐藏状态下翻转，el-tag 的 zoom 过渡收不到 `transitionend` 就走不完，节点被留在 DOM 里——下次打开一个不含卡口的产品，这个标签会原样复活（已踩，浏览器实测复现）。
 
 **成品出入库与订单跟踪台账（M4）**
 
-- 三表：`t_finished_doc`（单据头）/ `t_finished_item`（明细）/ `t_finished_balance`（余额）。明细锚定**部件组 + 边别**，卡口按左右分行。
+- 三表：`t_finished_doc`（单据头）/ `t_finished_item`（明细）/ `t_finished_balance`（余额）。明细锚定**订单产品行 + 边别**（2026-08-10 由部件组升级——入库的是装配产出的整套滑轨，拆回外/中/内分别入库与实物不符），卡口按左右分行。挂订单的明细 `group_type` 恒为 null（整套滑轨没有组的概念），只有纯属性期初行才可能有值。
 - **数量恒为正**，出入方向由单头 `direction`（1入 −1出）表达；聚合一律 `direction × quantity`。红字单方向与被冲原单相反，因此**天然抵扣、无需特判**——不要在聚合里写"如果是红字就减"这类分支。
 - 状态机 `1草稿 → 2已确认 → (更正) 开红字单`；`9已作废`仅从草稿进入。**已确认单禁改禁删禁作废，只能红字冲销**；红字单本身不可再冲销；红字单建后**立即确认生效**。
 - 红字支持**按行部分冲销**，每行冲销量 ≤ 原行数量 − 该行已冲销量。
 - **确认（confirm）是唯一驱动余额的入口**，同事务内三步：① 装配闸门（仅 `inbound`，复用 `assembly-quota.util.ts`，`lock:true`）② 余额行 `FOR UPDATE` ③ 增减后**结存不得为负**。任何地方都不得直接改 `t_finished_balance`。
 - 「结存不得为负」同时管住两类操作：销售出库、以及**红字冲销入库单**（货已发出时不能凭空把入库冲掉）。
-- `t_finished_balance` 唯一键 `(order_part_group_id, side, batch_no, attr_key)`：挂订单的行 `attr_key` 恒为空串；不挂订单的纯属性期初行锚点列为 0、靠 `attr_key`（属性指纹）兜底唯一。设计文档原写「应用层保证」，实现改为**下沉到数据库唯一键**，并发下应用层判重挡不住重复行。
+- `t_finished_balance` 唯一键 `(order_product_id, side, batch_no, attr_key)`：挂订单的行 `attr_key` 恒为空串；不挂订单的纯属性期初行锚点列为 0、靠 `attr_key`（属性指纹）兜底唯一。设计文档原写「应用层保证」，实现改为**下沉到数据库唯一键**，并发下应用层判重挡不住重复行。
 - **⚠️ 台账「完成数」与闸门「已入库量」口径故意不同，勿"统一"**：
   - 台账完成数**包含期初**（`opening_balance`）——期初是上线前已完成的存量，不计入就对不上手工账；
-  - 闸门已入库量**排除期初**——期初没有装配过程，计入会让该组额度永久为负、挡死后续正常入库。
+  - 闸门已入库量**排除期初**——期初没有装配过程，计入会让该产品额度永久为负、挡死后续正常入库。
   两处各自正确，改任一处前先想清楚服务的是哪个问题。
-- 台账（`order-ledger.service.ts`，`GET /order/ledger`）按部件组一行，四数**全部实时聚合、不落冗余列**；欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
+- 台账（`order-ledger.service.ts`，`GET /order/ledger`）**按订单产品行一行**（2026-08-10 由部件组升级），四数**全部实时聚合、不落冗余列**；欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
+  - 每行内嵌 `partGroups[]`（组类型/组型号/生产图号/版本/料厚/组支数/**外发已回货**）随列表一起返回——组数有限（一个产品最多 5 组），一页 20 行也就 60~100 行，一次 IN 查询就够；每展开一行再打一次接口反而更慢。展开行里逐笔流水才走 `GET /order/ledger/detail?orderProductId=`。
+  - 主行升到产品级后，一行即一个产品，原先「相邻同产品行跨行合并」的 `span-method` 已整段删除。
+  - **两个 Excel 导出都是产品级行**：四数在产品级，按组铺行会让每行重复产品级四数、**合计翻倍**。组级字段（生产图号/版本/料厚/组类型）由 `joinGroupField` 按组序去重后用「/」并列。
 - 台账 SQL 注意：`rows` 是 MySQL 8 保留字，列别名不能用它（已踩）。
 - **欠数口径的唯一事实源是 [order-owed.util.ts](apps/server/src/modules/order/order-owed.util.ts)**：入向/出向单据族的 SQL 片段与参数定义在此，台账聚合与订单自动完结共用，**禁止任一处另写**——分叉后会出现「台账显示已交清、订单却挂在进行中」且查不出谁错。
-- **订单状态自动同步（§3.1）**：成品出入库「确认」与「红字冲销」后，在**同一事务内**调用 `syncOrderFinishState`——进行中且**全部部件组**发货欠数 ≤ 0 → 自动完结；已完结但任一组回正 → 自动重开。要点：
+- **订单状态自动同步（§3.1）**：成品出入库「确认」与「红字冲销」后，在**同一事务内**调用 `syncOrderFinishState`——进行中且**全部产品行**发货欠数 ≤ 0 → 自动完结；已完结但任一产品行回正 → 自动重开。要点：
   - 只有出向单据影响发货欠数，入库确认不会误触发；
   - 超发（欠数为负）算已交清；
   - 「完结」只是台账口径**不锁单据**，已完结订单仍可继续出入库，所以回正必须能自动重开，否则订单会被错误地挂在已完结上；
@@ -352,7 +384,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **纯编排模块，不自己写库**：成品期初走 `FinishedStockService.createOpeningBalance`（§6 明确「内部走 finished-stock 通道」），部件期初走 `PartStockService.adjustInTx` 且 `source='opening'`。各自另写一套写库逻辑会立刻造成口径分叉，这是本模块存在的唯一理由。
 - 成品期初**建单后同事务立即确认**、不留草稿：录入页本身即「确认」语义。单据仍在成品出入库列表可见、可红字冲销纠错，追溯性没丢。
 - 成品期初支持两种行混录：
-  - **挂订单行**（`orderPartGroupId ≥ 1`）：快照由服务端读订单侧，计入台账「完成数」、参与生产欠数；
+  - **挂订单行**（`orderProductId ≥ 1`，2026-08-10 由部件组升级，与成品明细同锚点）：快照由服务端经 `ProductSnapshotService` 读订单侧，计入台账「完成数」、参与生产欠数；
   - **纯属性行**（省略锚点）：锚点落 0、属性自带，靠余额表 `attr_key` 指纹兜底唯一，**只进库存数、台账查不到**（§7.9，这是设计如此不是漏了）。
 - 期初豁免装配闸门（§4.5），但计入台账完成数 —— 与 §5.1 的「完成数含期初 / 闸门排除期初」一致。
 - **部件期初整批全有全无**（同一事务）：部件台账是**累加**语义，部分成功后用户改完坏行重提整批，已成功的行会被加第二次、直接把账做错。出错提示带行号，改完整批重提不会重复计数。这也与项目既有导入约定（客户导入「整批校验通过才落库」）一致。
@@ -389,9 +421,10 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | M1 骨架 | monorepo、登录/权限/菜单、基础数据（客户资料含批量导入、开单信息、部件信息、字典）、共享包 | ✅ 已完成 |
 | M2 订单 | 订单四级 CRUD、附件、组按类型自动展开部件、图号带入工艺、状态机 | ✅ 已完成 |
 | M3 外发 | ~~发坯单~~ → **外发件回厂记录**（2026-08-10 两轮简化定型：一行=一次回厂，无单据无状态） | ✅ 已完成 |
-| M3.5 装配 | 装配批次 CRUD（一组多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
+| M3.5 装配 | 装配批次 CRUD（一个产品多批 + 卡口分边、计划/实际完成时间+数量）、装配管理页、可入库量接口与闸门守卫 | ✅ 已完成 |
 | M4 出入库+台账 | 出入库单、确认/红字冲销（支持部分冲销）、**装配入库闸门**（复用 `assembly-quota.util.ts`）、balance、成品库存、**订单跟踪台账** + 口径核算脚本 | ✅ 已完成 |
 | M5 期初+看板 | 补录订单、成品/部件期初、部件台账、首页看板、台账展开与合并、台账 Excel 导出、新手引导、操作手册**全部完成** | ✅ 已完成 |
+| M6 锚点分层 | 装配/成品/台账由部件组升到**订单产品行**，外发保持部件组；台账改「产品级主行 + 部件组展开」，两个导出改产品级；新增 `ProductSnapshotService` | ✅ 已完成（2026-08-10） |
 
 期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉。
 
@@ -460,6 +493,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2k | 外发取消发出环节 | 使用部门要求：发货不过磅、不留发出记录，外发单只跟踪计划/实际回货与回货数量。删发外日期两列与发出重量/单重，发出数量改「应回数量」作回齐基准；状态机改 1待回货→3部分回货→4已回齐；`outsource:send` 权限点下线。口径见 §5.6 | ✅ 已完成（2026-08-10） |
 | 2l | 外发收敛为回厂流水 | 第二轮简化：连发坯单也取消，三表塌缩为 `t_outsource_part`（一行=一次回厂）。删打印页/单号采番/6 个权限点；首页右卡改「近期外发回厂」。口径见 §5.6 | ✅ 已完成（2026-08-10） |
 | 2m | 业务字段全局开关 | 系统配置新增「业务字段」Tab，现有两个开关：**颜色**（与表面处理配套的业务字段）、**客户图号**（非部件组生产图号）。**录入展示开关 ≠ 数据清理**：停用不删既有数据、编辑不洗历史值。前端走 feature store + `useFeatureFlags`，后端只在导出侧读开关并把两个导出的汇总行改为按表头名定位。口径与新增开关的 6 处改动点见 §5.7 | ✅ 已完成（2026-08-10） |
+| 2n | 跟踪锚点分层 | 装配 / 成品明细 / 成品余额 / 入库闸门 / 台账主行 由**部件组升到订单产品行**，外发件回厂**保持部件组**；台账改「产品级主行 + 部件组展开」，两个 Excel 导出改产品级（按组铺行会让合计翻倍）；新增 `ProductSnapshotService` 与组级快照分层。迁移 `migration-product-level-tracking.sql` 带「清空只生效一次」守卫（已实测重跑不清数据）。口径见 §5.2 | ✅ 已完成（2026-08-10） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |
 | 5 | 外发回货验收(FQC) | V1 仅用备注承载，不独立建模 | 📘 V1 不做 |

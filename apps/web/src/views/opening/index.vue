@@ -15,11 +15,11 @@
         <el-tab-pane label="成品期初（挂订单）" name="group">
           <div class="tab-tip">
             适用于<b>未完结的历史订单</b>：先在「订单管理」把订单补录进来（勾选「期初补录」），
-            再在这里按部件组录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与生产欠数。
+            再在这里按产品录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与生产欠数。
           </div>
           <div class="toolbar">
             <el-date-picker v-model="docDate" type="date" value-format="YYYY-MM-DD" size="small" style="width: 150px" />
-            <el-button size="small" type="primary" plain :icon="Plus" @click="openPicker">添加部件组</el-button>
+            <el-button size="small" type="primary" plain :icon="Plus" @click="openPicker">添加产品</el-button>
             <el-input v-model="groupRemark" size="small" placeholder="整单备注（选填）" style="width: 220px" />
             <span class="sum">合计 <b>{{ groupTotal }}</b> 支 / {{ groupRows.length }} 行</span>
             <el-button
@@ -27,7 +27,7 @@
               :loading="saving" :disabled="!groupRows.length" @click="submitGroup"
             >提交期初</el-button>
           </div>
-          <el-table :data="groupRows" border stripe size="small" empty-text="请点击「添加部件组」选择要录期初的产品">
+          <el-table :data="groupRows" border stripe size="small" empty-text="请点击「添加产品」选择要录期初的产品">
             <el-table-column type="index" label="#" width="46" align="center" />
             <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
             <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
@@ -37,7 +37,7 @@
             <el-table-column label="边别" width="70" align="center">
               <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="组支数" prop="qtyPcs" width="80" align="center" />
+            <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
             <el-table-column label="期初数量(支)" width="130" align="center">
               <template #default="{ row }">
                 <el-input-number v-model="row.quantity" :min="1" :precision="0" :controls="false" style="width: 100%" />
@@ -202,8 +202,8 @@
       </el-tabs>
     </el-card>
 
-    <!-- 部件组选择器（挂订单期初用）：按边别展开 -->
-    <el-dialog v-model="pickerVisible" title="选择要录期初的部件组" width="1000px" top="6vh" @open="loadOptions">
+    <!-- 产品选择器（挂订单期初用）：按边别展开 -->
+    <el-dialog v-model="pickerVisible" title="选择要录期初的订单产品" width="1000px" top="6vh" @open="loadOptions">
       <div class="picker-bar">
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
@@ -224,7 +224,7 @@
         <el-table-column label="边别" width="70" align="center">
           <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="组支数" prop="qtyPcs" width="80" align="center" />
+        <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
       </el-table>
       <template #footer>
         <span class="picker-count">已选 {{ picked.length }} 行</span>
@@ -267,7 +267,7 @@ loadDict('surface_type').then((rows: any[]) => {
 
 /* ===================== 挂订单期初 ===================== */
 interface GroupRow {
-  orderPartGroupId: number;
+  orderProductId: number;
   side: string;
   orderNo: string | null;
   customerName: string | null;
@@ -297,10 +297,10 @@ async function loadOptions() {
   pickerLoading.value = true;
   try {
     const opts = await getStockGroupOptions({ keyword: pickerKeyword.value || undefined, limit: 300 });
-    // 复用出入库的部件组选项接口，按边别展开成可选行（期初不看可入库量，闸门对期初豁免）
+    // 复用出入库的产品行选项接口，按边别展开成可选行（期初不看可入库量，闸门对期初豁免）
     pickerRows.value = opts.flatMap((o) =>
       o.sides.map((s) => ({
-        orderPartGroupId: o.orderPartGroupId,
+        orderProductId: o.orderProductId,
         side: s.side,
         orderNo: o.orderNo,
         customerName: o.customerName,
@@ -318,14 +318,15 @@ async function loadOptions() {
 }
 function isSelectable(row: GroupRow) {
   return !groupRows.value.some(
-    (r) => r.orderPartGroupId === row.orderPartGroupId && r.side === row.side,
+    (r) => r.orderProductId === row.orderProductId && r.side === row.side,
   );
 }
 function confirmPick() {
   picked.value.forEach((o) => {
-    if (groupRows.value.some((r) => r.orderPartGroupId === o.orderPartGroupId && r.side === o.side)) return;
-    // 默认按组支数带出（卡口按半数），期初多半就是整组已完成
-    const def = o.side ? Math.ceil(o.qtyPcs / 2) : o.qtyPcs;
+    if (groupRows.value.some((r) => r.orderProductId === o.orderProductId && r.side === o.side)) return;
+    // 默认按订单数带出（含卡口左右各半，奇数支左边多一支，与 expandPartRows 同口径），
+    // 期初多半就是整个产品已完成
+    const def = o.side === 'right' ? Math.floor(o.qtyPcs / 2) : o.side ? Math.ceil(o.qtyPcs / 2) : o.qtyPcs;
     groupRows.value.push({ ...o, quantity: def || 1, remark: '' });
   });
   picked.value = [];
@@ -342,7 +343,7 @@ async function submitGroup() {
       docDate: docDate.value,
       remark: groupRemark.value || undefined,
       items: groupRows.value.map((r) => ({
-        orderPartGroupId: r.orderPartGroupId,
+        orderProductId: r.orderProductId,
         side: r.side,
         quantity: r.quantity,
         remark: r.remark || undefined,

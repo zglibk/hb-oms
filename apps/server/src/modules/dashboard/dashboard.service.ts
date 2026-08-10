@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { FINISHED_DOC_STATUS, ORDER_STATUS } from '@hb-oms/shared';
+import { FINISHED_DOC_STATUS, ORDER_STATUS, formatProductModel } from '@hb-oms/shared';
 // 欠数口径的唯一事实源在 order-owed.util —— 台账、订单自动完结、本看板三处共用同一份
 // 单据族 SQL，禁止在此另写一份 biz_type 判定（分叉后首页与台账数字对不上，最难查）
 import {
@@ -35,9 +35,9 @@ const TOP_LIMIT = 10;
 /** 「临近交期」窗口天数（设计文档 §5.2 定为 7 天） */
 const UPCOMING_DAYS = 7;
 
-/** 部件组粒度的待办行（逾期未发货 / 临近交期共用结构） */
+/** 产品行粒度的待办行（逾期未发货 / 临近交期共用结构） */
 export interface DashboardOwedRow {
-  orderPartGroupId: number;
+  orderProductId: number;
   orderId: number;
   orderNo: string | null;
   customerName: string | null;
@@ -76,23 +76,24 @@ export class DashboardService {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * 进行中订单的部件组 + 成品进出聚合，看板三处（汇总卡、逾期、临近）共用同一 FROM，
+   * 进行中订单的**产品行** + 成品进出聚合，看板三处（汇总卡、逾期、临近）共用同一 FROM，
    * 保证四个卡片与两张列表算的是同一批行。
+   *
+   * 2026-08-10 由部件组升级到产品行——与成品出入库明细同维度，欠数口径才对得上。
    */
   private readonly activeGroupsFrom = `
-        FROM t_order_part_group g
-        JOIN t_order_product p ON p.id = g.order_product_id
-        JOIN t_order o         ON o.id = g.order_id
+        FROM t_order_product p
+        JOIN t_order o ON o.id = p.order_id
         LEFT JOIN (
-              SELECT fi.order_part_group_id AS gid,
+              SELECT fi.order_product_id AS pid,
                      SUM(CASE WHEN ${INBOUND_FAMILY_SQL}  THEN fd.direction * fi.quantity ELSE 0 END) AS in_qty,
                      SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty
                 FROM t_finished_item fi
                 JOIN t_finished_doc  fd ON fd.id = fi.doc_id
                 LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-               WHERE fd.status = ? AND fi.order_part_group_id > 0
-               GROUP BY fi.order_part_group_id
-             ) fin ON fin.gid = g.id
+               WHERE fd.status = ? AND fi.order_product_id > 0
+               GROUP BY fi.order_product_id
+             ) fin ON fin.pid = p.id
        WHERE o.status = ?`;
 
   /** 派生表 + WHERE 的参数序（顺序即 SQL 中占位符出现顺序） */
@@ -105,14 +106,15 @@ export class DashboardService {
     ];
   }
 
-  /** 待办行的公共查询列 */
+  /** 待办行的公共查询列（产品级；型号由 item_no + product_type 在 JS 侧拼） */
   private readonly owedRowColumns = `
-              g.id AS groupId, o.id AS orderId, o.order_no AS orderNo,
+              p.id AS productId, o.id AS orderId, o.order_no AS orderNo,
               o.customer_name AS customerName, o.salesman AS salesman,
               o.merchandiser AS merchandiser, o.production_no AS productionNo,
-              g.product_model AS productModel, p.delivery_date AS deliveryDate,
-              g.qty_pcs AS qtyPcs,
-              g.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
+              p.item_no AS itemNo, p.product_type AS productType,
+              p.delivery_date AS deliveryDate,
+              p.qty_pcs AS qtyPcs,
+              p.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
 
   async summary() {
     const [cards, overdueOrders, upcomingOrders, recentOutsource, counts] = await Promise.all([
@@ -154,11 +156,11 @@ export class DashboardService {
         `SELECT
            COUNT(CASE WHEN p.delivery_date IS NOT NULL
                        AND p.delivery_date < CURDATE()
-                       AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS overdueCnt,
+                       AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS overdueCnt,
            COUNT(CASE WHEN p.delivery_date IS NOT NULL
                        AND p.delivery_date >= CURDATE()
                        AND p.delivery_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
-                       AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS upcomingCnt
+                       AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0 THEN 1 END) AS upcomingCnt
          ${this.activeGroupsFrom}`,
         [UPCOMING_DAYS, ...this.activeGroupsParams],
       ),
@@ -176,11 +178,11 @@ export class DashboardService {
   private async loadCards() {
     const rows: any[] = await this.dataSource.query(
       `SELECT COUNT(DISTINCT o.id) AS activeOrders,
-              SUM(GREATEST(g.qty_pcs - IFNULL(fin.in_qty, 0), 0))  AS productionOwed,
-              SUM(GREATEST(g.qty_pcs - IFNULL(fin.out_qty, 0), 0)) AS deliveryOwed,
+              SUM(GREATEST(p.qty_pcs - IFNULL(fin.in_qty, 0), 0))  AS productionOwed,
+              SUM(GREATEST(p.qty_pcs - IFNULL(fin.out_qty, 0), 0)) AS deliveryOwed,
               COUNT(DISTINCT CASE WHEN p.delivery_date IS NOT NULL
                                    AND p.delivery_date < CURDATE()
-                                   AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0
+                                   AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
                                   THEN o.id END) AS overdueOrders
        ${this.activeGroupsFrom}`,
       this.activeGroupsParams,
@@ -202,8 +204,8 @@ export class DashboardService {
        ${this.activeGroupsFrom}
          AND p.delivery_date IS NOT NULL
          AND p.delivery_date < CURDATE()
-         AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0
-       ORDER BY p.delivery_date ASC, g.id ASC
+         AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
+       ORDER BY p.delivery_date ASC, p.id ASC
        LIMIT ?`,
       [...this.activeGroupsParams, TOP_LIMIT],
     );
@@ -219,8 +221,8 @@ export class DashboardService {
          AND p.delivery_date IS NOT NULL
          AND p.delivery_date >= CURDATE()
          AND p.delivery_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
-         AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0
-       ORDER BY p.delivery_date ASC, g.id ASC
+         AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
+       ORDER BY p.delivery_date ASC, p.id ASC
        LIMIT ?`,
       [...this.activeGroupsParams, UPCOMING_DAYS, TOP_LIMIT],
     );
@@ -258,14 +260,15 @@ export class DashboardService {
 
   private toOwedRow(r: any): DashboardOwedRow {
     return {
-      orderPartGroupId: Number(r.groupId),
+      orderProductId: Number(r.productId),
       orderId: Number(r.orderId),
       orderNo: r.orderNo ?? null,
       customerName: r.customerName ?? null,
       salesman: r.salesman ?? null,
       merchandiser: r.merchandiser ?? null,
       productionNo: r.productionNo ?? null,
-      productModel: r.productModel ?? null,
+      // 产品级型号：货号 + 类型中文组合 + 「滑轨」
+      productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
       deliveryDate: this.dateText(r.deliveryDate),
       days: Number(r.days) || 0,
       qtyPcs: Number(r.qtyPcs) || 0,

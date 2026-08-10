@@ -5,7 +5,9 @@ import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   formatDimension,
+  formatProductModel,
   hasSocket,
+  needsOutsource,
   UNIT_OPTIONS,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
@@ -42,10 +44,47 @@ import { SystemConfigService } from '../system-config/system-config.service';
  */
 const EXPORT_MAX_ROWS = 5000;
 
-export interface LedgerRow {
+/**
+ * 取台账行下各部件组的某个字段，去重后按组序用「/」并列。
+ *
+ * 台账主行升到产品级后，生产图号/版本/料厚这些**组级**字段一个产品可能有多个值，
+ * 导出是平表没法嵌套，故并列展示（与总计划导出同一处理方式）。
+ * 按组序（sort/id 正序，见 attachPartGroups 的 ORDER BY）而非台账排序，
+ * 保证得到「外轨/中轨/内轨」这种与订单表单一致的顺序。
+ */
+function joinGroupField(row: LedgerRow, pick: (g: LedgerPartGroup) => string | null): string {
+  const seen: string[] = [];
+  row.partGroups.forEach((g) => {
+    const v = (pick(g) ?? '').trim();
+    if (v && !seen.includes(v)) seen.push(v);
+  });
+  return seen.join('/');
+}
+
+/**
+ * 台账展开行：部件组明细。
+ * 四数在产品级（主行），组级只剩「工艺属性 + 外发回厂进度」——外发仍锚部件组，
+ * 这正是展开行存在的意义。
+ */
+export interface LedgerPartGroup {
   orderPartGroupId: number;
-  orderId: number;
+  groupType: string | null;
+  productModel: string | null;
+  /** 生产图号（组级，内部技术图纸号） */
+  drawingNo: string | null;
+  drawingVersion: string | null;
+  materialThickness: string | null;
+  /** 组支数（组间是互补部件，各组默认都等于产品支数，非数量拆分） */
+  qtyPcs: number;
+  /** 该组外发已回货数量（支） */
+  returnedQty: number;
+  /** 该组外发欠数 = 组支数 − 已回货；不需要表面处理时为 null（不适用） */
+  outsourceOwed: number | null;
+}
+
+export interface LedgerRow {
   orderProductId: number;
+  orderId: number;
   /** 下单日期 */
   orderDate: string | null;
   salesman: string | null;
@@ -56,9 +95,9 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
+  /** 产品型号 = 货号 + 类型中文组合 + 「滑轨」（组后缀在展开行里） */
   productModel: string | null;
   productType: string | null;
-  groupType: string | null;
   railSection: string | null;
   dimensionMm: number | null;
   dimensionText: string | null;
@@ -67,11 +106,10 @@ export interface LedgerRow {
   unit: string | null;
   surfaceType: string | null;
   color: string | null;
-  drawingNo: string | null;
-  drawingVersion: string | null;
-  materialThickness: string | null;
-  /** 该部件组各装配批次的车间（去重）；车间已下沉批次级，一组多批可分在不同车间 */
+  /** 该产品各装配批次的车间（去重）；车间已下沉批次级，多批可分在不同车间 */
   assemblyWorkshops: string[];
+  /** 部件组明细（展开行）：工艺属性 + 各组外发回厂进度 */
+  partGroups: LedgerPartGroup[];
   deliveryDate: string | null;
   isExport: number;
   exportCountry: string | null;
@@ -89,8 +127,19 @@ export interface LedgerRow {
   productionOwed: number;
   /** 发货欠数 = 订单数 − 出库数，可为负（超发）；手工表「成品结存」即此口径 */
   deliveryOwed: number;
-  /** 外发已回货数量 */
+  /** 外发已回货数量（该产品下各部件组之和） */
   returnedQty: number;
+  /**
+   * 外发欠数 = **应外发量 − 已回货量**，即"还有多少支零件在加工厂没回来"。
+   *
+   * ⚠️ 应外发量是 **Σ部件组支数**，不是产品订单数——外发锚部件组，一个三节轨产品
+   * 20 支会拆成 外轨/中轨/内轨 三组各 20 支，实际要送出去 60 支零件。拿产品订单数
+   * 去减各组回货合计（20 − 60）只会得到 −40 这种没有意义的负数。
+   *
+   * 不需要表面处理的产品（`surface_type = none`）为 **null**——它压根不走外发，
+   * 显示 0 会和"已全部回厂"混淆，界面与导出一律留空。
+   */
+  outsourceOwed: number | null;
   /** 装配完成量（actual_date 非空的批次合计） */
   assembledQty: number;
   /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
@@ -117,10 +166,14 @@ export class OrderLedgerService {
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
 
     if (query.keyword) {
+      // 生产图号在部件组上（展开行才显示），但要能搜到——故用 EXISTS 下钻匹配
       where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                   OR g.product_model LIKE ? OR p.item_no LIKE ? OR p.material_code LIKE ?)`);
+                   OR p.item_no LIKE ? OR p.material_code LIKE ?
+                   OR EXISTS (SELECT 1 FROM t_order_part_group g2
+                               WHERE g2.order_product_id = p.id
+                                 AND (g2.product_model LIKE ? OR g2.drawing_no LIKE ?)))`);
       const kw = `%${query.keyword}%`;
-      params.push(kw, kw, kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw, kw);
     }
     if (query.customerName) {
       where.push('o.customer_name = ?');
@@ -157,7 +210,7 @@ export class OrderLedgerService {
     if (query.assemblyWorkshop) {
       // 车间已下沉批次级（订单环节不再安排装配车间），按批次实际车间匹配
       where.push(`EXISTS (SELECT 1 FROM t_assembly_batch b
-                           WHERE b.order_part_group_id = g.id AND b.workshop = ?)`);
+                           WHERE b.order_product_id = p.id AND b.workshop = ?)`);
       params.push(query.assemblyWorkshop);
     }
     if (query.isExport != null) {
@@ -174,41 +227,44 @@ export class OrderLedgerService {
       params.push(query.productType);
     }
 
-    // 聚合派生表放在 JOIN 里，筛选条件才能引用其列
+    // 聚合派生表放在 JOIN 里，筛选条件才能引用其列。
+    // 主行粒度＝**订单产品行**：成品出入库与装配都锚产品行，四数自然在产品级；
+    // 部件组沦为展开明细（图号/版本/料厚/外发回货），另行按需查询。
     const fromSql = `
-        FROM t_order_part_group g
-        JOIN t_order_product p ON p.id = g.order_product_id
-        JOIN t_order o         ON o.id = g.order_id
+        FROM t_order_product p
+        JOIN t_order o ON o.id = p.order_id
         LEFT JOIN (
-              SELECT fi.order_part_group_id AS gid,
+              SELECT fi.order_product_id AS pid,
                      SUM(CASE WHEN ${INBOUND_FAMILY_SQL}  THEN fd.direction * fi.quantity ELSE 0 END) AS in_qty,
                      SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty
                 FROM t_finished_item fi
                 JOIN t_finished_doc  fd ON fd.id = fi.doc_id
                 LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-               WHERE fd.status = ? AND fi.order_part_group_id > 0
-               GROUP BY fi.order_part_group_id
-             ) fin ON fin.gid = g.id
+               WHERE fd.status = ? AND fi.order_product_id > 0
+               GROUP BY fi.order_product_id
+             ) fin ON fin.pid = p.id
         LEFT JOIN (
-              SELECT order_part_group_id AS gid, SUM(quantity) AS qty
+              SELECT order_product_id AS pid, SUM(quantity) AS qty
                 FROM t_finished_balance
-               WHERE order_part_group_id > 0
-               GROUP BY order_part_group_id
-             ) bal ON bal.gid = g.id
+               WHERE order_product_id > 0
+               GROUP BY order_product_id
+             ) bal ON bal.pid = p.id
         LEFT JOIN (
-              SELECT order_part_group_id AS gid, SUM(return_qty) AS return_qty
-                FROM t_outsource_part
-               GROUP BY order_part_group_id
-             ) ret ON ret.gid = g.id
+              -- 外发仍锚**部件组**（部件分开送去表面处理），故按产品行下的组求和
+              SELECT g.order_product_id AS pid, SUM(op.return_qty) AS return_qty
+                FROM t_outsource_part op
+                JOIN t_order_part_group g ON g.id = op.order_part_group_id
+               GROUP BY g.order_product_id
+             ) ret ON ret.pid = p.id
         LEFT JOIN (
-              SELECT order_part_group_id AS gid,
+              SELECT order_product_id AS pid,
                      SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done_qty,
                      MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date,
-                     -- 装配车间已下沉批次级，一组多批可分在不同车间，聚合成去重列表展示
+                     -- 装配车间已下沉批次级，一个产品多批可分在不同车间，聚合成去重列表展示
                      GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
                 FROM t_assembly_batch
-               GROUP BY order_part_group_id
-             ) asm ON asm.gid = g.id
+               GROUP BY order_product_id
+             ) asm ON asm.pid = p.id
        WHERE ${where.join(' AND ')}`;
 
     // 派生表参数在 WHERE 参数之前（SQL 里 JOIN 先于 WHERE 出现）。
@@ -223,11 +279,11 @@ export class OrderLedgerService {
     const having: string[] = [];
     if (query.onlyOwed) {
       having.push(
-        '(g.qty_pcs - IFNULL(fin.in_qty, 0) > 0 OR g.qty_pcs - IFNULL(fin.out_qty, 0) > 0)',
+        '(p.qty_pcs - IFNULL(fin.in_qty, 0) > 0 OR p.qty_pcs - IFNULL(fin.out_qty, 0) > 0)',
       );
     }
     if (query.onlyOverdue) {
-      having.push('(p.delivery_date IS NOT NULL AND p.delivery_date < CURDATE() AND g.qty_pcs - IFNULL(fin.out_qty, 0) > 0)');
+      having.push('(p.delivery_date IS NOT NULL AND p.delivery_date < CURDATE() AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0)');
     }
     const havingSql = having.length ? ` AND ${having.join(' AND ')}` : '';
 
@@ -240,10 +296,7 @@ export class OrderLedgerService {
     const total = Number(countRows?.[0]?.cnt ?? 0);
 
     const rows: any[] = await this.dataSource.query(
-      `SELECT g.id AS groupId, g.order_id AS orderId, g.order_product_id AS orderProductId,
-              g.group_type AS groupType, g.product_model AS productModel, g.qty_pcs AS qtyPcs,
-              g.drawing_no AS drawingNo, g.drawing_version AS drawingVersion,
-              g.material_thickness AS materialThickness,
+      `SELECT p.id AS orderProductId, p.order_id AS orderId, p.qty_pcs AS qtyPcs,
               o.order_no AS orderNo, o.order_date AS orderDate, o.customer_name AS customerName,
               o.salesman AS salesman, o.merchandiser AS merchandiser,
               o.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
@@ -260,7 +313,7 @@ export class OrderLedgerService {
               IFNULL(asm.done_qty, 0)   AS assembledQty,
               asm.next_plan_date        AS nextAssemblyPlanDate
        ${fromSql}${havingSql}
-       ORDER BY (p.delivery_date IS NULL), p.delivery_date ASC, g.id DESC
+       ORDER BY (p.delivery_date IS NULL), p.delivery_date ASC, p.id DESC
        LIMIT ? OFFSET ?`,
       [...allParams, pageSize, (page - 1) * pageSize],
     );
@@ -274,9 +327,8 @@ export class OrderLedgerService {
       const deliveryDate = this.dateText(r.deliveryDate);
       const deliveryOwed = qtyPcs - outQty;
       return {
-        orderPartGroupId: Number(r.groupId),
-        orderId: Number(r.orderId),
         orderProductId: Number(r.orderProductId),
+        orderId: Number(r.orderId),
         orderDate: this.dateText(r.orderDate),
         salesman: r.salesman ?? null,
         merchandiser: r.merchandiser ?? null,
@@ -285,9 +337,9 @@ export class OrderLedgerService {
         orderNo: r.orderNo ?? null,
         materialCode: r.materialCode ?? null,
         itemNo: r.itemNo ?? null,
-        productModel: r.productModel ?? null,
+        // 产品级型号：货号 + 类型中文组合 + 「滑轨」（组后缀属于展开行）
+        productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
         productType: r.productType ?? null,
-        groupType: r.groupType ?? null,
         railSection: r.railSection ?? null,
         dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
         dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm) || null,
@@ -295,10 +347,9 @@ export class OrderLedgerService {
         unit: r.unit ?? null,
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
-        drawingNo: r.drawingNo ?? null,
-        drawingVersion: r.drawingVersion ?? null,
-        materialThickness: r.materialThickness ?? null,
         assemblyWorkshops: this.splitList(r.workshops),
+        // 部件组明细随主行一起返回（组数有限，一次查完免得每展开一行再打一次接口）
+        partGroups: [] as LedgerPartGroup[],
         deliveryDate,
         isExport: Number(r.isExport) || 0,
         exportCountry: r.exportCountry ?? null,
@@ -310,6 +361,8 @@ export class OrderLedgerService {
         productionOwed: qtyPcs - inQty,
         deliveryOwed,
         returnedQty: Number(r.returnedQty) || 0,
+        // 应外发量要按部件组累加，故留到 attachPartGroups 里填
+        outsourceOwed: null,
         assembledQty,
         assemblyPendingQty: qtyPcs - assembledQty,
         nextAssemblyPlanDate: this.dateText(r.nextAssemblyPlanDate),
@@ -317,11 +370,14 @@ export class OrderLedgerService {
       };
     });
 
+    // 部件组明细：只查当前页这些产品行的组，一次查完（一页 20 行 × 三组＝60 行，很轻）
+    await this.attachPartGroups(list);
+
     // 汇总卡：当前筛选结果的整体口径（不受分页影响，故单独聚合）
     const sumRows: any[] = await this.dataSource.query(
       // 注意：rows 是 MySQL 8 保留字（窗口函数），列别名必须避开
       `SELECT COUNT(*) AS rowCnt,
-              SUM(g.qty_pcs) AS totalQty,
+              SUM(p.qty_pcs) AS totalQty,
               SUM(IFNULL(fin.in_qty, 0)) AS totalIn,
               SUM(IFNULL(fin.out_qty, 0)) AS totalOut,
               SUM(IFNULL(bal.qty, 0)) AS totalStock
@@ -351,17 +407,78 @@ export class OrderLedgerService {
   }
 
   /**
-   * 台账行内展开明细（设计文档 §5.1）：该部件组的三条流水。
+   * 给台账主行挂上部件组明细（展开行用）。
+   *
+   * 随列表一起返回而不是另开接口：组数有限（一个产品最多 5 组），一页 20 行也就
+   * 60~100 行，一次 IN 查询就够；每展开一行打一次接口反而更慢、还要在前端做缓存。
+   * 组级唯一还需实时聚合的只有**外发已回货**（外发仍锚部件组）。
+   */
+  private async attachPartGroups(list: LedgerRow[]) {
+    const productIds = [...new Set(list.map((r) => r.orderProductId))].filter((v) => v > 0);
+    if (!productIds.length) return;
+
+    const rows: any[] = await this.dataSource.query(
+      `SELECT g.id AS groupId, g.order_product_id AS pid, g.group_type AS groupType,
+              g.product_model AS productModel, g.drawing_no AS drawingNo,
+              g.drawing_version AS drawingVersion, g.material_thickness AS materialThickness,
+              g.qty_pcs AS qtyPcs,
+              IFNULL(ret.return_qty, 0) AS returnedQty
+         FROM t_order_part_group g
+         LEFT JOIN (
+               SELECT order_part_group_id AS gid, SUM(return_qty) AS return_qty
+                 FROM t_outsource_part
+                GROUP BY order_part_group_id
+              ) ret ON ret.gid = g.id
+        WHERE g.order_product_id IN (${productIds.map(() => '?').join(',')})
+        ORDER BY g.sort ASC, g.id ASC`,
+      productIds,
+    );
+
+    const byProduct = new Map<number, Array<Omit<LedgerPartGroup, 'outsourceOwed'>>>();
+    rows.forEach((r) => {
+      const pid = Number(r.pid);
+      const arr = byProduct.get(pid) ?? [];
+      arr.push({
+        orderPartGroupId: Number(r.groupId),
+        groupType: r.groupType ?? null,
+        productModel: r.productModel ?? null,
+        drawingNo: r.drawingNo ?? null,
+        drawingVersion: r.drawingVersion ?? null,
+        materialThickness: r.materialThickness ?? null,
+        qtyPcs: Number(r.qtyPcs) || 0,
+        returnedQty: Number(r.returnedQty) || 0,
+      });
+      byProduct.set(pid, arr);
+    });
+    list.forEach((r) => {
+      // 不外发的产品（表面处理=无）欠数不适用，组级与产品级一律 null，界面与导出留空
+      const outsourced = needsOutsource(r.surfaceType);
+      const groups = byProduct.get(r.orderProductId) ?? [];
+      r.partGroups = groups.map((g) => ({
+        ...g,
+        outsourceOwed: outsourced ? g.qtyPcs - g.returnedQty : null,
+      }));
+      // 应外发量 = Σ组支数（一个三节轨产品要送出去的是三个部件，不是一套产品）
+      r.outsourceOwed = outsourced
+        ? groups.reduce((s, g) => s + g.qtyPcs, 0) - r.returnedQty
+        : null;
+    });
+  }
+
+  /**
+   * 台账行内展开明细（设计文档 §5.1）：该**产品行**的三条流水。
    *
    * 只读、按需加载——台账一页 15~100 行，若随列表一起返回，三张流水表要多查三遍
    * 全量数据，而用户实际只会展开其中一两行。故独立接口，展开时才查。
+   * （部件组的工艺属性与外发回货合计已随主行返回，这里查的是逐笔流水。）
    *
    * 口径与台账主表保持一致：
+   *   - 成品与装配锚**产品行**；
+   *   - 外发仍锚**部件组**，故按该产品下的所有组反查（外发本就是分部件送出去的）；
    *   - 成品流水只取**已确认**单据（草稿/已作废不算数，与四数聚合同口径）；
-   *   - 外发流水排除已作废发坯单（与台账「外发已回货」列同口径）；
    *   - 装配批次全取，用 actual_date 是否为空区分计划中/已完成。
    */
-  async findRowDetail(orderPartGroupId: number) {
+  async findRowDetail(orderProductId: number) {
     const [finished, outsource, assembly] = await Promise.all([
       this.dataSource.query(
         `SELECT fd.doc_no AS docNo, fd.biz_type AS bizType, fd.direction AS direction,
@@ -371,27 +488,29 @@ export class OrderLedgerService {
            FROM t_finished_item fi
            JOIN t_finished_doc fd ON fd.id = fi.doc_id
            LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-          WHERE fi.order_part_group_id = ? AND fd.status = ?
+          WHERE fi.order_product_id = ? AND fd.status = ?
           ORDER BY fd.doc_date ASC, fd.id ASC`,
-        [orderPartGroupId, FINISHED_DOC_STATUS.CONFIRMED],
+        [orderProductId, FINISHED_DOC_STATUS.CONFIRMED],
       ),
       this.dataSource.query(
-        `SELECT id, back_date AS backDate, processor_name AS processorName,
-                surface_type AS surfaceType, color AS color,
-                return_weight AS returnWeight, unit_weight AS unitWeight,
-                return_qty AS returnQty, remark, creator_name AS creatorName
-           FROM t_outsource_part
-          WHERE order_part_group_id = ?
-          ORDER BY back_date ASC, id ASC`,
-        [orderPartGroupId],
+        `SELECT op.id, op.back_date AS backDate, op.processor_name AS processorName,
+                op.surface_type AS surfaceType, op.color AS color,
+                op.return_weight AS returnWeight, op.unit_weight AS unitWeight,
+                op.return_qty AS returnQty, op.remark, op.creator_name AS creatorName,
+                g.group_type AS groupType
+           FROM t_outsource_part op
+           JOIN t_order_part_group g ON g.id = op.order_part_group_id
+          WHERE g.order_product_id = ?
+          ORDER BY op.back_date ASC, op.id ASC`,
+        [orderProductId],
       ),
       this.dataSource.query(
         `SELECT id, side, workshop, plan_start_date AS planStartDate, plan_date AS planDate,
                 actual_date AS actualDate, qty, remark, creator_name AS creatorName
            FROM t_assembly_batch
-          WHERE order_part_group_id = ?
+          WHERE order_product_id = ?
           ORDER BY id ASC`,
-        [orderPartGroupId],
+        [orderProductId],
       ),
     ]);
 
@@ -411,6 +530,8 @@ export class OrderLedgerService {
       })),
       outsource: outsource.map((r: any) => ({
         id: Number(r.id),
+        // 外发锚部件组，故流水要标明是哪个部件回的厂
+        groupType: r.groupType ?? null,
         backDate: this.dateText(r.backDate),
         processorName: r.processorName ?? null,
         surfaceType: r.surfaceType ?? null,
@@ -476,30 +597,31 @@ export class OrderLedgerService {
     const ws = wb.addWorksheet('订单跟踪台账');
 
     const columns: Array<{ header: string; width: number; productLevel?: boolean }> = [
-      { header: '下单日期', width: 12, productLevel: true },
-      { header: '业务员', width: 10, productLevel: true },
-      { header: '跟单员', width: 10, productLevel: true },
-      { header: '客户', width: 20, productLevel: true },
-      { header: '订单编号', width: 16, productLevel: true },
-      { header: '产品编码', width: 14, productLevel: true },
+      { header: '下单日期', width: 12 },
+      { header: '业务员', width: 10 },
+      { header: '跟单员', width: 10 },
+      { header: '客户', width: 20 },
+      { header: '订单编号', width: 16 },
+      { header: '产品编码', width: 14 },
       { header: '产品型号', width: 22 },
-      { header: '规格', width: 12, productLevel: true },
-      { header: '订单数量', width: 10, productLevel: true },
-      { header: '单位', width: 7, productLevel: true },
-      { header: '表面处理', width: 11, productLevel: true },
+      { header: '规格', width: 12 },
+      { header: '订单数量', width: 10 },
+      { header: '单位', width: 7 },
+      { header: '表面处理', width: 11 },
       ...(colorEnabled
-        ? [{ header: '颜色', width: 10, productLevel: true }]
+        ? [{ header: '颜色', width: 10 }]
         : []),
       { header: '生产图号', width: 16 },
       { header: '版本', width: 8 },
       { header: '料厚', width: 14 },
       { header: '外发已回货', width: 11 },
+      { header: '外发欠数', width: 10 },
       { header: '装配车间', width: 12 },
       { header: '装配完成', width: 10 },
       { header: '订单数(支)', width: 11 },
       { header: '成品入库', width: 10 },
       { header: '生产欠数', width: 10 },
-      { header: '订单交期', width: 12, productLevel: true },
+      { header: '订单交期', width: 12 },
       { header: '成品出货', width: 10 },
       { header: '发货欠数', width: 10 },
       { header: '库存数', width: 10 },
@@ -530,10 +652,13 @@ export class OrderLedgerService {
         unitLabel(r.unit),
         label('surface_type', r.surfaceType),
         ...(colorEnabled ? [r.color ?? ''] : []),
-        r.drawingNo ?? '',
-        r.drawingVersion ?? '',
-        r.materialThickness ?? '',
+        // 组级字段按组序去重并列（一个产品多组时如「DWG-OM/DWG-IN」）
+        joinGroupField(r, (g) => g.drawingNo),
+        joinGroupField(r, (g) => g.drawingVersion),
+        joinGroupField(r, (g) => g.materialThickness),
         r.returnedQty,
+        // 不外发的产品留空而不是 0——0 会被读成「已全部回厂」
+        r.outsourceOwed ?? '',
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
         r.assembledQty,
         r.qtyPcs,
@@ -547,22 +672,8 @@ export class OrderLedgerService {
       ]);
     });
 
-    // 产品级列跨行合并：与台账页同一规则——只合并**相邻**的同产品行，
-    // 同产品的组万一没挨着就各自成行，绝不把中间夹着的别的产品并进来
-    const productCols = columns
-      .map((c, i) => (c.productLevel ? i + 1 : 0))
-      .filter(Boolean);
-    let i = 0;
-    while (i < list.length) {
-      let j = i;
-      while (j + 1 < list.length && list[j + 1].orderProductId === list[i].orderProductId) j++;
-      if (j > i) {
-        const from = i + 2; // +1 表头、+1 转成 1-based
-        const to = j + 2;
-        productCols.forEach((col) => ws.mergeCells(from, col, to, col));
-      }
-      i = j + 1;
-    }
+    // 注：台账主行升到产品级后，一行就是一个产品，不再有「同产品多行需跨行合并」
+    // 的情况，原先的相邻行合并逻辑已随之删除。
 
     // 汇总行：与页面顶部汇总卡同一口径（当前筛选的整体合计，不受分页影响）。
     // 按表头名定位而不是数手写的空串——列数会随「颜色」开关变化，位置写死必错位。
@@ -619,67 +730,17 @@ export class OrderLedgerService {
     }
     if (total > EXPORT_MAX_ROWS) {
       throw new BadRequestException(
-        `当前筛选结果 ${total} 个部件组，超过单次导出上限 ${EXPORT_MAX_ROWS}；` +
+        `当前筛选结果 ${total} 个产品行，超过单次导出上限 ${EXPORT_MAX_ROWS}；` +
           '请先按关键字 / 状态 / 下单日期区间缩小范围再导出',
       );
     }
 
-    // 1) 按产品行汇总（保持 findLedger 的排序：交期升序）
-    interface PlanRow {
-      first: LedgerRow;
-      groupTypes: string[];
-      drawingNos: string[];
-      drawingVersions: string[];
-      thicknesses: string[];
-      qtyPcs: number;
-      inQty: number;
-      outQty: number;
-      stockQty: number;
-      returnedQty: number;
-      assembledQty: number;
-      workshops: string[];
-      overdue: boolean;
-    }
-    // 先按产品分桶（Map 保留首次出现顺序 = findLedger 的交期排序）
-    const groupsByProduct = new Map<number, LedgerRow[]>();
-    for (const r of list) {
-      const arr = groupsByProduct.get(r.orderProductId) ?? [];
-      arr.push(r);
-      groupsByProduct.set(r.orderProductId, arr);
-    }
-    const pushUniq = (arr: string[], v: string | null) => {
-      if (v && !arr.includes(v)) arr.push(v);
-    };
-    const planRows: PlanRow[] = [];
-    for (const groups of groupsByProduct.values()) {
-      // 组级字段并列时按**组序正序**（台账排序是 g.id DESC，直接拼会得到
-      // 「内轨/外中轨」这种与订单表单相反的顺序，看表的人要多想一步）
-      const ordered = [...groups].sort((a, b) => a.orderPartGroupId - b.orderPartGroupId);
-      const row: PlanRow = {
-        first: ordered[0],
-        groupTypes: [], drawingNos: [], drawingVersions: [], thicknesses: [],
-        qtyPcs: 0, inQty: 0, outQty: 0, stockQty: 0, returnedQty: 0, assembledQty: 0,
-        workshops: [], overdue: false,
-      };
-      for (const r of ordered) {
-        pushUniq(row.groupTypes, r.groupType);
-        pushUniq(row.drawingNos, r.drawingNo);
-        pushUniq(row.drawingVersions, r.drawingVersion);
-        pushUniq(row.thicknesses, r.materialThickness);
-        r.assemblyWorkshops.forEach((w) => pushUniq(row.workshops, w));
-        row.qtyPcs += r.qtyPcs;
-        row.inQty += r.inQty;
-        row.outQty += r.outQty;
-        row.stockQty += r.stockQty;
-        row.returnedQty += r.returnedQty;
-        row.assembledQty += r.assembledQty;
-        row.overdue = row.overdue || r.overdue;
-      }
-      planRows.push(row);
-    }
-
-    // 2) 台账行不含的产品/订单侧列，单独平选一次（纯取列，无聚合，不涉口径）
-    const productIds = [...groupsByProduct.keys()];
+    // 1) findLedger 现在**直接返回产品级行**（2026-08-10 台账主行升级），
+    //    原先「按 orderProductId 分桶再汇总四数」的整段逻辑随之删除——
+    //    行本身就是产品级，组级字段（组类型/图号/版本/料厚）改从行内 partGroups 取，
+    //    由 joinGroupField 按组序去重并列，与台账导出同一处理方式。
+    const planRows = list;
+    const productIds = planRows.map((r) => r.orderProductId);
     const extraRows: any[] = await this.dataSource.query(
       `SELECT p.id            AS productId,
               p.product_name  AS productName,
@@ -769,7 +830,8 @@ export class OrderLedgerService {
 
     let sumQtyPcs = 0, sumIn = 0, sumOut = 0, sumStock = 0;
     planRows.forEach((r) => {
-      const f = r.first;
+      // 行本身即产品级，产品/订单侧字段直接取 r（原先要从分桶的首行 first 取）
+      const f = r;
       const ex = extraMap.get(f.orderProductId) ?? {};
       const productionOwed = r.qtyPcs - r.inQty;
       const deliveryOwed = r.qtyPcs - r.outQty;
@@ -790,7 +852,7 @@ export class OrderLedgerService {
         ...(cdnEnabled ? [ex.customerDrawingNo ?? ''] : []),
         labels('product_type', f.productType),
         label('rail_section', f.railSection),
-        labels('part_group_type', r.groupTypes),
+        labels('part_group_type', r.partGroups.map((g) => g.groupType ?? '').filter(Boolean)),
         f.dimensionText ?? '',
         f.orderQty,
         unitLabel(f.unit),
@@ -798,11 +860,11 @@ export class OrderLedgerService {
         label('surface_type', f.surfaceType),
         ...(colorEnabled ? [f.color ?? ''] : []),
         ex.sheetMaterial ?? '',
-        r.drawingNos.join('/'),
-        r.drawingVersions.join('/'),
-        r.thicknesses.join('/'),
+        joinGroupField(r, (g) => g.drawingNo),
+        joinGroupField(r, (g) => g.drawingVersion),
+        joinGroupField(r, (g) => g.materialThickness),
         r.returnedQty,
-        labels('assembly_workshop', r.workshops),
+        labels('assembly_workshop', r.assemblyWorkshops),
         r.assembledQty,
         r.inQty,
         productionOwed,

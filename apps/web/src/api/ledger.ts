@@ -1,10 +1,30 @@
 import request from '@/utils/request';
 
-/** 订单跟踪台账行（按部件组一行，四数实时聚合） */
-export interface LedgerRow {
+/**
+ * 台账展开行：部件组明细。
+ * 四数已升到产品级（主行），组级只剩「工艺属性 + 外发回厂进度」——外发仍锚部件组，
+ * 这正是展开行存在的意义。随主行一起返回，展开时无需再请求。
+ */
+export interface LedgerPartGroup {
   orderPartGroupId: number;
-  orderId: number;
+  groupType: string | null;
+  productModel: string | null;
+  /** 生产图号（组级，内部技术图纸号） */
+  drawingNo: string | null;
+  drawingVersion: string | null;
+  materialThickness: string | null;
+  /** 组支数（组间是互补部件，各组默认都等于产品支数，非数量拆分） */
+  qtyPcs: number;
+  /** 该组外发已回货数量（支） */
+  returnedQty: number;
+  /** 该组外发欠数 = 组支数 − 已回货；不需要表面处理时为 null（不适用，界面显示 —） */
+  outsourceOwed: number | null;
+}
+
+/** 订单跟踪台账行（按**订单产品行**一行，四数实时聚合） */
+export interface LedgerRow {
   orderProductId: number;
+  orderId: number;
   orderDate: string | null;
   salesman: string | null;
   merchandiser: string | null;
@@ -14,9 +34,9 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
+  /** 产品型号 = 货号 + 类型中文组合 + 「滑轨」（组后缀在展开行里） */
   productModel: string | null;
   productType: string | null;
-  groupType: string | null;
   railSection: string | null;
   dimensionMm: number | null;
   dimensionText: string | null;
@@ -24,11 +44,10 @@ export interface LedgerRow {
   unit: string | null;
   surfaceType: string | null;
   color: string | null;
-  drawingNo: string | null;
-  drawingVersion: string | null;
-  materialThickness: string | null;
-  /** 该部件组各装配批次的车间（去重）；车间已下沉批次级，一组多批可分在不同车间 */
+  /** 该产品各装配批次的车间（去重）；车间已下沉批次级，多批可分在不同车间 */
   assemblyWorkshops: string[];
+  /** 部件组明细（展开行）：工艺属性 + 各组外发回厂进度 */
+  partGroups: LedgerPartGroup[];
   deliveryDate: string | null;
   isExport: number;
   exportCountry: string | null;
@@ -40,7 +59,14 @@ export interface LedgerRow {
   stockQty: number;
   productionOwed: number;
   deliveryOwed: number;
+  /** 外发已回货（该产品下各部件组合计） */
   returnedQty: number;
+  /**
+   * 外发欠数 = 应外发量(**Σ组支数**) − 已回货量。
+   * 应外发量不是产品订单数——外发锚部件组，三节轨 20 支产品要送出去的是三个部件共 60 支。
+   * 不需要表面处理的产品为 null（不适用，界面显示 —）。
+   */
+  outsourceOwed: number | null;
   assembledQty: number;
   assemblyPendingQty: number;
   nextAssemblyPlanDate: string | null;
@@ -86,7 +112,7 @@ export interface LedgerResult {
 export const getLedger = (params: LedgerQuery) =>
   request.get<any, LedgerResult>('/api/order/ledger', { params });
 
-/* ===== 行内展开：该部件组的三条流水 ===== */
+/* ===== 行内展开：该产品行的三条流水 ===== */
 
 /** 成品出入库流水（只含已确认单据） */
 export interface LedgerFinishedRow {
@@ -103,10 +129,11 @@ export interface LedgerFinishedRow {
   remark: string | null;
 }
 
-/** 外发流水（排除已作废发坯单） */
 /** 外发回厂流水行（2026-08-10：外发已收敛为回厂记录，无单号无状态） */
 export interface LedgerOutsourceRow {
   id: number;
+  /** 外发仍锚**部件组**，故流水要标明是哪个部件回的厂 */
+  groupType: string | null;
   /** 实际回厂日期 */
   backDate: string | null;
   processorName: string | null;
@@ -141,9 +168,9 @@ export interface LedgerRowDetail {
 }
 
 /** 展开某台账行时按需加载，不随列表一起返回（一页几十行全查太重） */
-export const getLedgerRowDetail = (orderPartGroupId: number) =>
+export const getLedgerRowDetail = (orderProductId: number) =>
   request.get<any, LedgerRowDetail>('/api/order/ledger/detail', {
-    params: { orderPartGroupId },
+    params: { orderProductId },
   });
 
 /** 导出 Excel：按当前筛选全量导出（不含分页参数），列序对齐台账页 */

@@ -6,6 +6,7 @@ import {
   assemblySides,
   deriveAssemblyStatus,
   formatDimension,
+  formatProductModel,
   hasSocket,
   isValidSide,
   sideLabel,
@@ -21,13 +22,12 @@ import {
 import { InboundQuotaRow, loadInboundQuota, loadOneInboundQuota, quotaKey } from './assembly-quota.util';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
-import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
+import { ProductSnapshotService } from '../../common/services/product-snapshot.service';
 
-/** 装配管理列表行：按**部件组**一行，附该组的装配进度聚合 */
+/** 装配管理列表行：按**订单产品行**一行，附该产品的装配进度聚合 */
 export interface AssemblyGroupRow {
-  orderPartGroupId: number;
-  orderId: number;
   orderProductId: number;
+  orderId: number;
   orderNo: string | null;
   customerName: string | null;
   orderDate: string | null;
@@ -36,16 +36,15 @@ export interface AssemblyGroupRow {
   materialCode: string | null;
   productModel: string | null;
   productType: string | null;
-  groupType: string | null;
   railSection: string | null;
   dimensionText: string | null;
   /**
-   * 该部件组各装配批次的车间（去重）。车间已下沉批次级——订单环节不再安排装配车间，
-   * 一组多批可分在不同车间，故是列表而非单值；无批次时为空数组。
+   * 该产品各装配批次的车间（去重）。车间已下沉批次级——订单环节不再安排装配车间，
+   * 一个产品多批可分在不同车间，故是列表而非单值；无批次时为空数组。
    */
   assemblyWorkshops: string[];
   deliveryDate: string | null;
-  /** 组支数（台账「订单数」口径） */
+  /** 产品支数（台账「订单数」口径，也是排产数量的默认值） */
   qtyPcs: number;
   /** 是否含卡口——含卡口的批次与闸门按左右分开核算 */
   socket: boolean;
@@ -55,7 +54,7 @@ export interface AssemblyGroupRow {
   plannedQty: number;
   /** 已完成装配量（actual_date 非空）（支） */
   doneQty: number;
-  /** 未装配量 = 组支数 − 已完成装配量，可为负（超装配） */
+  /** 未装配量 = 产品支数 − 已完成装配量，可为负（超装配） */
   pendingQty: number;
   /** 最早未完成批次的计划完成时间（逾期提示用） */
   nextPlanDate: string | null;
@@ -70,14 +69,18 @@ export class AssemblyService {
   constructor(
     @InjectRepository(AssemblyBatch) private readonly batchRepo: Repository<AssemblyBatch>,
     private readonly dataSource: DataSource,
-    private readonly partGroupSnapshot: PartGroupSnapshotService,
+    // 装配锚产品行，故读产品级快照（部件组级快照留给外发用）
+    private readonly productSnapshot: ProductSnapshotService,
   ) {}
 
   /* ==================== 查询 ==================== */
 
   /**
-   * 装配管理列表：按**部件组**一行（对齐台账粒度），聚合该组的批次数、
-   * 已录量、已完成量、最早未完成计划日。已作废订单的组不进本页。
+   * 装配管理列表：按**订单产品行**一行（对齐台账主行粒度），聚合该产品的批次数、
+   * 已录量、已完成量、最早未完成计划日。已作废订单的产品不进本页。
+   *
+   * 排产是产品级活动——一条产线装的是整套滑轨，不会按外轨/中轨/内轨分别排，
+   * 故不再按部件组铺行（2026-08-10 改）。
    */
   async findList(query: QueryAssemblyDto) {
     const page = query.page ?? 1;
@@ -88,14 +91,14 @@ export class AssemblyService {
 
     if (query.keyword) {
       where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                   OR g.product_model LIKE ? OR p.item_no LIKE ?)`);
+                   OR p.item_no LIKE ? OR p.material_code LIKE ?)`);
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
     }
     if (query.workshop) {
       // 车间只存在于装配批次（订单环节不再安排计划车间），故只匹配批次实际车间
       where.push(`EXISTS (SELECT 1 FROM t_assembly_batch b
-                           WHERE b.order_part_group_id = g.id AND b.workshop = ?)`);
+                           WHERE b.order_product_id = p.id AND b.workshop = ?)`);
       params.push(query.workshop);
     }
     if (query.deliveryFrom) {
@@ -107,29 +110,28 @@ export class AssemblyService {
       params.push(query.deliveryTo);
     }
     if (query.onlyUnfinished) {
-      where.push('COALESCE(a.done_qty, 0) < g.qty_pcs');
+      where.push('COALESCE(a.done_qty, 0) < p.qty_pcs');
     }
     if (query.onlyOverdue) {
       where.push('a.next_plan_date IS NOT NULL AND a.next_plan_date < CURDATE()');
     }
 
     const fromSql = `
-        FROM t_order_part_group g
-        JOIN t_order_product p ON p.id = g.order_product_id
-        JOIN t_order o         ON o.id = g.order_id
+        FROM t_order_product p
+        JOIN t_order o ON o.id = p.order_id
         LEFT JOIN (
-              SELECT order_part_group_id                                        AS gid,
+              SELECT order_product_id                                           AS pid,
                      COUNT(*)                                                   AS batch_count,
                      SUM(qty)                                                   AS planned_qty,
                      SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done_qty,
                      MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date,
                      MAX(actual_date)                                           AS last_actual_date,
-                     -- 装配车间已下沉批次级（订单不再预设计划车间），一组多批可能分在不同车间，
-                     -- 故聚合成去重列表交给界面并列展示；NULL 会被 GROUP_CONCAT 自动跳过
+                     -- 装配车间已下沉批次级（订单不再预设计划车间），一个产品多批可能分在不同
+                     -- 车间，故聚合成去重列表交给界面并列展示；NULL 会被 GROUP_CONCAT 自动跳过
                      GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
                 FROM t_assembly_batch
-               GROUP BY order_part_group_id
-             ) a ON a.gid = g.id
+               GROUP BY order_product_id
+             ) a ON a.pid = p.id
        WHERE ${where.join(' AND ')}`;
 
     const countRows: Array<{ cnt: number | string }> = await this.dataSource.query(
@@ -139,12 +141,9 @@ export class AssemblyService {
     const total = Number(countRows?.[0]?.cnt ?? 0);
 
     const rows: any[] = await this.dataSource.query(
-      `SELECT g.id                AS group_id,
-              g.order_id          AS order_id,
-              g.order_product_id  AS order_product_id,
-              g.group_type        AS group_type,
-              g.product_model     AS product_model,
-              g.qty_pcs           AS qty_pcs,
+      `SELECT p.id                AS product_id,
+              p.order_id          AS order_id,
+              p.qty_pcs           AS qty_pcs,
               o.order_no          AS order_no,
               o.customer_name     AS customer_name,
               o.order_date        AS order_date,
@@ -164,7 +163,7 @@ export class AssemblyService {
               a.next_plan_date           AS next_plan_date,
               a.last_actual_date         AS last_actual_date
        ${fromSql}
-       ORDER BY (p.delivery_date IS NULL), p.delivery_date ASC, g.id DESC
+       ORDER BY (p.delivery_date IS NULL), p.delivery_date ASC, p.id DESC
        LIMIT ? OFFSET ?`,
       [...params, pageSize, (page - 1) * pageSize],
     );
@@ -175,18 +174,17 @@ export class AssemblyService {
       const doneQty = Number(r.done_qty) || 0;
       const nextPlanDate = this.dateText(r.next_plan_date);
       return {
-        orderPartGroupId: Number(r.group_id),
+        orderProductId: Number(r.product_id),
         orderId: Number(r.order_id),
-        orderProductId: Number(r.order_product_id),
         orderNo: r.order_no ?? null,
         customerName: r.customer_name ?? null,
         orderDate: this.dateText(r.order_date),
         productionNo: r.production_no ?? null,
         itemNo: r.item_no ?? null,
         materialCode: r.material_code ?? null,
-        productModel: r.product_model ?? null,
+        // 产品级型号：货号 + 产品类型中文组合 + 「滑轨」，不带组后缀
+        productModel: formatProductModel(r.item_no ?? '', r.product_type ?? ''),
         productType: r.product_type ?? null,
-        groupType: r.group_type ?? null,
         railSection: r.rail_section ?? null,
         dimensionText: this.dimensionText(r),
         assemblyWorkshops: this.splitList(r.workshops),
@@ -207,42 +205,35 @@ export class AssemblyService {
   }
 
   /**
-   * 某部件组的装配批次明细 + 分边别小计与可入库量。
-   * 供装配管理页的批次弹窗与 M4 入库表单下钻使用。
+   * 某产品行的装配批次明细 + 分边别小计与可入库量。
+   * 供装配管理页的批次弹窗与成品入库表单下钻使用。
    */
   async findBatches(query: QueryAssemblyBatchDto) {
-    if (!query.orderPartGroupId && !query.orderProductId) {
-      throw new BadRequestException('请指定部件组或产品行');
+    if (!query.orderProductId) {
+      throw new BadRequestException('请指定订单产品');
     }
 
     const qb = this.batchRepo.createQueryBuilder('b');
-    if (query.orderPartGroupId) {
-      qb.andWhere('b.orderPartGroupId = :gid', { gid: query.orderPartGroupId });
-    }
-    if (query.orderProductId) {
-      qb.andWhere('b.orderProductId = :pid', { pid: query.orderProductId });
-    }
+    qb.andWhere('b.orderProductId = :pid', { pid: query.orderProductId });
     if (query.side != null) qb.andWhere('b.side = :side', { side: query.side });
     // 按预计装配区间排：先计划开始、再计划完成，未填计划的沉到最后按录入序
     qb.orderBy('b.planStartDate', 'ASC').addOrderBy('b.planDate', 'ASC').addOrderBy('b.id', 'ASC');
     const list = await qb.getMany();
 
     // 分边别小计：含卡口按左右各算一份额度，非卡口只有空串一份
-    let sides: Array<InboundQuotaRow & { plannedQty: number; sideLabel: string }> = [];
-    let group: Awaited<ReturnType<PartGroupSnapshotService['loadOne']>> = null;
-    if (query.orderPartGroupId) {
-      group = await this.partGroupSnapshot.loadOne(null, query.orderPartGroupId, {
-        includeCancelledOrder: true,
-      });
-      const socket = hasSocket(group?.productType);
-      const keys = assemblySides(socket).map((side) => ({
-        orderPartGroupId: query.orderPartGroupId as number,
-        side,
-      }));
-      const quota = await loadInboundQuota(this.dataSource.manager, keys);
-      sides = keys.map((k) => {
-        const row = quota.get(quotaKey(k.orderPartGroupId, k.side)) ?? {
-          orderPartGroupId: k.orderPartGroupId,
+    const product = await this.productSnapshot.loadOne(null, query.orderProductId, {
+      includeCancelledOrder: true,
+    });
+    const socket = hasSocket(product?.productType);
+    const keys = assemblySides(socket).map((side) => ({
+      orderProductId: query.orderProductId as number,
+      side,
+    }));
+    const quota = await loadInboundQuota(this.dataSource.manager, keys);
+    const sides: Array<InboundQuotaRow & { plannedQty: number; sideLabel: string }> = keys.map(
+      (k) => {
+        const row = quota.get(quotaKey(k.orderProductId, k.side)) ?? {
+          orderProductId: k.orderProductId,
           side: k.side,
           assembledQty: 0,
           inboundQty: 0,
@@ -255,26 +246,21 @@ export class AssemblyService {
             .filter((b) => b.side === k.side)
             .reduce((s, b) => s + (b.qty || 0), 0),
         };
-      });
-    }
+      },
+    );
 
     return {
-      group: group
-        ? {
-            ...group,
-            socket: hasSocket(group.productType),
-          }
-        : null,
+      product: product ? { ...product, socket } : null,
       sides,
       list,
     };
   }
 
-  /** 可入库量查询（§4.4 闸门口径，M4 入库表单前置展示；只读不加锁） */
+  /** 可入库量查询（§4.4 闸门口径，入库表单前置展示；只读不加锁） */
   async findInboundQuota(query: QueryInboundQuotaDto): Promise<InboundQuotaRow> {
     return loadOneInboundQuota(
       this.dataSource.manager,
-      query.orderPartGroupId,
+      query.orderProductId,
       query.side ?? '',
     );
   }
@@ -287,8 +273,8 @@ export class AssemblyService {
    */
   async createBatch(dto: CreateAssemblyBatchDto, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
-      const snap = await this.partGroupSnapshot.loadOne(mgr, dto.orderPartGroupId);
-      if (!snap) throw new BadRequestException('订单部件组不存在，或所属订单已作废');
+      const snap = await this.productSnapshot.loadOne(mgr, dto.orderProductId);
+      if (!snap) throw new BadRequestException('订单产品不存在，或所属订单已作废');
 
       const side = this.assertSide(dto.side, snap.productType, snap.productModel);
       const planStartDate = this.normalizeDate(dto.planStartDate);
@@ -300,7 +286,6 @@ export class AssemblyService {
         mgr.getRepository(AssemblyBatch).create({
           orderId: snap.orderId,
           orderProductId: snap.orderProductId,
-          orderPartGroupId: snap.orderPartGroupId,
           side,
           // 车间不再继承产品行计划车间（订单环节已不安排装配车间），完全由本批次录入决定
           workshop: dto.workshop?.trim() || null,
@@ -318,7 +303,7 @@ export class AssemblyService {
           ...auditOnCreate(user),
         }),
       );
-      return { id: saved.id, orderPartGroupId: snap.orderPartGroupId, side };
+      return { id: saved.id, orderProductId: snap.orderProductId, side };
     });
   }
 
@@ -330,10 +315,10 @@ export class AssemblyService {
     return this.dataSource.transaction(async (mgr) => {
       const pre = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!pre) throw new NotFoundException('装配批次不存在');
-      // 统一锁顺序「先锁部件组全部批次行、再改本行」，与 M4 入库确认一致，避免交叉等待死锁
+      // 统一锁顺序「先锁产品行全部批次行、再改本行」，与入库确认一致，避免交叉等待死锁
       await loadInboundQuota(
         mgr,
-        [{ orderPartGroupId: pre.orderPartGroupId, side: pre.side }],
+        [{ orderProductId: pre.orderProductId, side: pre.side }],
         { lock: true },
       );
       const batch = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
@@ -354,8 +339,8 @@ export class AssemblyService {
         remark: dto.remark ?? null,
         ...auditOnUpdate(user),
       });
-      await this.assertQuotaNonNegative(mgr, batch.orderPartGroupId, batch.side, '修改本批次');
-      return { id, orderPartGroupId: batch.orderPartGroupId, side: batch.side };
+      await this.assertQuotaNonNegative(mgr, batch.orderProductId, batch.side, '修改本批次');
+      return { id, orderProductId: batch.orderProductId, side: batch.side };
     });
   }
 
@@ -367,15 +352,15 @@ export class AssemblyService {
       if (!pre) throw new NotFoundException('装配批次不存在');
       await loadInboundQuota(
         mgr,
-        [{ orderPartGroupId: pre.orderPartGroupId, side: pre.side }],
+        [{ orderProductId: pre.orderProductId, side: pre.side }],
         { lock: true },
       );
       const batch = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!batch) throw new NotFoundException('装配批次不存在');
 
       await mgr.getRepository(AssemblyBatch).delete(id);
-      await this.assertQuotaNonNegative(mgr, batch.orderPartGroupId, batch.side, '删除本批次');
-      return { id, orderPartGroupId: batch.orderPartGroupId, side: batch.side };
+      await this.assertQuotaNonNegative(mgr, batch.orderProductId, batch.side, '删除本批次');
+      return { id, orderProductId: batch.orderProductId, side: batch.side };
     });
   }
 
@@ -383,19 +368,19 @@ export class AssemblyService {
 
   /**
    * 闸门复核：可入库量不得为负（§7.14）。
-   * 调用前上层已在同事务内对该部件组批次行加锁，此处 lock=false 不重复加锁。
+   * 调用前上层已在同事务内对该产品行批次行加锁，此处 lock=false 不重复加锁。
    */
   private async assertQuotaNonNegative(
     mgr: EntityManager,
-    orderPartGroupId: number,
+    orderProductId: number,
     side: string,
     action: string,
   ) {
-    const row = await loadOneInboundQuota(mgr, orderPartGroupId, side);
+    const row = await loadOneInboundQuota(mgr, orderProductId, side);
     if (row.quota < 0) {
       const st = side ? `（${sideLabel(side)}边）` : '';
       throw new BadRequestException(
-        `${action}后该部件组${st}已完成装配 ${row.assembledQty} 支、已入库 ${row.inboundQty} 支，` +
+        `${action}后该产品${st}已完成装配 ${row.assembledQty} 支、已入库 ${row.inboundQty} 支，` +
           `可入库量将变为 ${row.quota} 支；请先红字冲销对应的成品入库单，再调整装配批次`,
       );
     }

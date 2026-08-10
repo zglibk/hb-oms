@@ -49,12 +49,12 @@ async function main() {
 
   // ---------- 独立重算：逐单据行累加，不用任何 CASE WHEN 家族判断 ----------
   const [docRows] = await db.query<any[]>(
-    `SELECT fi.order_part_group_id AS gid, fi.quantity AS qty,
+    `SELECT fi.order_product_id AS gid, fi.quantity AS qty,
             fd.direction AS dir, fd.biz_type AS biz, fo.biz_type AS originBiz
        FROM t_finished_item fi
        JOIN t_finished_doc fd ON fd.id = fi.doc_id
        LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-      WHERE fd.status = ? AND fi.order_part_group_id > 0`,
+      WHERE fd.status = ? AND fi.order_product_id > 0`,
     [CONFIRMED],
   );
 
@@ -80,26 +80,28 @@ async function main() {
   }
 
   const [asmRows] = await db.query<any[]>(
-    `SELECT order_part_group_id AS gid,
+    `SELECT order_product_id AS gid,
             SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done
-       FROM t_assembly_batch GROUP BY order_part_group_id`,
+       FROM t_assembly_batch GROUP BY order_product_id`,
   );
   const asmMap = new Map<number, number>(asmRows.map((r) => [Number(r.gid), Number(r.done) || 0]));
 
   const [balRows] = await db.query<any[]>(
-    `SELECT order_part_group_id AS gid, SUM(quantity) AS qty
-       FROM t_finished_balance WHERE order_part_group_id > 0 GROUP BY order_part_group_id`,
+    `SELECT order_product_id AS gid, SUM(quantity) AS qty
+       FROM t_finished_balance WHERE order_product_id > 0 GROUP BY order_product_id`,
   );
   const balMap = new Map<number, number>(balRows.map((r) => [Number(r.gid), Number(r.qty) || 0]));
 
+  // 台账主行粒度＝订单产品行（2026-08-10 由部件组升级），核算随之改按产品行
   const [groups] = await db.query<any[]>(
-    `SELECT g.id AS gid, g.qty_pcs AS qtyPcs, g.product_model AS model
-       FROM t_order_part_group g
-       JOIN t_order o ON o.id = g.order_id
+    `SELECT p.id AS gid, p.qty_pcs AS qtyPcs,
+            CONCAT(IFNULL(p.item_no, ''), IFNULL(p.product_type, '')) AS model
+       FROM t_order_product p
+       JOIN t_order o ON o.id = p.order_id
       WHERE o.status <> 9`,
   );
 
-  console.log('【1】四数逐组核算（独立重算 vs 余额表）');
+  console.log('【1】四数逐产品核算（独立重算 vs 余额表）');
   let checkedGroups = 0;
   for (const g of groups) {
     const gid = Number(g.gid);
@@ -110,28 +112,28 @@ async function main() {
     // 库存数必须等于「完成数 − 出库数」：余额表与单据流水两条路径自洽
     check(
       stock === m.inQty - m.outQty,
-      `组 ${gid}（${g.model}）库存数自洽：余额表 ${stock} = 完成 ${m.inQty} − 出库 ${m.outQty}`,
+      `产品 ${gid}（${g.model}）库存数自洽：余额表 ${stock} = 完成 ${m.inQty} − 出库 ${m.outQty}`,
       { stock, inQty: m.inQty, outQty: m.outQty },
     );
-    check(m.inQty >= 0, `组 ${gid} 完成数非负`, m.inQty);
-    check(m.outQty >= 0, `组 ${gid} 出库数非负`, m.outQty);
+    check(m.inQty >= 0, `产品 ${gid} 完成数非负`, m.inQty);
+    check(m.outQty >= 0, `产品 ${gid} 出库数非负`, m.outQty);
   }
   if (!checkedGroups) console.log('  · 无出入库数据，跳过（属正常：尚未开始出入库）');
 
   console.log('\n【2】余额表不得出现负数结存');
   const [neg] = await db.query<any[]>(
-    'SELECT id, order_part_group_id AS gid, side, quantity FROM t_finished_balance WHERE quantity < 0',
+    'SELECT id, order_product_id AS gid, side, quantity FROM t_finished_balance WHERE quantity < 0',
   );
   check(neg.length === 0, '无负数结存行', neg.slice(0, 5));
 
   console.log('\n【3】装配闸门事后复核：已确认生产入库量 ≤ 已完成装配量（期初豁免）');
   const [gateRows] = await db.query<any[]>(
-    `SELECT fi.order_part_group_id AS gid, fi.side AS side, fi.quantity AS qty,
+    `SELECT fi.order_product_id AS gid, fi.side AS side, fi.quantity AS qty,
             fd.direction AS dir, fd.biz_type AS biz, fo.biz_type AS originBiz
        FROM t_finished_item fi
        JOIN t_finished_doc fd ON fd.id = fi.doc_id
        LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-      WHERE fd.status = ? AND fi.order_part_group_id > 0`,
+      WHERE fd.status = ? AND fi.order_product_id > 0`,
     [CONFIRMED],
   );
   const gateIn = new Map<string, number>();
@@ -142,9 +144,9 @@ async function main() {
     gateIn.set(key, (gateIn.get(key) ?? 0) + Number(r.dir) * (Number(r.qty) || 0));
   }
   const [asmSide] = await db.query<any[]>(
-    `SELECT order_part_group_id AS gid, side,
+    `SELECT order_product_id AS gid, side,
             SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done
-       FROM t_assembly_batch GROUP BY order_part_group_id, side`,
+       FROM t_assembly_batch GROUP BY order_product_id, side`,
   );
   const asmSideMap = new Map<string, number>(
     asmSide.map((r) => [`${r.gid}#${r.side ?? ''}`, Number(r.done) || 0]),

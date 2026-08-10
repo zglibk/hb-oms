@@ -43,9 +43,9 @@
     <el-card shadow="never">
       <div class="tip-bar">
         <el-icon><InfoFilled /></el-icon>
-        装配按<b>部件组</b>跟踪，一组可分多批录入；填了「实际完成时间」即视为该批完成，其数量计入成品入库的可入库量。
+        装配按<b>产品</b>跟踪（装出来的是整套滑轨），一个产品可分多批录入；填了「实际完成时间」即视为该批完成，其数量计入成品入库的可入库量。
       </div>
-      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="orderPartGroupId">
+      <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="orderProductId">
         <el-table-column label="订单编号" width="130" fixed="left" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.productionNo || row.orderNo || '—' }}<audit-info mode="inline" :row="row" />
@@ -101,7 +101,7 @@
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
 
-    <batch-dialog v-model="batchVisible" :order-part-group-id="batchGroupId" @changed="load" />
+    <batch-dialog v-model="batchVisible" :order-product-id="batchProductId" @changed="load" />
   </div>
 </template>
 
@@ -152,9 +152,9 @@ onActivated(load);
 
 /* ===== 批次弹窗 ===== */
 const batchVisible = ref(false);
-const batchGroupId = ref<number | null>(null);
+const batchProductId = ref<number | null>(null);
 function openBatches(row: AssemblyGroupRow) {
-  batchGroupId.value = row.orderPartGroupId;
+  batchProductId.value = row.orderProductId;
   batchVisible.value = true;
 }
 
@@ -172,7 +172,7 @@ function pendingClass(row: AssemblyGroupRow) {
   if (row.pendingQty === 0) return 'num-ok';
   return 'num-pending';
 }
-/** 组级装配进度：未开始 / 装配中 / 已装完（超装配单独标注） */
+/** 产品级装配进度：未开始 / 装配中 / 已装完（超装配单独标注） */
 function progressTag(row: AssemblyGroupRow): { label: string; type: string } {
   if (row.doneQty <= 0) return { label: '未开始', type: 'info' };
   if (row.pendingQty > 0) return { label: `装配中 ${row.doneQty}/${row.qtyPcs}`, type: 'warning' };

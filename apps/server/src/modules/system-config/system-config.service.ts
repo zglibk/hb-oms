@@ -193,9 +193,16 @@ export class SystemConfigService {
       );
     }
 
-    // 3. 按依赖反向顺序清空 OMS 业务表（保留主数据与系统配置；
-    //    M3 外发 / M3.5 装配 / M4 出入库建表后在订单四表之前追加对应表）
+    // 3. 按依赖反向顺序清空 OMS 业务表（保留主数据与系统配置）。
+    //    顺序＝从下游到上游：成品余额/明细/单头 → 装配 → 外发 → 订单四级 → 日志/文件/采番。
     const truncated = [
+      't_finished_balance',
+      't_finished_item',
+      't_finished_doc',
+      't_assembly_batch',
+      't_outsource_part',
+      't_part_adjust',
+      't_part_balance',
       't_order_part',
       't_order_part_group',
       't_order_product',

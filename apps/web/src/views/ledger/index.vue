@@ -77,26 +77,56 @@
     <el-card shadow="never">
       <app-table
         :data="list" v-loading="loading" border stripe
-        :page="query.page" :page-size="query.pageSize" row-key="orderPartGroupId"
-        :span-method="spanMethod" @expand-change="onExpandChange"
+        :page="query.page" :page-size="query.pageSize" row-key="orderProductId"
+        @expand-change="onExpandChange"
       >
-        <!-- 行内展开：该部件组的出入库 / 外发 / 装配三条流水（§5.1），展开时才加载 -->
+        <!-- 行内展开：部件组明细（随主行返回）+ 该产品行的出入库 / 外发 / 装配三条流水，
+             流水展开时才加载（§5.1） -->
         <el-table-column type="expand" width="36" fixed="left">
           <template #default="{ row }">
-            <div v-loading="detailLoadingId === row.orderPartGroupId" class="lg-detail">
-              <template v-if="detailCache[row.orderPartGroupId]">
+            <div v-loading="detailLoadingId === row.orderProductId" class="lg-detail">
+              <!-- 部件组明细：工艺属性（生产图号/版本/料厚）与外发回厂进度仍在组级 -->
+              <div class="lg-detail__sec">
+                <div class="lg-detail__title">部件组明细（工艺属性与外发回厂在组级）</div>
+                <table v-if="row.partGroups?.length" class="lg-grid">
+                  <thead>
+                    <tr><th>部件组</th><th>组型号</th><th>生产图号</th><th>版本</th><th>料厚</th><th>组支数</th><th>外发已回货(支)</th><th>外发欠数(支)</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="g in row.partGroups" :key="g.orderPartGroupId">
+                      <td class="lg-c">{{ partGroupLabel(g.groupType) || '—' }}</td>
+                      <td>{{ g.productModel || '—' }}</td>
+                      <td>{{ g.drawingNo || '—' }}</td>
+                      <td class="lg-c">{{ g.drawingVersion || '—' }}</td>
+                      <td class="lg-c">{{ g.materialThickness || '—' }}</td>
+                      <td class="lg-c">{{ g.qtyPcs }}</td>
+                      <td class="lg-c">
+                        <span :class="{ 'num-ok': g.returnedQty > 0 }">{{ g.returnedQty }}</span>
+                      </td>
+                      <!-- 主行的外发欠数是这一列的合计；哪个部件还没回来，看这里 -->
+                      <td class="lg-c">
+                        <span v-if="g.outsourceOwed == null" class="num-na">—</span>
+                        <span v-else :class="owedClass(g.outsourceOwed)">{{ g.outsourceOwed }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-else class="lg-empty">该产品没有部件组</div>
+              </div>
+
+              <template v-if="detailCache[row.orderProductId]">
                 <div class="lg-detail__sec">
                   <div class="lg-detail__title">成品出入库流水（仅已确认单据）</div>
-                  <table v-if="detailCache[row.orderPartGroupId].finished.length" class="lg-grid">
+                  <table v-if="detailCache[row.orderProductId].finished.length" class="lg-grid">
                     <thead>
                       <tr><th>单号</th><th>类型</th><th>日期</th><th>边别</th><th>方向</th><th>数量</th><th>被冲原单</th><th>制单人</th><th>备注</th></tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(f, i) in detailCache[row.orderPartGroupId].finished" :key="i">
+                      <tr v-for="(f, i) in detailCache[row.orderProductId].finished" :key="i">
                         <td>{{ f.docNo || '—' }}</td>
                         <td>{{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType) }}</td>
                         <td class="lg-c">{{ f.docDate || '—' }}</td>
-                        <td class="lg-c">{{ sideLabel(f.side) || '整组' }}</td>
+                        <td class="lg-c">{{ sideLabel(f.side) || '整套' }}</td>
                         <td class="lg-c">
                           <span :class="f.direction > 0 ? 'num-ok' : 'num-owed'">{{ f.direction > 0 ? '入' : '出' }}</span>
                         </td>
@@ -111,13 +141,14 @@
                 </div>
 
                 <div class="lg-detail__sec">
-                  <div class="lg-detail__title">外发回厂流水</div>
-                  <table v-if="detailCache[row.orderPartGroupId].outsource.length" class="lg-grid">
+                  <div class="lg-detail__title">外发回厂流水（逐笔；外发仍锚部件组）</div>
+                  <table v-if="detailCache[row.orderProductId].outsource.length" class="lg-grid">
                     <thead>
-                      <tr><th>回厂日期</th><th>加工商</th><th>{{ colorEnabled ? '表面处理/颜色' : '表面处理' }}</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
+                      <tr><th>部件组</th><th>回厂日期</th><th>加工商</th><th>{{ colorEnabled ? '表面处理/颜色' : '表面处理' }}</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(o, i) in detailCache[row.orderPartGroupId].outsource" :key="i">
+                      <tr v-for="(o, i) in detailCache[row.orderProductId].outsource" :key="i">
+                        <td class="lg-c">{{ partGroupLabel(o.groupType) || '—' }}</td>
                         <td class="lg-c">{{ o.backDate || '—' }}</td>
                         <td>{{ o.processorName || '—' }}</td>
                         <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), colorEnabled ? o.color : ''].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
@@ -129,19 +160,19 @@
                       </tr>
                     </tbody>
                   </table>
-                  <div v-else class="lg-empty">该部件组无外发回厂记录（不需要表面处理，或尚未回厂）</div>
+                  <div v-else class="lg-empty">该产品下各部件组均无外发回厂记录（不需要表面处理，或尚未回厂）</div>
                 </div>
 
                 <div class="lg-detail__sec">
                   <div class="lg-detail__title">装配批次</div>
-                  <table v-if="detailCache[row.orderPartGroupId].assembly.length" class="lg-grid">
+                  <table v-if="detailCache[row.orderProductId].assembly.length" class="lg-grid">
                     <thead>
                       <tr><th>#</th><th>边别</th><th>装配车间</th><th>计划开始</th><th>计划完成</th><th>实际完成</th><th>数量</th><th>状态</th><th>备注</th></tr>
                     </thead>
                     <tbody>
-                      <tr v-for="(a, i) in detailCache[row.orderPartGroupId].assembly" :key="a.id">
+                      <tr v-for="(a, i) in detailCache[row.orderProductId].assembly" :key="a.id">
                         <td class="lg-c">{{ i + 1 }}</td>
-                        <td class="lg-c">{{ sideLabel(a.side) || '整组' }}</td>
+                        <td class="lg-c">{{ sideLabel(a.side) || '整套' }}</td>
                         <td class="lg-c">{{ dictLabel(workshopDict, a.workshop) }}</td>
                         <td class="lg-c">{{ a.planStartDate || '—' }}</td>
                         <td class="lg-c">{{ a.planDate || '—' }}</td>
@@ -185,14 +216,19 @@
         <el-table-column label="表面处理" width="95" align="center">
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
-        <el-table-column label="图号/版本" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ [row.drawingNo, row.drawingVersion].filter(Boolean).join(' ') || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="料厚" width="95" align="center">
-          <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
+        <!-- 生产图号/版本/料厚是**组级**字段，一个产品可能有多组，故移入展开行 -->
+        <el-table-column label="部件组" width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ groupTypesText(row) }}</template>
         </el-table-column>
         <el-table-column label="外发已回货" width="100" align="center">
           <template #default="{ row }">{{ row.returnedQty }}</template>
+        </el-table-column>
+        <!-- 外发欠数 = 应外发量(Σ组支数) − 已回货；不外发的产品显示 —（见服务端注释） -->
+        <el-table-column label="外发欠数" width="95" align="center">
+          <template #default="{ row }">
+            <span v-if="row.outsourceOwed == null" class="num-na">—</span>
+            <span v-else :class="owedClass(row.outsourceOwed)">{{ row.outsourceOwed }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="装配车间" width="90" align="center">
           <template #default="{ row }">{{ dictLabels(workshopDict, row.assemblyWorkshops) }}</template>
@@ -243,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, reactive, ref } from 'vue';
+import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
@@ -269,6 +305,7 @@ import {
   UNIT_OPTIONS,
   FINISHED_BIZ_TYPE_OPTIONS,
   sideLabel,
+  partGroupLabel,
   labelOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
@@ -336,48 +373,28 @@ function reload() {
 }
 load();
 
-/* ===== 行内展开：按需加载该部件组的三条流水 ===== */
+/* ===== 行内展开：按需加载该产品行的三条流水 =====
+ * 部件组明细（组类型/图号/版本/料厚/外发回货）已随主行返回，展开即可见，无需再请求；
+ * 逐笔流水才走这个接口——一页十几行全查三张流水表太重。 */
 const detailCache = ref<Record<number, LedgerRowDetail>>({});
 const detailLoadingId = ref<number | null>(null);
 
 /** AppTable 是手风琴模式，展开事件的第二参是当前展开行数组 */
 async function onExpandChange(row: LedgerRow, expanded: unknown) {
   const isOpen = Array.isArray(expanded)
-    ? expanded.some((r: any) => r?.orderPartGroupId === row.orderPartGroupId)
+    ? expanded.some((r: any) => r?.orderProductId === row.orderProductId)
     : !!expanded;
-  if (!isOpen || detailCache.value[row.orderPartGroupId]) return;
-  detailLoadingId.value = row.orderPartGroupId;
+  if (!isOpen || detailCache.value[row.orderProductId]) return;
+  detailLoadingId.value = row.orderProductId;
   try {
-    detailCache.value[row.orderPartGroupId] = await getLedgerRowDetail(row.orderPartGroupId);
+    detailCache.value[row.orderProductId] = await getLedgerRowDetail(row.orderProductId);
   } finally {
     detailLoadingId.value = null;
   }
 }
 
-/* ===== 产品级列跨行合并（§5.1）=====
- * 同一产品行拆成多个部件组时，产品级信息（客户/订单编号/规格/交期…）每行重复
- * 一遍很吵，合并成一格更贴近手工台账的观感。
- * 只合并**相邻**的同产品行：排序由服务端决定，万一同产品的组没挨着，宁可不合并
- * 也不能把中间夹着的别的产品错并进来。 */
-const PRODUCT_LEVEL_COLS = new Set([
-  '下单日期', '业务/跟单', '客户', '订单编号', '产品编码',
-  '规格', '数量/单位', '表面处理', '订单交期',
-]);
-
-/** rowIndex → 合并跨度；0 表示本行被上一行合并掉 */
-const productSpans = computed(() => {
-  const spans = new Map<number, number>();
-  const rows = list.value;
-  let i = 0;
-  while (i < rows.length) {
-    let j = i;
-    while (j + 1 < rows.length && rows[j + 1].orderProductId === rows[i].orderProductId) j++;
-    spans.set(i, j - i + 1);
-    for (let k = i + 1; k <= j; k++) spans.set(k, 0);
-    i = j + 1;
-  }
-  return spans;
-});
+/* 注：主行升到产品级后一行即一个产品，原先「相邻同产品行跨行合并」的
+ * span-method 已无用武之地，随之整段删除。 */
 
 /* ===== 导出 Excel ===== */
 const exporting = ref(false);
@@ -412,11 +429,6 @@ async function onExport() {
   }
 }
 
-function spanMethod({ column, rowIndex }: { column: { label?: string }; rowIndex: number }) {
-  if (!column?.label || !PRODUCT_LEVEL_COLS.has(column.label)) return;
-  const span = productSpans.value.get(rowIndex) ?? 1;
-  return span === 0 ? { rowspan: 0, colspan: 0 } : { rowspan: span, colspan: 1 };
-}
 onActivated(load);
 
 /* ===== 展示辅助 ===== */
@@ -424,6 +436,11 @@ onActivated(load);
 function dictLabels(opts: Array<{ label: string; value: string }>, vs: string[] | null | undefined): string {
   if (!vs?.length) return '—';
   return vs.map((v) => opts.find((o) => o.value === v)?.label ?? v).join('/');
+}
+/** 主行的部件组一览：按组序并列（明细在展开行里） */
+function groupTypesText(row: LedgerRow): string {
+  const vs = (row.partGroups ?? []).map((g) => partGroupLabel(g.groupType) || '').filter(Boolean);
+  return vs.length ? vs.join('/') : '—';
 }
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';
@@ -467,6 +484,8 @@ export default { name: 'OrderLedger' };
 .num-info { color: var(--el-color-primary); font-weight: 600; }
 .num-owed { color: var(--el-color-warning); font-weight: 600; }
 .num-over { color: var(--el-color-danger); font-weight: 600; }
+/* 不适用（如不需要表面处理的产品没有外发欠数），与「0」在视觉上区分开 */
+.num-na { color: var(--el-text-color-placeholder); }
 .num-overdue { color: var(--el-color-danger); font-weight: 600; }
 
 /* 行内展开：三段流水。用原生 table 而非 el-table——展开区是只读明细，
@@ -503,6 +522,5 @@ export default { name: 'OrderLedger' };
   color: var(--el-text-color-secondary);
   padding: 6px 8px;
 }
-/* 合并单元格后仍要有清晰的行边界 */
 :deep(.el-table td.el-table__cell) { vertical-align: middle; }
 </style>

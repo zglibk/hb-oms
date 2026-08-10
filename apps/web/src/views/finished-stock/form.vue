@@ -46,11 +46,11 @@
 
         <div class="section-title">
           出入库明细
-          <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
+          <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加产品</el-button>
           <span class="sec-sum">合计 <b>{{ totalQty }}</b> 支</span>
         </div>
 
-        <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加部件组」选择产品">
+        <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加产品」选择要出入库的产品">
           <el-table-column type="index" label="#" width="46" align="center" />
           <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
           <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
@@ -87,8 +87,8 @@
       </el-form>
     </el-card>
 
-    <!-- 部件组选择器：按边别展开成可选行 -->
-    <el-dialog v-model="pickerVisible" title="选择产品部件组" width="1040px" top="6vh" @open="loadOptions">
+    <!-- 产品选择器：按边别展开成可选行（成品是装配产出的整套滑轨，锚订单产品行） -->
+    <el-dialog v-model="pickerVisible" title="选择订单产品" width="1040px" top="6vh" @open="loadOptions">
       <div class="picker-bar">
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
@@ -111,7 +111,7 @@
         <el-table-column label="边别" width="70" align="center">
           <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="组支数" prop="qtyPcs" width="80" align="center" />
+        <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
         <el-table-column :label="limitLabel" width="110" align="center">
           <template #default="{ row }">
             <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
@@ -155,7 +155,7 @@ const saving = ref(false);
 const formRef = ref<FormInstance>();
 
 interface ItemRow {
-  orderPartGroupId: number;
+  orderProductId: number;
   side: string;
   orderNo: string | null;
   customerName: string | null;
@@ -201,7 +201,7 @@ async function init() {
     form.machineNo = doc.machineNo ?? '';
     form.remark = doc.remark ?? '';
     form.items = (doc.items ?? []).map((it) => ({
-      orderPartGroupId: it.orderPartGroupId,
+      orderProductId: it.orderProductId,
       side: it.side,
       orderNo: it.orderNo,
       customerName: it.customerName,
@@ -219,18 +219,18 @@ async function init() {
 }
 init();
 
-/** 编辑态回填额度/结存：选项接口按组返回，按 (组,边别) 对齐 */
+/** 编辑态回填额度/结存：选项接口按产品行返回，按 (产品行,边别) 对齐 */
 async function refreshLimits() {
   if (!form.items.length) return;
   const opts = await getStockGroupOptions({ bizType: form.bizType, limit: 500 });
   const map = new Map<string, number>();
   opts.forEach((o) =>
     o.sides.forEach((s) =>
-      map.set(`${o.orderPartGroupId}#${s.side}`, isInbound.value ? s.quota : s.stockQty),
+      map.set(`${o.orderProductId}#${s.side}`, isInbound.value ? s.quota : s.stockQty),
     ),
   );
   form.items.forEach((it) => {
-    it.limit = map.get(`${it.orderPartGroupId}#${it.side}`) ?? 0;
+    it.limit = map.get(`${it.orderProductId}#${it.side}`) ?? 0;
   });
 }
 
@@ -246,7 +246,7 @@ function openPicker() {
   pickerVisible.value = true;
 }
 
-/** 选项按边别展开：卡口组展开左右两行，其余一行 */
+/** 选项按边别展开：含卡口的产品展开左右两行，其余一行 */
 async function loadOptions() {
   pickerLoading.value = true;
   try {
@@ -257,7 +257,7 @@ async function loadOptions() {
     });
     pickerRows.value = opts.flatMap((o) =>
       o.sides.map((s) => ({
-        orderPartGroupId: o.orderPartGroupId,
+        orderProductId: o.orderProductId,
         side: s.side,
         orderNo: o.orderNo,
         customerName: o.customerName,
@@ -274,10 +274,10 @@ async function loadOptions() {
     pickerLoading.value = false;
   }
 }
-/** 已在明细中的 (组,边别) 不可重复选 */
+/** 已在明细中的 (产品行,边别) 不可重复选 */
 function isSelectable(row: ItemRow): boolean {
   return !form.items.some(
-    (it) => it.orderPartGroupId === row.orderPartGroupId && it.side === row.side,
+    (it) => it.orderProductId === row.orderProductId && it.side === row.side,
   );
 }
 function onPickChange(rows: ItemRow[]) {
@@ -285,9 +285,9 @@ function onPickChange(rows: ItemRow[]) {
 }
 function confirmPick() {
   picked.value.forEach((o) => {
-    if (form.items.some((it) => it.orderPartGroupId === o.orderPartGroupId && it.side === o.side)) return;
+    if (form.items.some((it) => it.orderProductId === o.orderProductId && it.side === o.side)) return;
     form.items.push({
-      orderPartGroupId: o.orderPartGroupId,
+      orderProductId: o.orderProductId,
       side: o.side,
       orderNo: o.orderNo,
       customerName: o.customerName,
@@ -324,7 +324,7 @@ async function onSave() {
     machineNo: form.machineNo || undefined,
     remark: form.remark || undefined,
     items: form.items.map((it, i) => ({
-      orderPartGroupId: it.orderPartGroupId,
+      orderProductId: it.orderProductId,
       side: it.side,
       quantity: it.quantity,
       remark: it.remark || undefined,

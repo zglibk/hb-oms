@@ -48,13 +48,13 @@ export class OrderController {
   }
 
   /**
-   * 台账行内展开：某部件组的出入库/外发/装配三条流水（§5.1）。
+   * 台账行内展开：某产品行的出入库/外发/装配三条流水（§5.1）。
    * 同样**必须在 `:id` 之前**注册。只读查询，不标 @OperationLog。
    */
   @Get('ledger/detail')
   @RequirePermissions('ledger')
   async ledgerDetail(@Query() query: QueryLedgerDetailDto) {
-    return this.ledgerService.findRowDetail(query.orderPartGroupId);
+    return this.ledgerService.findRowDetail(query.orderProductId);
   }
 
   /**

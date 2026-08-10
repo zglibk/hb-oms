@@ -29,11 +29,11 @@ const SIDE_VALUES = ['', 'left', 'right'];
  * 客户端只传锚点 + 边别 + 数量，展示快照一律由服务端从订单侧读取落库（§5.5 防伪造）。
  */
 export class CreateFinishedItemDto {
-  /** 锚点：订单部件组ID */
+  /** 锚点：订单产品行ID（成品是装配产出的整套滑轨，2026-08-10 由部件组升级） */
   @Type(() => Number)
-  @IsInt({ message: '请选择订单部件组' })
-  @Min(1, { message: '请选择订单部件组' })
-  orderPartGroupId: number;
+  @IsInt({ message: '请选择订单产品' })
+  @Min(1, { message: '请选择订单产品' })
+  orderProductId: number;
 
   /** 边别：含卡口组合必填 left/right，非卡口必须留空 */
   @IsOptional()
@@ -132,7 +132,7 @@ export class QueryFinishedDocDto {
   @IsOptional() @IsDateString() dateTo?: string;
 }
 
-/** 成品库存查询：按余额行，可按部件组/属性筛选 */
+/** 成品库存查询：按余额行，可按产品行/属性筛选 */
 export class QueryBalanceDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
 
@@ -141,7 +141,7 @@ export class QueryBalanceDto {
   /** 关键字：货号/型号/订单号/客户/生产单号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
-  @IsOptional() @Type(() => Number) @IsInt() orderPartGroupId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() orderProductId?: number;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 
@@ -151,7 +151,7 @@ export class QueryBalanceDto {
   @IsOptional() @Transform(toBoolean) onlyInStock?: boolean;
 }
 
-/** 可出入库的部件组选项（建单选行用） */
+/** 可出入库的**产品行**选项（建单选行用；沿用旧接口路径 group-options） */
 export class QueryStockGroupOptionDto {
   @IsOptional() @IsString() keyword?: string;
 

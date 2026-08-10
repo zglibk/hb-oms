@@ -30,9 +30,9 @@ import type { OpeningFinishedDto } from '../opening/dto/opening.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import {
-  PartGroupSnapshot,
-  PartGroupSnapshotService,
-} from '../../common/services/part-group-snapshot.service';
+  ProductSnapshot,
+  ProductSnapshotService,
+} from '../../common/services/product-snapshot.service';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
 
 /** 单据类型 → 采番前缀（设计文档 §4.7：期初走 FGO 序列） */
@@ -54,7 +54,8 @@ export class FinishedStockService {
     @InjectRepository(FinishedItem) private readonly itemRepo: Repository<FinishedItem>,
     @InjectRepository(FinishedBalance) private readonly balanceRepo: Repository<FinishedBalance>,
     private readonly dataSource: DataSource,
-    private readonly partGroupSnapshot: PartGroupSnapshotService,
+    // 成品锚产品行，故读产品级快照（部件组级快照留给外发用）
+    private readonly productSnapshot: ProductSnapshotService,
     private readonly numberGenerator: NumberGeneratorService,
   ) {}
 
@@ -133,9 +134,9 @@ export class FinishedStockService {
 
     // 默认只看有结存；零结存行是历史痕迹，日常不看
     if (query.onlyInStock !== false) where.push('b.quantity <> 0');
-    if (query.orderPartGroupId) {
-      where.push('b.order_part_group_id = ?');
-      params.push(query.orderPartGroupId);
+    if (query.orderProductId) {
+      where.push('b.order_product_id = ?');
+      params.push(query.orderProductId);
     }
     if (query.side != null) {
       where.push('b.side = ?');
@@ -176,7 +177,6 @@ export class FinishedStockService {
         id: Number(r.id),
         orderId: Number(r.order_id),
         orderProductId: Number(r.order_product_id),
-        orderPartGroupId: Number(r.order_part_group_id),
         orderNo: r.orderNo ?? null,
         customerName: r.customerName ?? null,
         productionNo: r.productionNo ?? null,
@@ -200,7 +200,7 @@ export class FinishedStockService {
   }
 
   /**
-   * 可出入库的部件组选项：
+   * 可出入库的**产品行**选项（2026-08-10 由部件组升级——入库对象是装配产出的整套滑轨）：
    * - 入库（inbound）附「可入库量」= Σ已完成装配 − Σ已入库（§4.4 闸门口径）；
    * - 出库（sale_outbound）附当前结存，供选行时看清能发多少。
    */
@@ -210,49 +210,47 @@ export class FinishedStockService {
     let where = ' WHERE o.status <> ?';
     if (query.keyword) {
       where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                      OR g.product_model LIKE ? OR p.item_no LIKE ?)`;
+                      OR p.item_no LIKE ? OR p.material_code LIKE ?)`;
       const kw = `%${query.keyword}%`;
       params.push(kw, kw, kw, kw, kw);
     }
     params.push(limit);
 
     const rows: any[] = await this.dataSource.query(
-      `SELECT g.id AS groupId, g.order_id AS orderId, g.order_product_id AS orderProductId,
-              g.group_type AS groupType, g.product_model AS productModel, g.qty_pcs AS qtyPcs,
+      `SELECT p.id AS productId, p.order_id AS orderId, p.qty_pcs AS qtyPcs,
               o.order_no AS orderNo, o.customer_name AS customerName,
               o.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
               p.rail_section AS railSection, p.dimension_raw AS dimensionRaw,
               p.dimension_unit AS dimensionUnit, p.dimension_mm AS dimensionMm,
               p.surface_type AS surfaceType, p.color AS color
-         FROM t_order_part_group g
-         JOIN t_order_product p ON p.id = g.order_product_id
-         JOIN t_order o         ON o.id = g.order_id
+         FROM t_order_product p
+         JOIN t_order o ON o.id = p.order_id
          ${where}
-        ORDER BY g.id DESC
+        ORDER BY p.id DESC
         LIMIT ?`,
       params,
     );
     if (!rows.length) return [];
 
-    const groupIds = rows.map((r) => Number(r.groupId));
-    const snaps = await this.partGroupSnapshot.load(null, groupIds);
+    const productIds = rows.map((r) => Number(r.productId));
+    const snaps = await this.productSnapshot.load(null, productIds);
 
-    // 每个组按其卡口口径展开 side，附额度/结存
-    const keys: Array<{ orderPartGroupId: number; side: string }> = [];
+    // 每个产品按其卡口口径展开 side，附额度/结存
+    const keys: Array<{ orderProductId: number; side: string }> = [];
     rows.forEach((r) => {
       const socket = hasSocket(r.productType);
       (socket ? ['left', 'right'] : ['']).forEach((side) =>
-        keys.push({ orderPartGroupId: Number(r.groupId), side }),
+        keys.push({ orderProductId: Number(r.productId), side }),
       );
     });
     const quota = await loadInboundQuota(this.dataSource.manager, keys);
     const balances = await this.loadBalanceMap(this.dataSource.manager, keys);
 
     return rows.map((r) => {
-      const gid = Number(r.groupId);
+      const pid = Number(r.productId);
       const socket = hasSocket(r.productType);
       const sides = (socket ? ['left', 'right'] : ['']).map((side) => {
-        const q = quota.get(quotaKey(gid, side));
+        const q = quota.get(quotaKey(pid, side));
         return {
           side,
           sideLabel: sideLabel(side),
@@ -261,21 +259,19 @@ export class FinishedStockService {
           /** 可入库量（入库时的硬上限） */
           quota: q?.quota ?? 0,
           /** 当前结存（出库时的硬上限） */
-          stockQty: balances.get(quotaKey(gid, side))?.quantity ?? 0,
+          stockQty: balances.get(quotaKey(pid, side))?.quantity ?? 0,
         };
       });
       return {
-        orderPartGroupId: gid,
+        orderProductId: pid,
         orderId: Number(r.orderId),
-        orderProductId: Number(r.orderProductId),
         orderNo: r.orderNo ?? null,
         customerName: r.customerName ?? null,
         productionNo: r.productionNo ?? null,
         itemNo: r.itemNo ?? null,
-        productModel: r.productModel ?? null,
+        productModel: snaps.get(pid)?.productModel ?? null,
         productType: r.productType ?? null,
-        groupType: r.groupType ?? null,
-        dimensionText: snaps.get(gid)?.dimensionText ?? null,
+        dimensionText: snaps.get(pid)?.dimensionText ?? null,
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
         qtyPcs: Number(r.qtyPcs) || 0,
@@ -318,9 +314,10 @@ export class FinishedStockService {
    *    让用户录完再去出入库列表点一次确认纯属多余；单据仍在成品出入库列表可见、
    *    可红字冲销纠错，追溯性与纠错路径都没丢。
    * 2. 明细支持**两种行**：
-   *    - 挂订单行（orderPartGroupId ≥ 1）：快照由服务端从订单侧读，参与该组的四数与欠数；
-   *    - 纯属性行（orderPartGroupId 省略）：已完结订单的剩余库存，锚点落 0、属性自带，
+   *    - 挂订单行（orderProductId ≥ 1）：快照由服务端从订单侧读，参与该产品的四数与欠数；
+   *    - 纯属性行（orderProductId 省略）：已完结订单的剩余库存，锚点落 0、属性自带，
    *      靠余额表 attr_key 指纹兜底唯一，**只进库存数、不参与任何订单欠数**（§7.9）。
+   *      纯属性行仍可填 groupType——上线前若按部件存过半成品，靠它区分。
    *
    * 期初豁免装配闸门（§4.5——期初是上线前存量，没有装配过程），但结存不得为负的
    * 通用约束仍然生效（期初是入向，正常不会触发）。
@@ -364,26 +361,26 @@ export class FinishedStockService {
     docId: number,
     items: OpeningFinishedDto['items'],
   ): Promise<FinishedItem[]> {
-    const groupIds = items
-      .map((it) => Number(it.orderPartGroupId) || 0)
+    const productIds = items
+      .map((it) => Number(it.orderProductId) || 0)
       .filter((v) => v > 0);
-    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds, {
+    const snapshots = await this.productSnapshot.load(mgr, productIds, {
       // 期初补录的历史订单可能已完结，但不会是作废；作废订单仍不允许挂
       includeCancelledOrder: false,
     });
 
     const seen = new Set<string>();
     return items.map((it, i) => {
-      const groupId = Number(it.orderPartGroupId) || 0;
+      const productId = Number(it.orderProductId) || 0;
       const batchNo = (it.batchNo ?? '').trim();
 
-      if (groupId > 0) {
-        const snap = snapshots.get(groupId);
+      if (productId > 0) {
+        const snap = snapshots.get(productId);
         if (!snap) {
-          throw new BadRequestException(`第 ${i + 1} 行：订单部件组不存在或订单已作废`);
+          throw new BadRequestException(`第 ${i + 1} 行：订单产品不存在或订单已作废`);
         }
         const side = this.assertSide(it.side, snap, i);
-        const key = `g${groupId}#${side}#${batchNo}`;
+        const key = `p${productId}#${side}#${batchNo}`;
         if (seen.has(key)) {
           throw new BadRequestException(
             `第 ${i + 1} 行：「${snap.productModel ?? ''}${side ? ` ${sideLabel(side)}边` : ''}」重复，请合并数量`,
@@ -394,14 +391,14 @@ export class FinishedStockService {
           docId,
           orderId: snap.orderId,
           orderProductId: snap.orderProductId,
-          orderPartGroupId: snap.orderPartGroupId,
           orderNo: snap.orderNo,
           customerName: snap.customerName,
           productionNo: snap.productionNo,
           itemNo: snap.itemNo,
           productModel: snap.productModel,
           productType: snap.productType,
-          groupType: snap.groupType,
+          // 挂订单的成品是整套滑轨，没有组的概念，故不落组类型
+          groupType: null,
           railSection: snap.railSection,
           dimensionText: snap.dimensionText,
           dimensionMm: snap.dimensionMm,
@@ -435,7 +432,6 @@ export class FinishedStockService {
         docId,
         orderId: 0,
         orderProductId: 0,
-        orderPartGroupId: 0,
         orderNo: null,
         customerName: null,
         productionNo: null,
@@ -503,7 +499,7 @@ export class FinishedStockService {
    * 确认单据：草稿 → 已确认，并驱动余额增减。
    *
    * 同一事务内依次做三件事，任一失败整笔回滚：
-   * 1. **装配入库闸门**（仅 biz_type='inbound'）：按 (部件组, side) 校验
+   * 1. **装配入库闸门**（仅 biz_type='inbound'）：按 (产品行, side) 校验
    *    `本次入库量 ≤ 可入库量`，口径复用 assembly-quota.util（§4.5 / §7.13）。
    *    期初与红字豁免——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。
    * 2. **余额行锁**：对涉及的余额行 `SELECT ... FOR UPDATE`，防并发超扣（§7.8）。
@@ -637,7 +633,7 @@ export class FinishedStockService {
     // 同一单内同键明细先合并，避免逐行判定时漏算本单内的累计影响
     const merged = new Map<string, { item: FinishedItem; qty: number }>();
     items.forEach((it) => {
-      const key = this.balanceKey(it.orderPartGroupId, it.side, it.batchNo, this.attrKeyOf(it));
+      const key = this.balanceKey(it.orderProductId, it.side, it.batchNo, this.attrKeyOf(it));
       const prev = merged.get(key);
       if (prev) prev.qty += it.quantity || 0;
       else merged.set(key, { item: it, qty: it.quantity || 0 });
@@ -645,25 +641,25 @@ export class FinishedStockService {
 
     // 1) 装配入库闸门：仅生产入库校验；期初与红字豁免（§4.5）
     if (doc.bizType === FINISHED_BIZ_TYPE.INBOUND) {
-      const byGroupSide = new Map<
+      const byProductSide = new Map<
         string,
-        { groupId: number; side: string; qty: number; item: FinishedItem }
+        { productId: number; side: string; qty: number; item: FinishedItem }
       >();
       merged.forEach(({ item, qty }) => {
-        if (item.orderPartGroupId <= 0) return;
-        const k = quotaKey(item.orderPartGroupId, item.side);
-        const cur = byGroupSide.get(k);
+        if (item.orderProductId <= 0) return;
+        const k = quotaKey(item.orderProductId, item.side);
+        const cur = byProductSide.get(k);
         if (cur) cur.qty += qty;
-        else byGroupSide.set(k, { groupId: item.orderPartGroupId, side: item.side, qty, item });
+        else byProductSide.set(k, { productId: item.orderProductId, side: item.side, qty, item });
       });
-      if (byGroupSide.size) {
+      if (byProductSide.size) {
         const quota = await loadInboundQuota(
           mgr,
-          [...byGroupSide.values()].map((v) => ({ orderPartGroupId: v.groupId, side: v.side })),
+          [...byProductSide.values()].map((v) => ({ orderProductId: v.productId, side: v.side })),
           { lock: true },
         );
-        for (const v of byGroupSide.values()) {
-          const q = quota.get(quotaKey(v.groupId, v.side));
+        for (const v of byProductSide.values()) {
+          const q = quota.get(quotaKey(v.productId, v.side));
           const allowed = q?.quota ?? 0;
           if (v.qty > allowed) {
             const st = v.side ? `（${sideLabel(v.side)}边）` : '';
@@ -697,7 +693,7 @@ export class FinishedStockService {
   private async lockOrCreateBalance(mgr: EntityManager, item: FinishedItem): Promise<FinishedBalance> {
     const attrKey = this.attrKeyOf(item);
     const where = {
-      orderPartGroupId: item.orderPartGroupId,
+      orderProductId: item.orderProductId,
       side: item.side ?? '',
       batchNo: item.batchNo ?? '',
       attrKey,
@@ -708,8 +704,8 @@ export class FinishedStockService {
         .createQueryBuilder('b')
         .setLock('pessimistic_write')
         .where(
-          'b.orderPartGroupId = :g AND b.side = :s AND b.batchNo = :b AND b.attrKey = :a',
-          { g: where.orderPartGroupId, s: where.side, b: where.batchNo, a: attrKey },
+          'b.orderProductId = :p AND b.side = :s AND b.batchNo = :b AND b.attrKey = :a',
+          { p: where.orderProductId, s: where.side, b: where.batchNo, a: attrKey },
         )
         .getOne();
 
@@ -720,7 +716,6 @@ export class FinishedStockService {
       await mgr.getRepository(FinishedBalance).insert({
         orderId: item.orderId,
         orderProductId: item.orderProductId,
-        orderPartGroupId: item.orderPartGroupId,
         itemNo: item.itemNo ?? '',
         productModel: item.productModel ?? '',
         productType: item.productType ?? '',
@@ -745,10 +740,11 @@ export class FinishedStockService {
 
   /**
    * 纯属性行（不挂订单）的属性指纹；挂订单的行恒为空串。
-   * 供 M5 期初纯属性录入复用——挂订单的行靠部件组唯一，属性行只能靠属性唯一。
+   * 供期初纯属性录入复用——挂订单的行靠产品行唯一，属性行只能靠属性唯一。
+   * 指纹仍含 groupType：上线前若按部件存过半成品，不同部件要各自成行。
    */
   private attrKeyOf(item: FinishedItem): string {
-    if (item.orderPartGroupId > 0) return '';
+    if (item.orderProductId > 0) return '';
     return [
       item.itemNo ?? '',
       item.productType ?? '',
@@ -760,8 +756,8 @@ export class FinishedStockService {
     ].join('|');
   }
 
-  private balanceKey(groupId: number, side: string, batchNo: string, attrKey: string): string {
-    return `${groupId}#${side ?? ''}#${batchNo ?? ''}#${attrKey}`;
+  private balanceKey(productId: number, side: string, batchNo: string, attrKey: string): string {
+    return `${productId}#${side ?? ''}#${batchNo ?? ''}#${attrKey}`;
   }
 
   /** 各原明细行已被红字冲销的数量合计 */
@@ -783,23 +779,23 @@ export class FinishedStockService {
     return map;
   }
 
-  /** 按 (部件组, side) 取余额（batch 默认空串），供选项接口展示当前结存 */
+  /** 按 (产品行, side) 取余额（batch 默认空串），供选项接口展示当前结存 */
   private async loadBalanceMap(
     mgr: EntityManager,
-    keys: Array<{ orderPartGroupId: number; side: string }>,
+    keys: Array<{ orderProductId: number; side: string }>,
   ) {
     const map = new Map<string, { quantity: number }>();
-    const ids = [...new Set(keys.map((k) => k.orderPartGroupId))].filter((v) => v > 0);
+    const ids = [...new Set(keys.map((k) => k.orderProductId))].filter((v) => v > 0);
     if (!ids.length) return map;
     const rows: any[] = await mgr.query(
-      `SELECT order_part_group_id AS gid, side, SUM(quantity) AS qty
+      `SELECT order_product_id AS pid, side, SUM(quantity) AS qty
          FROM t_finished_balance
-        WHERE order_part_group_id IN (${ids.map(() => '?').join(',')})
-        GROUP BY order_part_group_id, side`,
+        WHERE order_product_id IN (${ids.map(() => '?').join(',')})
+        GROUP BY order_product_id, side`,
       ids,
     );
     rows.forEach((r) =>
-      map.set(quotaKey(Number(r.gid), r.side ?? ''), { quantity: Number(r.qty) || 0 }),
+      map.set(quotaKey(Number(r.pid), r.side ?? ''), { quantity: Number(r.qty) || 0 }),
     );
     return map;
   }
@@ -811,18 +807,18 @@ export class FinishedStockService {
     docId: number,
     items: CreateFinishedDocDto['items'],
   ) {
-    const groupIds = items.map((it) => it.orderPartGroupId);
-    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds);
+    const productIds = items.map((it) => it.orderProductId);
+    const snapshots = await this.productSnapshot.load(mgr, productIds);
 
     const seen = new Set<string>();
     const rows = items.map((it, i) => {
-      const snap = snapshots.get(it.orderPartGroupId);
+      const snap = snapshots.get(it.orderProductId);
       if (!snap) {
-        throw new BadRequestException(`第 ${i + 1} 行明细：订单部件组不存在或订单已作废`);
+        throw new BadRequestException(`第 ${i + 1} 行明细：订单产品不存在或订单已作废`);
       }
       const side = this.assertSide(it.side, snap, i);
       const batchNo = (it.batchNo ?? '').trim();
-      const key = `${it.orderPartGroupId}#${side}#${batchNo}`;
+      const key = `${it.orderProductId}#${side}#${batchNo}`;
       if (seen.has(key)) {
         throw new BadRequestException(
           `第 ${i + 1} 行明细：同一单据内「${snap.productModel ?? ''}${side ? ` ${sideLabel(side)}边` : ''}」重复，请合并数量`,
@@ -834,14 +830,14 @@ export class FinishedStockService {
         docId,
         orderId: snap.orderId,
         orderProductId: snap.orderProductId,
-        orderPartGroupId: snap.orderPartGroupId,
         orderNo: snap.orderNo,
         customerName: snap.customerName,
         productionNo: snap.productionNo,
         itemNo: snap.itemNo,
         productModel: snap.productModel,
         productType: snap.productType,
-        groupType: snap.groupType,
+        // 挂订单的成品是整套滑轨，没有组的概念
+        groupType: null,
         railSection: snap.railSection,
         dimensionText: snap.dimensionText,
         dimensionMm: snap.dimensionMm,
@@ -863,7 +859,6 @@ export class FinishedStockService {
     return {
       orderId: src.orderId,
       orderProductId: src.orderProductId,
-      orderPartGroupId: src.orderPartGroupId,
       orderNo: src.orderNo,
       customerName: src.customerName,
       productionNo: src.productionNo,
@@ -881,7 +876,7 @@ export class FinishedStockService {
     };
   }
 
-  private assertSide(side: string | undefined, snap: PartGroupSnapshot, index: number): string {
+  private assertSide(side: string | undefined, snap: ProductSnapshot, index: number): string {
     const v = (side ?? '').trim();
     const socket = hasSocket(snap.productType);
     if (!isValidSide(v, socket)) {

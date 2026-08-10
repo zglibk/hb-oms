@@ -8,21 +8,25 @@
     @open="load"
   >
     <div v-loading="loading" class="bd-body">
-      <div v-if="data?.group" class="bd-head">
-        <span class="bd-model">{{ data.group.productModel || '—' }}</span>
-        <span class="bd-meta">{{ data.group.orderNo || '—' }}</span>
-        <span class="bd-meta">生产单号 {{ data.group.productionNo || '—' }}</span>
-        <span class="bd-meta">{{ data.group.customerName || '—' }}</span>
-        <span class="bd-meta">规格 {{ data.group.dimensionText || '—' }}</span>
-        <span class="bd-meta">组支数 <b>{{ data.group.qtyPcs }}</b> 支</span>
-        <el-tag v-if="data.group.socket" size="small" type="warning">含卡口 · 左右分开核算</el-tag>
+      <div v-if="data?.product" class="bd-head">
+        <span class="bd-model">{{ data.product.productModel || '—' }}</span>
+        <span class="bd-meta">{{ data.product.orderNo || '—' }}</span>
+        <span class="bd-meta">生产单号 {{ data.product.productionNo || '—' }}</span>
+        <span class="bd-meta">{{ data.product.customerName || '—' }}</span>
+        <span class="bd-meta">规格 {{ data.product.dimensionText || '—' }}</span>
+        <span class="bd-meta">订单数 <b>{{ data.product.qtyPcs }}</b> 支</span>
+        <!-- disable-transitions 必须加：el-tag 默认带 zoom 过渡，而本弹窗是复用的
+             （换产品时 v-if 在弹窗隐藏状态下翻转），leave 过渡收不到 transitionend
+             就永远走不完，节点被留在 DOM 里 —— 下次开一个不含卡口的产品，这个
+             「含卡口」标签会被原样复活。 -->
+        <el-tag v-if="data.product.socket" size="small" type="warning" disable-transitions>含卡口 · 左右分开核算</el-tag>
       </div>
 
       <!-- 分边别小计：已完成装配 / 已入库 / 可入库量 -->
       <div v-if="data?.sides?.length" class="bd-sides">
         <div v-for="s in data.sides" :key="s.side || 'none'" class="bd-side-card">
           <div class="bd-side-title">
-            {{ s.sideLabel ? `${s.sideLabel}边` : '整组' }}
+            {{ s.sideLabel ? `${s.sideLabel}边` : '整套' }}
           </div>
           <div class="bd-side-nums">
             <span>已录 <b>{{ s.plannedQty }}</b></span>
@@ -141,7 +145,7 @@
         </div>
         <div v-if="overAssembled" class="bd-hint warn">
           <el-icon><WarningFilled /></el-icon>
-          本批录入后该{{ socket ? '边别' : '组' }}已录装配量将超过组支数（超装配属正常，可继续提交）
+          本批录入后该{{ socket ? '边别' : '产品' }}已录装配量将超过订单数（超装配属正常，可继续提交）
         </div>
       </div>
     </div>
@@ -168,7 +172,7 @@ import { ASSEMBLY_STATUS, SIDE_OPTIONS, labelOf, sideLabel, tagTypeOf } from '@/
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 
-const props = defineProps<{ modelValue: boolean; orderPartGroupId: number | null }>();
+const props = defineProps<{ modelValue: boolean; orderProductId: number | null }>();
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void;
   (e: 'changed'): void;
@@ -179,7 +183,7 @@ const submitting = ref(false);
 const removingId = ref<number | null>(null);
 const data = ref<AssemblyBatchesResult | null>(null);
 
-const socket = computed(() => !!data.value?.group?.socket);
+const socket = computed(() => !!data.value?.product?.socket);
 
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
@@ -213,8 +217,8 @@ function resetDraft() {
   editingId.value = null;
   editingIndex.value = 0;
   draft.side = socket.value ? 'left' : '';
-  // 车间不再从订单继承（订单环节已不安排装配车间）；沿用该组最近一条批次的车间做默认值，
-  // 一组多批通常同车间，仍可逐批改；该组还没有批次时留空由计划员选
+  // 车间不再从订单继承（订单环节已不安排装配车间）；沿用该产品最近一条批次的车间做默认值，
+  // 一个产品多批通常同车间，仍可逐批改；该产品还没有批次时留空由计划员选
   const batches = data.value?.list ?? [];
   draft.workshop = batches[batches.length - 1]?.workshop ?? '';
   draft.planStartDate = today();
@@ -224,28 +228,38 @@ function resetDraft() {
   draft.remark = '';
 }
 
-/** 默认数量 = 该边别未装配量（不足则 1），减少计划员手工输入 */
+/**
+ * 该边别的应排产量：非卡口 = 产品订单数；含卡口左右各半，
+ * **奇数支左边多一支**（Math.ceil / 减法），与共享包 expandPartRows 同口径，保证合计守恒。
+ */
+function sideTarget(side: string): number {
+  const p = data.value?.product;
+  if (!p) return 0;
+  if (!socket.value) return p.qtyPcs;
+  const left = Math.ceil(p.qtyPcs / 2);
+  return side === 'right' ? p.qtyPcs - left : left;
+}
+
+/** 默认数量 = 该边别未排产量（不足则 1），减少计划员手工输入 */
 function defaultQty(): number {
-  const g = data.value?.group;
-  if (!g) return 1;
+  if (!data.value?.product) return 1;
   const s = data.value?.sides.find((x) => x.side === draft.side);
   const done = s?.plannedQty ?? 0;
-  const target = socket.value ? Math.ceil(g.qtyPcs / 2) : g.qtyPcs;
-  return Math.max(target - done, 1);
+  return Math.max(sideTarget(draft.side) - done, 1);
 }
 
 async function load() {
-  if (!props.orderPartGroupId) return;
+  if (!props.orderProductId) return;
   loading.value = true;
   try {
-    data.value = await getAssemblyBatches({ orderPartGroupId: props.orderPartGroupId });
+    data.value = await getAssemblyBatches({ orderProductId: props.orderProductId });
     resetDraft();
   } finally {
     loading.value = false;
   }
 }
 watch(
-  () => props.orderPartGroupId,
+  () => props.orderProductId,
   () => {
     if (props.modelValue) load();
   },
@@ -257,14 +271,12 @@ watch(
   },
 );
 
-/** 本批录入后该边别已录量是否超过组支数（超装配允许，仅提示） */
+/** 本批录入后该边别已录量是否超过订单数（超装配允许，仅提示） */
 const overAssembled = computed(() => {
-  const g = data.value?.group;
-  if (!g || !draft.qty) return false;
+  if (!data.value?.product || !draft.qty) return false;
   const s = data.value?.sides.find((x) => x.side === draft.side);
   const already = (s?.plannedQty ?? 0) - (editingId.value ? originalQty.value : 0);
-  const target = socket.value ? Math.ceil(g.qtyPcs / 2) : g.qtyPcs;
-  return already + draft.qty > target;
+  return already + draft.qty > sideTarget(draft.side);
 });
 const originalQty = ref(0);
 
@@ -282,7 +294,7 @@ function startEdit(row: AssemblyBatchRow) {
 }
 
 async function onSubmit() {
-  if (!props.orderPartGroupId) return;
+  if (!props.orderProductId) return;
   if (socket.value && !draft.side) {
     ElMessage.warning('该产品含卡口，请选择左/右边别');
     return;
@@ -314,7 +326,7 @@ async function onSubmit() {
       ElMessage.success('批次已更新');
     } else {
       await createAssemblyBatch({
-        orderPartGroupId: props.orderPartGroupId,
+        orderProductId: props.orderProductId,
         side: socket.value ? draft.side : '',
         ...body,
       });

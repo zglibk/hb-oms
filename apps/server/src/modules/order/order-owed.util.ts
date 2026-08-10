@@ -45,10 +45,10 @@ export interface OrderOwedSummary {
   orderId: number;
   orderNo: string;
   status: number;
-  /** 该订单下的部件组数 */
-  groupCount: number;
-  /** 仍有发货欠数（订单数 − 出库数 > 0）的组数；0 = 全部交清 */
-  owedGroupCount: number;
+  /** 该订单下的产品行数 */
+  productCount: number;
+  /** 仍有发货欠数（订单数 − 出库数 > 0）的产品行数；0 = 全部交清 */
+  owedProductCount: number;
 }
 
 /** 自动状态同步的结果，供接口回传给界面提示 */
@@ -60,8 +60,10 @@ export interface FinishSyncResult {
 }
 
 /**
- * 按订单汇总「还有几个部件组欠发货」。
- * 成品表未建时（M4 之前）返回的 out_qty 恒为 0，此处不再兜底——M4 已落地。
+ * 按订单汇总「还有几个产品行欠发货」。
+ *
+ * 锚点是**订单产品行**（2026-08-10 由部件组升级，与成品出入库明细同维度）——
+ * 成品是装配产出的整套滑轨，出库也按产品走，欠数自然在产品级判定。
  */
 export async function loadOrderOwedSummary(
   mgr: EntityManager,
@@ -75,19 +77,19 @@ export async function loadOrderOwedSummary(
     `SELECT o.id        AS orderId,
             o.order_no  AS orderNo,
             o.status    AS status,
-            COUNT(g.id) AS groupCount,
-            SUM(CASE WHEN g.qty_pcs - IFNULL(fout.out_qty, 0) > 0 THEN 1 ELSE 0 END) AS owedGroupCount
+            COUNT(p.id) AS productCount,
+            SUM(CASE WHEN p.qty_pcs - IFNULL(fout.out_qty, 0) > 0 THEN 1 ELSE 0 END) AS owedProductCount
        FROM t_order o
-       JOIN t_order_part_group g ON g.order_id = o.id
+       JOIN t_order_product p ON p.order_id = o.id
        LEFT JOIN (
-             SELECT fi.order_part_group_id AS gid,
+             SELECT fi.order_product_id AS pid,
                     SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty
                FROM t_finished_item fi
                JOIN t_finished_doc  fd ON fd.id = fi.doc_id
                LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
-              WHERE fd.status = ? AND fi.order_part_group_id > 0
-              GROUP BY fi.order_part_group_id
-            ) fout ON fout.gid = g.id
+              WHERE fd.status = ? AND fi.order_product_id > 0
+              GROUP BY fi.order_product_id
+            ) fout ON fout.pid = p.id
       WHERE o.id IN (${ids.map(() => '?').join(',')})
       GROUP BY o.id, o.order_no, o.status`,
     [...OUTBOUND_FAMILY_PARAMS, FINISHED_DOC_STATUS.CONFIRMED, ...ids],
@@ -98,8 +100,8 @@ export async function loadOrderOwedSummary(
       orderId: Number(r.orderId),
       orderNo: r.orderNo ?? '',
       status: Number(r.status),
-      groupCount: Number(r.groupCount) || 0,
-      owedGroupCount: Number(r.owedGroupCount) || 0,
+      productCount: Number(r.productCount) || 0,
+      owedProductCount: Number(r.owedProductCount) || 0,
     });
   });
   return map;
@@ -107,8 +109,8 @@ export async function loadOrderOwedSummary(
 
 /**
  * 订单状态自动同步（设计文档 §3.1 状态机）：
- *   - 进行中 且**全部部件组**发货欠数 ≤ 0 → 自动完结；
- *   - 已完结 但**任一组**发货欠数回正（> 0）→ 自动重开。
+ *   - 进行中 且**全部产品行**发货欠数 ≤ 0 → 自动完结；
+ *   - 已完结 但**任一产品行**发货欠数回正（> 0）→ 自动重开。
  *
  * 触发时机：成品出入库单「确认」与「红字冲销」之后、**同一事务内**调用，
  * 保证库存与订单状态一起成立或一起回滚。
@@ -117,7 +119,7 @@ export async function loadOrderOwedSummary(
  * - 「完结」只是台账口径（不再跟踪），**不锁单据**——已完结订单仍可继续出入库
  *   （客户追加提货），所以才需要回正时自动重开，否则订单会被错误地挂在已完结上。
  * - 已作废订单（status=9）不参与，作废是终态。
- * - 无部件组的订单不会被判为"已交清"（groupCount>0 才判定），避免空单被自动完结。
+ * - 无产品行的订单不会被判为"已交清"（productCount>0 才判定），避免空单被自动完结。
  */
 export async function syncOrderFinishState(
   mgr: EntityManager,
@@ -137,7 +139,7 @@ export async function syncOrderFinishState(
     );
 
   for (const s of summaries.values()) {
-    const allDelivered = s.groupCount > 0 && s.owedGroupCount === 0;
+    const allDelivered = s.productCount > 0 && s.owedProductCount === 0;
 
     if (s.status === ORDER_STATUS.ACTIVE && allDelivered) {
       await move(s.orderId, ORDER_STATUS.ACTIVE, ORDER_STATUS.FINISHED);

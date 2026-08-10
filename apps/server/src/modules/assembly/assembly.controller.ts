@@ -19,14 +19,14 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
 export class AssemblyController {
   constructor(private readonly service: AssemblyService) {}
 
-  /** 装配管理列表：按部件组一行，附装配进度聚合 */
+  /** 装配管理列表：按**订单产品行**一行，附装配进度聚合 */
   @Get()
   @RequirePermissions('assembly')
   async list(@Query() query: QueryAssemblyDto) {
     return this.service.findList(query);
   }
 
-  /** 某部件组的批次明细 + 分边别小计与可入库量；注册在 :id 型路由之前 */
+  /** 某产品行的批次明细 + 分边别小计与可入库量；注册在 :id 型路由之前 */
   @Get('batch')
   @RequirePermissions('assembly')
   async batches(@Query() query: QueryAssemblyBatchDto) {

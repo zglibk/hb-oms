@@ -59,6 +59,8 @@ const MIGRATIONS: string[] = [
   'migration-field-switches.sql',
   // 修正 t_material.part_type 列注释（原注释的 *_rail 取值从未在库中出现）
   'migration-material-part-type-comment.sql',
+  // 跟踪锚点分层：装配与成品从部件组升到产品行（含一次性清空测试数据）
+  'migration-product-level-tracking.sql',
 ];
 
 /**
@@ -74,6 +76,12 @@ const forbiddenColumns = [
   't_outsource_doc.blank_no',
   't_outsource_item.doc_id',
   't_outsource_return.item_id',
+  // 装配与成品的锚点已于 2026-08-10 从部件组升到产品行（migration-product-level-tracking.sql）。
+  // 这三列若被旧版 schema 重建复活，闸门与台账会退回按组核算而程序不报错，故显式盯住。
+  // 注意：外发 t_outsource_part.order_part_group_id **仍在使用**，不在此列。
+  't_assembly_batch.order_part_group_id',
+  't_finished_item.order_part_group_id',
+  't_finished_balance.order_part_group_id',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -113,7 +121,7 @@ const expectedColumns = [
   't_outsource_part.order_qty',
   't_outsource_part.drawing_no',
   // M3.5 装配批次
-  't_assembly_batch.order_part_group_id',
+  't_assembly_batch.order_product_id',
   't_assembly_batch.side',
   't_assembly_batch.workshop',
   't_assembly_batch.plan_start_date',
@@ -127,11 +135,11 @@ const expectedColumns = [
   't_finished_doc.direction',
   't_finished_doc.origin_doc_id',
   't_finished_doc.status',
-  't_finished_item.order_part_group_id',
+  't_finished_item.order_product_id',
   't_finished_item.side',
   't_finished_item.quantity',
   't_finished_item.origin_item_id',
-  't_finished_balance.order_part_group_id',
+  't_finished_balance.order_product_id',
   't_finished_balance.side',
   't_finished_balance.attr_key',
   't_finished_balance.quantity',
