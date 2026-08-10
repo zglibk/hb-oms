@@ -12,7 +12,7 @@
   <div class="sum-card" :class="`sum-card--${color}`">
     <div class="sum-card__icon"><slot name="icon" /></div>
     <div class="sum-card__body">
-      <div class="sum-card__value">{{ value }}</div>
+      <div class="sum-card__value" :title="String(value)">{{ displayValue }}</div>
       <div class="sum-card__label-row">
         <span class="sum-card__label">{{ label }}</span>
         <button v-if="linkText" class="sum-card__link" @click="emit('link')">{{ linkText }}</button>
@@ -22,9 +22,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+
 export type StatCardColor = 'slate' | 'blue' | 'green' | 'teal' | 'amber' | 'red';
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** 主数字 */
     value: number | string;
@@ -39,6 +41,18 @@ withDefaults(
 );
 
 const emit = defineEmits<{ (e: 'link'): void }>();
+
+/** 数值加千分位；非有限数字保持原样，避免把业务文案误格式化 */
+const displayValue = computed(() => {
+  if (typeof props.value === 'number' && Number.isFinite(props.value)) {
+    return props.value.toLocaleString('zh-CN');
+  }
+  if (typeof props.value === 'string' && /^-?\d+(\.\d+)?$/.test(props.value.trim())) {
+    const n = Number(props.value);
+    if (Number.isFinite(n)) return n.toLocaleString('zh-CN');
+  }
+  return props.value;
+});
 </script>
 
 <script lang="ts">
@@ -80,6 +94,7 @@ export default { name: 'AppStatCard' };
     color: var(--card-color);
     background: var(--card-icon-bg);
     border-radius: 8px;
+    align-self: center;
   }
 
   /* 右侧内容区：占满剩余空间，上下结构 */
@@ -89,15 +104,25 @@ export default { name: 'AppStatCard' };
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 2px;
+    gap: 4px;
   }
 
-  /* 数字：高度占比 2，大字号突出 */
+  /* 数字：等宽数字 + 西文无衬线，避免雅黑数字发胖、字距不齐 */
   &__value {
-    flex: 2;
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1.1;
+    font-family:
+      'Segoe UI',
+      'DIN Alternate',
+      'Helvetica Neue',
+      Arial,
+      'PingFang SC',
+      'Microsoft YaHei',
+      sans-serif;
+    font-size: clamp(22px, 1.65rem, 30px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
     color: var(--card-color);
     white-space: nowrap;
     overflow: hidden;
@@ -106,7 +131,6 @@ export default { name: 'AppStatCard' };
 
   /* 标签行：左标签 + 右文字按钮，两端对齐 */
   &__label-row {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -149,9 +173,9 @@ export default { name: 'AppStatCard' };
   }
   &--blue {
     --card-color: var(--el-color-primary);
-    --card-bg: rgba(64, 158, 255, 0.1);
-    --card-border: rgba(64, 158, 255, 0.25);
-    --card-icon-bg: rgba(64, 158, 255, 0.16);
+    --card-bg: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+    --card-border: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
+    --card-icon-bg: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
   }
   &--green {
     --card-color: var(--el-color-success);
