@@ -98,6 +98,18 @@ html {
   outline: none;
 }
 
+/* ============================================================
+ * Tooltip 全局（teleport 挂 body，popper-class 含 el-tooltip）
+ * - 限宽避免长文撑满屏；pre-line 配合 utils/tooltip 的序号换行
+ * - 勿用裸 .el-popper：下拉/日期等面板共用该类
+ * ============================================================ */
+.el-popper.el-tooltip {
+  max-width: min(22.5rem, 80vw);
+  line-height: 1.55;
+  word-break: break-word;
+  white-space: pre-line;
+}
+
 html,
 body,
 #app {

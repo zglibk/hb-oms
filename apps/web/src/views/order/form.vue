@@ -75,7 +75,7 @@
             <el-form-item label="期初补录">
               <el-switch v-model="isOpeningOrder" :active-value="1" :inactive-value="0" />
               <el-tooltip
-                content="系统上线时补录的历史订单：免下单来源/附件等非关键必填校验；四数口径与正常订单完全一致。补录后到「期初录入」按部件组录已完成入库数量。"
+                content="1. 打开：用于补录未完结的历史订单（新系统正式启用时）；补录后再到「期初录入」按部件组录入已完成入库数量。2. 保持关闭：正常新订单"
                 placement="top"
               >
                 <el-icon class="tip-icon"><QuestionFilled /></el-icon>
