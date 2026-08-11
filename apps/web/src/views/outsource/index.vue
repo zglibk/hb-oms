@@ -115,6 +115,16 @@
         <el-descriptions-item label="料厚">{{ editRow.materialThickness || '—' }}</el-descriptions-item>
       </el-descriptions>
       <el-form :model="editForm" label-width="90px" size="small" class="ed-form">
+        <!-- 录入方式排在首项，与登记页一致：它决定下面重量改动会不会回算数量。
+             口径同登记页（按数量时重量/单重只是记录值）；默认按这条记录已有的数据
+             推断——原本就是过磅折算出来的，编辑时自然还按重量走 -->
+        <el-form-item label="录入方式" class="ed-mode">
+          <el-radio-group v-model="editMode">
+            <el-radio v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="加工商" required>
           <el-input v-model="editForm.processorName" />
         </el-form-item>
@@ -129,15 +139,6 @@
         <!-- 停用时仅隐藏输入框，editForm.color 仍随提交原样回传，不洗掉历史值 -->
         <el-form-item v-if="colorEnabled" label="颜色">
           <el-input v-model="editForm.color" />
-        </el-form-item>
-        <!-- 录入方式与登记页同一套口径：按数量时重量/单重只是记录值，不回算数量。
-             默认按这条记录已有的数据推断——原本就是过磅折算出来的，编辑时自然还按重量走 -->
-        <el-form-item label="录入方式">
-          <el-radio-group v-model="editMode" size="small">
-            <el-radio-button v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
-              {{ o.label }}
-            </el-radio-button>
-          </el-radio-group>
         </el-form-item>
         <el-form-item label="回厂数量" required>
           <el-input-number v-model="editForm.returnQty" :min="1" :precision="0" :step="1" style="width: 140px" />
@@ -393,6 +394,14 @@ function unitLabel(v: string | null): string {
 .pager { margin-top: 12px; }
 .ed-snap { margin-bottom: 12px; }
 .ed-form { padding-right: 12px; }
+/* 录入方式加浅底，与登记页同一处理：让人改重量之前先看清是哪种方式 */
+.ed-mode {
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 6px 12px 0 0;
+  margin-bottom: 14px;
+}
 .unit-tip {
   margin-left: 8px;
   color: var(--el-text-color-secondary);

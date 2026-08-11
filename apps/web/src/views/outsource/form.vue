@@ -13,6 +13,29 @@
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
+        <!-- 第一行专门放「录入方式」：它决定下面明细该填哪一列，排在加工商/日期
+             之后容易被直接跳过。单选按钮（而非按钮组）+ 独占一行 + 浅底，
+             让人录入前必然看到自己选的是哪种。 -->
+        <el-row class="mode-row" :gutter="16">
+          <el-col :span="24">
+            <el-form-item label="录入方式">
+              <el-radio-group v-model="entryMode">
+                <el-radio v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
+                  {{ o.label }}
+                </el-radio>
+              </el-radio-group>
+              <span class="mode-tip">
+                <template v-if="isQtyMode">
+                  以加工商<b>送货单的数量</b>为准；重量与单重<b>选填</b>，填了也不会反过来改数量。
+                </template>
+                <template v-else>
+                  填<b>重量与单重</b>自动算出数量（重量 ÷ 单重），算完仍可微调。
+                </template>
+              </span>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="加工商" prop="processorName">
@@ -24,24 +47,9 @@
               <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="录入方式">
-              <el-radio-group v-model="entryMode" size="small">
-                <el-radio-button v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
-                  {{ o.label }}
-                </el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="6">
+          <el-col :xs="24" :md="12">
             <div class="head-tip">
-              加工商与回厂日期为<b>各行共用</b>值，一次可录多个部件组。
-              <template v-if="isQtyMode">
-                当前<b>按数量</b>：以加工商送货单的数量为准，重量与单重<b>选填</b>、不参与折算。
-              </template>
-              <template v-else>
-                当前<b>按重量折算</b>：填重量与单重自动算出数量，算完仍可微调。
-              </template>
+              加工商与回厂日期为本次录入的<b>各行共用</b>值；同一天从同一家回来的货，勾多个部件组一次录完。
             </div>
           </el-col>
         </el-row>
@@ -399,6 +407,21 @@ function goBack() {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 32px;
+}
+/* 录入方式独占首行并加浅底：这一项决定明细该填哪一列，做成一条显眼的设置带，
+   避免录入员一进来就跳到加工商、把方式漏看 */
+.mode-row {
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 8px 0 0;
+  margin-bottom: 14px;
+}
+.mode-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  b { color: var(--el-text-color-primary); }
 }
 .section-title {
   font-size: 14px; font-weight: 600; color: var(--el-text-color-primary);
