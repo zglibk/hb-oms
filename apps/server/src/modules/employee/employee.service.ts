@@ -12,9 +12,10 @@ import {
   JOB_STATUS,
   birthDateFromIdCard,
   buildEmpNo,
+  empCodePrefix,
   empPlantLabel,
   empYearFlag,
-  isConvertToFormal,
+  needsEmpNoReissue,
 } from '@hb-oms/shared';
 import { Employee } from './entities/employee.entity';
 import { Department } from '../system/entities/department.entity';
@@ -144,18 +145,23 @@ export class EmployeeService {
     const payload = this.normalizePayload(merged);
 
     /**
-     * 试用转正换发正式编码（规则五）：非正式人员（实习生 S / 临时工 L）转为
-     * 不带前缀的用工属性时，换发标准 10 位正式编码。这是**唯一**允许改编号的场景，
-     * 且必须由前端显式传 regenerateEmpNo（用户在弹窗里确认过），不做静默改号——
-     * 编号是对外标识，悄悄换掉会让工牌、考勤、薪资对不上账。
+     * 换发编号（规则五）：非正式人员（实习生 S / 临时工 L / 学徒 A / 派遣工 P）
+     * 转正后注销原前缀编号、重新核发标准 10 位正式码，原编号归档留存。
+     * 判据是**前缀是否变化**，故 实习生 → 学徒 这类横向变更同样可换发，
+     * 避免出现「编号前缀与用工属性对不上」。
+     *
+     * 这是**唯一**允许改编号的场景，且必须由前端显式传 regenerateEmpNo
+     * （用户在弹窗里确认过），不做静默改号——编号是对外标识，
+     * 悄悄换掉会让工牌、考勤、薪资对不上账。
      *
      * 年份标识位仍取**员工本人的入职日期**：转正不是重新入职，工龄连续。
      */
     let empNo = payload.empNo;
     if (dto.regenerateEmpNo) {
-      if (!isConvertToFormal(item.empType, payload.empType)) {
+      if (!needsEmpNoReissue(item.empType, payload.empType)) {
+        const p = empCodePrefix(payload.empType);
         throw new BadRequestException(
-          '只有「实习生 / 临时工」转为正式用工属性时才需要换发编号，当前变更无需换号',
+          `用工属性变更前后编号前缀一致（${p ? `均为 ${p}` : '均为无前缀正式工'}），无需换发编号`,
         );
       }
       empNo = await this.generateEmpNo({

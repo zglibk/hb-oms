@@ -63,6 +63,7 @@ export {
   empCodePrefix,
   empCodePreview,
   isConvertToFormal,
+  needsEmpNoReissue,
   isValidEmpNo,
   // 单位换算（1套=2支、1英寸=25mm）
   PIECES_PER_SET,

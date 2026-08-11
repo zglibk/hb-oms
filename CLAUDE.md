@@ -167,7 +167,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **新增/修改状态只改共享包一处**。凡前后端都要用、且必须口径一致的纯常量/纯函数一律进共享包，禁止两端各写一份；依赖 NestJS/Vue/Element Plus 的代码不得进共享包。
 - **禁止在 service SQL、前端模板中出现裸的状态数字**（如 `status = 2`、`row.status === 1`），一律引用命名常量。注意跨表状态不可混用（订单状态用 `ORDER_STATUS`、外发状态用 `OUTSOURCE_STATUS`，即便数值恰好相同）。
 
-共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（**仅剩**重量→数量折算 `qtyFromWeight`——发坯单号、回齐判定、状态派生已随发坯单一并删除）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）、`employee-code.ts`（员工编码规则：厂区表 `EMP_PLANT_OPTIONS`、年份标识 `empYearFlag`、非正式前缀 `empCodePrefix`、转正判定 `isConvertToFormal`、拼装 `buildEmpNo` 与界面预览 `empCodePreview`；**部门编码不在此，它是 `t_department.hr_code` 主数据**）。
+共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（**仅剩**重量→数量折算 `qtyFromWeight`——发坯单号、回齐判定、状态派生已随发坯单一并删除）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）、`employee-code.ts`（员工编码规则：厂区表 `EMP_PLANT_OPTIONS`、年份标识 `empYearFlag`、非正式前缀 `empCodePrefix`（S实习生/L临时工/A学徒/P派遣工）、换号判定 `needsEmpNoReissue`、拼装 `buildEmpNo` 与界面预览 `empCodePreview`；**部门编码不在此，它是 `t_department.hr_code` 主数据**）。
 
 ### 4.2 数据库字段注释强制
 
@@ -405,10 +405,10 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **部门编码落在 `t_department.hr_code`（3位），不写死在代码里**：部门是会增减的主数据，硬编码迟早与库对不上。未配 `hr_code` 的部门建档即被拒并提示去「基础数据 → 部门信息」配置。初始映射为规则原表的 001~009 加本厂补的 `010` IT部，**两条路径都要给到**：存量库由 `migration-employee-code.sql` 按名称回填（缺的部门自动补建），全新安装由 `seed-data.ts` 的 `DEPARTMENTS` 种下（`db:init` **不跑 migrations**，只种子建库，漏了它新库会一个编码都没有）。**改任一处必须同步另一处**。
 - **流水号走 `NumberGeneratorService`**（§5.4），计数键 `EMP:{厂区}{年份}{部门}`。**跨年自动从 001 重来不需要额外逻辑**——年份位变了就是另一个计数键。
 - **生成编号需要三项前置信息：厂区 / 入职日期 / 所属部门**，缺一即拒绝并给出「这一项决定第几位」的中文提示。
-- **编号终身不变（规则四.1）**：`update` 恒取库中 `empNo`、无视传入值。⚠️ **跨厂区调动只改 `plant_code`，编码里的厂区位仍是入职时的厂区——两者不一致是设计如此，不是 bug**。
-- **唯一允许换号的场景是「试用转正」**（规则五）：实习生/临时工转为不带前缀的用工属性时换发 10 位正式码，且必须由前端显式传 `regenerateEmpNo`（用户在弹窗确认过），服务端二次校验确属该转换才放行——编号是工牌/考勤/薪资的对账依据，不做静默改号。年份位仍取本人入职日期（转正不是重新入职）。
-- **前缀只给规则点名的两类**：实习生 `S` / 临时工 `L`。正式工/派遣工/学徒一律无前缀，**不要自行给未列出的类别发明前缀**（附则：编码架构变更须三方评审）。`intern` 字典项由迁移补入 `emp_type`。
-- 离职编号永久封存：流水号只增不减、不回收，天然满足「严禁二次分配」。离职返聘 = 新建档案、生成全新编号。
+- **编号终身不变**——注意规则四把这条**限定为「正式员工」**：`update` 恒取库中 `empNo`、无视传入值。⚠️ **跨厂区调动只改 `plant_code`，编码里的厂区位仍是入职时的厂区——两者不一致是设计如此，不是 bug**。
+- **非正式用工一律带前缀**（规则五，2026-08-11 由 2 类增补到 4 类）：实习生 `S` / 临时工 `L` / 学徒 `A` / 劳务派遣工 `P`，**只有 `formal` 正式工无前缀**。前缀后方 10 位数字的编排逻辑与正式工完全一致（同一组 `厂区+年份+部门` 共用计数），方便人事统一统计。`intern` 字典项由迁移补入 `emp_type`。**不要给规则未列出的类别发明前缀**（附则：编码架构变更须三方评审）。
+- **唯一允许换号的场景是「用工属性变更导致前缀应变」**（规则五：学徒期满转正、派遣工转自有正式工等，均需注销原前缀编号、重新核发，原编号归档留存）。判据用共享包 `needsEmpNoReissue(旧, 新)`（**比较前缀是否变化**，故也覆盖规则没写的 实习生 S → 学徒 A 这类横向变更），且必须由前端显式传 `regenerateEmpNo`（用户在弹窗确认过），服务端二次校验才放行——编号是工牌/考勤/薪资的对账依据，**不做静默改号**。年份位仍取本人入职日期（转正不是重新入职，工龄连续）。
+- 离职编号永久封存：流水号只增不减、不回收，天然满足「严禁二次分配」。离职返聘 = 新建档案、生成全新编号；派遣工用工结束同理（劳动关系属外派公司，本厂只登记用工厂区与部门）。
 
 **呆滞品管理（2026-08-11，dull-stock 模块）**
 

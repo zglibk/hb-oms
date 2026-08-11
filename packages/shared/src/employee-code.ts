@@ -1,7 +1,8 @@
 /**
  * 员工编码规则（《海宝五金员工编码管理规则》，行政人事部）。
  *
- * 10 位纯数字，全公司唯一、**终身固定不变**：
+ * **正式员工**编号 10 位纯数字，全公司唯一、**终身固定不变**；
+ * 非正式人员（实习生/临时工/学徒/派遣工）在同样的 10 位数字前加英文前缀区分：
  *
  * ```
  *   01      26        009        018
@@ -17,10 +18,12 @@
  * - 第 8-10 位 **流水号**：在「厂区 + 年份标识 + 部门」这一组合内从 001 递增。
  *   新员工每年 1 月 1 日自然从 001 重来（年份标识变了 = 换了一个计数组合）。
  *
- * 非正式人员加字母前缀（`EMP_TYPE_CODE_PREFIX`），**试用转正后换发标准 10 位码**。
+ * 非正式人员加字母前缀（`EMP_TYPE_CODE_PREFIX`），**转正后注销原前缀编号、
+ * 重新核发标准 10 位正式码**，原非正式编号归档留存。
  *
- * 人事异动（调岗/升职/跨厂区调动）**不换号**；离职编号永久封存不再分配；
+ * 正式员工的人事异动（调岗/升职/跨厂区调动）**不换号**；离职编号永久封存不再分配；
  * 离职返聘按返聘当下信息**生成全新编号**（即新建一条档案）。
+ * 派遣工用工结束同样是编号作废封存（劳动关系属外派公司，本厂只登记用工厂区与部门）。
  */
 
 /** 纯数字部分的长度（不含非正式人员前缀） */
@@ -58,15 +61,18 @@ export function empYearFlag(hireDate: string | null | undefined): string {
 }
 
 /**
- * 非正式用工的编码前缀（规则第五条）。
+ * 非正式用工的编码前缀（规则第五条，2026-08-11 增补学徒与派遣工）。
  *
- * 规则只点名了**实习生 S / 临时工 L** 两类，其余用工属性（正式工/派遣工/学徒）
- * 一律不加前缀、直接用 10 位码——**不要自行给未列出的类别发明前缀**，
+ * **所有非正式人员都不使用 10 位纯数字正式编码**，统一加英文前缀区分；
+ * 前缀后方的 10 位数字编排逻辑与正式工完全一致，方便人事统一统计。
+ * 只有 `formal` 正式工无前缀——**不要给规则未列出的类别发明前缀**，
  * 编码架构的变更须经人事/财务/生产三方评审（规则附则）。
  */
 export const EMP_TYPE_CODE_PREFIX: Record<string, string> = {
-  intern: 'S',
-  temp: 'L',
+  intern: 'S', // 实习生
+  temp: 'L', // 临时工
+  apprentice: 'A', // 学徒
+  dispatch: 'P', // 劳务派遣工（劳动关系属外派公司，本厂只登记用工厂区与部门）
 };
 
 /** 取用工属性对应的编码前缀；未列出的返回空串 */
@@ -80,14 +86,33 @@ export function isPrefixedEmpType(empType: string | null | undefined): boolean {
 }
 
 /**
- * 是否构成「试用转正」：由带前缀的非正式用工（实习生/临时工）转为不带前缀的用工属性。
- * 规则第五条要求此时**换发**标准 10 位正式编码，故这是唯一允许重新生成编号的场景。
+ * 是否构成「转正」：由带前缀的非正式用工转为正式工（不带前缀）。
+ * 规则第五条：学徒期满转正、派遣工转为自有正式工后，全部重新编制正式工编码，
+ * 原非正式编号归档留存。
  */
 export function isConvertToFormal(
   oldEmpType: string | null | undefined,
   newEmpType: string | null | undefined,
 ): boolean {
   return isPrefixedEmpType(oldEmpType) && !isPrefixedEmpType(newEmpType);
+}
+
+/**
+ * 用工属性变更后是否应当**换发编号**：判据是「前缀变了没有」。
+ *
+ * 规则四已明确把「编号终身固定不变」限定为**正式员工**，规则五则要求非正式人员
+ * 转正后注销原前缀编号、重新核发。用前缀是否变化来判断，既覆盖规则点名的
+ * 「实习生/临时工/学徒/派遣工 → 正式」，也顺带覆盖规则没写但同样会造成
+ * 「编号前缀与用工属性对不上」的横向变更（如 实习生 S → 学徒 A）。
+ *
+ * ⚠️ 返回 true 只代表**应当征询**，绝不能据此静默改号——编号是工牌/考勤/薪资的
+ * 对账依据，必须由用户确认后才换（见 EmployeeService.update）。
+ */
+export function needsEmpNoReissue(
+  oldEmpType: string | null | undefined,
+  newEmpType: string | null | undefined,
+): boolean {
+  return empCodePrefix(oldEmpType) !== empCodePrefix(newEmpType);
 }
 
 /** 流水号位数与上限（001~999） */
@@ -110,8 +135,8 @@ export function buildEmpNo(params: {
   return `${empCodePrefix(empType)}${digits}`;
 }
 
-/** 编码格式校验：可选 S/L 前缀 + 10 位数字 */
-export const EMP_NO_PATTERN = /^[SL]?\d{10}$/;
+/** 编码格式校验：可选非正式用工前缀（S实习生/L临时工/A学徒/P派遣工）+ 10 位数字 */
+export const EMP_NO_PATTERN = /^[SLAP]?\d{10}$/;
 
 export function isValidEmpNo(empNo: string | null | undefined): boolean {
   return EMP_NO_PATTERN.test((empNo ?? '').trim());

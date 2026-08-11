@@ -385,7 +385,8 @@ import {
   EMP_PLANT_OPTIONS,
   empPlantLabel,
   empCodePreview,
-  isConvertToFormal,
+  empCodePrefix,
+  needsEmpNoReissue,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppTable from '@/components/AppTable.vue';
@@ -608,19 +609,22 @@ async function onSave() {
   await formRef.value?.validate();
 
   /**
-   * 试用转正换发正式编码（规则五）：实习生 S / 临时工 L 转成不带前缀的用工属性时，
-   * 换发标准 10 位编码。**必须先问过用户**——编号是对外标识，
+   * 换发编号（规则五）：用工属性变更导致**编号前缀应当变化**时
+   * （实习生 S / 临时工 L / 学徒 A / 派遣工 P ↔ 正式工无前缀），
+   * 按规则应注销原编号、重新核发。**必须先问过用户**——编号是对外标识，
    * 悄悄换掉会让工牌、考勤、薪资对不上账。用户选「保留」就沿用原编号。
    */
   let regenerateEmpNo = false;
   const original = editId.value ? list.value.find((r) => r.id === editId.value) : null;
-  if (original && isConvertToFormal(original.empType, form.empType)) {
+  if (original && needsEmpNoReissue(original.empType, form.empType)) {
+    const newPrefix = empCodePrefix(form.empType);
     try {
       await ElMessageBox.confirm(
         `「${form.empName}」由${dictLabel(empTypeOpts.value, original.empType)}转为`
-          + `${dictLabel(empTypeOpts.value, form.empType)}，按编码规则应换发 10 位正式员工编号`
-          + `（现编号 ${original.empNo}）。换发后原编号永久封存、不再启用。`,
-        '试用转正：是否换发正式编号？',
+          + `${dictLabel(empTypeOpts.value, form.empType)}，按编码规则应换发`
+          + `${newPrefix ? `「${newPrefix} + 10 位数字」的编号` : '10 位纯数字正式员工编号'}`
+          + `（现编号 ${original.empNo}）。换发后原编号注销封存、归档留存，不再启用。`,
+        '用工属性变更：是否换发编号？',
         { type: 'warning', confirmButtonText: '换发新编号', cancelButtonText: '保留原编号' },
       );
       regenerateEmpNo = true;

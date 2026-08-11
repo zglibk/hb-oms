@@ -158,7 +158,7 @@
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
     <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
-    <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 转正 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
+    <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
     <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
@@ -814,7 +814,8 @@
       </table>
       <p>
         例：<code>0199005036</code> = 总厂 + 2026 年前入职 + 品检部 + 该部门存量第 36 人；<br />
-        <code>0126009018</code> = 总厂 + 2026 年入职 + 模具部 + 本年度该部门第 18 位。
+        <code>0126009018</code> = 总厂 + 2026 年入职 + 模具部 + 本年度该部门第 18 位；<br />
+        <code>0126010007</code> = 总厂 + 2026 年入职 + IT部 + 本年度该部门第 7 位。
       </p>
       <div class="alert alert--info">
         <strong>99 只是「老员工」的标记</strong>，不代表哪一年入职。真实入职时间、工龄、年假一律看
@@ -827,23 +828,39 @@
         去「基础数据 → 部门信息」编辑那个部门，填 3 位数字即可。
       </div>
 
-      <h3 class="subsection__title">编号一旦生成，终身不变</h3>
+      <h3 class="subsection__title">正式员工编号一旦生成，终身不变</h3>
       <ul>
         <li><strong>调岗、升职、跨厂区调动都不换号。</strong>调去别的厂区就改「厂区」字段，编号原样不动——所以老员工的编号前两位可能和他现在的厂区对不上，<strong>这是规则要求的，不是出错</strong>。</li>
         <li><strong>离职后编号永久封存</strong>，不会再分给别人。离职返聘按新员工重新建档、生成全新编号。</li>
       </ul>
+      <p>非正式用工（实习生/临时工/学徒/派遣工）转正时要换号，见下一节。</p>
 
-      <h3 class="subsection__title">实习生和临时工带字母前缀</h3>
-      <ul>
-        <li>用工属性选<strong>实习生</strong> → 编号前面加 <code>S</code>，如 <code>S0126001005</code>；</li>
-        <li>选<strong>临时工</strong> → 加 <code>L</code>，如 <code>L0199002012</code>；</li>
-        <li>正式工、派遣工、学徒不加前缀，直接 10 位。</li>
-      </ul>
+      <h3 class="subsection__title">非正式用工带字母前缀</h3>
+      <p><strong>只有正式工是 10 位纯数字</strong>，其余四类都在前面加一个字母区分：</p>
+      <table class="field-table">
+        <thead><tr><th>用工属性</th><th>前缀</th><th>示例</th></tr></thead>
+        <tbody>
+          <tr><td>实习生</td><td><code>S</code></td><td><code>S0126001005</code></td></tr>
+          <tr><td>临时工</td><td><code>L</code></td><td><code>L0199002012</code></td></tr>
+          <tr><td>学徒</td><td><code>A</code></td><td><code>A0126001023</code></td></tr>
+          <tr><td>劳务派遣工</td><td><code>P</code></td><td><code>P0126001016</code></td></tr>
+          <tr><td>正式工</td><td>无</td><td><code>0126010007</code></td></tr>
+        </tbody>
+      </table>
       <p>
-        <strong>试用转正</strong>时把用工属性从实习生/临时工改成正式工，保存时系统会问你要不要
-        <strong>换发正式编号</strong>。选「换发新编号」就生成一个不带字母的 10 位正式编号，原编号封存；
-        选「保留原编号」则不动。
+        字母后面那 10 位数字的编法<strong>和正式工完全一样</strong>（同厂区、同年份、同部门共用一套流水号），
+        方便人事统一统计。
       </p>
+      <div class="alert alert--info">
+        <strong>派遣工</strong>的劳动关系在外派公司，我们只登记他在哪个厂区、哪个部门干活；
+        用工结束后编号作废封存，不会再分给别人。
+      </div>
+      <p>
+        <strong>转正时要换号。</strong>把用工属性从实习生/临时工/学徒/派遣工改成<strong>正式工</strong>，
+        保存时系统会问你要不要换发正式编号。选「换发新编号」就生成一个不带字母的 10 位正式编号，
+        原编号注销归档、不再启用；选「保留原编号」则不动。
+      </p>
+      <p>四类非正式用工之间互相改（比如实习生转学徒）也会问一次，因为字母前缀跟着要变。</p>
 
       <h3 class="subsection__title">字段分四块</h3>
       <ul>
