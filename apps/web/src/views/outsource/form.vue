@@ -24,9 +24,24 @@
               <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :md="12">
+          <el-col :xs="24" :sm="12" :md="6">
+            <el-form-item label="录入方式">
+              <el-radio-group v-model="entryMode" size="small">
+                <el-radio-button v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
+                  {{ o.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="6">
             <div class="head-tip">
-              加工商与回厂日期为本次录入的<b>各行共用</b>值；同一天从同一家回来的货，勾多个部件组一次录完。
+              加工商与回厂日期为<b>各行共用</b>值，一次可录多个部件组。
+              <template v-if="isQtyMode">
+                当前<b>按数量</b>：以加工商送货单的数量为准，重量与单重<b>选填</b>、不参与折算。
+              </template>
+              <template v-else>
+                当前<b>按重量折算</b>：填重量与单重自动算出数量，算完仍可微调。
+              </template>
             </div>
           </el-col>
         </el-row>
@@ -63,7 +78,23 @@
           <el-table-column v-if="colorEnabled" label="颜色" width="100" align="center">
             <template #default="{ row }"><el-input v-model="row.color" /></template>
           </el-table-column>
-          <el-table-column label="回厂重量(kg)" width="120" align="center">
+          <!-- 数量列排在重量之前：它才是入账依据，送货单上多数也只有这一个数。
+               min 取 0 与重量列一致，「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
+          <el-table-column width="125" align="center">
+            <template #header>
+              回厂数量(支)<span v-if="isQtyMode" class="col-req">*</span>
+            </template>
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.returnQty" :min="0" :precision="0" :step="1" :controls="false"
+                style="width: 100%" :placeholder="isQtyMode ? '按送货单' : '自动折算'"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column width="125" align="center">
+            <template #header>
+              回厂重量(kg)<span v-if="isQtyMode" class="col-opt">选填</span>
+            </template>
             <template #default="{ row }">
               <el-input-number
                 v-model="row.returnWeight" :min="0" :precision="2" :step="1" :controls="false"
@@ -71,19 +102,15 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="单重(kg/支)" width="115" align="center">
+          <el-table-column width="120" align="center">
+            <template #header>
+              单重(kg/支)<span v-if="isQtyMode" class="col-opt">选填</span>
+            </template>
             <template #default="{ row }">
               <el-input-number
                 v-model="row.unitWeight" :min="0" :precision="4" :step="0.01" :controls="false"
                 style="width: 100%" @change="() => syncQty(row)"
               />
-            </template>
-          </el-table-column>
-          <!-- 数量由重量÷单重自动折算（syncQty），仍允许人工微调；min 取 0 与重量列一致，
-               「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
-          <el-table-column label="回厂数量(支)" width="120" align="center">
-            <template #default="{ row }">
-              <el-input-number v-model="row.returnQty" :min="0" :precision="0" :step="1" :controls="false" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="120">
@@ -148,7 +175,7 @@ defineOptions({ name: 'OutsourceForm' });
 
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
 import {
   createOutsourceParts,
@@ -158,9 +185,17 @@ import {
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import {
+  ENTRY_MODE_OPTIONS,
+  mismatchedQty,
+  useOutsourceEntryMode,
+} from '@/composables/useOutsourceEntry';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
+
+/** 录入方式：按数量 / 按重量折算（记住上次选择，口径见 useOutsourceEntry） */
+const { entryMode, isQtyMode } = useOutsourceEntryMode();
 
 const router = useRouter();
 const formRef = ref<FormInstance>();
@@ -208,8 +243,13 @@ const totalWeight = computed(
   () => Math.round(form.items.reduce((s, it) => s + (it.returnWeight || 0), 0) * 100) / 100,
 );
 
-/** 重量或单重变化 → 自动折算数量（共享包同一口径，仍可人工微调） */
+/**
+ * 重量或单重变化 → 折算数量（共享包同一口径，折算后仍可人工微调）。
+ * **仅「按重量折算」模式生效**：按数量模式下这两列只是记录值，
+ * 再驱动数量就会把录入员按送货单填好的数字改掉（原实现的坑）。
+ */
 function syncQty(row: ItemRow) {
+  if (isQtyMode.value) return;
   const qty = qtyFromWeight(row.returnWeight, row.unitWeight);
   if (qty > 0) row.returnQty = qty;
 }
@@ -273,6 +313,31 @@ function unitLabel(v: string | null): string {
   return UNIT_OPTIONS.find((o: any) => o.value === v)?.label ?? (v ?? '');
 }
 
+/**
+ * 数量与「重量÷单重」对不上时确认一次（偏差 >10%，口径见 useOutsourceEntry）。
+ * **只提示不拦截**：过磅本就有误差，且两个数不一致时以送货单数量为准是业务惯例；
+ * 但相差太多多半是某一处录错了，让人当场核一眼比事后对账划算。
+ */
+async function confirmQtyConsistent(): Promise<boolean> {
+  const bad = form.items
+    .map((it, i) => ({ it, no: i + 1, calc: mismatchedQty(it) }))
+    .filter((r) => r.calc !== null);
+  if (!bad.length) return true;
+  const lines = bad
+    .map((r) => `第 ${r.no} 行：登记 ${r.it.returnQty} 支，按重量折算 ${r.calc} 支`)
+    .join('；');
+  try {
+    await ElMessageBox.confirm(`${lines}。确认以登记的数量入账吗？`, '数量与重量折算不一致', {
+      type: 'warning',
+      confirmButtonText: '按登记数量入账',
+      cancelButtonText: '返回修改',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /* ===== 保存 ===== */
 async function onSave() {
   await formRef.value?.validate();
@@ -282,9 +347,14 @@ async function onSave() {
   }
   const bad = form.items.findIndex((it) => !it.returnQty || it.returnQty <= 0);
   if (bad >= 0) {
-    ElMessage.warning(`第 ${bad + 1} 行回厂数量必须大于 0`);
+    ElMessage.warning(
+      isQtyMode.value
+        ? `第 ${bad + 1} 行请按送货单填写回厂数量`
+        : `第 ${bad + 1} 行回厂数量必须大于 0（填写重量与单重可自动折算）`,
+    );
     return;
   }
+  if (!(await confirmQtyConsistent())) return;
   saving.value = true;
   try {
     const res = await createOutsourceParts({
@@ -360,5 +430,16 @@ function goBack() {
   line-height: 32px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+/* 列头的必填星号与「选填」标注：随录入方式切换，让人一眼看出该填哪一列 */
+.col-req {
+  color: var(--el-color-danger);
+  margin-left: 2px;
+}
+.col-opt {
+  color: var(--el-text-color-placeholder);
+  font-weight: 400;
+  margin-left: 4px;
+  font-size: 11px;
 }
 </style>

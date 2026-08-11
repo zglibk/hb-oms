@@ -130,23 +130,32 @@
         <el-form-item v-if="colorEnabled" label="颜色">
           <el-input v-model="editForm.color" />
         </el-form-item>
+        <!-- 录入方式与登记页同一套口径：按数量时重量/单重只是记录值，不回算数量。
+             默认按这条记录已有的数据推断——原本就是过磅折算出来的，编辑时自然还按重量走 -->
+        <el-form-item label="录入方式">
+          <el-radio-group v-model="editMode" size="small">
+            <el-radio-button v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="回厂数量" required>
+          <el-input-number v-model="editForm.returnQty" :min="1" :precision="0" :step="1" style="width: 140px" />
+          <span class="unit-tip">支{{ editQtyMode ? '（以送货单为准）' : '（重量÷单重折算，可改）' }}</span>
+        </el-form-item>
         <el-form-item label="回厂重量">
           <el-input-number
             v-model="editForm.returnWeight" :min="0" :precision="2" :step="1" :controls="false"
             style="width: 140px" @change="syncEditQty"
           />
-          <span class="unit-tip">kg</span>
+          <span class="unit-tip">kg{{ editQtyMode ? '（选填）' : '' }}</span>
         </el-form-item>
         <el-form-item label="单重">
           <el-input-number
             v-model="editForm.unitWeight" :min="0" :precision="4" :step="0.01" :controls="false"
             style="width: 140px" @change="syncEditQty"
           />
-          <span class="unit-tip">kg/支</span>
-        </el-form-item>
-        <el-form-item label="回厂数量">
-          <el-input-number v-model="editForm.returnQty" :min="1" :precision="0" :step="1" style="width: 140px" />
-          <span class="unit-tip">支（重量÷单重自动折算，可改）</span>
+          <span class="unit-tip">kg/支{{ editQtyMode ? '（选填）' : '' }}</span>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" />
@@ -176,6 +185,11 @@ import {
   type OutsourcePartRow,
 } from '@/api/outsource';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
+import {
+  ENTRY_MODE_OPTIONS,
+  mismatchedQty,
+  type OutsourceEntryMode,
+} from '@/composables/useOutsourceEntry';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
@@ -255,23 +269,35 @@ const editForm = reactive({
   remark: '',
 });
 
+/**
+ * 编辑弹窗的录入方式。默认**按这条记录已有的数据推断**：
+ * 原本就带重量与单重的，说明当初是过磅折算出来的，编辑时继续按重量走；
+ * 只有数量的（送货单没印重量），进来就是「按数量」，不会被折算改掉。
+ */
+const editMode = ref<OutsourceEntryMode>('qty');
+const editQtyMode = computed(() => editMode.value === 'qty');
+
 function openEdit(row: OutsourcePartRow) {
   editRow.value = row;
+  const weight = Number(row.returnWeight) || 0;
+  const unit = Number(row.unitWeight) || 0;
+  editMode.value = weight > 0 && unit > 0 ? 'weight' : 'qty';
   Object.assign(editForm, {
     processorName: row.processorName,
     backDate: String(row.backDate).slice(0, 10),
     surfaceType: row.surfaceType ?? undefined,
     color: row.color ?? '',
-    returnWeight: Number(row.returnWeight) || 0,
-    unitWeight: Number(row.unitWeight) || 0,
+    returnWeight: weight,
+    unitWeight: unit,
     returnQty: row.returnQty,
     remark: row.remark ?? '',
   });
   editVisible.value = true;
 }
 
-/** 重量或单重变化 → 自动折算数量（共享包同一口径，仍可人工微调） */
+/** 重量或单重变化 → 折算数量；**仅「按重量折算」模式生效**（同登记页口径） */
 function syncEditQty() {
+  if (editQtyMode.value) return;
   const qty = qtyFromWeight(editForm.returnWeight, editForm.unitWeight);
   if (qty > 0) editForm.returnQty = qty;
 }
@@ -289,6 +315,19 @@ async function onEditSave() {
   if (!editForm.returnQty || editForm.returnQty <= 0) {
     ElMessage.warning('回厂数量必须大于 0');
     return;
+  }
+  // 数量与重量折算对不上时确认一次（只提示不拦截，口径见 useOutsourceEntry）
+  const calc = mismatchedQty(editForm);
+  if (calc !== null) {
+    try {
+      await ElMessageBox.confirm(
+        `登记 ${editForm.returnQty} 支，按重量折算 ${calc} 支。确认以登记的数量入账吗？`,
+        '数量与重量折算不一致',
+        { type: 'warning', confirmButtonText: '按登记数量入账', cancelButtonText: '返回修改' },
+      );
+    } catch {
+      return;
+    }
   }
   saving.value = true;
   try {
