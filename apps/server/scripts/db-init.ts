@@ -81,10 +81,12 @@ async function main() {
 async function seedDepartments(db: mysql.Connection) {
   for (const d of DEPARTMENTS) {
     await db.query(
-      `INSERT INTO t_department (dept_code, dept_name, parent_id, sort)
-       VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE dept_name = VALUES(dept_name), parent_id = VALUES(parent_id), sort = VALUES(sort)`,
-      [d.dept_code, d.dept_name, d.parent_id, d.sort],
+      // hr_code 必须一并种下：它是员工编号第 5-7 位的来源，缺了就没法给员工建档
+      `INSERT INTO t_department (dept_code, dept_name, hr_code, parent_id, sort)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE dept_name = VALUES(dept_name), hr_code = VALUES(hr_code),
+         parent_id = VALUES(parent_id), sort = VALUES(sort)`,
+      [d.dept_code, d.dept_name, d.hr_code, d.parent_id, d.sort],
     );
   }
   console.log(`✓ 部门 ${DEPARTMENTS.length} 条`);

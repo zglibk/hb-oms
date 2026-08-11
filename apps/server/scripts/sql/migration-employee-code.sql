@@ -9,7 +9,8 @@
 --   1. t_employee 加 plant_code（厂区，编码第 1-2 位的来源）；
 --   2. t_department 加 hr_code（部门人事编码，编码第 5-7 位的来源）——
 --      **刻意放在部门主数据里而不是写死在代码**：部门会增减，硬编码迟早和库里对不上；
---   3. 补齐规则里的 9 个部门并回填 hr_code（按名称匹配存量部门，缺的新建）；
+--   3. 补齐规则里的 9 个部门并回填 hr_code（按名称匹配存量部门，缺的新建），
+--      另给存量的 IT部 补 010（规则原表只列到 009，这一档是本厂补的）；
 --   4. emp_type 字典补「实习生 intern」——规则点名了实习生要用 S 前缀，
 --      而原字典只有 正式工/临时工/派遣工/学徒，没有实习生这一档。
 --
@@ -51,6 +52,8 @@ UPDATE t_department SET hr_code = '006' WHERE dept_name = '技术研发部' AND 
 UPDATE t_department SET hr_code = '007' WHERE dept_name = '财务部'     AND (hr_code IS NULL OR hr_code = '');
 UPDATE t_department SET hr_code = '008' WHERE dept_name = '采购部'     AND (hr_code IS NULL OR hr_code = '');
 UPDATE t_department SET hr_code = '009' WHERE dept_name = '模具部'     AND (hr_code IS NULL OR hr_code = '');
+-- IT部：规则原表只列到 009，010 是本厂在规则之外补的（2026-08-11 用户指定）
+UPDATE t_department SET hr_code = '010' WHERE dept_name = 'IT部'       AND (hr_code IS NULL OR hr_code = '');
 
 -- 规则里有、库里还没有的部门补建（挂在顶级公司节点下，取现有最小的根部门为父）。
 -- 用 hr_code 判存，重复执行不会建第二份。

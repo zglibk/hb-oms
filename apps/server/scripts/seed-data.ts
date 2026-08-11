@@ -5,12 +5,28 @@
  */
 
 // ---------- 部门 ----------
+/**
+ * 部门种子。
+ *
+ * `hr_code` 是**员工编号第 5-7 位**的来源（《员工编码管理规则》）：没有它就没法给
+ * 员工建档，所以全新安装必须把这份映射一并种下去，不能只靠迁移
+ * （`db:init` 不跑 migrations）。存量库由 `migration-employee-code.sql` 回填，
+ * 两条路径的终态必须一致——**改这里记得同步改那个迁移**。
+ *
+ * 编码 001~009 出自规则原表；010（IT部）是规则之外本厂补的一档。
+ */
 export const DEPARTMENTS = [
-  { dept_code: 'COMPANY', dept_name: '海宝五金', parent_id: 0, sort: 0 },
-  { dept_code: 'SALE', dept_name: '业务部', parent_id: 1, sort: 1 },
-  { dept_code: 'WAREHOUSE', dept_name: '仓库部', parent_id: 1, sort: 2 },
-  { dept_code: 'PROD', dept_name: '生产部', parent_id: 1, sort: 3 },
-  { dept_code: 'IT', dept_name: 'IT部', parent_id: 1, sort: 4 },
+  { dept_code: 'COMPANY', dept_name: '海宝五金', hr_code: null, parent_id: 0, sort: 0 },
+  { dept_code: 'PROD', dept_name: '生产部', hr_code: '001', parent_id: 1, sort: 3 },
+  { dept_code: 'WAREHOUSE', dept_name: '仓库部', hr_code: '002', parent_id: 1, sort: 2 },
+  { dept_code: 'HR_ADMIN', dept_name: '行政人事部', hr_code: '003', parent_id: 1, sort: 13 },
+  { dept_code: 'SALE', dept_name: '业务部', hr_code: '004', parent_id: 1, sort: 1 },
+  { dept_code: 'HR_QC', dept_name: '品检部', hr_code: '005', parent_id: 1, sort: 15 },
+  { dept_code: 'HR_RD', dept_name: '技术研发部', hr_code: '006', parent_id: 1, sort: 16 },
+  { dept_code: 'HR_FIN', dept_name: '财务部', hr_code: '007', parent_id: 1, sort: 17 },
+  { dept_code: 'HR_PUR', dept_name: '采购部', hr_code: '008', parent_id: 1, sort: 18 },
+  { dept_code: 'HR_MOULD', dept_name: '模具部', hr_code: '009', parent_id: 1, sort: 19 },
+  { dept_code: 'IT', dept_name: 'IT部', hr_code: '010', parent_id: 1, sort: 4 },
 ];
 
 // ---------- 内置角色：公司实际岗位编制，数据范围一律「全部」、一律内置 ----------
