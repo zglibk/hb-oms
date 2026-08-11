@@ -16,11 +16,13 @@ import { OutsourceModule } from './modules/outsource/outsource.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
 import { FinishedStockModule } from './modules/finished-stock/finished-stock.module';
 import { PartStockModule } from './modules/part-stock/part-stock.module';
+import { DullStockModule } from './modules/dull-stock/dull-stock.module';
 import { OpeningModule } from './modules/opening/opening.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
+import { EmployeeModule } from './modules/employee/employee.module';
 
 @Module({
   imports: [
@@ -71,11 +73,13 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     AssemblyModule,
     FinishedStockModule,
     PartStockModule,
+    DullStockModule,
     OpeningModule,
     DashboardModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,
+    EmployeeModule,
   ],
 })
 export class AppModule {}

@@ -7,6 +7,7 @@
           系统上线时把手工账上的存量搬进系统，<b>菜单常驻、可反复补录</b>。
           成品期初会生成一张 <b>FGO 期初单并立即生效</b>，在「成品出入库」里可查、录错可红字冲销；
           部件期初按 7 维属性累加并留变动流水。
+          已完结订单剩下的成品不在这里录——请到<b>「物料管理 → 呆滞品管理」</b>逐批建档。
         </span>
       </div>
 
@@ -16,6 +17,7 @@
           <div class="tab-tip">
             适用于<b>未完结的历史订单</b>：先在「订单管理」把订单补录进来（勾选「期初补录」），
             再在这里按产品录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与成品欠数。
+            已完结订单剩下的成品请改到<b>「呆滞品管理」</b>建档。
           </div>
           <div class="toolbar">
             <el-date-picker v-model="docDate" type="date" value-format="YYYY-MM-DD" size="small" style="width: 150px" />
@@ -49,83 +51,6 @@
             <el-table-column label="操作" width="70" align="center" fixed="right">
               <template #default="{ $index }">
                 <el-button size="small" link type="danger" :icon="Delete" @click="groupRows.splice($index, 1)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-
-        <!-- ============ 成品期初（纯属性）============ -->
-        <el-tab-pane label="成品期初（不挂订单）" name="attr">
-          <div class="tab-tip">
-            适用于<b>已完结订单的剩余库存</b>：不挂任何订单，只按属性记库存。
-            这部分<b>只进「库存数」，不参与任何订单欠数</b>，台账里查不到（这是设计如此，不是漏了）。
-          </div>
-          <div class="toolbar">
-            <el-date-picker v-model="attrDate" type="date" value-format="YYYY-MM-DD" size="small" style="width: 150px" />
-            <el-button size="small" type="primary" plain :icon="Plus" @click="addAttrRow">添加一行</el-button>
-            <el-input v-model="attrRemark" size="small" placeholder="整单备注（选填）" style="width: 220px" />
-            <span class="sum">合计 <b>{{ attrTotal }}</b> 支 / {{ attrRows.length }} 行</span>
-            <el-button
-              size="small" type="primary" v-permission.disable="'opening:finished'"
-              :loading="saving" :disabled="!attrRows.length" @click="submitAttr"
-            >提交期初</el-button>
-          </div>
-          <el-table :data="attrRows" border stripe size="small" empty-text="请点击「添加一行」录入">
-            <el-table-column type="index" label="#" width="46" align="center" />
-            <el-table-column label="货号 *" width="120">
-              <template #default="{ row }"><el-input v-model="row.itemNo" placeholder="如 53#" /></template>
-            </el-table-column>
-            <el-table-column label="产品类型" width="150">
-              <template #default="{ row }">
-                <el-select v-model="row.productTypes" multiple collapse-tags placeholder="可多选" style="width: 100%">
-                  <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="部件组" width="110">
-              <template #default="{ row }">
-                <el-select v-model="row.groupType" clearable placeholder="整品" style="width: 100%">
-                  <el-option v-for="o in PART_GROUP_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="节数" width="115">
-              <template #default="{ row }">
-                <el-select v-model="row.railSection" clearable style="width: 100%">
-                  <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="规格(mm)" width="105">
-              <template #default="{ row }">
-                <el-input-number v-model="row.dimensionMm" :min="0" :precision="0" :controls="false" style="width: 100%" />
-              </template>
-            </el-table-column>
-            <el-table-column label="表面处理" width="120">
-              <template #default="{ row }">
-                <el-select v-model="row.surfaceType" clearable style="width: 100%">
-                  <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column v-if="colorEnabled" label="颜色" width="100">
-              <template #default="{ row }"><el-input v-model="row.color" /></template>
-            </el-table-column>
-            <el-table-column label="边别" width="100">
-              <template #default="{ row }">
-                <el-select v-model="row.side" clearable placeholder="非卡口留空" style="width: 100%">
-                  <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="数量(支) *" width="115">
-              <template #default="{ row }">
-                <el-input-number v-model="row.quantity" :min="1" :precision="0" :controls="false" style="width: 100%" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="70" align="center" fixed="right">
-              <template #default="{ $index }">
-                <el-button size="small" link type="danger" :icon="Delete" @click="attrRows.splice($index, 1)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -246,24 +171,13 @@ import {
   SIDE_OPTIONS,
   RAIL_SECTION_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
-  PART_GROUP_OPTIONS,
   sideLabel,
   normalizeProductTypes,
 } from '@/constants/dict';
-import { loadDict } from '@/composables/useDict';
-import { useFeatureFlags } from '@/composables/useFeatureFlags';
-
-/** 「颜色」字段全局开关（系统配置 → 业务字段） */
-const { colorEnabled } = useFeatureFlags();
 
 const tab = ref('group');
 const saving = ref(false);
 const today = () => new Date().toISOString().slice(0, 10);
-
-const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
-loadDict('surface_type').then((rows: any[]) => {
-  surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
-});
 
 /* ===================== 挂订单期初 ===================== */
 interface GroupRow {
@@ -353,60 +267,6 @@ async function submitGroup() {
     if (res.finished?.length) ElMessage.success(`订单 ${res.finished.join('、')} 已交清，自动完结`);
     groupRows.value = [];
     groupRemark.value = '';
-  } finally {
-    saving.value = false;
-  }
-}
-
-/* ===================== 纯属性期初 ===================== */
-interface AttrRow {
-  itemNo: string;
-  productTypes: string[];
-  groupType: string;
-  railSection: string;
-  dimensionMm: number;
-  surfaceType: string;
-  color: string;
-  side: string;
-  quantity: number;
-}
-const attrDate = ref(today());
-const attrRemark = ref('');
-const attrRows = ref<AttrRow[]>([]);
-const attrTotal = computed(() => attrRows.value.reduce((s, r) => s + (r.quantity || 0), 0));
-
-function addAttrRow() {
-  attrRows.value.push({
-    itemNo: '', productTypes: [], groupType: 'whole', railSection: 'three_section',
-    dimensionMm: 0, surfaceType: '', color: '', side: '', quantity: 1,
-  });
-}
-async function submitAttr() {
-  const noItem = attrRows.value.findIndex((r) => !r.itemNo.trim());
-  if (noItem >= 0) return ElMessage.warning(`第 ${noItem + 1} 行必须填货号`);
-  const badQty = attrRows.value.findIndex((r) => !r.quantity || r.quantity <= 0);
-  if (badQty >= 0) return ElMessage.warning(`第 ${badQty + 1} 行数量必须大于 0`);
-  saving.value = true;
-  try {
-    const res = await openingFinished({
-      docDate: attrDate.value,
-      remark: attrRemark.value || undefined,
-      items: attrRows.value.map((r) => ({
-        itemNo: r.itemNo.trim(),
-        // 组合串规范化后再传，避免「普通,自锁」与「自锁,普通」分裂成两行库存
-        productType: normalizeProductTypes(r.productTypes),
-        groupType: r.groupType || undefined,
-        railSection: r.railSection || undefined,
-        dimensionMm: r.dimensionMm || undefined,
-        surfaceType: r.surfaceType || undefined,
-        color: r.color || undefined,
-        side: r.side || '',
-        quantity: r.quantity,
-      })),
-    });
-    ElMessage.success(`期初单 ${res.docNo} 已录入并生效（${res.itemCount} 行）`);
-    attrRows.value = [];
-    attrRemark.value = '';
   } finally {
     saving.value = false;
   }

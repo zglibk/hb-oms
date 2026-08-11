@@ -141,6 +141,7 @@
     <a class="toc-item toc-sub" data-key="销售出库 库存不足" onclick="jump('ch4-2')">4.2 销售出库</a>
     <a class="toc-item toc-sub" data-key="做错了 红字冲销 部分冲销" onclick="jump('ch4-3')">4.3 单据做错了：红字冲销</a>
     <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次" onclick="jump('ch4-4')">4.4 成品库存</a>
+    <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
@@ -152,11 +153,12 @@
 
     <a class="toc-item" data-key="期初 上线 补录 历史订单 部件台账" onclick="jump('ch7')">第7章 上线准备：期初录入</a>
     <a class="toc-item toc-sub" data-key="补录 历史订单 期初补录开关" onclick="jump('ch7-1')">7.1 先补录未完结的历史订单</a>
-    <a class="toc-item toc-sub" data-key="成品期初 挂订单 纯属性" onclick="jump('ch7-2')">7.2 成品期初</a>
+    <a class="toc-item toc-sub" data-key="成品期初 挂订单" onclick="jump('ch7-2')">7.2 成品期初</a>
     <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
     <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
+    <a class="toc-item" data-key="HR 人事档案 员工 工号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
     <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
@@ -200,7 +202,7 @@
         <tbody>
           <tr><td>业务员 / 跟单员</td><td>录订单、查台账回复客户交期、看首页逾期提醒</td><td>第1、5、6章</td></tr>
           <tr><td>计划员</td><td>登记外发件回厂、录装配批次</td><td>第2、3章</td></tr>
-          <tr><td>仓管员</td><td>成品入库、销售出库、成品库存、期初录入</td><td>第4、7章</td></tr>
+          <tr><td>仓管员</td><td>成品入库、销售出库、成品库存、呆滞品管理、期初录入</td><td>第4、7章</td></tr>
           <tr><td>经理层</td><td>首页看板、台账筛选与汇总</td><td>第5、6章</td></tr>
           <tr><td>系统管理员</td><td>开账号配权限、维护字典与基础数据</td><td>第8、9章</td></tr>
         </tbody>
@@ -533,6 +535,58 @@
           <tr><td>ORD</td><td>系统订单号（内部定位用，业务上看生产单号）</td></tr>
         </tbody>
       </table>
+
+      <h2 class="section__title" id="ch4-5">4.5 呆滞品管理</h2>
+      <p>菜单位置：<strong>物料管理 → 呆滞品管理</strong>。</p>
+      <p>
+        订单做完发完了，仓库里还剩下一些成品没处理掉——多做的、退回来的、客户不要了的，这些就是<strong>呆滞品</strong>。
+        它们已经不属于任何一张在跑的订单了，所以不能挂在订单上记，单独在这一页建档。
+      </p>
+      <div class="alert alert--info">
+        这一页是<strong>一本独立的账</strong>：不进订单跟踪台账的四个数，也不进「成品库存」。
+        它跟订单的世界是分开的，别拿这里的数去对台账。
+      </div>
+
+      <h3>一条记录 = 一批货</h3>
+      <p>
+        同一个货号、同一个客户，先后可能剩下好几批呆滞品（这次剩 200 支、下个月又剩 50 支），
+        <strong>各建各的记录</strong>，系统不会把它们合并。这样每一批是什么时候、哪张生产单留下来的，事后都查得到。
+      </p>
+      <p>建档要填：货号、客户、生产单号（这批货是哪来的）、产品类型/节数/规格/表面处理/颜色/边别（这批货是什么），以及<strong>单位</strong>和<strong>期初数</strong>。</p>
+      <ul>
+        <li><strong>单位可选「套」或「支」</strong>，按仓库盘点时怎么报就怎么填。这一行的四个数量都按这个单位算，页面顶上的合计会统一折成支（1 套 = 2 支）。</li>
+        <li><strong>建档后就不能改单位了</strong>（只要登记过出入库）——改了的话历史那几笔记的数含义就全变了。真要换，先把流水删掉，或者另建一条。</li>
+        <li><strong>表面处理选「电泳」会自动带出「黑色」，选「喷涂」自动带出「白色」</strong>，这两个是厂里最常见的搭配。自己改过颜色之后就不会再被自动改掉了。</li>
+      </ul>
+
+      <h3>四个数怎么来的</h3>
+      <table class="field-table">
+        <thead><tr><th>列</th><th>怎么来的</th></tr></thead>
+        <tbody>
+          <tr><td>期初数</td><td>建档时填的，就是这批呆滞品一开始有多少。填错了可以编辑改。</td></tr>
+          <tr><td>入库数</td><td><strong>不能直接填</strong>：是所有「入库」流水的合计（退货回来了、盘点多出来了）。</td></tr>
+          <tr><td>出库数</td><td><strong>不能直接填</strong>：是所有「出库」流水的合计（清库处理掉了、降价卖了、内部领用了）。</td></tr>
+          <tr><td>结存数</td><td><strong>期初数 + 入库数 − 出库数</strong>，系统自动算，现在还剩多少。</td></tr>
+        </tbody>
+      </table>
+      <p>
+        后面进了货或者出了货，点这一行的<strong>「出入库」</strong>登记一笔：选入库还是出库、填日期、数量、原因。
+        每登记一笔就留一条流水，<strong>点行首箭头展开</strong>能看到这条呆滞品的全部进出记录，以及每一笔之后还剩多少。
+      </p>
+      <div class="alert alert--warning">
+        <strong>结存不能为负。</strong>出库数量超过当前结存会被直接拒绝——账上只有 6 套，发不出 10 套。
+      </div>
+
+      <h3>登记错了怎么办</h3>
+      <p>
+        展开行里每一笔流水后面都有<strong>「删除」</strong>，删掉之后累计数和结存会跟着回滚。
+        这跟「部件台账」不一样——部件台账只能反向再调一笔，呆滞品这本账允许直接删。
+      </p>
+      <div class="alert alert--info">
+        有一种情况会拦你：<strong>删一笔入库</strong>会让结存变少，如果这批货后来已经出掉了，删完就成负数了，系统会拒绝。
+        这说明你要删的其实是那笔出库记录，先删它。
+      </div>
+      <p><strong>整条呆滞品记录</strong>只有在<strong>一笔流水都没有</strong>的时候才能删除，否则要先把流水删干净——不然已经发生的进出就凭空消失了。</p>
     </section>
 
     <!-- ============ 第5章 ============ -->
@@ -667,19 +721,20 @@
       </ol>
 
       <h2 class="section__title" id="ch7-2">7.2 成品期初</h2>
-      <p>期初录入页有两个成品页签：</p>
-      <table class="field-table">
-        <thead><tr><th>类型</th><th>什么时候用</th><th>效果</th></tr></thead>
-        <tbody>
-          <tr><td>挂订单</td><td>这批库存属于某张<strong>还没交完</strong>的订单</td><td>点「添加产品」选具体的<strong>订单产品</strong>录数量（与成品入库同一个选择器），<strong>会计入该订单的完成数与欠数</strong></td></tr>
-          <tr><td>不挂订单</td><td>订单早已完结，只是仓库还剩一些货</td><td>只按货号、规格等属性登记，<strong>只增加库存数，不影响任何订单的欠数</strong></td></tr>
-        </tbody>
-      </table>
+      <p>
+        「成品期初（挂订单）」页签，用于<strong>还没交完的订单</strong>已经做好入库的那部分。
+        点「添加产品」选具体的<strong>订单产品</strong>录数量（与成品入库同一个选择器），
+        这部分<strong>会计入该订单的完成数与欠数</strong>。
+      </p>
       <ul>
         <li>期初单据走成品出入库通道，单号是 <code>FGO</code> 开头，<strong>保存即生效</strong>（不需要再点确认）。</li>
         <li><strong>期初不受装配闸门约束</strong>——上线前的存货本来就没在系统里走过装配。</li>
         <li>录错了同样可以红字冲销。</li>
       </ul>
+      <div class="alert alert--info">
+        <strong>订单早就完结、仓库只是还剩一些货</strong>的，不在这里录——那是呆滞品，
+        请到<strong>「物料管理 → 呆滞品管理」</strong>逐批建档，见 <a href="javascript:void(0)" onclick="jump('ch4-5')">4.5</a>。
+      </div>
 
       <h2 class="section__title" id="ch7-3">7.3 部件期初</h2>
       <p>还没装配成成品的半成品部件（外轨/中轨/内轨），录在「部件期初」页签。</p>
@@ -729,6 +784,36 @@
       <p>批量导入的通用规则：先下载模板 → 按模板填 → 上传。<strong>整批校验全部通过才入库</strong>，任何一行有问题都会列出行号和原因，一行都不会入。</p>
     </section>
 
+    <!-- ============ HR 人事档案 ============ -->
+    <section class="chapter" id="ch8hr">
+      <h1 class="chapter__title">HR · 人事档案</h1>
+      <p>
+        菜单位置：<strong>HR人力资源管理 → 人事档案</strong>。
+        用来建厂内员工花名册（工号、用工属性、车间岗位等）。
+      </p>
+      <div class="alert alert--tip">
+        <strong>独立模块、单向依赖：</strong>录入时可选用「基础数据 → 部门信息」作为所属组织；
+        <strong>暂不向订单、外发、装配等业务模块供数</strong>（业务员/跟单员等仍按原方式手填或选客户默认值）。日后打通另说。
+      </div>
+      <h3 class="subsection__title">字段分四块</h3>
+      <ul>
+        <li><strong>基本信息</strong>：员工编号（全系统唯一）、姓名、性别、身份证、联系方式、籍贯、民族、婚姻状况、政治面貌、住址、紧急联系人。年龄按出生日期自动算，不单独存。</li>
+        <li><strong>教育背景</strong>：学历、学历类型（全日制/非全日制）、专业、最终毕业院校、毕业时间（按年月）。</li>
+        <li><strong>用工属性</strong>：正式工/临时工/派遣工/学徒、入职日期、试用期（月）、合同到期日、在职/离职；离职须填离职日期（可填原因）。离职时档案会自动停用。</li>
+        <li><strong>车间属性</strong>：所属组织（部门树）、班组（手填）、岗位（字典：冲压工/装配工/质检/机修等，可在「数据字典」增减）、直属车间主管（选本表在职员工）。</li>
+      </ul>
+      <ol class="steps">
+        <li>打开「人事档案」，点「新增员工」。</li>
+        <li>先填基本信息与教育背景，再填用工属性；最后选所属组织与岗位，需要时可指定直属主管。</li>
+        <li>保存。列表可按关键字、组织、用工属性、岗位、在职状态筛选。</li>
+      </ol>
+      <div class="alert alert--info">
+        用工属性、岗位、婚姻状况、政治面貌、学历等选项在<strong>系统管理 → 数据字典</strong>维护
+        （类型 <code>emp_type</code> / <code>hr_position</code> / <code>marital_status</code> / <code>political_status</code> / <code>education</code>）。
+        学历类型为系统固定项（全日制 / 非全日制）。
+      </div>
+    </section>
+
     <!-- ============ 第9章 ============ -->
     <section class="chapter" id="ch9">
       <h1 class="chapter__title">第9章 管理员篇</h1>
@@ -774,11 +859,15 @@
         <tbody>
           <tr>
             <td><strong>颜色字段</strong><br />（跟「表面处理」配套的那个）</td>
-            <td>订单表单的「颜色」输入框；外发件回厂记录的登记页、编辑弹窗与列表；期初录入（不挂订单）；成品库存列表；订单跟踪台账展开行的「表面处理/颜色」；台账导出与总计划导出的「颜色」列</td>
+            <td>订单表单的「颜色」输入框；外发件回厂记录的登记页、编辑弹窗与列表；成品库存列表；订单跟踪台账展开行的「表面处理/颜色」；台账导出与总计划导出的「颜色」列。<br /><strong>不影响呆滞品管理</strong>——那一页有自己的开关（下一行）</td>
           </tr>
           <tr>
             <td><strong>客户图号</strong><br />（客户来图上的图号）</td>
             <td>订单表单的「客户图号」输入框；订单列表展开行的「客户图号」列；总计划导出的「客户图号」列。<br /><strong>不影响部件组的「生产图号」</strong>——那是我们内部转化的技术图纸编号，是另一个字段</td>
+          </tr>
+          <tr>
+            <td><strong>呆滞品颜色</strong><br />（独立开关）</td>
+            <td>呆滞品管理的颜色列与建档弹窗的颜色输入框。<br /><strong>与上面的「颜色字段」互不影响</strong>——呆滞品的表面处理和颜色是配套带出来的（电泳→黑色、喷涂→白色），是认货的主要依据，所以哪怕全局颜色关了，这里也能照常用</td>
           </tr>
         </tbody>
       </table>

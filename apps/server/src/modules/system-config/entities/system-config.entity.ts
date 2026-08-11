@@ -77,6 +77,23 @@ export class SystemConfig {
   })
   customerDrawingNoEnabled: number;
 
+  /**
+   * 「呆滞品颜色」字段启用开关：1启用 0停用。
+   *
+   * **刻意独立于 `colorFieldEnabled`**（2026-08-11）：呆滞品建档时表面处理与颜色是
+   * 配套联动带出的（电泳→黑色 / 喷涂→白色），颜色是这本账辨认货物的主要依据；
+   * 而全局颜色开关是给「订单/外发口径用不到颜色」的厂关的。两者诉求不同，
+   * 合用一个开关会出现「关了全局颜色，呆滞品就认不出货」的尴尬，故各管各的。
+   */
+  @Column({
+    name: 'dull_stock_color_enabled',
+    type: 'tinyint',
+    default: 1,
+    comment:
+      '呆滞品颜色字段启用开关：1启用 0停用；**独立于 color_field_enabled**，只管呆滞品管理页的颜色列与建档弹窗',
+  })
+  dullStockColorEnabled: number;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

@@ -152,6 +152,71 @@ export const PART_ADJUST_SOURCE_OPTIONS: Array<{ label: string; value: string; t
   { label: '手工调整', value: PART_ADJUST_SOURCE.MANUAL, type: 'warning' },
 ];
 
+/* ===================== 人事档案（HR） ===================== */
+
+/** 在职状态：1在职 2离职（t_employee.job_status） */
+export const JOB_STATUS = {
+  ACTIVE: 1,
+  LEFT: 2,
+} as const;
+
+export const JOB_STATUS_OPTIONS: StatusOption[] = [
+  { label: '在职', value: JOB_STATUS.ACTIVE, type: 'success' },
+  { label: '离职', value: JOB_STATUS.LEFT, type: 'info' },
+];
+
+/** 性别：0未知 1男 2女（与 t_user.gender / t_employee.gender 同口径） */
+export const GENDER = {
+  UNKNOWN: 0,
+  MALE: 1,
+  FEMALE: 2,
+} as const;
+
+export const GENDER_OPTIONS: StatusOption[] = [
+  { label: '未知', value: GENDER.UNKNOWN, type: 'info' },
+  { label: '男', value: GENDER.MALE, type: 'primary' },
+  { label: '女', value: GENDER.FEMALE, type: 'danger' },
+];
+
+/** 学历类型（t_employee.education_type）：全日制 / 非全日制 */
+export const EDUCATION_TYPE = {
+  FULL_TIME: 'full_time',
+  PART_TIME: 'part_time',
+} as const;
+
+export const EDUCATION_TYPE_OPTIONS: Array<{ label: string; value: string; type: string }> = [
+  { label: '全日制', value: EDUCATION_TYPE.FULL_TIME, type: 'success' },
+  { label: '非全日制', value: EDUCATION_TYPE.PART_TIME, type: 'warning' },
+];
+
+/**
+ * 由出生日期算周岁；无效则返回 null。
+ * 人事档案列表/详情展示用，年龄不落库。
+ */
+export function ageFromBirthDate(birthDate: string | Date | null | undefined): number | null {
+  if (!birthDate) return null;
+  const d = typeof birthDate === 'string' ? new Date(birthDate.slice(0, 10)) : birthDate;
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1;
+  return age >= 0 && age < 150 ? age : null;
+}
+
+/**
+ * 从 18 位身份证号解析出生日期（YYYY-MM-DD）；格式不对返回 null。
+ */
+export function birthDateFromIdCard(idCard: string | null | undefined): string | null {
+  if (!idCard || !/^\d{17}[\dXx]$/.test(idCard.trim())) return null;
+  const y = idCard.slice(6, 10);
+  const m = idCard.slice(10, 12);
+  const day = idCard.slice(12, 14);
+  const d = new Date(`${y}-${m}-${day}`);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${y}-${m}-${day}`;
+}
+
 /* ===================== 通用启停 ===================== */
 
 /** 基础数据启停：1启用 0停用 */

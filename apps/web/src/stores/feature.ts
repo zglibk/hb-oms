@@ -20,6 +20,8 @@ const STORAGE_KEY = 'hb-oms-feature-flags';
 const DEFAULTS: FeatureFlags = {
   colorFieldEnabled: true,
   customerDrawingNoEnabled: true,
+  // 呆滞品颜色**独立开关**，与 colorFieldEnabled 互不影响
+  dullStockColorEnabled: true,
 };
 
 type FeatureState = FeatureFlags & {

@@ -1,25 +1,16 @@
 import request from '@/utils/request';
 
 /**
- * 成品期初明细行：**两种形态二选一**
- * - 挂订单：填 orderProductId，展示字段由服务端从订单侧快照读取；
- * - 纯属性（不挂订单）：省略 orderProductId，改填货号等属性，只进库存数、不参与订单欠数。
+ * 成品期初明细行：**必须挂订单产品行**，展示字段由服务端从订单侧快照读取。
+ *
+ * 2026-08-11 起不再支持「纯属性行（不挂订单）」——已完结订单剩下的成品
+ * 改由「物料管理 → 呆滞品管理」逐批建档跟踪。
  */
 export interface OpeningFinishedItemPayload {
-  orderProductId?: number;
+  orderProductId: number;
   side?: string;
   batchNo?: string;
   quantity: number;
-  /* 以下仅纯属性行使用 */
-  itemNo?: string;
-  productModel?: string;
-  productType?: string;
-  groupType?: string;
-  railSection?: string;
-  dimensionMm?: number;
-  dimensionText?: string;
-  surfaceType?: string;
-  color?: string;
   remark?: string;
 }
 

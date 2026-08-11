@@ -17,16 +17,19 @@ import { PartDimensionDto } from '../../part-stock/dto/part-stock.dto';
 const SIDE_VALUES = ['', 'left', 'right'];
 
 /**
- * 成品期初明细行（设计文档 §4.8）：**两种形态二选一**
- * - 挂订单：填 `orderProductId`，其余展示字段由服务端从订单侧快照读取（客户端传了也不采信）；
- * - 纯属性（不挂订单）：省略 `orderProductId`，改填货号等属性，只进库存数、不参与订单欠数。
+ * 成品期初明细行（设计文档 §4.8）：**必须挂订单产品行**。
  *
- * 这里不用 class-validator 表达"二选一"（写出来晦涩且报错难懂），
- * 改由 service 逐行判定并给出明确中文提示。
+ * 展示字段一律由服务端从订单侧快照读取，客户端传了也不采信（防伪造，§5.5）。
+ *
+ * 2026-08-11 起不再支持「纯属性行（不挂订单）」——已完结订单剩下的成品
+ * 改由「物料管理 → 呆滞品管理」逐批建档跟踪，那里能记客户/生产单号，
+ * 也能持续登记后续的出入库，本模块只管上线时把在做的订单存量搬进来。
  */
 export class OpeningFinishedItemDto {
-  /** 挂订单时填产品行ID；省略或 0 = 纯属性行 */
-  @IsOptional() @Type(() => Number) @IsInt({ message: '产品行ID必须为整数' }) orderProductId?: number;
+  @Type(() => Number)
+  @IsInt({ message: '产品行ID必须为整数' })
+  @Min(1, { message: '成品期初必须挂订单产品行' })
+  orderProductId: number;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 
@@ -36,26 +39,6 @@ export class OpeningFinishedItemDto {
   @IsInt({ message: '期初数量必须为整数' })
   @Min(1, { message: '期初数量必须大于 0' })
   quantity: number;
-
-  /* ---- 以下仅纯属性行使用；挂订单行传了也会被订单快照覆盖 ---- */
-
-  @IsOptional() @IsString() @MaxLength(64, { message: '货号不能超过 64 个字符' }) itemNo?: string;
-
-  @IsOptional() @IsString() @MaxLength(128, { message: '产品型号不能超过 128 个字符' }) productModel?: string;
-
-  @IsOptional() @IsString() @MaxLength(128, { message: '产品类型组合不能超过 128 个字符' }) productType?: string;
-
-  @IsOptional() @IsString() @MaxLength(32, { message: '部件组类型不能超过 32 个字符' }) groupType?: string;
-
-  @IsOptional() @IsString() @MaxLength(32, { message: '轨道节数不能超过 32 个字符' }) railSection?: string;
-
-  @IsOptional() @Type(() => Number) @IsInt({ message: '规格必须为整数' }) @Min(0, { message: '规格不能为负' }) dimensionMm?: number;
-
-  @IsOptional() @IsString() @MaxLength(64, { message: '规格文本不能超过 64 个字符' }) dimensionText?: string;
-
-  @IsOptional() @IsString() @MaxLength(32, { message: '表面处理不能超过 32 个字符' }) surfaceType?: string;
-
-  @IsOptional() @IsString() @MaxLength(64, { message: '颜色不能超过 64 个字符' }) color?: string;
 
   @IsOptional() @IsString() @MaxLength(255, { message: '备注不能超过 255 个字符' }) remark?: string;
 }

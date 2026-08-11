@@ -14,6 +14,7 @@ import { useFeatureStore } from '@/stores/feature';
 export function useFeatureFlags(): {
   colorEnabled: ComputedRef<boolean>;
   customerDrawingNoEnabled: ComputedRef<boolean>;
+  dullStockColorEnabled: ComputedRef<boolean>;
 } {
   const store = useFeatureStore();
   return {
@@ -21,5 +22,10 @@ export function useFeatureFlags(): {
     colorEnabled: computed(() => store.colorFieldEnabled),
     /** 「客户图号」字段是否启用（客户来图图号，非部件组的生产图号） */
     customerDrawingNoEnabled: computed(() => store.customerDrawingNoEnabled),
+    /**
+     * 呆滞品管理页的「颜色」是否启用。
+     * **独立于 colorEnabled**，呆滞品页只认这一个，不要再与全局颜色开关相与。
+     */
+    dullStockColorEnabled: computed(() => store.dullStockColorEnabled),
   };
 }

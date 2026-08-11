@@ -63,6 +63,12 @@ const MIGRATIONS: string[] = [
   'migration-product-level-tracking.sql',
   // 供应商主数据（基础数据）：外发「加工商」等下拉的来源
   'migration-supplier.sql',
+  // 呆滞品管理：由「成品期初（不挂订单）」拆分独立，含成品出入库相关列注释订正
+  'migration-dull-stock.sql',
+  // 人事档案（HR 一级菜单；可读部门，暂不对外供数）
+  'migration-employee.sql',
+  // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
+  'migration-employee-profile.sql',
 ];
 
 /**
@@ -161,6 +167,17 @@ const expectedColumns = [
   't_supplier.supplier_code',
   't_supplier.supplier_name',
   't_supplier.status',
+  // 呆滞品管理（由「成品期初（不挂订单）」拆分独立）
+  't_dull_stock.unit',
+  't_dull_stock.opening_qty',
+  't_dull_stock.inbound_qty',
+  't_dull_stock.outbound_qty',
+  't_dull_stock.balance_qty',
+  't_dull_stock.customer_name',
+  't_dull_stock.production_no',
+  't_dull_stock_flow.dull_id',
+  't_dull_stock_flow.direction',
+  't_dull_stock_flow.flow_date',
   // 审计追溯六件套（§5.5）：抽查各表的姓名快照列，缺了说明迁移没跑到
   't_dict.creator_name',
   't_dict.updater_name',
@@ -179,10 +196,24 @@ const expectedColumns = [
   // 业务字段开关
   't_system_config.color_field_enabled',
   't_system_config.customer_drawing_no_enabled',
+  // 呆滞品颜色（独立于全局颜色开关）
+  't_system_config.dull_stock_color_enabled',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）
   't_order.other_req',
+  // 人事档案
+  't_employee.emp_no',
+  't_employee.emp_name',
+  't_employee.job_status',
+  't_employee.dept_id',
+  't_employee.supervisor_id',
+  't_employee.native_place',
+  't_employee.education',
+  't_employee.education_type',
+  't_employee.graduate_school',
+  't_employee.marital_status',
+  't_employee.political_status',
 ];
 
 async function main() {

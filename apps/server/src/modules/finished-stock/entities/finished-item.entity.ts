@@ -15,7 +15,9 @@ import {
  * 闸门与结存按 side 分别核算。
  * `quantity` **恒为正**，出入方向由单头 direction 表达——聚合时统一 `direction × quantity`，
  * 红字单方向与原单相反，因此天然抵扣、无需特判。
- * 锚点两列为 0 表示「不挂订单的纯属性期初行」（只计库存数，不参与任何订单欠数，§7.9）。
+ *
+ * 明细一律挂订单产品行：原「不挂订单的纯属性期初行」形态已于 2026-08-11 下线，
+ * 已完结订单剩下的成品改由「物料管理 → 呆滞品管理」逐批建档跟踪。
  */
 @Entity('t_finished_item')
 export class FinishedItem {
@@ -31,7 +33,7 @@ export class FinishedItem {
     name: 'order_id',
     type: 'int',
     default: 0,
-    comment: '冗余订单ID（订单下游引用探测按此列）；0=不挂订单的纯属性期初行',
+    comment: '冗余订单ID（订单下游引用探测按此列）',
   })
   orderId: number;
 
@@ -40,7 +42,7 @@ export class FinishedItem {
     name: 'order_product_id',
     type: 'int',
     default: 0,
-    comment: '锚点：订单产品行（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
+    comment: '锚点：订单产品行（跟踪/台账粒度）',
   })
   orderProductId: number;
 
@@ -85,7 +87,8 @@ export class FinishedItem {
     type: 'varchar',
     length: 32,
     nullable: true,
-    comment: '部件组类型快照：whole整品 outer_middle外中轨 inner内轨…',
+    comment:
+      '部件组类型（弃用，恒为 NULL：成品是整套滑轨、无组的概念；原仅「不挂订单的纯属性期初行」使用，该形态已于 2026-08-11 下线）',
   })
   groupType: string | null;
 
@@ -105,7 +108,7 @@ export class FinishedItem {
     name: 'dimension_mm',
     type: 'int',
     nullable: true,
-    comment: '规格快照（mm 统一口径，匹配纯属性行用）',
+    comment: '规格快照（mm 统一口径）',
   })
   dimensionMm: number | null;
 

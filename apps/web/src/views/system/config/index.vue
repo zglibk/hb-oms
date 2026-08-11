@@ -184,7 +184,8 @@
               />
               <div class="switch-hint switch-hint--block">
                 与「表面处理」配套的业务字段。影响范围：订单表单、外发件回厂记录（登记 / 编辑 / 列表）、
-                期初录入、成品库存列表、订单跟踪台账展开行，以及台账导出与总计划导出的「颜色」列。
+                成品库存列表、订单跟踪台账展开行，以及台账导出与总计划导出的「颜色」列。
+                <strong>不影响呆滞品管理</strong>——那一页有下面单独的开关。
               </div>
             </el-form-item>
 
@@ -198,6 +199,20 @@
               <div class="switch-hint switch-hint--block">
                 客户来图上的图号，<strong>不是</strong>部件组的「生产图号」（后者不受此开关影响）。
                 影响范围：订单表单、订单列表展开行，以及总计划导出的「客户图号」列。
+              </div>
+            </el-form-item>
+
+            <el-form-item label="呆滞品颜色">
+              <el-switch
+                :model-value="form.dullStockColorEnabled === 1"
+                active-text="启用"
+                inactive-text="停用"
+                @update:model-value="(v: any) => (form.dullStockColorEnabled = v ? 1 : 0)"
+              />
+              <div class="switch-hint switch-hint--block">
+                只管<strong>「物料管理 → 呆滞品管理」</strong>的颜色列与建档弹窗，
+                <strong>独立于上面的「颜色字段」开关</strong>——呆滞品的表面处理与颜色是配套联动带出的
+                （电泳→黑色、喷涂→白色），是这本账辨认货物的主要依据，所以单独控制。
               </div>
             </el-form-item>
 
@@ -377,6 +392,7 @@ const form = reactive<SystemConfig>({
   // 默认启用：接口回值前不该让页面先渲染成"已停用"
   colorFieldEnabled: 1,
   customerDrawingNoEnabled: 1,
+  dullStockColorEnabled: 1,
 });
 
 /* 裁剪组件 ref */

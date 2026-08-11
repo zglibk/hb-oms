@@ -46,6 +46,15 @@ export {
   // 启停
   ENABLE_STATUS_OPTIONS as ENABLE_STATUS,
   ENABLE_STATUS as ENABLE_STATUS_VALUE,
+  // 人事档案
+  JOB_STATUS_OPTIONS as JOB_STATUS,
+  JOB_STATUS as JOB_STATUS_VALUE,
+  GENDER_OPTIONS as GENDER,
+  GENDER as GENDER_VALUE,
+  EDUCATION_TYPE_OPTIONS as EDUCATION_TYPE,
+  EDUCATION_TYPE as EDUCATION_TYPE_VALUE,
+  ageFromBirthDate,
+  birthDateFromIdCard,
   // 单位换算（1套=2支、1英寸=25mm）
   PIECES_PER_SET,
   UNIT,
@@ -122,6 +131,18 @@ export const PART_ADJUST_REASON_OPTIONS: string[] = [
   '录错纠正',
   PART_ADJUST_REASON_OTHER,
 ];
+
+/**
+ * 表面处理 → 默认颜色（呆滞品建档时**联动带出**，仅前端交互，不进共享包也不做服务端校验）。
+ *
+ * 厂里呆滞品绝大多数就这两种搭配，逐条手选颜色纯属重复劳动。
+ * 联动只在颜色为空、或仍是上一个表面处理带出的默认色时才改写——
+ * 用户手工改过的颜色不能被覆盖。
+ */
+export const SURFACE_DEFAULT_COLOR: Record<string, string> = {
+  electrophoresis: '黑色',
+  spray: '白色',
+};
 
 /** 取角色中文名，未知角色回退为原编码 */
 export function roleLabel(code: string): string {

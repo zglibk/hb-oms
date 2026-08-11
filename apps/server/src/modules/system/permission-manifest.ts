@@ -102,10 +102,18 @@ export const PERMISSIONS: PermSeed[] = [
 
   { perm_code: 'stock-balance', perm_name: '成品库存', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
 
-  { perm_code: 'part-stock', perm_name: '部件台账', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/part-stock', component: 'part-stock/index', icon: 'Grid', sort: 3 },
+  // 呆滞品管理（2026-08-11 由「成品期初（不挂订单）」拆分独立）：已完结订单剩下的成品，
+  // 逐批建档跟踪 期初/入库/出库/结存 四个数。紧挨成品库存，同为成品口径
+  { perm_code: 'dull-stock', perm_name: '呆滞品管理', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/dull-stock', component: 'dull-stock/index', icon: 'Warning', sort: 3 },
+  { perm_code: 'dull-stock:create', perm_name: '新增呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 1 },
+  { perm_code: 'dull-stock:update', perm_name: '编辑呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 2 },
+  { perm_code: 'dull-stock:delete', perm_name: '删除呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 3 },
+  { perm_code: 'dull-stock:stock', perm_name: '登记出入库', perm_type: 2, parent_code: 'dull-stock', sort: 4 },
+
+  { perm_code: 'part-stock', perm_name: '部件台账', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/part-stock', component: 'part-stock/index', icon: 'Grid', sort: 4 },
   { perm_code: 'part-stock:adjust', perm_name: '调整部件余量', perm_type: 2, parent_code: 'part-stock', sort: 1 },
 
-  { perm_code: 'opening', perm_name: '期初录入', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/opening', component: 'opening/index', icon: 'Upload', sort: 4 },
+  { perm_code: 'opening', perm_name: '期初录入', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/opening', component: 'opening/index', icon: 'Upload', sort: 5 },
   { perm_code: 'opening:finished', perm_name: '成品期初录入', perm_type: 2, parent_code: 'opening', sort: 1 },
   { perm_code: 'opening:part', perm_name: '部件期初录入', perm_type: 2, parent_code: 'opening', sort: 2 },
 
@@ -116,6 +124,13 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'equipment-info:create', perm_name: '新增设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 1 },
   { perm_code: 'equipment-info:update', perm_name: '编辑设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 2 },
   { perm_code: 'equipment-info:delete', perm_name: '删除设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 3 },
+
+  // ===== HR 人力资源管理（可读部门等主数据；V1 暂不向业务模块对外供数）=====
+  { perm_code: 'hr', perm_name: 'HR人力资源管理', perm_type: 1, menu_path: '/hr', icon: 'Avatar', sort: 15 },
+  { perm_code: 'hr:employee', perm_name: '人事档案', perm_type: 1, parent_code: 'hr', menu_path: '/hr/employee', component: 'hr/employee/index', icon: 'User', sort: 1 },
+  { perm_code: 'employee:create', perm_name: '新增员工', perm_type: 2, parent_code: 'hr:employee', sort: 1 },
+  { perm_code: 'employee:update', perm_name: '编辑员工', perm_type: 2, parent_code: 'hr:employee', sort: 2 },
+  { perm_code: 'employee:delete', perm_name: '删除员工', perm_type: 2, parent_code: 'hr:employee', sort: 3 },
 
   // ===== 基础数据 =====
   { perm_code: 'basic', perm_name: '基础数据', perm_type: 1, menu_path: '/basic', icon: 'Coin', sort: 10 },

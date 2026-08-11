@@ -132,6 +132,31 @@ export const DICTS: Array<{
 
   // 外发加工商（M3 外发单下拉，可在字典管理维护）
   { dict_type: 'processor', dict_label: '示例加工商', dict_value: '示例加工商', sort: 1 },
+
+  // 人事档案：用工属性 / 岗位（HR 模块；可在字典管理维护）
+  { dict_type: 'emp_type', dict_label: '正式工', dict_value: 'formal', sort: 1 },
+  { dict_type: 'emp_type', dict_label: '临时工', dict_value: 'temp', sort: 2 },
+  { dict_type: 'emp_type', dict_label: '派遣工', dict_value: 'dispatch', sort: 3 },
+  { dict_type: 'emp_type', dict_label: '学徒', dict_value: 'apprentice', sort: 4 },
+  { dict_type: 'hr_position', dict_label: '冲压工', dict_value: 'stamping', sort: 1 },
+  { dict_type: 'hr_position', dict_label: '装配工', dict_value: 'assembly', sort: 2 },
+  { dict_type: 'hr_position', dict_label: '质检', dict_value: 'qc', sort: 3 },
+  { dict_type: 'hr_position', dict_label: '机修', dict_value: 'maintenance', sort: 4 },
+  { dict_type: 'marital_status', dict_label: '未婚', dict_value: 'unmarried', sort: 1 },
+  { dict_type: 'marital_status', dict_label: '已婚', dict_value: 'married', sort: 2 },
+  { dict_type: 'marital_status', dict_label: '离异', dict_value: 'divorced', sort: 3 },
+  { dict_type: 'marital_status', dict_label: '丧偶', dict_value: 'widowed', sort: 4 },
+  { dict_type: 'political_status', dict_label: '群众', dict_value: 'masses', sort: 1 },
+  { dict_type: 'political_status', dict_label: '共青团员', dict_value: 'league', sort: 2 },
+  { dict_type: 'political_status', dict_label: '中共党员', dict_value: 'party', sort: 3 },
+  { dict_type: 'political_status', dict_label: '民主党派', dict_value: 'democratic', sort: 4 },
+  { dict_type: 'education', dict_label: '小学', dict_value: 'primary', sort: 1 },
+  { dict_type: 'education', dict_label: '初中', dict_value: 'junior', sort: 2 },
+  { dict_type: 'education', dict_label: '高中/中专', dict_value: 'senior', sort: 3 },
+  { dict_type: 'education', dict_label: '大专', dict_value: 'college', sort: 4 },
+  { dict_type: 'education', dict_label: '本科', dict_value: 'bachelor', sort: 5 },
+  { dict_type: 'education', dict_label: '硕士', dict_value: 'master', sort: 6 },
+  { dict_type: 'education', dict_label: '博士', dict_value: 'doctor', sort: 7 },
 ];
 
 // ---------- 账号（plainPwd 在 db-init 中 bcrypt 加密）----------

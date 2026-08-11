@@ -278,6 +278,8 @@ export interface SystemConfig {
   colorFieldEnabled: number;
   /** 「客户图号」字段全局启用开关：1启用 0停用 */
   customerDrawingNoEnabled: number;
+  /** 「呆滞品颜色」字段启用开关：1启用 0停用（**独立于** colorFieldEnabled） */
+  dullStockColorEnabled: number;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;
@@ -292,6 +294,12 @@ export interface FeatureFlags {
   colorFieldEnabled: boolean;
   /** 「客户图号」字段是否启用（客户来图图号，非部件组的生产图号） */
   customerDrawingNoEnabled: boolean;
+  /**
+   * 呆滞品管理页的「颜色」是否启用。
+   * **独立于 colorFieldEnabled**：呆滞品的表面处理与颜色是配套联动带出的辨货依据，
+   * 与订单/外发口径要不要颜色是两回事，故各管各的（见后端实体注释）。
+   */
+  dullStockColorEnabled: boolean;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */

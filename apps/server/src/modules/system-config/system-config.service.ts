@@ -39,6 +39,7 @@ export class SystemConfigService {
         loginBgSetAsDefault: 0,
         colorFieldEnabled: 1,
         customerDrawingNoEnabled: 1,
+        dullStockColorEnabled: 1,
       });
       row = await this.repo.save(row);
     }
@@ -62,11 +63,14 @@ export class SystemConfigService {
   async getFeatureFlags(): Promise<{
     colorFieldEnabled: boolean;
     customerDrawingNoEnabled: boolean;
+    dullStockColorEnabled: boolean;
   }> {
     const row = await this.get();
     return {
       colorFieldEnabled: Number(row.colorFieldEnabled) === 1,
       customerDrawingNoEnabled: Number(row.customerDrawingNoEnabled) === 1,
+      // 呆滞品颜色独立开关，不与 colorFieldEnabled 相与——两者各管各的（见实体注释）
+      dullStockColorEnabled: Number(row.dullStockColorEnabled) === 1,
     };
   }
 

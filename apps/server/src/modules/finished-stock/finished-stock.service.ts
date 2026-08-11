@@ -6,10 +6,8 @@ import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   STOCK_DIRECTION,
-  formatProductModel,
   hasSocket,
   isValidSide,
-  normalizeProductTypes,
   sideLabel,
 } from '@hb-oms/shared';
 import { FinishedDoc } from './entities/finished-doc.entity';
@@ -309,15 +307,12 @@ export class FinishedStockService {
   /**
    * 成品期初录入（设计文档 §4.8，供 opening 模块调用——§6 要求「内部走 finished-stock 通道」）。
    *
-   * 与普通建单的两点差异：
-   * 1. **建单后同事务立即确认并驱动余额**，不留草稿。期初录入页本身就是"确认"的语义，
-   *    让用户录完再去出入库列表点一次确认纯属多余；单据仍在成品出入库列表可见、
-   *    可红字冲销纠错，追溯性与纠错路径都没丢。
-   * 2. 明细支持**两种行**：
-   *    - 挂订单行（orderProductId ≥ 1）：快照由服务端从订单侧读，参与该产品的四数与欠数；
-   *    - 纯属性行（orderProductId 省略）：已完结订单的剩余库存，锚点落 0、属性自带，
-   *      靠余额表 attr_key 指纹兜底唯一，**只进库存数、不参与任何订单欠数**（§7.9）。
-   *      纯属性行仍可填 groupType——上线前若按部件存过半成品，靠它区分。
+   * 与普通建单的差异：**建单后同事务立即确认并驱动余额**，不留草稿。
+   * 期初录入页本身就是"确认"的语义，让用户录完再去出入库列表点一次确认纯属多余；
+   * 单据仍在成品出入库列表可见、可红字冲销纠错，追溯性与纠错路径都没丢。
+   *
+   * 明细**必须挂订单产品行**（2026-08-11）：已完结订单剩下的成品改由
+   * 「物料管理 → 呆滞品管理」承载，不再走这条通道。
    *
    * 期初豁免装配闸门（§4.5——期初是上线前存量，没有装配过程），但结存不得为负的
    * 通用约束仍然生效（期初是入向，正常不会触发）。
@@ -355,15 +350,13 @@ export class FinishedStockService {
     });
   }
 
-  /** 期初明细落库：挂订单行取订单快照，纯属性行用客户端提供的属性 */
+  /** 期初明细落库：快照一律从订单侧读，客户端传值不采信 */
   private async buildOpeningItems(
     mgr: EntityManager,
     docId: number,
     items: OpeningFinishedDto['items'],
   ): Promise<FinishedItem[]> {
-    const productIds = items
-      .map((it) => Number(it.orderProductId) || 0)
-      .filter((v) => v > 0);
+    const productIds = items.map((it) => Number(it.orderProductId) || 0);
     const snapshots = await this.productSnapshot.load(mgr, productIds, {
       // 期初补录的历史订单可能已完结，但不会是作废；作废订单仍不允许挂
       includeCancelledOrder: false,
@@ -374,80 +367,35 @@ export class FinishedStockService {
       const productId = Number(it.orderProductId) || 0;
       const batchNo = (it.batchNo ?? '').trim();
 
-      if (productId > 0) {
-        const snap = snapshots.get(productId);
-        if (!snap) {
-          throw new BadRequestException(`第 ${i + 1} 行：订单产品不存在或订单已作废`);
-        }
-        const side = this.assertSide(it.side, snap, i);
-        const key = `p${productId}#${side}#${batchNo}`;
-        if (seen.has(key)) {
-          throw new BadRequestException(
-            `第 ${i + 1} 行：「${snap.productModel ?? ''}${side ? ` ${sideLabel(side)}边` : ''}」重复，请合并数量`,
-          );
-        }
-        seen.add(key);
-        return mgr.getRepository(FinishedItem).create({
-          docId,
-          orderId: snap.orderId,
-          orderProductId: snap.orderProductId,
-          orderNo: snap.orderNo,
-          customerName: snap.customerName,
-          productionNo: snap.productionNo,
-          itemNo: snap.itemNo,
-          productModel: snap.productModel,
-          productType: snap.productType,
-          // 挂订单的成品是整套滑轨，没有组的概念，故不落组类型
-          groupType: null,
-          railSection: snap.railSection,
-          dimensionText: snap.dimensionText,
-          dimensionMm: snap.dimensionMm,
-          surfaceType: snap.surfaceType,
-          color: snap.color,
-          side,
-          batchNo,
-          quantity: it.quantity,
-          originItemId: null,
-          remark: it.remark ?? null,
-          sort: i,
-        });
+      const snap = snapshots.get(productId);
+      if (!snap) {
+        throw new BadRequestException(`第 ${i + 1} 行：订单产品不存在或订单已作废`);
       }
-
-      // ---- 纯属性行（不挂订单）----
-      const itemNo = (it.itemNo ?? '').trim();
-      if (!itemNo) {
+      const side = this.assertSide(it.side, snap, i);
+      const key = `p${productId}#${side}#${batchNo}`;
+      if (seen.has(key)) {
         throw new BadRequestException(
-          `第 ${i + 1} 行：不挂订单的期初行必须填货号（用于属性匹配与库存查询）`,
+          `第 ${i + 1} 行：「${snap.productModel ?? ''}${side ? ` ${sideLabel(side)}边` : ''}」重复，请合并数量`,
         );
       }
-      const side = (it.side ?? '').trim();
-      const productType = normalizeProductTypes(it.productType ?? '');
-      const key = `a${itemNo}#${productType}#${it.groupType ?? ''}#${it.railSection ?? ''}#${it.dimensionMm ?? 0}#${it.surfaceType ?? ''}#${it.color ?? ''}#${side}#${batchNo}`;
-      if (seen.has(key)) {
-        throw new BadRequestException(`第 ${i + 1} 行：同属性的纯属性期初行重复，请合并数量`);
-      }
       seen.add(key);
-
       return mgr.getRepository(FinishedItem).create({
         docId,
-        orderId: 0,
-        orderProductId: 0,
-        orderNo: null,
-        customerName: null,
-        productionNo: null,
-        itemNo,
-        // 型号未填时按「货号+类型组合+组后缀」拼，与挂订单行同一口径
-        productModel:
-          (it.productModel ?? '').trim() ||
-          formatProductModel(itemNo, productType, it.groupType ?? undefined),
-        productType,
-        groupType: (it.groupType ?? '').trim() || null,
-        railSection: (it.railSection ?? '').trim() || null,
-        dimensionText:
-          (it.dimensionText ?? '').trim() || (it.dimensionMm ? `${it.dimensionMm}mm` : null),
-        dimensionMm: Number(it.dimensionMm) || null,
-        surfaceType: (it.surfaceType ?? '').trim() || null,
-        color: (it.color ?? '').trim() || null,
+        orderId: snap.orderId,
+        orderProductId: snap.orderProductId,
+        orderNo: snap.orderNo,
+        customerName: snap.customerName,
+        productionNo: snap.productionNo,
+        itemNo: snap.itemNo,
+        productModel: snap.productModel,
+        productType: snap.productType,
+        // 挂订单的成品是整套滑轨，没有组的概念，故不落组类型
+        groupType: null,
+        railSection: snap.railSection,
+        dimensionText: snap.dimensionText,
+        dimensionMm: snap.dimensionMm,
+        surfaceType: snap.surfaceType,
+        color: snap.color,
         side,
         batchNo,
         quantity: it.quantity,
@@ -633,7 +581,7 @@ export class FinishedStockService {
     // 同一单内同键明细先合并，避免逐行判定时漏算本单内的累计影响
     const merged = new Map<string, { item: FinishedItem; qty: number }>();
     items.forEach((it) => {
-      const key = this.balanceKey(it.orderProductId, it.side, it.batchNo, this.attrKeyOf(it));
+      const key = this.balanceKey(it.orderProductId, it.side, it.batchNo);
       const prev = merged.get(key);
       if (prev) prev.qty += it.quantity || 0;
       else merged.set(key, { item: it, qty: it.quantity || 0 });
@@ -689,9 +637,13 @@ export class FinishedStockService {
     }
   }
 
-  /** 取余额行并加行锁；不存在则先建一行 0 结存再锁（唯一键兜底并发重复插入） */
+  /**
+   * 取余额行并加行锁；不存在则先建一行 0 结存再锁（唯一键兜底并发重复插入）。
+   * `attr_key` 恒为空串——余额行现在一律挂订单产品行（不挂订单的纯属性行已下线，
+   * 见 t_finished_balance 实体注释），它只是仍留在 uk_balance 里的历史成分。
+   */
   private async lockOrCreateBalance(mgr: EntityManager, item: FinishedItem): Promise<FinishedBalance> {
-    const attrKey = this.attrKeyOf(item);
+    const attrKey = '';
     const where = {
       orderProductId: item.orderProductId,
       side: item.side ?? '',
@@ -738,26 +690,8 @@ export class FinishedStockService {
     return created;
   }
 
-  /**
-   * 纯属性行（不挂订单）的属性指纹；挂订单的行恒为空串。
-   * 供期初纯属性录入复用——挂订单的行靠产品行唯一，属性行只能靠属性唯一。
-   * 指纹仍含 groupType：上线前若按部件存过半成品，不同部件要各自成行。
-   */
-  private attrKeyOf(item: FinishedItem): string {
-    if (item.orderProductId > 0) return '';
-    return [
-      item.itemNo ?? '',
-      item.productType ?? '',
-      item.groupType ?? '',
-      item.railSection ?? '',
-      String(item.dimensionMm ?? 0),
-      item.surfaceType ?? '',
-      item.color ?? '',
-    ].join('|');
-  }
-
-  private balanceKey(productId: number, side: string, batchNo: string, attrKey: string): string {
-    return `${productId}#${side ?? ''}#${batchNo ?? ''}#${attrKey}`;
+  private balanceKey(productId: number, side: string, batchNo: string): string {
+    return `${productId}#${side ?? ''}#${batchNo ?? ''}`;
   }
 
   /** 各原明细行已被红字冲销的数量合计 */

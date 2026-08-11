@@ -369,6 +369,7 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   -- 业务字段开关（录入与展示开关，关掉不删除既有数据）
   color_field_enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '颜色字段启用开关：1启用 0停用（停用后全系统隐藏颜色的录入与展示，不删除既有数据）',
   customer_drawing_no_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
+  dull_stock_color_enabled TINYINT     NOT NULL DEFAULT 1 COMMENT '呆滞品颜色字段启用开关：1启用 0停用；**独立于 color_field_enabled**，只管呆滞品管理页的颜色列与建档弹窗',
   -- 元数据
   updated_by              INT          NULL COMMENT '最后更新人ID',
   updater_name            VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
@@ -482,18 +483,18 @@ CREATE TABLE IF NOT EXISTS t_finished_doc (
 CREATE TABLE IF NOT EXISTS t_finished_item (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
   doc_id              INT           NOT NULL COMMENT '所属单据',
-  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID（订单下游引用探测按此列）；0=不挂订单的纯属性期初行',
-  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单产品行（跟踪/台账粒度）；0=纯属性期初行，不参与任何订单欠数',
+  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID（订单下游引用探测按此列）',
+  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单产品行（跟踪/台账粒度）',
   order_no            VARCHAR(32)   NULL COMMENT '订单号快照',
   customer_name       VARCHAR(128)  NULL COMMENT '客户名称快照',
   production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自订单 t_order.production_no；台账「订单编号」口径）',
   item_no             VARCHAR(64)   NULL COMMENT '货号快照（如 53#）',
   product_model       VARCHAR(128)  NULL COMMENT '产品型号快照（货号+产品类型组合，如 53#普通）',
   product_type        VARCHAR(128)  NULL COMMENT '产品类型多选组合串快照（字典序逗号拼接，如 standard,self_lock）',
-  group_type          VARCHAR(32)   NULL COMMENT '部件组类型（仅**纯属性期初行**使用：上线前若按部件存了半成品，靠它区分；挂订单的行恒为空——成品是整套滑轨，无组的概念）',
+  group_type          VARCHAR(32)   NULL COMMENT '部件组类型（弃用，恒为 NULL：成品是整套滑轨、无组的概念；原仅「不挂订单的纯属性期初行」使用，该形态已于 2026-08-11 下线）',
   rail_section        VARCHAR(32)   NULL COMMENT '轨道节数快照：two_section二节轨 three_section三节轨',
   dimension_text      VARCHAR(64)   NULL COMMENT '规格展示快照（如 350mm）',
-  dimension_mm        INT           NULL COMMENT '规格快照（mm 统一口径，匹配纯属性行用）',
+  dimension_mm        INT           NULL COMMENT '规格快照（mm 统一口径）',
   surface_type        VARCHAR(32)   NULL COMMENT '表面处理快照（字典 surface_type）',
   color               VARCHAR(64)   NULL COMMENT '颜色快照',
   side                VARCHAR(16)   NOT NULL DEFAULT '' COMMENT '边别：含卡口组合 left左 right右，其余空串；卡口产品按左右分行，左右不串量',
@@ -512,12 +513,12 @@ CREATE TABLE IF NOT EXISTS t_finished_item (
 
 CREATE TABLE IF NOT EXISTS t_finished_balance (
   id                  INT AUTO_INCREMENT PRIMARY KEY,
-  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID；0=不挂订单的纯属性期初行',
-  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单产品行；0=纯属性期初行（只计库存数，不参与任何订单欠数）',
-  item_no             VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '货号（属性快照，纯属性行的匹配依据）',
+  order_id            INT           NOT NULL DEFAULT 0 COMMENT '冗余订单ID',
+  order_product_id    INT           NOT NULL DEFAULT 0 COMMENT '锚点：订单产品行（跟踪/台账粒度）',
+  item_no             VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '货号（属性快照）',
   product_model       VARCHAR(128)  NOT NULL DEFAULT '' COMMENT '产品型号（展示快照）',
   product_type        VARCHAR(128)  NOT NULL DEFAULT '' COMMENT '产品类型多选组合串（属性快照）',
-  group_type          VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '部件组类型（仅纯属性期初行使用；挂订单的行恒为空串）',
+  group_type          VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '部件组类型（弃用，恒为空串：原仅纯属性期初行使用，该形态已于 2026-08-11 下线）',
   rail_section        VARCHAR(32)   NOT NULL DEFAULT '' COMMENT '轨道节数（属性快照）',
   dimension_mm        INT           NOT NULL DEFAULT 0 COMMENT '规格 mm（属性快照）',
   dimension_text      VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '规格展示文本（展示快照）',
@@ -525,14 +526,14 @@ CREATE TABLE IF NOT EXISTS t_finished_balance (
   color               VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '颜色（属性快照）',
   side                VARCHAR(16)   NOT NULL DEFAULT '' COMMENT '边别：含卡口 left/right，其余空串',
   batch_no            VARCHAR(64)   NOT NULL DEFAULT '' COMMENT '批次号（预留，默认空串）',
-  attr_key            VARCHAR(255)  NOT NULL DEFAULT '' COMMENT '纯属性行的属性指纹（货号|类型|组类型|节数|规格|表面处理|颜色），挂订单的行恒为空串；与锚点列一起参与唯一键，把「纯属性行逻辑唯一」下沉到数据库而非依赖应用层自觉',
+  attr_key            VARCHAR(255)  NOT NULL DEFAULT '' COMMENT '预留：恒为空串（原用于「不挂订单的纯属性期初行」，该形态已于 2026-08-11 下线，改由呆滞品管理承载）；仍参与 uk_balance 唯一键',
   quantity            INT           NOT NULL DEFAULT 0 COMMENT '当前结存（支）；只由单据确认与红字冲销驱动，禁止直接改数',
   created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_balance (order_product_id, side, batch_no, attr_key),
   KEY idx_order (order_id),
   KEY idx_item_no (item_no)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成品库存余额（订单产品行+边别+批次唯一；纯属性行以 attr_key 兜底唯一）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='成品库存余额（订单产品行+边别+批次唯一）';
 
 -- 部件台账（设计文档 §4.6）：属性锚定的独立参考台账 + 变动流水
 -- V1 定位：仅「期初 + 手工调整留痕」，**不与外发/成品单据联动**（§2.1）
@@ -580,6 +581,53 @@ CREATE TABLE IF NOT EXISTS t_part_adjust (
   KEY idx_item_no (item_no),
   KEY idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部件台账变动流水（期初录入与手工调整共用；余量每次变动必留痕，禁止直接改数）';
+
+-- 呆滞品管理（2026-08-11 由「成品期初（不挂订单）」拆分独立）：
+-- 已完结订单剩下的成品，逐批建档跟踪 期初/入库/出库/结存 四个数。
+-- **独立台账**：与订单跟踪台账四数、成品库存完全不联动。
+CREATE TABLE IF NOT EXISTS t_dull_stock (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  item_no        VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '货号（如 53#）',
+  customer_name  VARCHAR(128) NOT NULL DEFAULT '' COMMENT '客户名称（纯文本快照，不关联 t_customer；主数据改名不回写，§5.5）',
+  production_no  VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '生产单号（呆滞品来源，纯文本快照，不校验订单是否存在）',
+  product_model  VARCHAR(128) NOT NULL DEFAULT '' COMMENT '产品型号（未填时按 货号+产品类型组合 自动拼，共享包 formatProductModel）',
+  product_type   VARCHAR(128) NOT NULL DEFAULT '' COMMENT '产品类型多选组合串（字典序逗号拼接，如 standard,self_lock）',
+  rail_section   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '轨道节数：two_section二节轨 three_section三节轨',
+  dimension_mm   INT          NOT NULL DEFAULT 0 COMMENT '规格（mm 统一口径，1英寸=25mm）',
+  dimension_text VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '规格展示文本（如 350mm）',
+  surface_type   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '表面处理（字典 surface_type）：none无 seal_paint封漆 electrophoresis电泳 spray喷涂 smooth_paint平滑漆…',
+  color          VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '颜色（字典 surface_color，允许手输新值）',
+  side           VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：left左 right右，非卡口空串',
+  unit           VARCHAR(16)  NOT NULL DEFAULT 'piece' COMMENT '数量单位：set套 piece支；本行四个数量列一律按本单位计，1套=2支；已有流水后不可改',
+  opening_qty    INT          NOT NULL DEFAULT 0 COMMENT '期初数：建档时的呆滞存量（单位见 unit）',
+  inbound_qty    INT          NOT NULL DEFAULT 0 COMMENT '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记出入库驱动，禁止直接改',
+  outbound_qty   INT          NOT NULL DEFAULT 0 COMMENT '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记出入库驱动，禁止直接改',
+  balance_qty    INT          NOT NULL DEFAULT 0 COMMENT '结存数 = 期初数 + 入库数 − 出库数，不得为负',
+  remark         VARCHAR(255) NULL COMMENT '备注',
+  creator_id     INT          NULL COMMENT '创建人ID',
+  creator_name   VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by     INT          NULL COMMENT '最后更新人ID',
+  updater_name   VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_item_no (item_no),
+  KEY idx_customer (customer_name),
+  KEY idx_production_no (production_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='呆滞品档案（独立台账，与订单跟踪台账/成品库存不联动；一行=一批呆滞货，刻意不设属性唯一键）';
+
+CREATE TABLE IF NOT EXISTS t_dull_stock_flow (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  dull_id       INT          NOT NULL COMMENT '所属呆滞品档案行',
+  direction     TINYINT      NOT NULL COMMENT '方向：1入库 -1出库（与成品出入库 STOCK_DIRECTION 同口径）',
+  quantity      INT          NOT NULL DEFAULT 0 COMMENT '本次数量，恒为正；方向由 direction 表达（单位同档案行 unit）',
+  flow_date     DATE         NOT NULL COMMENT '出入库日期',
+  reason        VARCHAR(255) NOT NULL COMMENT '原因/用途说明（必填，如退货入库/清库处理/盘盈盘亏）',
+  remark        VARCHAR(255) NULL COMMENT '备注',
+  creator_id    INT          NULL COMMENT '操作人ID',
+  creator_name  VARCHAR(64)  NULL COMMENT '操作人姓名快照',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_dull (dull_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='呆滞品出入库流水（只增不改，录错可整条删除并同事务回滚累计数；变动后结存不落库，查询时按 id 正序累计推导）';
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -634,6 +682,53 @@ CREATE TABLE IF NOT EXISTS t_supplier (
   KEY idx_supplier_name (supplier_name),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商主数据（基础数据；外发加工商等下拉来源）';
+
+-- 人事档案（HR；可读部门树；V1 暂不向业务模块对外供数）
+CREATE TABLE IF NOT EXISTS t_employee (
+  id                 INT AUTO_INCREMENT PRIMARY KEY,
+  emp_no             VARCHAR(32)  NOT NULL COMMENT '员工编号（全库唯一，手工录入）',
+  emp_name           VARCHAR(64)  NOT NULL COMMENT '姓名',
+  gender             TINYINT      NOT NULL DEFAULT 0 COMMENT '性别：0未知 1男 2女',
+  id_card            VARCHAR(18)  NULL COMMENT '身份证号',
+  birth_date         DATE         NULL COMMENT '出生日期（可由身份证带出）',
+  phone              VARCHAR(32)  NULL COMMENT '联系方式',
+  address            VARCHAR(255) NULL COMMENT '住址',
+  emergency_contact  VARCHAR(64)  NULL COMMENT '紧急联系人（如：张三 138xxxx）',
+  native_place       VARCHAR(64)  NULL COMMENT '籍贯',
+  ethnicity          VARCHAR(32)  NULL COMMENT '民族',
+  marital_status     VARCHAR(32)  NULL COMMENT '婚姻状况（字典 marital_status）',
+  political_status   VARCHAR(32)  NULL COMMENT '政治面貌（字典 political_status）',
+  education          VARCHAR(32)  NULL COMMENT '学历（字典 education）',
+  education_type     VARCHAR(16)  NULL COMMENT '学历类型：full_time全日制 part_time非全日制',
+  major              VARCHAR(64)  NULL COMMENT '专业',
+  graduate_school    VARCHAR(128) NULL COMMENT '最终毕业院校',
+  graduate_date      DATE         NULL COMMENT '毕业时间（存当月首日，界面按月录入）',
+  emp_type           VARCHAR(32)  NOT NULL COMMENT '用工属性：formal正式工 temp临时工 dispatch派遣工 apprentice学徒（字典 emp_type）',
+  hire_date          DATE         NULL COMMENT '入职日期',
+  probation_months   TINYINT      NULL COMMENT '试用期（月），空或0=无试用期',
+  contract_end_date  DATE         NULL COMMENT '合同到期日',
+  job_status         TINYINT      NOT NULL DEFAULT 1 COMMENT '在职状态：1在职 2离职',
+  leave_date         DATE         NULL COMMENT '离职日期（离职时必填）',
+  leave_reason       VARCHAR(255) NULL COMMENT '离职原因',
+  dept_id            INT          NULL COMMENT '所属车间/组织（t_department.id，可读部门树）',
+  team_group         VARCHAR(64)  NULL COMMENT '班组（自由文本）',
+  position           VARCHAR(64)  NULL COMMENT '岗位（字典 hr_position）',
+  supervisor_id      INT          NULL COMMENT '直属车间主管（本表 id）',
+  status             TINYINT      NOT NULL DEFAULT 1 COMMENT '档案启停：1启用 0停用（离职时自动置0）',
+  remark             VARCHAR(255) NULL COMMENT '备注',
+  creator_id         INT          NULL COMMENT '创建人ID',
+  creator_name       VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by         INT          NULL COMMENT '最后更新人ID',
+  updater_name       VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_emp_no (emp_no),
+  UNIQUE KEY uk_id_card (id_card),
+  KEY idx_dept (dept_id),
+  KEY idx_job_status (job_status),
+  KEY idx_supervisor (supervisor_id),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人事档案（HR；暂不对外供数）';
 
 -- 工艺信息（设计文档 §4.1.3；订单按生产图号匹配自动带入，引用为快照不回写）
 CREATE TABLE IF NOT EXISTS t_process_info (

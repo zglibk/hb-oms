@@ -52,7 +52,7 @@
           <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
         </el-table-column>
         <el-table-column label="订单号" width="130" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.orderNo || '期初/无订单' }}</template>
+          <template #default="{ row }">{{ row.orderNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="生产单号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
