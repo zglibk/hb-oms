@@ -140,7 +140,7 @@
                         <td class="lg-c">{{ f.quantity }}</td>
                         <td>{{ f.originDocNo || '—' }}</td>
                         <td class="lg-c">{{ f.creatorName || '—' }}</td>
-                        <td>{{ f.remark || '—' }}</td>
+                        <td class="lg-memo" :title="f.remark || ''">{{ f.remark || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -157,13 +157,13 @@
                       <tr v-for="(o, i) in detailCache[row.orderProductId].outsource" :key="i">
                         <td class="lg-c">{{ partGroupLabel(o.groupType) || '—' }}</td>
                         <td class="lg-c">{{ o.backDate || '—' }}</td>
-                        <td>{{ o.processorName || '—' }}</td>
+                        <td class="lg-memo" :title="o.processorName || ''">{{ o.processorName || '—' }}</td>
                         <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), colorEnabled ? o.color : ''].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
                         <td class="lg-c">{{ o.returnWeight }}</td>
                         <td class="lg-c">{{ o.unitWeight }}</td>
                         <td class="lg-c">{{ o.returnQty }}</td>
                         <td class="lg-c">{{ o.creatorName || '—' }}</td>
-                        <td>{{ o.remark || '—' }}</td>
+                        <td class="lg-memo" :title="o.remark || ''">{{ o.remark || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -190,7 +190,7 @@
                             {{ a.completed ? '已完成' : '计划中' }}
                           </el-tag>
                         </td>
-                        <td>{{ a.remark || '—' }}</td>
+                        <td class="lg-memo" :title="a.remark || ''">{{ a.remark || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -244,7 +244,7 @@
             成品栏 = 整轨支数（订单数、入库、出货、库存都按这个算）
           所以「外发欠数」大于「订单数」是正常的，分栏就是为了让这件事一眼可见。
         -->
-        <el-table-column label="部件（零件支数）" align="center">
+        <el-table-column label="部件（支数）" align="center">
           <el-table-column label="外发已回货" width="100" align="center">
             <template #default="{ row }">{{ row.returnedQty }}</template>
           </el-table-column>
@@ -257,7 +257,7 @@
           </el-table-column>
         </el-table-column>
 
-        <el-table-column label="成品（整轨支数）" align="center">
+        <el-table-column label="成品（支数）" align="center">
           <el-table-column label="装配完成" width="90" align="center">
             <template #default="{ row }">
               <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
@@ -515,11 +515,21 @@ export default { name: 'OrderLedger' };
 .num-na { color: var(--el-text-color-placeholder); }
 .num-overdue { color: var(--el-color-danger); font-weight: 600; }
 
-/* 行内展开：三段流水。用原生 table 而非 el-table——展开区是只读明细，
-   不需要排序/固定列/虚拟滚动，嵌套 el-table 反而带来对齐与性能负担 */
+/* 行内展开：部件组明细 + 三段流水。用原生 table 而非 el-table——展开区是只读明细，
+   不需要排序/固定列/虚拟滚动，嵌套 el-table 反而带来对齐与性能负担。
+
+   ⚠️ 展开区**不能**用 width:100%：主表 24 列、总宽远超视口，Element Plus 的展开单元格
+   会横跨整张表，子表撑满后每列被平分出巨大空白（「1.1」「1.0」占掉一整格），完全散架。
+   改为按内容定宽（width:max-content + 单元格 nowrap），列宽自然贴合文字。 */
 .lg-detail {
   padding: 10px 16px 12px 52px;
   min-height: 40px;
+  /* 主表横向可滚动，展开区跟着变宽；不贴住视口左侧的话，右滚就看不到明细了。
+     sticky 需要元素窄于所在单元格才有效，故配合 max-content 定宽使用。 */
+  position: sticky;
+  left: 0;
+  width: max-content;
+  min-width: 520px;
   &__sec { margin-bottom: 14px; &:last-child { margin-bottom: 0; } }
   &__title {
     font-size: 13px;
@@ -531,18 +541,30 @@ export default { name: 'OrderLedger' };
   }
 }
 .lg-grid {
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
   th, td {
     border: 1px solid var(--el-border-color-lighter);
-    padding: 5px 8px;
+    padding: 4px 10px;
     text-align: left;
     white-space: nowrap;
   }
-  th { background: var(--el-fill-color-light); font-weight: 600; }
+  th {
+    background: var(--el-fill-color-light);
+    font-weight: 600;
+    text-align: center;
+    color: var(--el-text-color-regular);
+  }
   tbody tr:hover td { background: var(--el-fill-color-lighter); }
   .lg-c { text-align: center; }
+  /* 自由文本（备注/加工商）单条过长会把整张表拉宽，截断并靠 title 悬浮看全文 */
+  .lg-memo {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .lg-empty {
   font-size: 12.5px;
