@@ -13,67 +13,76 @@
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
-        <!-- 第一行专门放「录入方式」：它决定下面明细该填哪一列，排在加工商/日期
-             之后容易被直接跳过。单选按钮（而非按钮组）+ 独占一行 + 浅底，
-             让人录入前必然看到自己选的是哪种。 -->
-        <el-row class="mode-row" :gutter="16">
-          <el-col :span="24">
-            <el-form-item label="录入方式">
-              <el-radio-group v-model="entryMode">
-                <el-radio v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
-                  {{ o.label }}
-                </el-radio>
-              </el-radio-group>
-              <span class="mode-tip">
-                <template v-if="isQtyMode">
-                  以加工商<b>送货单的数量</b>为准；重量与单重<b>选填</b>，填了也不会反过来改数量。
-                </template>
-                <template v-else>
-                  填<b>重量与单重</b>自动算出数量（重量 ÷ 单重），算完仍可微调。
-                </template>
-              </span>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <!-- 区 1：本次共用——录入方式决定明细该填哪列，加工商/日期各行共用 -->
+        <div class="shared-block">
+          <div class="shared-block__title">本次共用</div>
+          <el-row :gutter="16">
+            <el-col :span="24">
+              <el-form-item label="录入方式">
+                <el-radio-group v-model="entryMode">
+                  <el-radio v-for="o in ENTRY_MODE_OPTIONS" :key="o.value" :value="o.value">
+                    {{ o.label }}
+                  </el-radio>
+                </el-radio-group>
+                <span class="mode-tip">
+                  <template v-if="isQtyMode">
+                    以加工商<b>送货单的数量</b>为准；重量与单重<b>选填</b>，填了也不会反过来改数量。
+                  </template>
+                  <template v-else>
+                    填<b>重量与单重</b>自动算出数量（重量 ÷ 单重），算完仍可微调。
+                  </template>
+                </span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="16" class="shared-block__fields">
+            <el-col :xs="24" :sm="12" :md="8" :lg="6">
+              <el-form-item label="加工商" prop="processorName">
+                <el-input v-model="form.processorName" placeholder="做表面处理的外协厂" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8" :lg="6">
+              <el-form-item label="回厂日期" prop="backDate">
+                <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-alert
+            class="shared-block__alert"
+            type="info"
+            :closable="false"
+            show-icon
+            title="加工商与回厂日期为各行共用；同一天同一家回来的货可一次勾多组。"
+          />
+        </div>
 
-        <el-row :gutter="16">
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="加工商" prop="processorName">
-              <el-input v-model="form.processorName" placeholder="做表面处理的外协厂" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12" :md="6">
-            <el-form-item label="回厂日期" prop="backDate">
-              <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <div class="head-tip">
-              加工商与回厂日期为本次录入的<b>各行共用</b>值；同一天从同一家回来的货，勾多个部件组一次录完。
-            </div>
-          </el-col>
-        </el-row>
-
+        <!-- 区 2：回厂明细 -->
         <div class="section-title">
-          回厂明细
-          <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
+          <span class="section-title__left">
+            回厂明细
+            <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
+          </span>
           <span class="sec-sum">
             合计 <b>{{ totalQty }}</b> 支 ／ <b>{{ totalWeight }}</b> kg
           </span>
         </div>
 
-        <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加部件组」选择回厂的产品">
+        <div v-if="!form.items.length" class="detail-empty">
+          <p class="detail-empty__text">还没有回厂明细，请先选择本次回来的部件组</p>
+          <el-button type="primary" :icon="Plus" @click="openPicker">添加部件组</el-button>
+        </div>
+        <el-table v-else :data="form.items" border stripe size="small" class="detail-table">
           <el-table-column type="index" label="#" width="46" align="center" />
-          <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
-          <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
-          <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
-          <el-table-column label="订单数量" width="100" align="center">
+          <el-table-column label="生产单号" prop="productionNo" width="120" fixed="left" show-overflow-tooltip />
+          <el-table-column label="产品型号" prop="productModel" min-width="140" show-overflow-tooltip />
+          <el-table-column label="规格" prop="dimensionText" width="80" align="center" show-overflow-tooltip />
+          <el-table-column label="订单数量" width="88" align="center">
             <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
           </el-table-column>
-          <el-table-column label="生产图号" width="130" show-overflow-tooltip>
+          <el-table-column label="生产图号" width="100" show-overflow-tooltip>
             <template #default="{ row }">{{ row.drawingNo || '—' }}</template>
           </el-table-column>
-          <el-table-column label="料厚" width="110" align="center">
+          <el-table-column label="料厚" width="72" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
           </el-table-column>
           <el-table-column label="表面处理" width="120" align="center">
@@ -83,12 +92,11 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column v-if="colorEnabled" label="颜色" width="100" align="center">
+          <el-table-column v-if="colorEnabled" label="颜色" width="90" align="center">
             <template #default="{ row }"><el-input v-model="row.color" /></template>
           </el-table-column>
-          <!-- 数量列排在重量之前：它才是入账依据，送货单上多数也只有这一个数。
-               min 取 0 与重量列一致，「必须大于 0」在保存时统一校验（后端 DTO 亦有 @Min(1) 兜底） -->
-          <el-table-column width="125" align="center">
+          <!-- 数量列排在重量之前：它才是入账依据；必填校验在保存时统一做 -->
+          <el-table-column width="125" align="center" class-name="col-focus" label-class-name="col-focus">
             <template #header>
               回厂数量(支)<span v-if="isQtyMode" class="col-req">*</span>
             </template>
@@ -99,7 +107,7 @@
               />
             </template>
           </el-table-column>
-          <el-table-column width="125" align="center">
+          <el-table-column width="125" align="center" class-name="col-focus" label-class-name="col-focus">
             <template #header>
               回厂重量(kg)<span v-if="isQtyMode" class="col-opt">选填</span>
             </template>
@@ -110,7 +118,7 @@
               />
             </template>
           </el-table-column>
-          <el-table-column width="120" align="center">
+          <el-table-column width="120" align="center" class-name="col-focus" label-class-name="col-focus">
             <template #header>
               单重(kg/支)<span v-if="isQtyMode" class="col-opt">选填</span>
             </template>
@@ -121,7 +129,7 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="备注" min-width="120">
+          <el-table-column label="备注" width="110">
             <template #default="{ row }"><el-input v-model="row.remark" /></template>
           </el-table-column>
           <el-table-column label="操作" width="70" align="center" fixed="right">
@@ -403,19 +411,45 @@ function goBack() {
   gap: 12px;
   .title-text { font-size: 15px; font-weight: 600; }
 }
-.head-tip {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 32px;
-}
-/* 录入方式独占首行并加浅底：这一项决定明细该填哪一列，做成一条显眼的设置带，
-   避免录入员一进来就跳到加工商、把方式漏看 */
-.mode-row {
+
+/* 区 1：本次共用——整块浅底，字段左聚，说明沉底 */
+.shared-block {
   background: var(--el-fill-color-lighter);
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  padding: 8px 0 0;
-  margin-bottom: 14px;
+  border-radius: 8px;
+  padding: 12px 16px 14px;
+  margin-bottom: 8px;
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+  &__fields {
+    max-width: 720px;
+  }
+  &__alert {
+    margin-top: 2px;
+  }
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
+  :deep(.el-alert) {
+    padding: 8px 12px;
+    --el-alert-padding: 8px 12px;
+    background-color: color-mix(in srgb, var(--el-color-danger) 8%, transparent);
+    border-color: color-mix(in srgb, var(--el-color-danger) 28%, transparent);
+  }
+  :deep(.el-alert__title) {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--el-color-danger);
+  }
+  :deep(.el-alert__icon) {
+    color: var(--el-color-danger);
+  }
 }
 .mode-tip {
   margin-left: 12px;
@@ -423,21 +457,62 @@ function goBack() {
   color: var(--el-text-color-secondary);
   b { color: var(--el-text-color-primary); }
 }
+
 .section-title {
-  font-size: 14px; font-weight: 600; color: var(--el-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
   border-left: 4px solid var(--el-color-primary);
-  padding-left: 10px; line-height: 1.3;
-  margin: 22px 0 14px;
-  display: flex; align-items: center;
+  padding-left: 10px;
+  line-height: 1.3;
+  margin: 20px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  &__left {
+    display: inline-flex;
+    align-items: center;
+  }
   .ml12 { margin-left: 12px; }
 }
 .sec-sum {
-  margin-left: 16px;
+  margin-left: auto;
   font-weight: 400;
   font-size: 12px;
   color: var(--el-text-color-secondary);
   b { color: var(--el-color-primary); }
 }
+
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 200px;
+  padding: 32px 16px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  &__text {
+    margin: 0;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+/* 录入列浅底强调，与订单快照列区分 */
+.detail-table {
+  :deep(th.col-focus),
+  :deep(td.col-focus) {
+    background-color: color-mix(in srgb, var(--el-color-primary) 6%, transparent) !important;
+  }
+  :deep(th.col-focus) {
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+}
+
 .picker-bar {
   display: flex;
   align-items: center;
@@ -454,7 +529,6 @@ function goBack() {
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-/* 列头的必填星号与「选填」标注：随录入方式切换，让人一眼看出该填哪一列 */
 .col-req {
   color: var(--el-color-danger);
   margin-left: 2px;
