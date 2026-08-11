@@ -28,8 +28,14 @@
         default-expand-all
         :tree-props="{ children: 'children' }"
       >
-        <el-table-column label="部门名称" min-width="200" class-name="col-left">
+        <el-table-column label="部门名称" min-width="220" class-name="col-left">
           <template #default="{ row }">
+            <!-- 图标按**层级**取（公司/部门/班组各一种），新增部门时自动套用该层级的图标，
+                 无需逐个配置；叶子节点同样有图标——原先图标是挂在展开箭头上的，
+                 Element Plus 不给无子节点的行渲染那个元素，所以下级部门全都缺图标 -->
+            <el-icon :class="['dept-ico', `dept-ico--l${levelOf(row)}`]">
+              <component :is="deptIcon(row)" />
+            </el-icon>
             {{ row.deptName }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
@@ -118,7 +124,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus';
-import { Plus, Edit, Delete, RefreshLeft } from '@element-plus/icons-vue';
+import {
+  Plus, Edit, Delete, RefreshLeft,
+  OfficeBuilding, Folder, UserFilled, Postcard,
+} from '@element-plus/icons-vue';
 import { getDeptTree, createDept, updateDept, deleteDept, type DeptNode } from '@/api/system';
 import { ENABLE_STATUS, labelOf, tagTypeOf } from '@/constants/dict';
 import AppActions from '@/components/AppActions.vue';
@@ -128,10 +137,38 @@ const tree = ref<DeptNode[]>([]);
 const keyword = ref('');
 const statusFilter = ref<number | undefined>(undefined);
 
+/**
+ * 层级图标表（下标 0 = 第一层）：公司 → 部门 → 班组 → 更深层级。
+ * **图标完全由层级推导，不落库、不逐个配置**——新增部门时挂在哪一层就自动是哪个图标。
+ * 层级比表长时统一回落到最后一个，避免越深越没图标。
+ */
+const LEVEL_ICONS = [OfficeBuilding, Folder, UserFilled, Postcard];
+
+/** 节点层级（1 起）；未标注时按第一层处理 */
+function levelOf(row: DeptNode): number {
+  return Math.min(row._level ?? 1, LEVEL_ICONS.length);
+}
+function deptIcon(row: DeptNode) {
+  return LEVEL_ICONS[levelOf(row) - 1];
+}
+
+/**
+ * 标注层级。el-table 的树形插槽只给 row，不给深度，图标又要按深度取，
+ * 所以取到树之后自己走一遍打上 `_level`。
+ * 返回新对象而不是就地改，保证 filteredTree 的 `{...n}` 展开能带上这个字段。
+ */
+function withLevel(nodes: DeptNode[], level = 1): DeptNode[] {
+  return nodes.map((n) => ({
+    ...n,
+    _level: level,
+    children: n.children?.length ? withLevel(n.children, level + 1) : (n.children ?? []),
+  }));
+}
+
 async function load() {
   loading.value = true;
   try {
-    tree.value = await getDeptTree();
+    tree.value = withLevel(await getDeptTree());
   } finally {
     loading.value = false;
   }
@@ -266,21 +303,19 @@ export default { name: 'BasicDept' };
 <style scoped lang="scss">
 .toolbar { margin-bottom: 12px; }
 
-/* 树形表格展开/折叠图标：用 EP 图标 FolderRemove / FolderOpened（黄色 #E6A23C）
- * 折叠态 = FolderRemove；展开态 = FolderOpened。
- * 叶子节点（无 children）EP 不渲染 expand-icon，故无需处理。
- * SVG path 取自 @element-plus/icons-vue（folder-remove.vue / folder-opened.vue）。 */
-:deep(.el-table__expand-icon) {
-  svg { display: none; }
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23E6A23C' d='M128 192v640h768V320H485.76L357.504 192zm-32-64h287.872l128.384 128H928a32 32 0 0 1 32 32v576a32 32 0 0 1-32 32H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32m256 416h320v64H352z'/%3E%3C/svg%3E") center / contain no-repeat;
-
-  &.el-table__expand-icon--expanded {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath fill='%23E6A23C' d='M878.08 448H241.92l-96 384h636.16zM832 384v-64H485.76L357.504 192H128v448l57.92-231.744A32 32 0 0 1 216.96 384zm-24.96 512H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32h287.872l128.384 128H864a32 32 0 0 1 32 32v96h23.04a32 32 0 0 1 31.04 39.744l-112 448A32 32 0 0 1 807.04 896'/%3E%3C/svg%3E");
-    /* 展开态不再旋转 */
-    transform: none;
-  }
+/* 部门层级图标：公司(蓝) → 部门(琥珀) → 班组(绿) → 更深层级(灰)。
+ * 形状 + 颜色双重区分，缩进之外再给一层可读性；层级由 withLevel 标注，见 script。
+ *
+ * 注：原实现把文件夹图标做成展开箭头的背景图，导致
+ *   ① 三层共用同一个图标，看不出层级；
+ *   ② 叶子节点没有 .el-table__expand-icon 元素，整行缺图标（用户实测反馈）。
+ * 现改为在名称单元格内按层级渲染，展开箭头恢复 EP 默认样式、只负责"能不能展开"。 */
+.dept-ico {
+  margin-right: 6px;
+  vertical-align: -2px;
+  &--l1 { color: var(--el-color-primary); }
+  &--l2 { color: #e6a23c; }
+  &--l3 { color: var(--el-color-success); }
+  &--l4 { color: var(--el-text-color-secondary); }
 }
 </style>

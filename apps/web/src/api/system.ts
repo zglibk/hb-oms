@@ -141,6 +141,11 @@ export interface DeptNode {
   phone: string | null;
   status: number;
   children: DeptNode[];
+  /**
+   * 前端标注的层级（1 起，公司=1、部门=2、班组=3…），**接口不返回**。
+   * el-table 树形插槽不给节点深度，而部门图标要按层级取，故取到树后自行标注。
+   */
+  _level?: number;
 }
 export const getDeptTree = () => request.get<any, DeptNode[]>('/api/system/dept/tree');
 export const createDept = (data: Partial<DeptNode>) => request.post('/api/system/dept', data);
