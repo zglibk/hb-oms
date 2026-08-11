@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { FileModule } from './modules/file/file.module';
 import { SystemModule } from './modules/system/system.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { SupplierModule } from './modules/supplier/supplier.module';
 import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
 import { OutsourceModule } from './modules/outsource/outsource.module';
@@ -63,6 +64,7 @@ import { SystemConfigModule } from './modules/system-config/system-config.module
     FileModule,
     SystemModule,
     CustomerModule,
+    SupplierModule,
     ProcessInfoModule,
     OrderModule,
     OutsourceModule,

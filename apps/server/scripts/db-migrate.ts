@@ -61,6 +61,8 @@ const MIGRATIONS: string[] = [
   'migration-material-part-type-comment.sql',
   // 跟踪锚点分层：装配与成品从部件组升到产品行（含一次性清空测试数据）
   'migration-product-level-tracking.sql',
+  // 供应商主数据（基础数据）：外发「加工商」等下拉的来源
+  'migration-supplier.sql',
 ];
 
 /**
@@ -155,6 +157,10 @@ const expectedColumns = [
   // 订单字段口径调整：生产单号上移订单级 + 产品级客户图号
   't_order.production_no',
   't_order_product.customer_drawing_no',
+  // 供应商主数据（外发加工商等下拉来源）
+  't_supplier.supplier_code',
+  't_supplier.supplier_name',
+  't_supplier.status',
   // 审计追溯六件套（§5.5）：抽查各表的姓名快照列，缺了说明迁移没跑到
   't_dict.creator_name',
   't_dict.updater_name',

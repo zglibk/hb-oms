@@ -126,14 +126,20 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'customer:delete', perm_name: '删除客户', perm_type: 2, parent_code: 'basic:customer', sort: 3 },
   { perm_code: 'customer:import', perm_name: '批量导入客户', perm_type: 2, parent_code: 'basic:customer', sort: 4 },
 
-  { perm_code: 'basic:dept', perm_name: '部门信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/dept', component: 'basic/dept/index', icon: 'School', sort: 2 },
+  // 供应商紧挨客户资料：两者都是往来单位主数据，维护人是同一批
+  { perm_code: 'basic:supplier', perm_name: '供应商', perm_type: 1, parent_code: 'basic', menu_path: '/basic/supplier', component: 'basic/supplier/index', icon: 'Van', sort: 2 },
+  { perm_code: 'supplier:create', perm_name: '新增供应商', perm_type: 2, parent_code: 'basic:supplier', sort: 1 },
+  { perm_code: 'supplier:update', perm_name: '编辑供应商', perm_type: 2, parent_code: 'basic:supplier', sort: 2 },
+  { perm_code: 'supplier:delete', perm_name: '删除供应商', perm_type: 2, parent_code: 'basic:supplier', sort: 3 },
+
+  { perm_code: 'basic:dept', perm_name: '部门信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/dept', component: 'basic/dept/index', icon: 'School', sort: 3 },
   { perm_code: 'dept:create', perm_name: '新增部门', perm_type: 2, parent_code: 'basic:dept', sort: 1 },
   { perm_code: 'dept:update', perm_name: '编辑部门', perm_type: 2, parent_code: 'basic:dept', sort: 2 },
   { perm_code: 'dept:delete', perm_name: '删除部门', perm_type: 2, parent_code: 'basic:dept', sort: 3 },
 
   // 部件信息（原物料信息，2026-08 改版；perm_code/路由/组件路径保持 material 内部标识稳定，
   // 2026-08-07 由「物料管理」移入「基础数据」——它本就是主数据，与出入库单据不同性质）
-  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 3 },
+  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 4 },
   { perm_code: 'material:create', perm_name: '新增部件', perm_type: 2, parent_code: 'basic:material', sort: 1 },
   { perm_code: 'material:update', perm_name: '编辑部件', perm_type: 2, parent_code: 'basic:material', sort: 2 },
   { perm_code: 'material:delete', perm_name: '删除部件', perm_type: 2, parent_code: 'basic:material', sort: 3 },

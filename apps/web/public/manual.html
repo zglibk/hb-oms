@@ -156,7 +156,7 @@
     <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
-    <a class="toc-item" data-key="基础数据 客户 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
+    <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
@@ -383,7 +383,7 @@
       </div>
 
       <ol class="steps">
-        <li>点「登记回厂」，先在<strong>「公共信息」</strong>里选<strong>录入方式</strong>（决定下面该填哪一列），再填<strong>加工商</strong>与<strong>回厂日期</strong>——后两项各行共用。</li>
+        <li>点「登记回厂」，先在<strong>「公共信息」</strong>里选<strong>录入方式</strong>（决定下面该填哪一列），再选<strong>加工商</strong>（下拉来自「基础数据 → 供应商」，没维护到的新厂也可直接输入）与<strong>回厂日期</strong>——后两项各行共用。</li>
         <li>再到<strong>「回厂明细」</strong>点「添加部件组」（没有明细时页面中间也会有这个按钮），选择器只列出需要表面处理的部件组，可以搜订单号/客户/生产单号/型号/图号，<strong>一次可多选</strong>。</li>
         <li><strong>按数量</strong>：逐行照送货单填<strong>回厂数量</strong>即可。<br />
           <strong>按重量折算</strong>：逐行填<strong>回厂重量</strong>（磅秤实测，kg），<strong>单重</strong>会按这一组对应的部件从部件信息自动带出（外轨组带外轨的、内轨组带内轨的），带出的不对或没带出直接改，数量随即算好。</li>
@@ -708,6 +708,15 @@
         <thead><tr><th>模块</th><th>菜单位置</th><th>作用</th></tr></thead>
         <tbody>
           <tr><td>客户资料</td><td>基础数据 → 客户资料</td><td>客户代码/名称/联系人，还有<strong>默认业务员、跟单员、交货地址</strong>——录订单选中客户就自动带出。支持 Excel 批量导入</td></tr>
+          <tr>
+            <td>供应商</td>
+            <td>基础数据 → 供应商</td>
+            <td>
+              做表面处理的外协厂等往来单位。维护好之后，<strong>「登记外发件回厂」的加工商就能直接下拉选</strong>，
+              不用每次手打（同一家厂被写成简称、全称、错别字，事后没法统计）。<br />
+              「排序」数字越小排越前，常用的厂放前面；<strong>停用</strong>只是不再进下拉，<strong>历史记录不受影响</strong>。
+            </td>
+          </tr>
           <tr><td>部门信息</td><td>基础数据 → 部门信息</td><td>组织架构，账号归属部门</td></tr>
           <tr><td>部件信息</td><td>基础数据 → 部件信息</td><td>产品主数据：货号、名称、产品类型、规格、<strong>单重</strong>（登记外发回厂时自动带出）等</td></tr>
           <tr><td>开单信息</td><td>工艺管理 → 开单信息</td><td>按<strong>生产图号</strong>维护的工艺资料：机台、长度要求、特殊要求、模具号、工艺更新说明与附图。<strong>录订单填了生产图号就自动带入</strong>。支持批量导入导出</td></tr>

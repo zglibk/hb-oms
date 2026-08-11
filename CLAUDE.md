@@ -57,7 +57,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
 - `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、**两个订单侧快照服务**（下游建单统一从它们读展示字段，禁止各模块再写一份 SQL）——`ProductSnapshotService`（产品级，给装配/成品出入库/成品期初）与 `PartGroupSnapshotService`（部件组级，给外发件回厂），分层理由见 §5.2；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、supplier（供应商）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
@@ -89,7 +89,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
   - 工艺管理(6)：开单信息
   - **物料管理(7)：成品出入库、成品库存、部件台账、期初录入** —— 成品库存口径（单据 + 结存）、部件半成品台账与上线期初
   - 设备管理(8)：设备信息
-  - **基础数据(10)：客户资料、部门信息、部件信息** —— 部件信息属主数据，与出入库单据不同性质，故归此处
+  - **基础数据(10)：客户资料、供应商、部门信息、部件信息** —— 供应商紧挨客户资料（同为往来单位主数据）；部件信息属主数据，与出入库单据不同性质，故归此处
   - 系统管理(90)：用户/角色/菜单权限/数据字典/操作日志/更新日志/系统配置
 - **调整菜单归属只改清单里的 `parent_code` + `sort`，无需迁移 SQL**：`PermissionSyncService` 第二遍对清单中**每一条**（含存量行）无条件 `update({ parentId })`，重启即生效。同理改名/改图标也只改清单。
 - 一级菜单**可以是叶子**（带 component 无 children）：`dynamic.ts` 按 `component && path` 注册路由、`SidebarItem` 用 `v-else-if="menu.path"` 渲染成普通菜单项，订单跟踪台账即用此形态置顶。
@@ -110,7 +110,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 
 在此之前 hb-oms 的菜单权限点只控制侧栏显隐，**所有业务 GET 接口零守卫**，任意登录账号直接调 API 就能读全厂订单、台账、库存与客户资料——菜单藏起来了，数据没藏。
 
-- **跨页引用型只读接口刻意只要求登录**（各 controller 有注释说明理由）：`/customer/all`（订单/开单信息表单的客户下拉）、`/process-info/by-drawing`（订单表单按图号带入）、`/system/material/by-code`、`/system/dept` 与 `/system/dept/tree`（用户管理选部门、角色数据范围）、`/system/dict/type/:type`（全局字典）。挂菜单码会让「录订单的人没有客户资料菜单」直接 403。作为补偿，`/customer/all` 已收窄投影，只回下拉需要的 6 个字段，联系人电话/备注/审计信息不外露。
+- **跨页引用型只读接口刻意只要求登录**（各 controller 有注释说明理由）：`/customer/all`（订单/开单信息表单的客户下拉）、`/supplier/all`（外发登记的加工商下拉，投影只回 id/编码/名称）、`/process-info/by-drawing`（订单表单按图号带入）、`/system/material/by-code`、`/system/dept` 与 `/system/dept/tree`（用户管理选部门、角色数据范围）、`/system/dict/type/:type`（全局字典）。挂菜单码会让「录订单的人没有客户资料菜单」直接 403。作为补偿，`/customer/all` 已收窄投影，只回下拉需要的 6 个字段，联系人电话/备注/审计信息不外露。
 - **一个接口服务两个页面时用 `@RequireAnyPermissions`（OR）**：`/finished-stock/group-options`（成品出入库 + 期初录入）、`/assembly/inbound-quota`（装配 + 成品出入库）、`/system/menu/tree`（菜单权限页 + 角色分配权限弹窗）。最后一个此前只认 `system:menu`，导致「只能管角色、不能改菜单」的管理员打不开分配权限弹窗。
 - **业务字段开关** `GET /system/config/features` **刻意只要求登录、不挂菜单权限点**（同上一条的跨页引用型只读接口）：各业务页开局都要读它决定字段显隐（现有「颜色」「客户图号」两个开关），挂 `system:config` 会让所有业务页 403。返回的只是几个布尔开关，不含业务数据。详见 §5.7。
 - **首页看板** `GET /dashboard/summary` 由 `stat:dashboard` 管控（容器 `stat` 是 perm_type=2 的根节点，`buildMenuTree` 只取 perm_type=1 故侧栏不受影响）。迁移已补授全部存量角色、行为不变，可按角色收回；前端无该权限时**不发请求、不弹 403**，欢迎区与日历照常显示。
@@ -133,7 +133,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
    - 删列后同步：`expectedColumns` 移除该列、`forbiddenColumns` 加上它（盯住不得被旧版 schema 重建复活）。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（截至锚点分层共 26 个，末条为 `migration-product-level-tracking.sql`）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（截至供应商模块共 27 个，末条为 `migration-supplier.sql`）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_supplier` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 > **一次性清数据的迁移必须做成「只生效一次」**（`migration-product-level-tracking.sql` 的写法，抄它）：`db:migrate` 每次跑**全量清单**，直接写 `DELETE FROM` 会让上线后任何一次重跑都清空生产数据。做法是用「被删的旧列是否还存在」当守卫——
 > ```sql
@@ -271,7 +271,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 ### 5.5 基础数据 vs 业务流水
 
-- **基础数据**（客户资料、开单信息、部件信息、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
+- **基础数据**（客户资料、供应商、开单信息、部件信息、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
+  - ⚠️ **供应商是例外，删除不做引用检查**：外发回厂只快照 `processor_name` 名称、**不持有 `supplier_id`**，删主数据动不了历史记录（§5.5 快照原则）。想临时下线用「停用」——停用即不进下拉，历史照旧。加工商下拉 `allow-create`，主数据没维护到的新厂可直接手输，不挡录入。
 - **业务流水**（订单、外发单、装配批次、出入库单）：创建时**快照冗余**基础数据关键字段（客户名、生产单号、产品型号、规格、周期码等），基础数据后续变更**不回写**历史单据；审计字段齐全；确认后的单据只能冲销不能改。
 - 快照字段一律**由服务端从上游表读取落库**，不采信客户端传值（防伪造）。
 

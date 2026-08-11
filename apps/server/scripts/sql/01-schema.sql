@@ -611,6 +611,30 @@ CREATE TABLE IF NOT EXISTS t_customer (
   KEY idx_customer_name (customer_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户资料';
 
+-- 供应商主数据（基础数据）：外发「加工商」等下拉的来源。
+-- 业务流水只快照名称（t_outsource_part.processor_name），不存 supplier_id——
+-- 遵循 §5.5 基础数据变更不回写历史单据，且下拉允许手输新值不挡录入。
+CREATE TABLE IF NOT EXISTS t_supplier (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  supplier_code  VARCHAR(64)  NOT NULL COMMENT '供应商编码（唯一）',
+  supplier_name  VARCHAR(128) NOT NULL COMMENT '供应商名称（可重复，编码才是唯一业务键）',
+  contact_person VARCHAR(64)  NULL COMMENT '联系人',
+  contact_phone  VARCHAR(64)  NULL COMMENT '联系电话',
+  address        VARCHAR(255) NULL COMMENT '地址',
+  sort           INT          NOT NULL DEFAULT 0 COMMENT '排序（越小越靠前，控制下拉顺序）',
+  status         TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1启用 0停用（停用后不进下拉，历史记录不受影响）',
+  remark         VARCHAR(255) NULL COMMENT '备注',
+  creator_id     INT          NULL COMMENT '创建人ID',
+  creator_name   VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by     INT          NULL COMMENT '最后更新人ID',
+  updater_name   VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_supplier_code (supplier_code),
+  KEY idx_supplier_name (supplier_name),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='供应商主数据（基础数据；外发加工商等下拉来源）';
+
 -- 工艺信息（设计文档 §4.1.3；订单按生产图号匹配自动带入，引用为快照不回写）
 CREATE TABLE IF NOT EXISTS t_process_info (
   id                    INT AUTO_INCREMENT PRIMARY KEY,

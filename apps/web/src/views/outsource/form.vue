@@ -38,7 +38,24 @@
           <el-row :gutter="16" class="shared-block__fields">
             <el-col :xs="24" :sm="12" :md="10" :lg="8">
               <el-form-item label="加工商" prop="processorName">
-                <el-input v-model="form.processorName" placeholder="做表面处理的外协厂" />
+                <!-- 下拉来自「基础数据 → 供应商」。allow-create：主数据没维护到的新厂
+                     也能直接输入，不挡录入（落库仍是名称快照，不存 supplier_id） -->
+                <el-select
+                  v-model="form.processorName"
+                  filterable
+                  allow-create
+                  default-first-option
+                  clearable
+                  placeholder="选择或直接输入"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="s in supplierOptions"
+                    :key="s.id"
+                    :label="s.supplierName"
+                    :value="s.supplierName"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="10" :lg="8">
@@ -196,6 +213,7 @@ import {
   getPartGroupOptions,
   type PartGroupOption,
 } from '@/api/outsource';
+import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -251,6 +269,12 @@ loadDict('surface_type').then((rows: any[]) => {
   surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 const outsourceSurfaces = computed(() => surfaceDict.value.filter((o) => o.value !== SURFACE_NONE));
+
+/** 加工商下拉：基础数据里维护的启用供应商（接口只需登录，没有供应商菜单也能取） */
+const supplierOptions = ref<SupplierOption[]>([]);
+getSupplierOptions().then((rows) => {
+  supplierOptions.value = rows;
+});
 
 const totalQty = computed(() => form.items.reduce((s, it) => s + (it.returnQty || 0), 0));
 const totalWeight = computed(

@@ -126,7 +126,18 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="加工商" required>
-          <el-input v-model="editForm.processorName" />
+          <!-- 同登记页：下拉取自「基础数据 → 供应商」，允许手输新值 -->
+          <el-select
+            v-model="editForm.processorName"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="选择或直接输入"
+            style="width: 100%"
+          >
+            <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.supplierName" />
+          </el-select>
         </el-form-item>
         <el-form-item label="回厂日期" required>
           <el-date-picker v-model="editForm.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
@@ -185,6 +196,7 @@ import {
   removeOutsourcePart,
   type OutsourcePartRow,
 } from '@/api/outsource';
+import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import {
   ENTRY_MODE_OPTIONS,
@@ -219,6 +231,12 @@ loadDict('surface_type').then((rows: any[]) => {
 });
 /** 外发可选表面处理 = 字典项去掉保留值 none（无表面处理不外发） */
 const outsourceSurfaces = computed(() => surfaceDict.value.filter((o) => o.value !== SURFACE_NONE));
+
+/** 加工商下拉：基础数据里维护的启用供应商（同登记页） */
+const supplierOptions = ref<SupplierOption[]>([]);
+getSupplierOptions().then((rows) => {
+  supplierOptions.value = rows;
+});
 
 /** 本页合计（仅当前页——分页数据，标题已写明「当前筛选」由后端分页限制） */
 const totalQty = computed(() => list.value.reduce((s, r) => s + (r.returnQty || 0), 0));
