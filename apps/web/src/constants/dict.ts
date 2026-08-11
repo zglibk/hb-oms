@@ -55,6 +55,15 @@ export {
   EDUCATION_TYPE as EDUCATION_TYPE_VALUE,
   ageFromBirthDate,
   birthDateFromIdCard,
+  // 员工编码规则（厂区/年份标识/前缀/拼装，部门编码在 t_department.hr_code）
+  EMP_PLANT_OPTIONS,
+  EMP_PLANT_CODES,
+  empPlantLabel,
+  empYearFlag,
+  empCodePrefix,
+  empCodePreview,
+  isConvertToFormal,
+  isValidEmpNo,
   // 单位换算（1套=2支、1英寸=25mm）
   PIECES_PER_SET,
   UNIT,

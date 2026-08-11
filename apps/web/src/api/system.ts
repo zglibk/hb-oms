@@ -135,6 +135,8 @@ export interface DeptNode {
   id: number;
   deptCode: string;
   deptName: string;
+  /** 部门人事编码（员工编号第 5-7 位，如 005）；空=该部门不参与员工编码 */
+  hrCode: string | null;
   parentId: number;
   sort: number;
   leader: string | null;

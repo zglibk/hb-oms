@@ -2,7 +2,10 @@ import request from '@/utils/request';
 
 export interface EmployeeRow {
   id: number;
+  /** 员工编号：新增时由服务端按编码规则自动生成，终身不变（试用转正换发除外） */
   empNo: string;
+  /** 厂区（编号第 1-2 位来源）：01总厂 02一号分厂 03二号分厂 */
+  plantCode: string | null;
   empName: string;
   gender: number;
   idCard: string | null;
@@ -45,6 +48,7 @@ export interface EmployeeQuery {
   pageSize?: number;
   keyword?: string;
   deptId?: number;
+  plantCode?: string;
   empType?: string;
   position?: string;
   jobStatus?: number;
@@ -65,11 +69,18 @@ export const getEmployeeList = (params: EmployeeQuery) =>
 export const getEmployee = (id: number) =>
   request.get<any, EmployeeRow>(`/api/employee/${id}`);
 
+/** 新增：编号由服务端生成并随响应回传，前端据此提示用户 */
 export const createEmployee = (data: Partial<EmployeeRow>) =>
-  request.post('/api/employee', data);
+  request.post<any, { id: number; empNo: string }>('/api/employee', data);
 
-export const updateEmployee = (id: number, data: Partial<EmployeeRow>) =>
-  request.put(`/api/employee/${id}`, data);
+/**
+ * 编辑：**不传 empNo**（编号终身不变，服务端也会无视）。
+ * 仅「实习生/临时工 转正」时传 regenerateEmpNo=true 换发正式编号。
+ */
+export const updateEmployee = (
+  id: number,
+  data: Partial<EmployeeRow> & { regenerateEmpNo?: boolean },
+) => request.put<any, { id: number; empNo: string; empNoChanged: boolean }>(`/api/employee/${id}`, data);
 
 export const deleteEmployee = (id: number) =>
   request.delete(`/api/employee/${id}`);

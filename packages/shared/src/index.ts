@@ -14,3 +14,4 @@ export * from './rail';
 export * from './version';
 export * from './outsource';
 export * from './assembly';
+export * from './employee-code';

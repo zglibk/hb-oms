@@ -17,6 +17,20 @@ export class Department {
   @Column({ name: 'dept_name' })
   deptName: string;
 
+  /**
+   * 部门人事编码：员工编号第 5-7 位的来源（如 005 品检部）。
+   * 放在部门主数据而不是写死在代码里——部门会增减，硬编码迟早和库里对不上。
+   * 空 = 该部门不参与员工编码，拿它建档会被服务端拒绝并提示先去配置。
+   */
+  @Column({
+    name: 'hr_code',
+    type: 'varchar',
+    length: 3,
+    nullable: true,
+    comment: '部门人事编码（员工编号第5-7位，如 005）；空=该部门不参与员工编码，建档时会被拒绝',
+  })
+  hrCode: string | null;
+
   @Column({ name: 'parent_id', type: 'int', default: 0 })
   parentId: number;
 

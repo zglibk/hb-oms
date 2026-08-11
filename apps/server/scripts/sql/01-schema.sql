@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS t_department (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   dept_code   VARCHAR(64)  NOT NULL COMMENT '部门编码',
   dept_name   VARCHAR(64)  NOT NULL COMMENT '部门名称',
+  hr_code     VARCHAR(3)   NULL COMMENT '部门人事编码（员工编号第5-7位，如 005）；空=该部门不参与员工编码，建档时会被拒绝',
   parent_id   INT          NOT NULL DEFAULT 0 COMMENT '上级部门ID，0=顶级',
   sort        INT          NOT NULL DEFAULT 0 COMMENT '排序号',
   leader      VARCHAR(64)  NULL COMMENT '负责人',
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS t_department (
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_dept_code (dept_code),
+  UNIQUE KEY uk_dept_hr_code (hr_code),
   KEY idx_parent (parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='部门表';
 
@@ -686,7 +688,8 @@ CREATE TABLE IF NOT EXISTS t_supplier (
 -- 人事档案（HR；可读部门树；V1 暂不向业务模块对外供数）
 CREATE TABLE IF NOT EXISTS t_employee (
   id                 INT AUTO_INCREMENT PRIMARY KEY,
-  emp_no             VARCHAR(32)  NOT NULL COMMENT '员工编号（全库唯一，手工录入）',
+  emp_no             VARCHAR(32)  NOT NULL COMMENT '员工编号（全库唯一，新增时由系统按编码规则自动生成：2位厂区+2位年份标识+3位部门+3位流水号，非正式人员带 S/L 前缀）',
+  plant_code         VARCHAR(2)   NULL COMMENT '厂区编码（员工编号第1-2位）：01总厂 02一号分厂 03二号分厂',
   emp_name           VARCHAR(64)  NOT NULL COMMENT '姓名',
   gender             TINYINT      NOT NULL DEFAULT 0 COMMENT '性别：0未知 1男 2女',
   id_card            VARCHAR(18)  NULL COMMENT '身份证号',

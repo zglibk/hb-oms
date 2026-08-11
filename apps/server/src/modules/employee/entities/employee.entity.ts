@@ -15,8 +15,29 @@ export class Employee {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'emp_no', type: 'varchar', length: 32, unique: true, comment: '员工编号（全库唯一，手工录入）' })
+  /**
+   * 员工编号：新增时由服务端按《员工编码管理规则》自动生成，**终身固定不变**。
+   * 编辑接口不接受修改；唯一例外是「试用转正」换发正式码（见 EmployeeService）。
+   */
+  @Column({
+    name: 'emp_no',
+    type: 'varchar',
+    length: 32,
+    unique: true,
+    comment:
+      '员工编号（全库唯一，新增时由系统按编码规则自动生成：2位厂区+2位年份标识+3位部门+3位流水号，非正式人员带 S/L 前缀）',
+  })
   empNo: string;
+
+  /** 厂区（编码第 1-2 位的来源）。跨厂区调动只改本列，**不换编号** */
+  @Column({
+    name: 'plant_code',
+    type: 'varchar',
+    length: 2,
+    nullable: true,
+    comment: '厂区编码（员工编号第1-2位）：01总厂 02一号分厂 03二号分厂',
+  })
+  plantCode: string | null;
 
   @Column({ name: 'emp_name', type: 'varchar', length: 64, comment: '姓名' })
   empName: string;

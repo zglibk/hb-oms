@@ -167,7 +167,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **新增/修改状态只改共享包一处**。凡前后端都要用、且必须口径一致的纯常量/纯函数一律进共享包，禁止两端各写一份；依赖 NestJS/Vue/Element Plus 的代码不得进共享包。
 - **禁止在 service SQL、前端模板中出现裸的状态数字**（如 `status = 2`、`row.status === 1`），一律引用命名常量。注意跨表状态不可混用（订单状态用 `ORDER_STATUS`、外发状态用 `OUTSOURCE_STATUS`，即便数值恰好相同）。
 
-共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（**仅剩**重量→数量折算 `qtyFromWeight`——发坯单号、回齐判定、状态派生已随发坯单一并删除）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）。
+共享包现有内容：`business-status.ts`（订单/外发/装配/成品单据/启停状态、表面处理哨兵 `SURFACE_NONE` 与 `needsOutsource`）、`unit.ts`（套↔支 `PIECES_PER_SET=2`、英寸↔mm `INCH_TO_MM=25`、`normalizeDimensionText`、`formatDimension`）、`product-type.ts`（产品类型多选组合 parse/normalize/format、`hasSocket`、`formatProductModel`）、`rail.ts`（部件/边别/节数/部件组选项、`expandPartRows` 部件展开蓝图）、`version.ts`（`normalizeVersion`）、`outsource.ts`（**仅剩**重量→数量折算 `qtyFromWeight`——发坯单号、回齐判定、状态派生已随发坯单一并删除）、`assembly.ts`（批次状态派生 `deriveAssemblyStatus` / `isAssemblyCompleted`、入库闸门算式 `calcInboundQuota`、边别合法性 `isValidSide` 与 `assemblySides`）、`employee-code.ts`（员工编码规则：厂区表 `EMP_PLANT_OPTIONS`、年份标识 `empYearFlag`、非正式前缀 `empCodePrefix`、转正判定 `isConvertToFormal`、拼装 `buildEmpNo` 与界面预览 `empCodePreview`；**部门编码不在此，它是 `t_department.hr_code` 主数据**）。
 
 ### 4.2 数据库字段注释强制
 
@@ -267,6 +267,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | FGO | 成品**出库**单 + **期初**（`opening_balance` 虽是入向但走 FGO 序列，§4.7 明文） | 同 ORD | 同上 |
 | FGR | 成品**红字冲销**单 | 同 ORD | 同上 |
 | FILE | 文件上传 | 同 ORD | file.service |
+| （无） | **员工编号** | `2位厂区 + 2位年份标识 + 3位部门 + 3位流水号`，非正式人员带 S/L 前缀 | employee.service（`generateEmpNo`，计数键 `EMP:{厂区}{年份}{部门}`） |
 
 **不采番的业务行**：**外发件回厂记录**、装配批次、部件调整流水、**呆滞品档案与其出入库流水**属轻量记账行，无单据号（主键 id 即可）。
 
@@ -394,6 +395,20 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - 调整后余量不得为负；`delta` 不接受 0（无意义的空流水）；行锁后累加防并发丢失。
 - V1 是**独立参考台账**：不与外发/成品单据联动（§2.1，无报工则无采集点），联动列入 V2（§10）。
 - **必填字段的每个约束都要给中文 message**：字段缺省时多个约束同时失败，只要有一个没给 message，用户看到的就是「must be a string」这类英文（本模块已踩，E2E 抓出）。
+
+**人事档案与员工编码（employee 模块）**
+
+编码规则的权威来源是《海宝五金员工编码管理规则》（行政人事部），双端事实源为共享包 [employee-code.ts](packages/shared/src/employee-code.ts)。
+
+- **10 位纯数字：`2位厂区 + 2位年份标识 + 3位部门 + 3位部门流水号`**，新增员工时由服务端自动生成，`empNo` **客户端传了也不采信**（§5.5 防伪造）。
+- **年份标识位**：`2026-01-01`（含）之后入职取公历年份后两位，之前的存量老员工统一 `99`。**99 只是存量标识**——工龄/年假一律以 `hire_date` 为准，禁止从编码反推入职时间。
+- **部门编码落在 `t_department.hr_code`（3位），不写死在代码里**：部门是会增减的主数据，硬编码迟早与库对不上。未配 `hr_code` 的部门建档即被拒并提示去「基础数据 → 部门信息」配置。9 个部门的初始映射由 `migration-employee-code.sql` 按名称回填、缺的自动补建。
+- **流水号走 `NumberGeneratorService`**（§5.4），计数键 `EMP:{厂区}{年份}{部门}`。**跨年自动从 001 重来不需要额外逻辑**——年份位变了就是另一个计数键。
+- **生成编号需要三项前置信息：厂区 / 入职日期 / 所属部门**，缺一即拒绝并给出「这一项决定第几位」的中文提示。
+- **编号终身不变（规则四.1）**：`update` 恒取库中 `empNo`、无视传入值。⚠️ **跨厂区调动只改 `plant_code`，编码里的厂区位仍是入职时的厂区——两者不一致是设计如此，不是 bug**。
+- **唯一允许换号的场景是「试用转正」**（规则五）：实习生/临时工转为不带前缀的用工属性时换发 10 位正式码，且必须由前端显式传 `regenerateEmpNo`（用户在弹窗确认过），服务端二次校验确属该转换才放行——编号是工牌/考勤/薪资的对账依据，不做静默改号。年份位仍取本人入职日期（转正不是重新入职）。
+- **前缀只给规则点名的两类**：实习生 `S` / 临时工 `L`。正式工/派遣工/学徒一律无前缀，**不要自行给未列出的类别发明前缀**（附则：编码架构变更须三方评审）。`intern` 字典项由迁移补入 `emp_type`。
+- 离职编号永久封存：流水号只增不减、不回收，天然满足「严禁二次分配」。离职返聘 = 新建档案、生成全新编号。
 
 **呆滞品管理（2026-08-11，dull-stock 模块）**
 
@@ -528,6 +543,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2l | 外发收敛为回厂流水 | 第二轮简化：连发坯单也取消，三表塌缩为 `t_outsource_part`（一行=一次回厂）。删打印页/单号采番/6 个权限点；首页右卡改「近期外发回厂」。口径见 §5.6 | ✅ 已完成（2026-08-10） |
 | 2m | 业务字段全局开关 | 系统配置新增「业务字段」Tab，现有两个开关：**颜色**（与表面处理配套的业务字段）、**客户图号**（非部件组生产图号）。**录入展示开关 ≠ 数据清理**：停用不删既有数据、编辑不洗历史值。前端走 feature store + `useFeatureFlags`，后端只在导出侧读开关并把两个导出的汇总行改为按表头名定位。口径与新增开关的 6 处改动点见 §5.7 | ✅ 已完成（2026-08-10） |
 | 2n | 跟踪锚点分层 | 装配 / 成品明细 / 成品余额 / 入库闸门 / 台账主行 由**部件组升到订单产品行**，外发件回厂**保持部件组**；台账改「产品级主行 + 部件组展开」，两个 Excel 导出改产品级（按组铺行会让合计翻倍）；新增 `ProductSnapshotService` 与组级快照分层。迁移 `migration-product-level-tracking.sql` 带「清空只生效一次」守卫（已实测重跑不清数据）。口径见 §5.2 | ✅ 已完成（2026-08-10） |
+| 2p | 员工编码自动生成 | 按《海宝五金员工编码管理规则》落地：新增员工自动生成 `2位厂区+2位年份标识+3位部门+3位流水号`，非正式人员带 S/L 前缀。新增 `t_employee.plant_code` 与 `t_department.hr_code`（部门编码放主数据、不写死），共享包 `employee-code.ts` 为双端事实源，流水号复用 `NumberGeneratorService`。编号终身不变（跨厂区调动只改 plant_code），唯一例外是试用转正显式换发。口径见 §5.6 | ✅ 已完成（2026-08-11） |
 | 2o | 呆滞品管理 | 「成品期初（不挂订单）」拆成独立模块：`t_dull_stock` + `t_dull_stock_flow` 两表，跟踪 期初/入库/出库/结存 四个数，新增客户与生产单号、单位可选套/支、表面处理联动带出颜色、流水可删并回滚累计数。**独立台账，不与订单台账/成品库存联动**。原纯属性期初形态前后端整体删除（系统未上线，无数据需迁移），成品期初收敛为只能挂订单。口径见 §5.6 | ✅ 已完成（2026-08-11） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |
 | 4 | 订单变更流程 | V1 简化为"被下游引用后禁改，提示先冲销/作废下游单据"；正式变更单据化列入 V2 | 📘 已定口径 |

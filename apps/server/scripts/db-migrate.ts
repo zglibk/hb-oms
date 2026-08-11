@@ -67,6 +67,8 @@ const MIGRATIONS: string[] = [
   'migration-dull-stock.sql',
   // 人事档案（HR 一级菜单；可读部门，暂不对外供数）
   'migration-employee.sql',
+  // 员工编码规则：厂区列 + 部门人事编码 + 9 个部门回填 + 实习生字典
+  'migration-employee-code.sql',
   // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
   'migration-employee-profile.sql',
 ];
@@ -208,6 +210,9 @@ const expectedColumns = [
   't_employee.job_status',
   't_employee.dept_id',
   't_employee.supervisor_id',
+  // 员工编码规则：厂区（第1-2位）与部门人事编码（第5-7位）
+  't_employee.plant_code',
+  't_department.hr_code',
   't_employee.native_place',
   't_employee.education',
   't_employee.education_type',

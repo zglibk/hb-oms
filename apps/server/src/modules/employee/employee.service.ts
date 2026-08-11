@@ -6,17 +6,29 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { JOB_STATUS, birthDateFromIdCard } from '@hb-oms/shared';
+import {
+  EMP_PLANT_CODES,
+  EMP_SEQ_WIDTH,
+  JOB_STATUS,
+  birthDateFromIdCard,
+  buildEmpNo,
+  empPlantLabel,
+  empYearFlag,
+  isConvertToFormal,
+} from '@hb-oms/shared';
 import { Employee } from './entities/employee.entity';
+import { Department } from '../system/entities/department.entity';
 import { CreateEmployeeDto, QueryEmployeeDto, UpdateEmployeeDto } from './dto/employee.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { NumberGeneratorService } from '../../common/services/number-generator.service';
 
 @Injectable()
 export class EmployeeService {
   constructor(
     @InjectRepository(Employee)
     private readonly repo: Repository<Employee>,
+    private readonly numberGen: NumberGeneratorService,
   ) {}
 
   async findList(query: QueryEmployeeDto) {
@@ -35,6 +47,7 @@ export class EmployeeService {
     if (query.status != null) qb.andWhere('e.status = :st', { st: query.status });
     if (query.jobStatus != null) qb.andWhere('e.jobStatus = :js', { js: query.jobStatus });
     if (query.deptId != null) qb.andWhere('e.deptId = :did', { did: query.deptId });
+    if (query.plantCode) qb.andWhere('e.plantCode = :pc', { pc: query.plantCode });
     if (query.empType) qb.andWhere('e.empType = :et', { et: query.empType });
     if (query.position) qb.andWhere('e.position = :pos', { pos: query.position });
     if (query.keyword) {
@@ -60,13 +73,23 @@ export class EmployeeService {
     return one;
   }
 
+  /**
+   * 新增员工：编号由系统按《员工编码管理规则》**自动生成**，不接受手工传入。
+   * 生成编号需要三项前置信息（厂区/入职日期/部门），缺一即拒绝并说明原因。
+   */
   async create(dto: CreateEmployeeDto, user: CurrentUserPayload) {
     const payload = this.normalizePayload(dto);
-    await this.assertUnique(payload.empNo, payload.idCard);
+    const empNo = await this.generateEmpNo({
+      plantCode: payload.plantCode,
+      hireDate: payload.hireDate,
+      deptId: payload.deptId,
+      empType: payload.empType,
+    });
+    await this.assertUnique(empNo, payload.idCard);
     if (payload.supervisorId) await this.assertSupervisor(payload.supervisorId);
-    const entity = this.repo.create({ ...payload, ...auditOnCreate(user) });
+    const entity = this.repo.create({ ...payload, empNo, ...auditOnCreate(user) });
     const saved = await this.repo.save(entity);
-    return { id: saved.id };
+    return { id: saved.id, empNo };
   }
 
   async update(id: number, dto: UpdateEmployeeDto, user: CurrentUserPayload) {
@@ -74,7 +97,10 @@ export class EmployeeService {
     if (!item) throw new NotFoundException('员工不存在');
 
     const merged: CreateEmployeeDto = {
-      empNo: dto.empNo ?? item.empNo,
+      // 编号**终身固定不变**（规则四.1）：调岗、升职、跨厂区调动一律沿用原号，
+      // 故这里恒取库中值、无视 dto.empNo。唯一例外是下面的「试用转正换发正式码」。
+      empNo: item.empNo,
+      plantCode: dto.plantCode !== undefined ? dto.plantCode : item.plantCode ?? undefined,
       empName: dto.empName ?? item.empName,
       gender: dto.gender ?? item.gender,
       idCard: dto.idCard !== undefined ? dto.idCard : item.idCard ?? undefined,
@@ -116,13 +142,37 @@ export class EmployeeService {
     };
 
     const payload = this.normalizePayload(merged);
-    await this.assertUnique(payload.empNo, payload.idCard, id);
+
+    /**
+     * 试用转正换发正式编码（规则五）：非正式人员（实习生 S / 临时工 L）转为
+     * 不带前缀的用工属性时，换发标准 10 位正式编码。这是**唯一**允许改编号的场景，
+     * 且必须由前端显式传 regenerateEmpNo（用户在弹窗里确认过），不做静默改号——
+     * 编号是对外标识，悄悄换掉会让工牌、考勤、薪资对不上账。
+     *
+     * 年份标识位仍取**员工本人的入职日期**：转正不是重新入职，工龄连续。
+     */
+    let empNo = payload.empNo;
+    if (dto.regenerateEmpNo) {
+      if (!isConvertToFormal(item.empType, payload.empType)) {
+        throw new BadRequestException(
+          '只有「实习生 / 临时工」转为正式用工属性时才需要换发编号，当前变更无需换号',
+        );
+      }
+      empNo = await this.generateEmpNo({
+        plantCode: payload.plantCode,
+        hireDate: payload.hireDate,
+        deptId: payload.deptId,
+        empType: payload.empType,
+      });
+    }
+
+    await this.assertUnique(empNo, payload.idCard, id);
     if (payload.supervisorId) {
       if (payload.supervisorId === id) throw new BadRequestException('直属主管不能是本人');
       await this.assertSupervisor(payload.supervisorId);
     }
-    await this.repo.update(id, { ...payload, ...auditOnUpdate(user) });
-    return { id };
+    await this.repo.update(id, { ...payload, empNo, ...auditOnUpdate(user) });
+    return { id, empNo, empNoChanged: empNo !== item.empNo };
   }
 
   async remove(id: number) {
@@ -169,10 +219,77 @@ export class EmployeeService {
     }));
   }
 
+  /**
+   * 按《员工编码管理规则》生成编号：厂区(2) + 年份标识(2) + 部门(3) + 流水号(3)，
+   * 非正式人员（实习生/临时工）带 S/L 前缀。
+   *
+   * 流水号走 `NumberGeneratorService`（MySQL 计数表 + LAST_INSERT_ID 原子自增，§5.4），
+   * 计数键为「厂区+年份标识+部门」——新员工每年 1 月 1 日年份标识一变即换了计数键，
+   * 流水号自然从 001 重来，无需额外的跨年重置逻辑。
+   *
+   * 三项前置信息缺一不可，各自给出可操作的中文提示（别让用户对着「生成失败」猜）。
+   */
+  private async generateEmpNo(params: {
+    plantCode: string | null;
+    hireDate: string | null;
+    deptId: number | null;
+    empType: string;
+  }): Promise<string> {
+    const plantCode = (params.plantCode ?? '').trim();
+    if (!plantCode) throw new BadRequestException('请选择厂区（员工编号第 1-2 位）');
+    if (!EMP_PLANT_CODES.includes(plantCode)) {
+      throw new BadRequestException(`厂区编码「${plantCode}」不在规则允许范围内`);
+    }
+
+    const yearFlag = empYearFlag(params.hireDate);
+    if (!yearFlag) {
+      throw new BadRequestException('请填写入职日期（员工编号第 3-4 位年份标识由它决定）');
+    }
+
+    if (!params.deptId) throw new BadRequestException('请选择所属部门（员工编号第 5-7 位）');
+    const dept = await this.repo.manager
+      .getRepository(Department)
+      .findOne({ where: { id: params.deptId } });
+    if (!dept) throw new BadRequestException('所属部门不存在');
+    const deptCode = (dept.hrCode ?? '').trim();
+    if (!deptCode) {
+      throw new BadRequestException(
+        `部门「${dept.deptName}」还没有配置人事编码，请先到「基础数据 → 部门信息」为它填 3 位人事编码`,
+      );
+    }
+
+    // 极小概率与历史手工编号撞号（存量档案的编号不是本规则生成的），撞了就取下一个流水号
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const seq = await this.nextSeq(plantCode, yearFlag, deptCode, dept.deptName);
+      const empNo = buildEmpNo({ plantCode, yearFlag, deptCode, seq, empType: params.empType });
+      const exists = await this.repo.findOne({ where: { empNo }, select: ['id'] });
+      if (!exists) return empNo;
+    }
+    throw new BadRequestException('员工编号连续生成冲突，请稍后重试或联系管理员检查历史编号');
+  }
+
+  /** 取「厂区+年份+部门」组合内的下一个流水号，超 999 给出可读提示 */
+  private async nextSeq(
+    plantCode: string,
+    yearFlag: string,
+    deptCode: string,
+    deptName: string,
+  ): Promise<number> {
+    const key = `EMP:${plantCode}${yearFlag}${deptCode}`;
+    try {
+      return Number(await this.numberGen.generatePaddedSequence(key, EMP_SEQ_WIDTH));
+    } catch {
+      // generatePaddedSequence 超上限抛的是普通 Error，转成面向用户的中文业务异常（§4.3）
+      throw new BadRequestException(
+        `「${empPlantLabel(plantCode)} / ${deptName}」在该年份的流水号已用满 999 位，` +
+          '需人事、财务、生产三方评审后调整编码规则',
+      );
+    }
+  }
+
   private normalizePayload(dto: CreateEmployeeDto) {
     const empNo = (dto.empNo || '').trim();
     const empName = (dto.empName || '').trim();
-    if (!empNo) throw new BadRequestException('请填写员工编号');
     if (!empName) throw new BadRequestException('请填写姓名');
     if (!dto.empType) throw new BadRequestException('请选择用工属性');
 
@@ -197,6 +314,9 @@ export class EmployeeService {
 
     return {
       empNo,
+      // 厂区：跨厂区调动只改这一列，**编号里的厂区位仍是入职时的厂区、不跟着改**——
+      // 编号终身固定是规则四.1 的硬要求，两者不一致是设计如此，不是 bug
+      plantCode: dto.plantCode?.trim() || null,
       empName,
       gender: dto.gender ?? 0,
       idCard,

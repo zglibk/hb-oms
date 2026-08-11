@@ -25,6 +25,11 @@
             @change="reload"
           />
         </el-form-item>
+        <el-form-item label="厂区">
+          <el-select v-model="query.plantCode" clearable placeholder="全部" style="width: 140px" @change="reload">
+            <el-option v-for="o in EMP_PLANT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="用工属性">
           <el-select v-model="query.empType" clearable placeholder="全部" style="width: 120px" @change="reload">
             <el-option v-for="o in empTypeOpts" :key="o.value" :label="o.label" :value="o.value" />
@@ -61,6 +66,9 @@
           </template>
         </el-table-column>
         <el-table-column label="姓名" prop="empName" width="90" fixed="left" />
+        <el-table-column label="厂区" width="110" align="center">
+          <template #default="{ row }">{{ empPlantLabel(row.plantCode) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="性别" width="60" align="center">
           <template #default="{ row }">{{ labelOf(GENDER, row.gender) }}</template>
         </el-table-column>
@@ -115,13 +123,29 @@
         <div class="form-sec">基本信息</div>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="员工编号" prop="empNo">
-              <el-input v-model="form.empNo" placeholder="全系统唯一工号" :spellcheck="false" />
+            <el-form-item label="员工编号">
+              <el-input :model-value="editId ? form.empNo : codePreviewText" disabled :spellcheck="false" />
+              <div class="code-hint">
+                <template v-if="editId">
+                  编号<b>终身不变</b>，调岗 / 升职 / 跨厂区调动都不换号
+                </template>
+                <template v-else>
+                  保存时按<b>厂区 + 年份 + 部门 + 流水号</b>自动生成，无需手工填写
+                </template>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="姓名" prop="empName">
               <el-input v-model="form.empName" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="厂区" prop="plantCode">
+              <el-select v-model="form.plantCode" placeholder="请选择" style="width: 100%">
+                <el-option v-for="o in EMP_PLANT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+              </el-select>
+              <div class="code-hint">编号第 1-2 位；跨厂区调动改这里，<b>编号不变</b></div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -276,11 +300,11 @@
         <div class="form-sec">车间属性</div>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="所属组织">
+            <el-form-item label="所属组织" prop="deptId">
               <el-tree-select
                 v-model="form.deptId"
-                :data="deptTree"
-                :props="{ label: 'deptName', children: 'children' }"
+                :data="deptTreeLabeled"
+                :props="{ label: 'codeLabel', children: 'children' }"
                 node-key="id"
                 check-strictly
                 clearable
@@ -288,6 +312,10 @@
                 placeholder="选自部门信息"
                 style="width: 100%"
               />
+              <div class="code-hint">
+                括号里是<b>人事编码</b>（编号第 5-7 位）；没有编码的部门无法生成员工编号，
+                需先到「基础数据 → 部门信息」配置
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -354,6 +382,10 @@ import {
   tagTypeOf,
   ageFromBirthDate,
   birthDateFromIdCard,
+  EMP_PLANT_OPTIONS,
+  empPlantLabel,
+  empCodePreview,
+  isConvertToFormal,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppTable from '@/components/AppTable.vue';
@@ -368,6 +400,7 @@ const query = reactive({
   pageSize: 20,
   keyword: '',
   deptId: undefined as number | undefined,
+  plantCode: undefined as string | undefined,
   empType: undefined as string | undefined,
   position: undefined as string | undefined,
   jobStatus: undefined as number | undefined,
@@ -390,6 +423,44 @@ loadDict('marital_status').then((rows: any[]) => { maritalOpts.value = mapDict(r
 loadDict('political_status').then((rows: any[]) => { politicalOpts.value = mapDict(rows); });
 loadDict('education').then((rows: any[]) => { educationOpts.value = mapDict(rows); });
 getDeptTree().then((t) => { deptTree.value = t || []; }).catch(() => {});
+
+/** 部门树节点标签带上人事编码：「品检部（005）」，让 HR 一眼看出哪些部门能生成编号 */
+const deptTreeLabeled = computed(() => {
+  const walk = (nodes: any[]): any[] =>
+    (nodes || []).map((n) => ({
+      ...n,
+      codeLabel: n.hrCode ? `${n.deptName}（${n.hrCode}）` : `${n.deptName}（未配人事编码）`,
+      children: walk(n.children || []),
+    }));
+  return walk(deptTree.value as any[]);
+});
+
+/** 部门 id → 人事编码，供编号预览用 */
+const deptHrCodeMap = computed(() => {
+  const map = new Map<number, string>();
+  const walk = (nodes: any[]) => {
+    (nodes || []).forEach((n) => {
+      if (n.hrCode) map.set(Number(n.id), String(n.hrCode));
+      walk(n.children || []);
+    });
+  };
+  walk(deptTree.value as any[]);
+  return map;
+});
+
+/**
+ * 新增时的编号预览：只展示能确定的前 7 位（厂区+年份+部门），
+ * 流水号用 ??? 占位——真实流水号由服务端采番时才定，提前显示可能与最终值不符。
+ */
+const codePreviewText = computed(() => {
+  const prefix = empCodePreview({
+    plantCode: form.plantCode,
+    hireDate: form.hireDate,
+    deptCode: form.deptId ? deptHrCodeMap.value.get(form.deptId) : '',
+    empType: form.empType,
+  });
+  return prefix ? `${prefix}???` : '补全厂区 / 入职日期 / 部门后自动生成';
+});
 
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null) {
   if (!v) return '—';
@@ -421,6 +492,7 @@ const deletingId = ref<number | null>(null);
 
 const emptyForm = () => ({
   empNo: '',
+  plantCode: '' as string,
   empName: '',
   gender: 1,
   idCard: '',
@@ -454,7 +526,10 @@ const emptyForm = () => ({
 const form = reactive(emptyForm());
 
 const rules = computed<FormRules>(() => ({
-  empNo: [{ required: true, message: '请填写员工编号', trigger: 'blur' }],
+  // 员工编号由服务端生成，不再校验；厂区/入职日期/部门是生成编号的三项前置信息
+  plantCode: [{ required: true, message: '请选择厂区（员工编号第 1-2 位）', trigger: 'change' }],
+  hireDate: [{ required: true, message: '请填写入职日期（决定编号第 3-4 位年份标识）', trigger: 'change' }],
+  deptId: [{ required: true, message: '请选择所属组织（员工编号第 5-7 位）', trigger: 'change' }],
   empName: [{ required: true, message: '请填写姓名', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
   empType: [{ required: true, message: '请选择用工属性', trigger: 'change' }],
@@ -494,6 +569,7 @@ function openEdit(row: EmployeeRow) {
   editId.value = row.id;
   Object.assign(form, emptyForm(), {
     empNo: row.empNo,
+    plantCode: row.plantCode || '',
     empName: row.empName,
     gender: row.gender ?? 0,
     idCard: row.idCard || '',
@@ -530,10 +606,36 @@ function openEdit(row: EmployeeRow) {
 
 async function onSave() {
   await formRef.value?.validate();
+
+  /**
+   * 试用转正换发正式编码（规则五）：实习生 S / 临时工 L 转成不带前缀的用工属性时，
+   * 换发标准 10 位编码。**必须先问过用户**——编号是对外标识，
+   * 悄悄换掉会让工牌、考勤、薪资对不上账。用户选「保留」就沿用原编号。
+   */
+  let regenerateEmpNo = false;
+  const original = editId.value ? list.value.find((r) => r.id === editId.value) : null;
+  if (original && isConvertToFormal(original.empType, form.empType)) {
+    try {
+      await ElMessageBox.confirm(
+        `「${form.empName}」由${dictLabel(empTypeOpts.value, original.empType)}转为`
+          + `${dictLabel(empTypeOpts.value, form.empType)}，按编码规则应换发 10 位正式员工编号`
+          + `（现编号 ${original.empNo}）。换发后原编号永久封存、不再启用。`,
+        '试用转正：是否换发正式编号？',
+        { type: 'warning', confirmButtonText: '换发新编号', cancelButtonText: '保留原编号' },
+      );
+      regenerateEmpNo = true;
+    } catch {
+      regenerateEmpNo = false;
+    }
+  }
+
   saving.value = true;
   try {
     const payload: any = {
       ...form,
+      // 编号一律不回传：新增由服务端生成，编辑时服务端也会无视（编号终身不变）
+      empNo: undefined,
+      regenerateEmpNo: regenerateEmpNo || undefined,
       idCard: form.idCard || undefined,
       birthDate: form.birthDate || undefined,
       nativePlace: form.nativePlace || undefined,
@@ -555,11 +657,11 @@ async function onSave() {
       probationMonths: form.probationMonths ?? undefined,
     };
     if (editId.value) {
-      await updateEmployee(editId.value, payload);
-      ElMessage.success('已保存');
+      const res = await updateEmployee(editId.value, payload);
+      ElMessage.success(res?.empNoChanged ? `已保存，新编号 ${res.empNo}` : '已保存');
     } else {
-      await createEmployee(payload);
-      ElMessage.success('已新增');
+      const res = await createEmployee(payload);
+      ElMessage.success(`已新增，员工编号 ${res?.empNo ?? ''}`);
     }
     formVisible.value = false;
     load();
@@ -582,6 +684,13 @@ async function onDelete(row: EmployeeRow) {
 </script>
 
 <style scoped lang="scss">
+/** 编码规则相关字段的行内说明：告诉 HR 这一项决定编号的第几位 */
+.code-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+  b { color: var(--el-text-color-primary); }
+}
 .toolbar {
   display: flex;
   align-items: center;

@@ -40,6 +40,28 @@ export class DeptService {
     if (exist) throw new BadRequestException(`部门编码「${deptCode}」已存在（${exist.deptName}）`);
   }
 
+  /**
+   * 人事编码归一 + 唯一校验：3 位数字，员工编号第 5-7 位就取它。
+   * 空串一律归一为 null——留空串会让 uk_dept_hr_code 只允许一个空串部门。
+   */
+  private async normalizeHrCode(
+    raw: string | null | undefined,
+    excludeId?: number,
+  ): Promise<string | null> {
+    const hrCode = (raw ?? '').trim();
+    if (!hrCode) return null;
+    if (!/^\d{3}$/.test(hrCode)) {
+      throw new BadRequestException('部门人事编码须为 3 位数字（如 005）');
+    }
+    const exist = await this.deptRepo.findOne({
+      where: excludeId ? { hrCode, id: Not(excludeId) } : { hrCode },
+    });
+    if (exist) {
+      throw new BadRequestException(`人事编码「${hrCode}」已被「${exist.deptName}」占用`);
+    }
+    return hrCode;
+  }
+
   async create(data: Partial<Department>, user: CurrentUserPayload) {
     if (!data.deptName?.trim()) throw new BadRequestException('部门名称必填');
     if (!data.deptCode?.trim()) throw new BadRequestException('部门编码必填');
@@ -52,6 +74,7 @@ export class DeptService {
       ...auditOnCreate(user),
       deptCode: data.deptCode.trim(),
       deptName: data.deptName.trim(),
+      hrCode: await this.normalizeHrCode(data.hrCode),
       parentId: data.parentId ?? 0,
       sort: data.sort ?? 0,
       leader: data.leader ?? null,
@@ -80,6 +103,8 @@ export class DeptService {
       ...auditOnUpdate(user),
       deptCode: data.deptCode?.trim() ?? dept.deptCode,
       deptName: data.deptName?.trim() ?? dept.deptName,
+      hrCode:
+        data.hrCode !== undefined ? await this.normalizeHrCode(data.hrCode, id) : dept.hrCode,
       parentId: data.parentId ?? dept.parentId,
       sort: data.sort ?? dept.sort,
       leader: data.leader !== undefined ? data.leader : dept.leader,

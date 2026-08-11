@@ -40,6 +40,12 @@
           </template>
         </el-table-column>
         <el-table-column label="部门编码" prop="deptCode" min-width="130" />
+        <el-table-column label="人事编码" width="90" align="center">
+          <template #default="{ row }">
+            <span v-if="row.hrCode">{{ row.hrCode }}</span>
+            <span v-else class="hr-code-empty">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="排序" prop="sort" width="70" />
         <el-table-column label="负责人" min-width="110">
           <template #default="{ row }">{{ row.leader || '—' }}</template>
@@ -89,6 +95,20 @@
           <el-col :span="12">
             <el-form-item label="部门编码" prop="deptCode">
               <el-input v-model="form.deptCode" placeholder="唯一，如 HB-001" :spellcheck="false" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="人事编码">
+              <el-input
+                v-model="form.hrCode"
+                maxlength="3"
+                placeholder="3 位数字，如 005；不参与员工编码可留空"
+                :spellcheck="false"
+              />
+              <div class="hr-code-hint">
+                <b>员工编号第 5-7 位</b>取这里。留空的部门无法生成员工编号，
+                HR 建档选到它会被拒绝。
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -208,6 +228,7 @@ const emptyForm = () => ({
   parentId: undefined as number | undefined,
   deptName: '',
   deptCode: '',
+  hrCode: '',
   leader: '',
   phone: '',
   sort: 0,
@@ -250,6 +271,7 @@ function openEdit(row: DeptNode) {
     parentId: row.parentId || undefined,
     deptName: row.deptName,
     deptCode: row.deptCode,
+    hrCode: row.hrCode ?? '',
     leader: row.leader ?? '',
     phone: row.phone ?? '',
     sort: row.sort,
@@ -302,6 +324,15 @@ export default { name: 'BasicDept' };
 
 <style scoped lang="scss">
 .toolbar { margin-bottom: 12px; }
+
+/* 人事编码：员工编号第 5-7 位的来源，未配置的部门在列表里弱化显示 */
+.hr-code-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+  b { color: var(--el-text-color-primary); }
+}
+.hr-code-empty { color: var(--el-text-color-placeholder); }
 
 /* 部门层级图标：公司(蓝) → 部门(琥珀) → 班组(绿) → 更深层级(灰)。
  * 形状 + 颜色双重区分，缩进之外再给一层可读性；层级由 withLevel 标注，见 script。

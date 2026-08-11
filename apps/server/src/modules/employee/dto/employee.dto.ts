@@ -12,17 +12,27 @@ import {
 } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
-import { EDUCATION_TYPE, JOB_STATUS } from '@hb-oms/shared';
+import { EDUCATION_TYPE, EMP_PLANT_CODES, JOB_STATUS } from '@hb-oms/shared';
 import { toBoolean } from '../../../common/utils/transform.util';
 import { Transform } from 'class-transformer';
 
 const EDUCATION_TYPE_VALUES = [EDUCATION_TYPE.FULL_TIME, EDUCATION_TYPE.PART_TIME];
 
 export class CreateEmployeeDto {
-  @IsString({ message: '请填写员工编号' })
-  @MinLength(1, { message: '请填写员工编号' })
+  /**
+   * 员工编号：**服务端自动生成，客户端传了也不采信**（防伪造，§5.5）。
+   * 保留字段仅为兼容 update 的 merged 结构，生成规则见 EmployeeService.generateEmpNo。
+   */
+  @IsOptional()
+  @IsString()
   @MaxLength(32, { message: '员工编号不能超过32字符' })
-  empNo: string;
+  empNo?: string;
+
+  /** 厂区（员工编号第 1-2 位）。新增必填，由服务端校验并给出中文提示 */
+  @IsOptional()
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
+  @IsIn(EMP_PLANT_CODES, { message: '厂区只能是 总厂 / 一号分厂 / 二号分厂' })
+  plantCode?: string;
 
   @IsString({ message: '请填写姓名' })
   @MinLength(1, { message: '请填写姓名' })
@@ -174,7 +184,16 @@ export class CreateEmployeeDto {
   remark?: string;
 }
 
-export class UpdateEmployeeDto extends PartialType(CreateEmployeeDto) {}
+export class UpdateEmployeeDto extends PartialType(CreateEmployeeDto) {
+  /**
+   * 试用转正时换发正式编码（规则五）。**必须由用户在界面上确认后显式传 true**，
+   * 服务端还会二次校验确实是「实习生/临时工 → 正式用工属性」才允许换号；
+   * 其余任何编辑一律沿用原编号（规则四.1 编号终身不变）。
+   */
+  @IsOptional()
+  @Transform(toBoolean)
+  regenerateEmpNo?: boolean;
+}
 
 export class QueryEmployeeDto {
   @IsOptional()
@@ -196,6 +215,10 @@ export class QueryEmployeeDto {
   @Type(() => Number)
   @IsInt()
   deptId?: number;
+
+  @IsOptional()
+  @IsIn(EMP_PLANT_CODES, { message: '厂区只能是 总厂 / 一号分厂 / 二号分厂' })
+  plantCode?: string;
 
   @IsOptional()
   @IsString()
