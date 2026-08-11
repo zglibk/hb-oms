@@ -13,9 +13,9 @@
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
-        <!-- 区 1：本次共用——录入方式决定明细该填哪列，加工商/日期各行共用 -->
+        <!-- 区 1：公共信息——录入方式决定明细该填哪列，加工商/日期各行共用 -->
         <div class="shared-block">
-          <div class="shared-block__title">本次共用</div>
+          <div class="shared-block__title">公共信息</div>
           <el-row :gutter="16">
             <el-col :span="24">
               <el-form-item label="录入方式">
@@ -418,10 +418,13 @@ function goBack() {
   padding: 12px 16px 14px;
   margin-bottom: 8px;
 
+  /* 与「回厂明细」同款左侧竖条，两个区块的标题看起来才是同一级 */
   &__title {
     font-size: 14px;
     font-weight: 600;
     color: var(--el-text-color-primary);
+    border-left: 4px solid var(--el-color-primary);
+    padding-left: 10px;
     margin-bottom: 10px;
     line-height: 1.3;
   }

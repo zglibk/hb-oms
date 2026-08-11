@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { qtyFromWeight } from '@/constants/dict';
 
 /**
@@ -8,7 +8,7 @@ import { qtyFromWeight } from '@/constants/dict';
  * 原实现让「重量 ÷ 单重」始终驱动数量，结果是：录入员按送货单填了数量 100，
  * 之后顺手补一个重量，数量就被静默改写成 80——账做错了还没人知道。
  *
- * 现在把「谁驱动谁」交给用户显式选择：
+ * 现在把「谁驱动谁」交给用户显式选择（默认 qty，见 useOutsourceEntryMode）：
  *   - qty    按数量：以送货单数量为准，重量/单重仅作记录与对账，**不回算数量**；
  *   - weight 按重量折算：重量与单重驱动数量，算完仍可微调。
  *
@@ -22,30 +22,15 @@ export const ENTRY_MODE_OPTIONS: Array<{ label: string; value: OutsourceEntryMod
   { label: '按重量折算', value: 'weight' },
 ];
 
-const MODE_KEY = 'hb_oms_outsource_entry_mode';
-
-function readMode(): OutsourceEntryMode {
-  try {
-    return localStorage.getItem(MODE_KEY) === 'weight' ? 'weight' : 'qty';
-  } catch {
-    // 隐私模式/内嵌浏览器可能禁用 localStorage，退回默认值即可
-    return 'qty';
-  }
-}
-
 /**
- * 登记页的录入方式（记住上次选择，不用每次重选）。
- * 默认 `qty`——送货单只有数量是常态，把常态设为默认少一次点击。
+ * 登记页的录入方式，**每次进入都重置为「按数量」**。
+ *
+ * 刻意不记忆上次选择：送货单只有数量是常态；而"记住上次"恰恰会制造隐患——
+ * 某次用过折算模式后，下次进来仍停在折算，录入员按送货单填了数量、再补个重量，
+ * 数量就被改掉了。默认回到最安全的那一档，要折算再手动切。
  */
 export function useOutsourceEntryMode() {
-  const entryMode = ref<OutsourceEntryMode>(readMode());
-  watch(entryMode, (v) => {
-    try {
-      localStorage.setItem(MODE_KEY, v);
-    } catch {
-      /* 同上，存不下不影响本次使用 */
-    }
-  });
+  const entryMode = ref<OutsourceEntryMode>('qty');
   return { entryMode, isQtyMode: computed(() => entryMode.value === 'qty') };
 }
 
