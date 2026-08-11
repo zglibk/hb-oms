@@ -15,7 +15,7 @@
         <el-tab-pane label="成品期初（挂订单）" name="group">
           <div class="tab-tip">
             适用于<b>未完结的历史订单</b>：先在「订单管理」把订单补录进来（勾选「期初补录」），
-            再在这里按产品录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与生产欠数。
+            再在这里按产品录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与成品欠数。
           </div>
           <div class="toolbar">
             <el-date-picker v-model="docDate" type="date" value-format="YYYY-MM-DD" size="small" style="width: 150px" />

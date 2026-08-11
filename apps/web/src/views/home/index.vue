@@ -2,7 +2,7 @@
   首页看板（销售视角，设计文档 §5.2）。
 
   欢迎区：问候 + 日历摘要（公历/农历/年余/下一法定假日）
-  汇总卡：进行中订单数 / 总生产欠数 / 总发货欠数 / 逾期订单数
+  汇总卡：进行中订单数 / 总成品欠数 / 总发货欠数 / 逾期订单数
   列表区：左卡「逾期未发货 / 临近交期」页签切换，右卡「外发超期未回齐」
 
   按设计文档明确**不做 ECharts 大屏**，普通管理页即可。
@@ -92,7 +92,7 @@
       <app-stat-card color="blue" :value="cards.activeOrders" label="进行中订单" :link-text="canLedger ? '台账>' : ''" @link="go('/ledger')">
         <template #icon><el-icon><Tickets /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="amber" :value="cards.productionOwed" label="总生产欠数(支)" :link-text="canLedger ? '台账>' : ''" @link="go('/ledger')">
+      <app-stat-card color="amber" :value="cards.productionOwed" label="总成品欠数(支)" :link-text="canLedger ? '台账>' : ''" @link="go('/ledger')">
         <template #icon><el-icon><Tools /></el-icon></template>
       </app-stat-card>
       <app-stat-card color="red" :value="cards.deliveryOwed" label="总发货欠数(支)" :link-text="canLedger ? '台账>' : ''" @link="go('/ledger')">

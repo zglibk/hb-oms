@@ -4,7 +4,7 @@ import request from '@/utils/request';
 export interface DashboardCards {
   /** 进行中订单数 */
   activeOrders: number;
-  /** 总生产欠数（支）：逐个产品行取正后求和，超产不冲抵其他产品 */
+  /** 总成品欠数（支）：逐个产品行取正后求和，超产不冲抵其他产品 */
   productionOwed: number;
   /** 总发货欠数（支）：同上口径 */
   deliveryOwed: number;

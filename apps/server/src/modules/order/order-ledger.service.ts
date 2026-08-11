@@ -24,8 +24,8 @@ import { SystemConfigService } from '../system-config/system-config.service';
 /**
  * ===== 订单跟踪台账：本系统的核心产出（设计文档 §5.1）=====
  *
- * 按**部件组**一行（对齐车间手工《订单跟踪表台账》的行粒度），围绕订单逐行呈现四个数：
- *   订单数 / 完成数 / 库存数 / 双欠数（生产欠数、发货欠数）
+ * 按**订单产品行**一行，围绕订单逐行呈现四个数：
+ *   订单数 / 完成数 / 库存数 / 双欠数（成品欠数、发货欠数）
  *
  * **全部实时聚合，不落任何冗余列**（§4.2）——冗余列一旦与单据不同步就是对账灾难，
  * 这里宁可每次算。红字单方向与原单相反，聚合时按 `direction × quantity` 求和即自然抵扣。
@@ -34,7 +34,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
  *   - 台账「完成数」**包含期初**（opening_balance）——期初是上线前已完成的存量，
  *     业务上确实"已完成"，不计进去台账就对不上手工账；
  *   - 闸门「已入库量」**排除期初**（assembly-quota.util.ts）——期初没有装配过程，
- *     计进去会让该组额度永久为负、挡死后续正常入库。
+ *     计进去会让该产品额度永久为负、挡死后续正常入库。
  *   两者服务于不同问题，各自正确。
  */
 
@@ -123,7 +123,11 @@ export interface LedgerRow {
   outQty: number;
   /** 库存数：该组当前结存合计 */
   stockQty: number;
-  /** 生产欠数 = 订单数 − 完成数，可为负（超产） */
+  /**
+   * 成品欠数 = 订单数 − 完成数，可为负（超产）。
+   * 展示名 2026-08-11 由「生产欠数」改为「成品欠数」——欠的是成品，与「发货欠数」成对；
+   * 字段名按 CLAUDE.md 的命名稳定性约定**保持 `productionOwed` 不变**（只改展示名）。
+   */
   productionOwed: number;
   /** 发货欠数 = 订单数 − 出库数，可为负（超发）；手工表「成品结存」即此口径 */
   deliveryOwed: number;
@@ -620,7 +624,7 @@ export class OrderLedgerService {
       { header: '装配完成', width: 10 },
       { header: '订单数(支)', width: 11 },
       { header: '成品入库', width: 10 },
-      { header: '生产欠数', width: 10 },
+      { header: '成品欠数', width: 10 },
       { header: '订单交期', width: 12 },
       { header: '成品出货', width: 10 },
       { header: '发货欠数', width: 10 },
@@ -686,7 +690,7 @@ export class OrderLedgerService {
     put('客户', `${summary.rows} 行`);
     put('订单数(支)', summary.totalQty);
     put('成品入库', summary.totalIn);
-    put('生产欠数', summary.totalProductionOwed);
+    put('成品欠数', summary.totalProductionOwed);
     put('成品出货', summary.totalOut);
     put('发货欠数', summary.totalDeliveryOwed);
     put('库存数', summary.totalStock);
@@ -807,7 +811,7 @@ export class OrderLedgerService {
       { header: '装配车间', width: 12 },
       { header: '装配完成', width: 10 },
       { header: '成品入库', width: 10 },
-      { header: '生产欠数', width: 10 },
+      { header: '成品欠数', width: 10 },
       { header: '成品出货', width: 10 },
       { header: '发货欠数', width: 10 },
       { header: '库存数', width: 10 },
@@ -891,7 +895,7 @@ export class OrderLedgerService {
     put('客户', `${planRows.length} 个产品`);
     put('订单数(支)', sumQtyPcs);
     put('成品入库', sumIn);
-    put('生产欠数', sumQtyPcs - sumIn);
+    put('成品欠数', sumQtyPcs - sumIn);
     put('成品出货', sumOut);
     put('发货欠数', sumQtyPcs - sumOut);
     put('库存数', sumStock);

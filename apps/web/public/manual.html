@@ -144,7 +144,7 @@
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
-    <a class="toc-item toc-sub" data-key="双欠数 生产欠数 发货欠数 区别" onclick="jump('ch5-2')">5.2 两个欠数的区别</a>
+    <a class="toc-item toc-sub" data-key="双欠数 成品欠数 发货欠数 区别" onclick="jump('ch5-2')">5.2 两个欠数的区别</a>
     <a class="toc-item toc-sub" data-key="筛选 展开 流水 部件组明细 导出" onclick="jump('ch5-3')">5.3 筛选与展开行</a>
     <a class="toc-item toc-sub" data-key="自动完结 重开 交清" onclick="jump('ch5-4')">5.4 订单自动完结与重开</a>
 
@@ -176,7 +176,7 @@
           <tr><td>订单数</td><td>客户订购数量，统一折算成「支」</td></tr>
           <tr><td>完成数</td><td>累计成品入库数量</td></tr>
           <tr><td>库存数</td><td>当前成品结存数量</td></tr>
-          <tr><td>欠数</td><td>两个口径并列：<strong>生产欠数</strong>（还差多少没做完）与<strong>发货欠数</strong>（还欠客户多少货）</td></tr>
+          <tr><td>欠数</td><td>两个口径并列：<strong>成品欠数</strong>（还差多少没做完）与<strong>发货欠数</strong>（还欠客户多少货）</td></tr>
         </tbody>
       </table>
 
@@ -344,7 +344,7 @@
       <p>展开列表行前面的箭头，可以看到该订单下每个产品的部件组明细（客户图号、型号、规格、图号、料厚、交期）。</p>
 
       <h3 class="subsection__title">导出总计划</h3>
-      <p>订单列表工具栏的「<strong>导出总计划</strong>」按钮，把当前筛选条件下的订单导成 Excel，<strong>一行 = 一个产品</strong>，带客户、订单编号、货号、规格、数量、图号料厚，以及成品入库 / 生产欠数 / 成品出货 / 发货欠数 / 库存数这几个进度数。</p>
+      <p>订单列表工具栏的「<strong>导出总计划</strong>」按钮，把当前筛选条件下的订单导成 Excel，<strong>一行 = 一个产品</strong>，带客户、订单编号、货号、规格、数量、图号料厚，以及成品入库 / 成品欠数 / 成品出货 / 发货欠数 / 库存数这几个进度数。</p>
       <ul>
         <li>导的是<strong>当前筛选的全部订单，不是当前这一页</strong>——点之前会先弹出条数让你确认。</li>
         <li>一个产品拆了多个部件组时，部件组 / 图号 / 版本 / 料厚会按组序并列显示（如 <code>外轨/中轨/内轨</code>、<code>DWG-OM/DWG-IN</code>），进度数是这个产品的合计。</li>
@@ -529,6 +529,16 @@
       <p>菜单位置：<strong>订单跟踪台账</strong>（一级菜单，在最上面）</p>
       <p>这是整个系统的核心产出，对应车间原来手工维护的那张 Excel 跟踪表。<strong>一行 = 一个订单产品</strong>；部件组的明细（图号、料厚、各部件外发回厂了多少）在<strong>展开行</strong>里看。</p>
 
+      <div class="alert alert--warning">
+        <strong>表头分成「部件」和「成品」两栏，两栏的「支」不是一回事：</strong>
+        <ul style="margin:6px 0 0">
+          <li><strong>部件栏（外发已回货 / 外发欠数）按<u>零件</u>数</strong>——一套三节轨含外轨、中轨、内轨三个零件，
+            20 支的订单要送去表面处理的是 <strong>20×3 = 60 支零件</strong>。</li>
+          <li><strong>成品栏（订单数 / 入库 / 出货 / 库存 …）按<u>整轨</u>数</strong>——装出来、入库、发货的都是整套滑轨。</li>
+        </ul>
+        所以看到<strong>「外发欠数」比「订单数」还大，是正常的</strong>，不是算错了。
+      </div>
+
       <h2 class="section__title" id="ch5-1">5.1 四个数怎么读</h2>
       <table class="field-table">
         <thead><tr><th>列</th><th>怎么来的</th></tr></thead>
@@ -561,12 +571,16 @@
       <table class="field-table">
         <thead><tr><th>欠数</th><th>算法</th><th>回答的问题</th></tr></thead>
         <tbody>
-          <tr><td>生产欠数</td><td>订单数 − 成品入库</td><td>生产视角：<strong>还差多少没做完</strong></td></tr>
+          <tr><td>成品欠数</td><td>订单数 − 成品入库</td><td>生产视角：<strong>还差多少没做完</strong></td></tr>
           <tr><td>发货欠数</td><td>订单数 − 成品出货</td><td>销售视角：<strong>还欠客户多少货</strong></td></tr>
         </tbody>
       </table>
-      <p>举例：订单 1000 支，已入库 1000 支、已出库 600 支 → 生产欠数 0（车间做完了），发货欠数 400（客户还没提完）。</p>
-      <p>欠数<strong>可以是负数</strong>：超产就是负的生产欠数，超发就是负的发货欠数，系统照实显示不截断。</p>
+      <p>举例：订单 1000 支，已入库 1000 支、已出库 600 支 → 成品欠数 0（车间做完了），发货欠数 400（客户还没提完）。</p>
+      <p>欠数<strong>可以是负数</strong>：超产就是负的成品欠数，超发就是负的发货欠数，系统照实显示不截断。</p>
+      <div class="alert alert--info">
+        这两个欠数都在<strong>「成品」栏</strong>下，算的是整轨支数。
+        「部件」栏里还有个<strong>外发欠数</strong>，那个算的是零件支数，跟这两个不是一个量级，别混着看。
+      </div>
 
       <h2 class="section__title" id="ch5-3">5.3 筛选与展开行</h2>
       <ul>
@@ -604,7 +618,7 @@
         <thead><tr><th>卡片</th><th>含义</th></tr></thead>
         <tbody>
           <tr><td>进行中订单</td><td>当前还在跟的订单张数</td></tr>
-          <tr><td>总生产欠数</td><td>所有进行中订单还差多少支没做完</td></tr>
+          <tr><td>总成品欠数</td><td>所有进行中订单还差多少支没做完</td></tr>
           <tr><td>总发货欠数</td><td>所有进行中订单还欠客户多少支</td></tr>
           <tr><td>逾期订单</td><td>交期已过且还欠发货的订单张数</td></tr>
         </tbody>

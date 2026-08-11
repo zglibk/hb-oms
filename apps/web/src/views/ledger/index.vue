@@ -66,7 +66,7 @@
       <app-stat-card color="teal" :value="summary.totalStock" label="库存数(支)" link-text="详情&gt;" @link="goDetail">
         <template #icon><el-icon><Box /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="amber" :value="summary.totalProductionOwed" label="生产欠数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="amber" :value="summary.totalProductionOwed" label="成品欠数(支)" link-text="详情&gt;" @link="goDetail">
         <template #icon><el-icon><Tools /></el-icon></template>
       </app-stat-card>
       <app-stat-card color="red" :value="summary.totalDeliveryOwed" label="发货欠数(支)" link-text="详情&gt;" @link="goDetail">
@@ -75,6 +75,13 @@
     </div>
 
     <el-card shadow="never">
+      <div class="tip-bar">
+        <el-icon><InfoFilled /></el-icon>
+        <span>
+          数量分两栏：<b>部件</b>按<b>零件</b>计（一套三节轨含外/中/内 3 个零件），
+          <b>成品</b>按<b>整轨</b>计。所以「外发欠数」比「订单数」大是正常的。
+        </span>
+      </div>
       <app-table
         :data="list" v-loading="loading" border stripe
         :page="query.page" :page-size="query.pageSize" row-key="orderProductId"
@@ -220,50 +227,64 @@
         <el-table-column label="部件组" width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ groupTypesText(row) }}</template>
         </el-table-column>
-        <el-table-column label="外发已回货" width="100" align="center">
-          <template #default="{ row }">{{ row.returnedQty }}</template>
-        </el-table-column>
-        <!-- 外发欠数 = 应外发量(Σ组支数) − 已回货；不外发的产品显示 —（见服务端注释） -->
-        <el-table-column label="外发欠数" width="95" align="center">
-          <template #default="{ row }">
-            <span v-if="row.outsourceOwed == null" class="num-na">—</span>
-            <span v-else :class="owedClass(row.outsourceOwed)">{{ row.outsourceOwed }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="装配车间" width="90" align="center">
           <template #default="{ row }">{{ dictLabels(workshopDict, row.assemblyWorkshops) }}</template>
         </el-table-column>
-        <el-table-column label="装配完成" width="90" align="center">
-          <template #default="{ row }">
-            <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="订单数" width="85" align="center" class-name="col-key">
-          <template #default="{ row }">{{ row.qtyPcs }}</template>
-        </el-table-column>
-        <el-table-column label="成品入库" width="90" align="center" class-name="col-key">
-          <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
-        </el-table-column>
-        <el-table-column label="生产欠数" width="90" align="center" class-name="col-key">
-          <template #default="{ row }">
-            <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
-          </template>
-        </el-table-column>
+        <!-- 交期紧挨数量区：判断急不急要「交期 + 发货欠数」一起看 -->
         <el-table-column label="订单交期" width="100" align="center">
           <template #default="{ row }">
             <span :class="{ 'num-overdue': row.overdue }">{{ dateText(row.deliveryDate) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="成品出货" width="90" align="center" class-name="col-key">
-          <template #default="{ row }">{{ row.outQty }}</template>
+
+        <!--
+          ===== 数量区按计量对象分成两栏（多级表头）=====
+          两栏的「支」不是一回事，同列并排最容易被误读成一套口径：
+            部件栏 = 零件支数（三节轨一套 = 外/中/内 3 个零件，20 套要外发 60 支）
+            成品栏 = 整轨支数（订单数、入库、出货、库存都按这个算）
+          所以「外发欠数」大于「订单数」是正常的，分栏就是为了让这件事一眼可见。
+        -->
+        <el-table-column label="部件（零件支数）" align="center">
+          <el-table-column label="外发已回货" width="100" align="center">
+            <template #default="{ row }">{{ row.returnedQty }}</template>
+          </el-table-column>
+          <!-- 外发欠数 = 应外发量(Σ组支数) − 已回货；不外发的产品显示 —（见服务端注释） -->
+          <el-table-column label="外发欠数" width="95" align="center">
+            <template #default="{ row }">
+              <span v-if="row.outsourceOwed == null" class="num-na">—</span>
+              <span v-else :class="owedClass(row.outsourceOwed)">{{ row.outsourceOwed }}</span>
+            </template>
+          </el-table-column>
         </el-table-column>
-        <el-table-column label="发货欠数" width="90" align="center" class-name="col-key">
-          <template #default="{ row }">
-            <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="库存数" width="85" align="center" class-name="col-key">
-          <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
+
+        <el-table-column label="成品（整轨支数）" align="center">
+          <el-table-column label="装配完成" width="90" align="center">
+            <template #default="{ row }">
+              <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="订单数" width="85" align="center" class-name="col-key">
+            <template #default="{ row }">{{ row.qtyPcs }}</template>
+          </el-table-column>
+          <el-table-column label="成品入库" width="90" align="center" class-name="col-key">
+            <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
+          </el-table-column>
+          <el-table-column label="成品欠数" width="90" align="center" class-name="col-key">
+            <template #default="{ row }">
+              <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="成品出货" width="90" align="center" class-name="col-key">
+            <template #default="{ row }">{{ row.outQty }}</template>
+          </el-table-column>
+          <el-table-column label="发货欠数" width="90" align="center" class-name="col-key">
+            <template #default="{ row }">
+              <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="库存数" width="85" align="center" class-name="col-key">
+            <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
+          </el-table-column>
         </el-table-column>
         <el-table-column label="状态" width="80" align="center" fixed="right">
           <template #default="{ row }">
@@ -291,6 +312,7 @@ import {
   Box,
   Tools,
   Van,
+  InfoFilled,
 } from '@element-plus/icons-vue';
 import {
   getLedger,
@@ -478,6 +500,11 @@ export default { name: 'OrderLedger' };
   margin: 4px 0;
 }
 .pager { margin-top: 12px; }
+.tip-bar {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  font-size: 12px; color: var(--el-text-color-secondary);
+  b { color: var(--el-text-color-primary); }
+}
 /* 四数列加浅底，从一堆属性列里凸显出来 */
 :deep(.col-key) { background: var(--el-fill-color-light); }
 .num-ok { color: var(--el-color-success); font-weight: 600; }

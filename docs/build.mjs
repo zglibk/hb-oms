@@ -350,9 +350,9 @@ ${NAV('home')}
       <h2>主要数据<small>全系统统一折算为「支」，1 套 = 2 支</small></h2>
       <div class="metrics">
         <div class="metric"><strong>订单数</strong><p>客户订购数量，套/支自动换算。</p></div>
-        <div class="metric"><strong>完成数</strong><p>累计成品入库；生产欠数 = 订单数 − 完成数。</p></div>
+        <div class="metric"><strong>完成数</strong><p>累计成品入库；成品欠数 = 订单数 − 完成数。</p></div>
         <div class="metric"><strong>库存数</strong><p>当前成品结存，按部件组（分左右）实时聚合。</p></div>
-        <div class="metric"><strong>欠数</strong><p>双口径：生产欠数与发货欠数并列。</p></div>
+        <div class="metric"><strong>欠数</strong><p>双口径：成品欠数与发货欠数并列。</p></div>
       </div>
     </aside>
   </div>

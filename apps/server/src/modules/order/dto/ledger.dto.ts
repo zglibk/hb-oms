@@ -50,7 +50,7 @@ export class QueryLedgerDto {
   /** 订单状态：1进行中 2已完结（已作废不进台账） */
   @IsOptional() @Type(() => Number) @IsInt() orderStatus?: number;
 
-  /** 只看有欠数（生产欠数 > 0 或 发货欠数 > 0） */
+  /** 只看有欠数（成品欠数 > 0 或 发货欠数 > 0） */
   @IsOptional() @Transform(toBoolean) onlyOwed?: boolean;
 
   /** 只看逾期（交期已过且仍欠发货） */

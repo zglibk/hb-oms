@@ -121,13 +121,13 @@
         <a class="toc-l3" href="#21-统一口径">2.1 统一口径</a>
         <a class="toc-l2" href="#3-业务流程与状态机">3. 业务流程与状态机</a>
         <a class="toc-l3" href="#31-订单状态机">3.1 订单状态机</a>
-        <a class="toc-l3" href="#32-外发单发坯单状态机">3.2 外发单（发坯单）状态机</a>
+        <a class="toc-l3" href="#32-外发无状态机">3.2 外发：无状态机</a>
         <a class="toc-l3" href="#33-成品出入库单状态机">3.3 成品出入库单状态机</a>
         <a class="toc-l3" href="#34-装配批次状态机">3.4 装配批次状态机</a>
         <a class="toc-l2" href="#4-数据模型">4. 数据模型</a>
         <a class="toc-l3" href="#41-基础数据">4.1 基础数据</a>
         <a class="toc-l3" href="#42-订单四级torder-→-torderproduct-→-torderpartgroup-→-torderpart">4.2 订单四级：t_order → t_order_product → t_order_part_group → t_order_part</a>
-        <a class="toc-l3" href="#43-外发表面处理toutsourcedoc-+-toutsourceitem-+-toutsourcereturn">4.3 外发（表面处理）：t_outsource_doc + t_outsource_item + t_outsource_return</a>
+        <a class="toc-l3" href="#43-外发表面处理toutsourcepart">4.3 外发（表面处理）：t_outsource_part</a>
         <a class="toc-l3" href="#44-装配批次tassemblybatch">4.4 装配批次：t_assembly_batch</a>
         <a class="toc-l3" href="#45-成品出入库tfinisheddoc-+-tfinisheditem-+-tfinishedbalance">4.5 成品出入库：t_finished_doc + t_finished_item + t_finished_balance</a>
         <a class="toc-l3" href="#46-部件台账tpartbalance属性锚定独立参考台账">4.6 部件台账：t_part_balance（属性锚定，独立参考台账）</a>
@@ -176,14 +176,14 @@
 </tr>
 <tr>
 <td>欠数（双口径）</td>
-<td><strong>生产欠数</strong> = 订单数 − 完成数（生产视角：还差多少没做完）；<strong>发货欠数</strong> = 订单数 − 累计出库（销售视角：还欠客户多少货）</td>
+<td><strong>成品欠数</strong> = 订单数 − 完成数（生产视角：还差多少没做完）；<strong>发货欠数</strong> = 订单数 − 累计出库（销售视角：还欠客户多少货）</td>
 </tr>
 </tbody></table></div>
 <h3 id="13-业务主线">1.3 业务主线<a class="anchor" href="#13-业务主线" aria-hidden="true">#</a></h3>
 <pre><code>客户下单（官方订单文件 / 口头 / 电话 / 社交软件）
    → 创建订单（订单 → 产品行 → 部件组 → 部件行 四级；部件组按生产图号自动带入工艺信息）
-   → 部件外发表面处理【可选：镀锌板产品不外发】（发出登记）
-   → 外发回货【可选】（分批回货登记）
+   → 部件外发表面处理【可选：镀锌板产品不外发】（系统不记发出）
+   → 外发件回厂【可选】（回厂时登记一条：加工商 + 回厂日期 + 重量/单重/数量）
    → 装配（计划员手工录计划完成时间 / 实际完成时间 + 装配数量，多批次）
    → 成品入库（受装配闸门约束：装配未完成禁止入库）
    → 成品出库（销售发货）
@@ -212,7 +212,7 @@
 <tr>
 <td>3</td>
 <td>欠数口径</td>
-<td><strong>双欠数并列展示</strong>：生产欠数 = 订单数 − 累计入库；发货欠数 = 订单数 − 累计出库</td>
+<td><strong>双欠数并列展示</strong>：成品欠数 = 订单数 − 累计入库；发货欠数 = 订单数 − 累计出库</td>
 </tr>
 <tr>
 <td>4</td>
@@ -221,8 +221,8 @@
 </tr>
 <tr>
 <td>5</td>
-<td>外发单粒度</td>
-<td>一张发坯单 = <strong>单头（加工商/日期/表面处理）+ 多产品明细行</strong>；回货按明细行<strong>分批登记</strong>，一行可多次回货</td>
+<td>外发粒度</td>
+<td><strong>无单据</strong>：只有「外发件回厂记录」流水，一行 = 一次回厂（锚定部件组）。不建发坯单、不登记发出、不记计划回厂时间；同组分批回厂录多条</td>
 </tr>
 <tr>
 <td>6</td>
@@ -292,20 +292,9 @@
 <li>「完结」是台账口径（不再跟踪），不锁单据：已完结订单仍可入库/出库（如客户追加提货），发生出入库后若发货欠数回正可自动重开或提示。</li>
 <li>作废校验：订单下任一产品行被外发单/出入库单引用后禁止作废，只能走完结。</li>
 </ul>
-<h3 id="32-外发单发坯单状态机">3.2 外发单（发坯单）状态机<a class="anchor" href="#32-外发单发坯单状态机" aria-hidden="true">#</a></h3>
-<pre><code>        1 待发出 ──登记实际发外日期──► 2 已发出
-             │                          │
-             ▼                          │ 任一明细行有回货登记
-        9 已作废（未发出时可作废）        ▼
-                                   3 部分回货
-                                        │ 全部明细行回齐（Σ回货数 ≥ 发出数），或手工「关闭」
-                                        ▼
-                                   4 已回齐
-</code></pre>
-<ul>
-<li>状态由系统按回货登记自动推进（2→3→4），也允许手工从 3 直接「关闭」为 4（尾数不回、损耗核销场景），关闭需填原因。</li>
-<li>已有回货登记的外发单禁止作废。</li>
-</ul>
+<h3 id="32-外发无状态机">3.2 外发：无状态机<a class="anchor" href="#32-外发无状态机" aria-hidden="true">#</a></h3>
+<p>外发<strong>没有状态机</strong>——模块只保留「外发件回厂记录」：货回厂时录一条流水（锚定部件组 + 加工商 + 回厂日期 + 重量/单重/数量），记录存在即已回厂，派生不出第二种状态。</p>
+<p>不建发坯单、不登记发出、不登记计划回厂时间：发货环节车间不过磅也不回系统操作，系统只承接&quot;回来了多少&quot;这一个事实。同一部件组分批回厂就录多条。</p>
 <h3 id="33-成品出入库单状态机">3.3 成品出入库单状态机<a class="anchor" href="#33-成品出入库单状态机" aria-hidden="true">#</a></h3>
 <pre><code>        1 草稿 ──确认──► 2 已确认 ──(错误更正)──► 开红字冲销单（FGR，原单不变）
           │
@@ -772,161 +761,63 @@
 <td>备注 / 行序</td>
 </tr>
 </tbody></table></div>
-<h3 id="43-外发表面处理toutsourcedoc-+-toutsourceitem-+-toutsourcereturn">4.3 外发（表面处理）：<code>t_outsource_doc</code> + <code>t_outsource_item</code> + <code>t_outsource_return</code><a class="anchor" href="#43-外发表面处理toutsourcedoc-+-toutsourceitem-+-toutsourcereturn" aria-hidden="true">#</a></h3>
-<h4 id="toutsourcedoc发坯单头">t_outsource_doc（发坯单头）<a class="anchor" href="#toutsourcedoc发坯单头" aria-hidden="true">#</a></h4>
+<h3 id="43-外发表面处理toutsourcepart">4.3 外发（表面处理）：<code>t_outsource_part</code><a class="anchor" href="#43-外发表面处理toutsourcepart" aria-hidden="true">#</a></h3>
+<h4 id="toutsourcepart外发件回厂记录">t_outsource_part（外发件回厂记录）<a class="anchor" href="#toutsourcepart外发件回厂记录" aria-hidden="true">#</a></h4>
+<p>一行 = 一次回厂。无单据号（不采番，§4.7 轻量记账行）、无状态列、无计划回厂时间。</p>
 <div class="table-wrap"><table><thead><tr>
 <th>字段</th>
 <th>类型</th>
 <th>说明</th>
 </tr>
 </thead><tbody><tr>
-<td>blank_no</td>
-<td>varchar(16) UK</td>
-<td><strong>发坯单号</strong>：7 位定长纯数字序号（<code>generatePaddedSequence</code> 模式，宽度取共享包 <code>BLANK_NO_WIDTH</code>），库存数字、展示拼前缀 <code>No.</code>；即本单据号。列宽留余量以备位数扩展</td>
+<td>order_id / order_product_id / order_part_group_id</td>
+<td>int idx</td>
+<td>锚点：<strong>部件组</strong>（订单/产品行为冗余列，订单下游引用探测按 order_id）</td>
+</tr>
+<tr>
+<td>order_no / customer_name / production_no / product_model / dimension_text / cycle_code</td>
+<td>varchar</td>
+<td>订单侧展示快照（服务端经 <code>PartGroupSnapshotService</code> 读取落库，不采信客户端传值）</td>
+</tr>
+<tr>
+<td>order_qty / unit</td>
+<td>int / varchar(16)</td>
+<td>订单数量与单位快照（set 套 / piece 支）</td>
+</tr>
+<tr>
+<td>drawing_no / material_thickness</td>
+<td>varchar</td>
+<td>生产图号 / 材料厚度快照（自部件组）</td>
 </tr>
 <tr>
 <td>processor_name</td>
-<td>varchar(128)</td>
+<td>varchar(128) idx</td>
 <td>加工商</td>
 </tr>
 <tr>
-<td>surface_type</td>
-<td>varchar(32)</td>
-<td>表面处理（字典 <code>surface_type</code>，除保留值 <code>none</code> 外均可选——外发必有表面处理）</td>
-</tr>
-<tr>
-<td>color</td>
-<td>varchar(64)</td>
-<td>颜色</td>
-</tr>
-<tr>
-<td>plan_send_date</td>
-<td>date</td>
-<td>计划发外日期</td>
-</tr>
-<tr>
-<td>actual_send_date</td>
-<td>date</td>
-<td>实际发外日期（登记后状态 → 已发出）</td>
-</tr>
-<tr>
-<td>require_back_date</td>
-<td>date</td>
-<td>要求回货日期</td>
-</tr>
-<tr>
-<td>status</td>
-<td>tinyint</td>
-<td>状态：1待发出 2已发出 3部分回货 4已回齐 9已作废</td>
-</tr>
-<tr>
-<td>close_reason</td>
-<td>varchar(255)</td>
-<td>手工关闭原因（部分回货 → 已回齐 时必填）</td>
-</tr>
-<tr>
-<td>remark</td>
-<td>text</td>
-<td>备注</td>
-</tr>
-</tbody></table></div>
-<h4 id="toutsourceitem发出明细行">t_outsource_item（发出明细行）<a class="anchor" href="#toutsourceitem发出明细行" aria-hidden="true">#</a></h4>
-<div class="table-wrap"><table><thead><tr>
-<th>字段</th>
-<th>类型</th>
-<th>说明</th>
-</tr>
-</thead><tbody><tr>
-<td>doc_id</td>
-<td>int idx</td>
-<td>所属发坯单</td>
-</tr>
-<tr>
-<td>order_id / order_product_id / order_part_group_id</td>
-<td>int idx</td>
-<td>锚点：<strong>部件组</strong>（订单/产品行为冗余列）</td>
-</tr>
-<tr>
-<td>order_no / customer_name</td>
-<td>varchar(32) / varchar(128)</td>
-<td>订单号、客户名称快照（列表与打印直接取用，免回联）</td>
-</tr>
-<tr>
-<td>production_no</td>
-<td>varchar(64)</td>
-<td>生产单号（自订单 <code>t_order.production_no</code> 快照）</td>
-</tr>
-<tr>
-<td>product_model</td>
-<td>varchar(128)</td>
-<td>产品型号（自部件组快照 = <code>货号+产品类型组合+组后缀</code>，如 45#缓冲外中轨、53#普通滑轨）</td>
-</tr>
-<tr>
-<td>dimension_text</td>
-<td>varchar(64)</td>
-<td>规格（展示快照）</td>
-</tr>
-<tr>
-<td>cycle_code</td>
-<td>varchar(64)</td>
-<td>周期码（自部件行追溯码快照）</td>
-</tr>
-<tr>
-<td>send_weight</td>
-<td>decimal(10,2)</td>
-<td>发出重量（kg）</td>
-</tr>
-<tr>
-<td>unit_weight</td>
-<td>decimal(10,4)</td>
-<td>单重（kg/支）</td>
-</tr>
-<tr>
-<td>send_qty</td>
-<td>int</td>
-<td>发出数量 = send_weight ÷ unit_weight 取整（前端自动算，可微调）</td>
-</tr>
-<tr>
-<td>returned_qty</td>
-<td>int</td>
-<td>累计回货数量（支）：由回货登记在同事务内按 <code>SUM(t_outsource_return.return_qty)</code> 重算回写，仅作行级回齐判定与列表展示的缓存列；台账「外发已回货数量」（§5.1）仍直接聚合 <code>t_outsource_return</code>，故不存在对账漂移</td>
-</tr>
-<tr>
-<td>remark / sort</td>
-<td>varchar(255) / int</td>
-<td>备注 / 行序</td>
-</tr>
-</tbody></table></div>
-<h4 id="toutsourcereturn回货登记一明细行可多条-=-分批回货">t_outsource_return（回货登记，一明细行可多条 = 分批回货）<a class="anchor" href="#toutsourcereturn回货登记一明细行可多条-=-分批回货" aria-hidden="true">#</a></h4>
-<div class="table-wrap"><table><thead><tr>
-<th>字段</th>
-<th>类型</th>
-<th>说明</th>
-</tr>
-</thead><tbody><tr>
-<td>doc_id / item_id</td>
-<td>int idx</td>
-<td>冗余单头 / 所属发出明细行</td>
+<td>surface_type / color</td>
+<td>varchar</td>
+<td>表面处理与颜色：自订单带出、可改（实际做的与订单登记的可能不同）；不可为保留值 <code>none</code></td>
 </tr>
 <tr>
 <td>back_date</td>
-<td>date</td>
-<td>回货日期</td>
+<td>date idx</td>
+<td><strong>实际回厂日期</strong>（必填——记录存在即代表已回厂）</td>
 </tr>
 <tr>
 <td>return_weight</td>
 <td>decimal(10,2)</td>
-<td>收回重量（kg）</td>
+<td>回厂重量（kg）</td>
 </tr>
 <tr>
 <td>unit_weight</td>
 <td>decimal(10,4)</td>
-<td>单重（默认带出发出行单重，可改）</td>
+<td>单重（默认自部件信息 <code>t_material.unit_weight</code> 带出，可改）</td>
 </tr>
 <tr>
 <td>return_qty</td>
 <td>int</td>
-<td>收回数量 = return_weight ÷ unit_weight 取整（可微调）</td>
+<td>回厂数量（支）= return_weight ÷ unit_weight 取整（前端自动算，可微调）</td>
 </tr>
 <tr>
 <td>remark</td>
@@ -934,9 +825,9 @@
 <td>备注</td>
 </tr>
 </tbody></table></div>
-<p>回齐判定（行级）：<code>Σreturn_qty ≥ send_qty</code>；全部明细行回齐 → 单头自动置 4 已回齐。回货数量允许超发出数量（重量折算误差），超出时界面黄色提示不拦截。</p>
+<p>台账「外发已回货数量」= <code>SUM(return_qty)</code>（按部件组聚合，§5.1）。</p>
 <blockquote>
-<p>审计字段例外：<code>t_outsource_return</code> 只有 <code>creator_id / creator_name / created_at</code>，<strong>不带更新人与 updated_at</strong>——回货登记只增不改（纠错走物理删除后重登），没有更新路径，留空字段反而误导。</p>
+<p>审计字段：<code>t_outsource_part</code> 带齐六件套（§5.5）——回厂记录可编辑（改加工商/日期/数量口径），有更新路径就必须记更新人。</p>
 </blockquote>
 <h3 id="44-装配批次tassemblybatch">4.4 装配批次：<code>t_assembly_batch</code><a class="anchor" href="#44-装配批次tassemblybatch" aria-hidden="true">#</a></h3>
 <p>计划员按<strong>部件组</strong>手工录入装配批次，一组可多批。<strong>轻量跟踪、不采番</strong>（批次行类比部件调整流水，不走 NumberGeneratorService）。已完成批次（实际完成时间已填）的数量参与成品入库闸门（§4.5）。</p>
@@ -1236,11 +1127,6 @@
 <td>同上</td>
 </tr>
 <tr>
-<td>（无前缀）</td>
-<td>发坯单号</td>
-<td>7 位定长纯数字全局序号，展示拼 <code>No.</code></td>
-</tr>
-<tr>
 <td>FILE</td>
 <td>文件上传</td>
 <td>同 hb-mes</td>
@@ -1311,7 +1197,7 @@
 </tr>
 <tr>
 <td>外发已回货数量</td>
-<td>Σt_outsource_return.return_qty（按组聚合）</td>
+<td>Σt_outsource_part.return_qty（按组聚合）</td>
 </tr>
 <tr>
 <td>装配车间</td>
@@ -1323,7 +1209,7 @@
 </tr>
 <tr>
 <td>订单欠数</td>
-<td>生产欠数 = 订单数 − 完成数</td>
+<td>成品欠数 = 订单数 − 完成数</td>
 </tr>
 <tr>
 <td>订单交期</td>
@@ -1344,7 +1230,7 @@
   IFNULL(fin.in_qty, 0)                                       AS 完成数,     -- Σ已确认入库(FGI+期初) − Σ对应红字
   IFNULL(fout.out_qty, 0)                                     AS 出库数,     -- Σ已确认出库(FGO) − Σ对应红字
   IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该组）
-  g.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 生产欠数,   -- 手工表「订单欠数」；可为负 = 超产
+  g.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 成品欠数,   -- 手工表「订单欠数」；可为负 = 超产
   g.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数,   -- 手工表「成品结存」；可为负 = 超发
   IFNULL(ret.return_qty, 0)                                   AS 外发已回货,
   IFNULL(asm.done_qty, 0)                                     AS 装配完成量, -- Σ已完成装配批次 qty（actual_date 非空）
@@ -1355,7 +1241,7 @@ JOIN t_order o ON o.id = g.order_id
 LEFT JOIN (按 order_part_group_id 聚合已确认入向明细，红字按 direction 自然抵扣) fin ...
 LEFT JOIN (同上，出向) fout ...
 LEFT JOIN (按 order_part_group_id 聚合 balance) bal ...
-LEFT JOIN (按 order_part_group_id 聚合 t_outsource_return) ret ...
+LEFT JOIN (按 order_part_group_id 聚合 t_outsource_part) ret ...
 LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非空) asm ...
 </code></pre>
 <ul>
@@ -1372,7 +1258,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 </ul>
 <h3 id="52-首页看板销售视角">5.2 首页看板（销售视角）<a class="anchor" href="#52-首页看板销售视角" aria-hidden="true">#</a></h3>
 <ul>
-<li>汇总卡：进行中订单数、总生产欠数（支）、总发货欠数（支）、逾期订单数。</li>
+<li>汇总卡：进行中订单数、总成品欠数（支）、总发货欠数（支）、逾期订单数。</li>
 <li>列表区：逾期未发货 TOP、临近交期 7 天内订单、外发超期未回齐（require_back_date 已过且未回齐）。</li>
 <li>无大屏需求，普通管理页即可（不做 ECharts 大屏，需要时后续加）。</li>
 </ul>
@@ -1423,11 +1309,6 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>outsource</td>
 <td><code>POST /outsource/item/:itemId/return</code>、<code>DELETE /outsource/return/:id</code></td>
 <td>回货登记/撤销（撤销需权限，留操作日志）</td>
-</tr>
-<tr>
-<td>outsource</td>
-<td><code>GET /outsource/print/:id</code></td>
-<td>发坯单打印数据（后续可加 Excel 导出）</td>
 </tr>
 <tr>
 <td>assembly</td>
@@ -1485,7 +1366,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>照搬 hb-mes 模式</td>
 </tr>
 </tbody></table></div>
-<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、外发管理（单据/发出/回货登记/打印发坯单）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
+<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、外发管理（回厂记录列表 / 登记回厂）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
 <hr>
 <h2 id="7-边界与不变式">7. 边界与不变式<a class="anchor" href="#7-边界与不变式" aria-hidden="true">#</a></h2>
 <ol>
@@ -1535,8 +1416,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 </tr>
 <tr>
 <td>M3 外发</td>
-<td>发坯单单头+明细、发出/回货登记、状态自动推进、打印</td>
-<td>分批回货、回齐自动判定、超回提示</td>
+<td>外发件回厂记录（一行=一次回厂，锚定部件组，批量录入）</td>
+<td>同组分批回厂多条、重量÷单重折算</td>
 </tr>
 <tr>
 <td>M3.5 装配</td>
