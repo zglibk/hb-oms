@@ -13,7 +13,7 @@
  * （`db:init` 不跑 migrations）。存量库由 `migration-employee-code.sql` 回填，
  * 两条路径的终态必须一致——**改这里记得同步改那个迁移**。
  *
- * 编码 001~009 出自规则原表；010（IT部）是规则之外本厂补的一档。
+ * 编码 001~011 出自规则《海宝五金员工编码管理规则》第三段的部门编码表。
  */
 export const DEPARTMENTS = [
   { dept_code: 'COMPANY', dept_name: '海宝五金', hr_code: null, parent_id: 0, sort: 0 },
@@ -27,6 +27,7 @@ export const DEPARTMENTS = [
   { dept_code: 'HR_PUR', dept_name: '采购部', hr_code: '008', parent_id: 1, sort: 18 },
   { dept_code: 'HR_MOULD', dept_name: '模具部', hr_code: '009', parent_id: 1, sort: 19 },
   { dept_code: 'IT', dept_name: 'IT部', hr_code: '010', parent_id: 1, sort: 4 },
+  { dept_code: 'HR_PLAN', dept_name: '计划部', hr_code: '011', parent_id: 1, sort: 21 },
 ];
 
 // ---------- 内置角色：公司实际岗位编制，数据范围一律「全部」、一律内置 ----------
