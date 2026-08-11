@@ -50,7 +50,7 @@ export class EmployeeService {
     if (query.deptId != null) qb.andWhere('e.deptId = :did', { did: query.deptId });
     if (query.plantCode) qb.andWhere('e.plantCode = :pc', { pc: query.plantCode });
     if (query.empType) qb.andWhere('e.empType = :et', { et: query.empType });
-    if (query.position) qb.andWhere('e.position = :pos', { pos: query.position });
+    if (query.positionId != null) qb.andWhere('e.positionId = :pos', { pos: query.positionId });
     if (query.keyword) {
       qb.andWhere(
         '(e.empNo LIKE :kw OR e.empName LIKE :kw OR e.phone LIKE :kw OR e.idCard LIKE :kw)',
@@ -135,7 +135,7 @@ export class EmployeeService {
       leaveReason: dto.leaveReason !== undefined ? dto.leaveReason : item.leaveReason ?? undefined,
       deptId: dto.deptId !== undefined ? dto.deptId : item.deptId ?? undefined,
       teamGroup: dto.teamGroup !== undefined ? dto.teamGroup : item.teamGroup ?? undefined,
-      position: dto.position !== undefined ? dto.position : item.position ?? undefined,
+      positionId: dto.positionId !== undefined ? dto.positionId : item.positionId ?? undefined,
       supervisorId:
         dto.supervisorId !== undefined ? dto.supervisorId : item.supervisorId ?? undefined,
       status: dto.status ?? item.status,
@@ -218,10 +218,24 @@ export class EmployeeService {
       for (const s of supers) supMap.set(s.id, s.empName);
     }
 
+    // 岗位名（t_position 主数据）：与部门同款解析，**不过滤停用岗位**——
+    // 岗位停用只是不再进下拉，已挂在员工身上的历史岗位仍要显示得出名字
+    const posIds = [...new Set(rows.map((r) => r.positionId).filter((x): x is number => !!x))];
+    const posMap = new Map<number, string>();
+    if (posIds.length) {
+      const placeholders = posIds.map(() => '?').join(',');
+      const positions = await this.repo.manager.query(
+        `SELECT id, position_name AS positionName FROM t_position WHERE id IN (${placeholders})`,
+        posIds,
+      );
+      for (const p of positions) posMap.set(Number(p.id), p.positionName);
+    }
+
     return rows.map((e) => ({
       ...e,
       deptName: e.deptId ? deptMap.get(e.deptId) ?? null : null,
       supervisorName: e.supervisorId ? supMap.get(e.supervisorId) ?? null : null,
+      positionName: e.positionId ? posMap.get(e.positionId) ?? null : null,
     }));
   }
 
@@ -348,7 +362,7 @@ export class EmployeeService {
       leaveReason: jobStatus === JOB_STATUS.LEFT ? dto.leaveReason?.trim() || null : null,
       deptId: dto.deptId ?? null,
       teamGroup: dto.teamGroup?.trim() || null,
-      position: dto.position?.trim() || null,
+      positionId: dto.positionId ?? null,
       supervisorId: dto.supervisorId ?? null,
       status,
       remark: dto.remark?.trim() || null,

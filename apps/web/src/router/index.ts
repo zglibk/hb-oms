@@ -73,6 +73,13 @@ const constantRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/finished-stock/form.vue'),
         meta: { title: '出入库单录入', activeMenu: '/finished-stock' },
       },
+      {
+        // 人事档案字段多（基本信息/教育背景/用工属性/车间属性四段），弹窗塞不下，改子页面
+        path: 'hr/employee/form',
+        name: 'EmployeeForm',
+        component: () => import('@/views/hr/employee/form.vue'),
+        meta: { title: '员工档案录入', activeMenu: '/hr/employee' },
+      },
     ],
   },
 ];

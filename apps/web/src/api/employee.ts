@@ -32,7 +32,10 @@ export interface EmployeeRow {
   deptId: number | null;
   deptName?: string | null;
   teamGroup: string | null;
-  position: string | null;
+  /** 岗位：t_position.id（2026-08-11 由字典值改为主数据引用） */
+  positionId: number | null;
+  /** 岗位名称（服务端解析后带出，停用岗位也照常显示） */
+  positionName?: string | null;
   supervisorId: number | null;
   supervisorName?: string | null;
   status: number;
@@ -50,7 +53,7 @@ export interface EmployeeQuery {
   deptId?: number;
   plantCode?: string;
   empType?: string;
-  position?: string;
+  positionId?: number;
   jobStatus?: number;
   status?: number;
   forSupervisor?: boolean;

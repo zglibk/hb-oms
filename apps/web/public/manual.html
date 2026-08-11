@@ -157,7 +157,7 @@
     <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
-    <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 设备" onclick="jump('ch8')">第8章 基础数据</a>
+    <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 编制 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
     <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
@@ -773,6 +773,16 @@
             </td>
           </tr>
           <tr><td>部门信息</td><td>基础数据 → 部门信息</td><td>组织架构，账号归属部门。另有<strong>人事编码</strong>（3 位数字）——它是<strong>员工编号第 5-7 位</strong>的来源，没填的部门无法给员工建档，见「HR · 人事档案」</td></tr>
+          <tr>
+            <td>岗位管理</td><td>基础数据 → 岗位管理</td>
+            <td>
+              人事档案「岗位」下拉的来源。除名称外还能记<strong>岗位编码、所属部门、职级、是否管理岗、编制人数</strong>；
+              列表会把<strong>编制 / 在岗</strong>并排显示，在岗超过编制会标红。<br />
+              <strong>所属部门留空 = 通用岗位</strong>（如文员、司机），任何部门的员工都能选到；
+              填了部门的岗位只在该部门下出现。<br />
+              已经有员工在用的岗位<strong>不能删除</strong>，要下线请把状态改成「停用」——停用后不再进下拉，在岗员工不受影响。
+            </td>
+          </tr>
           <tr><td>部件信息</td><td>基础数据 → 部件信息</td><td>产品主数据：货号、名称、产品类型、规格、<strong>单重</strong>（登记外发回厂时自动带出）等</td></tr>
           <tr><td>开单信息</td><td>工艺管理 → 开单信息</td><td>按<strong>生产图号</strong>维护的工艺资料：机台、长度要求、特殊要求、模具号、工艺更新说明与附图。<strong>录订单填了生产图号就自动带入</strong>。支持批量导入导出</td></tr>
           <tr><td>设备信息</td><td>设备管理 → 设备信息</td><td>机台档案</td></tr>
@@ -868,17 +878,36 @@
         <li><strong>基本信息</strong>：员工编号（自动生成）、厂区、姓名、性别、身份证、联系方式、籍贯、民族、婚姻状况、政治面貌、住址、紧急联系人。年龄按出生日期自动算，不单独存。</li>
         <li><strong>教育背景</strong>：学历、学历类型（全日制/非全日制）、专业、最终毕业院校、毕业时间（按年月）。</li>
         <li><strong>用工属性</strong>：正式工/临时工/派遣工/学徒、入职日期、试用期（月）、合同到期日、在职/离职；离职须填离职日期（可填原因）。离职时档案会自动停用。</li>
-        <li><strong>车间属性</strong>：所属组织（部门树）、班组（手填）、岗位（字典：冲压工/装配工/质检/机修等，可在「数据字典」增减）、直属车间主管（选本表在职员工）。</li>
+        <li><strong>车间属性</strong>：所属组织（部门树）、岗位、班组（手填）、直属车间主管（选本表在职员工）。</li>
       </ul>
+
+      <h3 class="subsection__title">录入是一个独立页面</h3>
+      <p>
+        点「新增员工」或「编辑」会<strong>跳到一个单独的录入页</strong>（不是弹窗）——档案字段分四大段，
+        弹窗里塞不下。填完点右上角<strong>保存</strong>即返回列表；点<strong>返回列表</strong>或<strong>取消</strong>则放弃本次录入。
+      </p>
+
+      <h3 class="subsection__title">岗位下拉会按部门过滤</h3>
+      <p>
+        岗位来自<strong>「基础数据 → 岗位管理」</strong>。选好<strong>所属组织</strong>后，岗位下拉只列
+        <strong>该部门的岗位 + 通用岗位</strong>（通用岗位后面标着「（通用）」，如文员、司机这类跨部门岗位）。
+      </p>
+      <ul>
+        <li>部门里岗位没配全、一时选不到想要的？勾上岗位下方的<strong>「显示全部岗位」</strong>就不再过滤。</li>
+        <li><strong>换了部门</strong>后，原来选的岗位如果不属于新部门，系统会<strong>自动清空并提示</strong>，请重新选一个。</li>
+        <li>这只是录入引导，<strong>系统不强制岗位必须属于该部门</strong>——借调、一人多岗都是现实存在的。</li>
+      </ul>
+
       <ol class="steps">
-        <li>打开「人事档案」，点「新增员工」。</li>
+        <li>打开「人事档案」，点「新增员工」进入录入页。</li>
         <li>先填基本信息与教育背景（<strong>厂区必选</strong>），再填用工属性与<strong>入职日期</strong>；最后选<strong>所属组织</strong>与岗位，需要时可指定直属主管。</li>
         <li>保存。编号自动生成，提示条会告诉你生成的是哪个号。列表可按关键字、组织、厂区、用工属性、岗位、在职状态筛选。</li>
       </ol>
       <div class="alert alert--info">
-        用工属性、岗位、婚姻状况、政治面貌、学历等选项在<strong>系统管理 → 数据字典</strong>维护
-        （类型 <code>emp_type</code> / <code>hr_position</code> / <code>marital_status</code> / <code>political_status</code> / <code>education</code>）。
-        学历类型为系统固定项（全日制 / 非全日制）。
+        用工属性、职级、婚姻状况、政治面貌、学历等选项在<strong>系统管理 → 数据字典</strong>维护
+        （类型 <code>emp_type</code> / <code>job_level</code> / <code>marital_status</code> / <code>political_status</code> / <code>education</code>）。
+        学历类型为系统固定项（全日制 / 非全日制）。<br />
+        <strong>岗位不在数据字典里</strong>，它是一份独立主数据，在「基础数据 → 岗位管理」维护。
       </div>
     </section>
 

@@ -715,7 +715,7 @@ CREATE TABLE IF NOT EXISTS t_employee (
   leave_reason       VARCHAR(255) NULL COMMENT '离职原因',
   dept_id            INT          NULL COMMENT '所属车间/组织（t_department.id，可读部门树）',
   team_group         VARCHAR(64)  NULL COMMENT '班组（自由文本）',
-  position           VARCHAR(64)  NULL COMMENT '岗位（字典 hr_position）',
+  position_id        INT          NULL COMMENT '岗位（t_position.id）',
   supervisor_id      INT          NULL COMMENT '直属车间主管（本表 id）',
   status             TINYINT      NOT NULL DEFAULT 1 COMMENT '档案启停：1启用 0停用（离职时自动置0）',
   remark             VARCHAR(255) NULL COMMENT '备注',
@@ -730,8 +730,33 @@ CREATE TABLE IF NOT EXISTS t_employee (
   KEY idx_dept (dept_id),
   KEY idx_job_status (job_status),
   KEY idx_supervisor (supervisor_id),
+  KEY idx_position (position_id),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人事档案（HR；暂不对外供数）';
+
+-- 岗位主数据（基础数据，2026-08-11 由字典 hr_position 升级）
+-- 被员工引用后禁止删除（§5.5），下线用「停用」
+CREATE TABLE IF NOT EXISTS t_position (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  position_code  VARCHAR(64)  NOT NULL COMMENT '岗位编码（唯一业务键）',
+  position_name  VARCHAR(64)  NOT NULL COMMENT '岗位名称（可重复，编码才是唯一业务键；不同部门可有同名岗位）',
+  dept_id        INT          NULL COMMENT '所属部门（t_department.id）；空=通用岗位，不限部门',
+  job_level      VARCHAR(32)  NULL COMMENT '职级（字典 job_level）',
+  is_manager     TINYINT      NOT NULL DEFAULT 0 COMMENT '是否管理岗：1是 0否',
+  headcount      INT          NULL COMMENT '编制人数；空=不限编（列表用它与在岗人数对照，超编标红）',
+  sort           INT          NOT NULL DEFAULT 0 COMMENT '排序（越小越靠前，控制下拉顺序）',
+  status         TINYINT      NOT NULL DEFAULT 1 COMMENT '状态：1启用 0停用（停用后不进下拉，已引用它的员工不受影响）',
+  remark         VARCHAR(255) NULL COMMENT '备注',
+  creator_id     INT          NULL COMMENT '创建人ID',
+  creator_name   VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by     INT          NULL COMMENT '最后更新人ID',
+  updater_name   VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_position_code (position_code),
+  KEY idx_dept (dept_id),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位主数据（基础数据；被员工引用后禁止删除，下线用停用）';
 
 -- 工艺信息（设计文档 §4.1.3；订单按生产图号匹配自动带入，引用为快照不回写）
 CREATE TABLE IF NOT EXISTS t_process_info (

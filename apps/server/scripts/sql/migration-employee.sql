@@ -51,7 +51,12 @@ CREATE TABLE IF NOT EXISTS t_employee (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人事档案（HR；暂不对外供数）';
 
--- 字典：用工属性 / 岗位（幂等）
+-- 字典：用工属性（幂等）
+--
+-- ⚠️ 原先这里还种 hr_position（冲压工/装配工/质检/机修）四条岗位字典，2026-08-11
+-- 岗位升级为 t_position 主数据后**必须从这里摘掉**：db:migrate 每次跑全量清单，
+-- 这段若还在，就会在 migration-position.sql 删掉字典项之后又把它们种回来，
+-- 于是每次迁移都复活一次（已实测复现）。岗位初始数据改由 migration-position.sql 负责。
 INSERT INTO t_dict (dict_type, dict_label, dict_value, sort, status, creator_name, updater_name)
 SELECT d.dict_type, d.dict_label, d.dict_value, d.sort, 1, '系统同步', '系统同步'
 FROM (
@@ -59,10 +64,6 @@ FROM (
   UNION ALL SELECT 'emp_type', '临时工', 'temp', 2
   UNION ALL SELECT 'emp_type', '派遣工', 'dispatch', 3
   UNION ALL SELECT 'emp_type', '学徒', 'apprentice', 4
-  UNION ALL SELECT 'hr_position', '冲压工', 'stamping', 1
-  UNION ALL SELECT 'hr_position', '装配工', 'assembly', 2
-  UNION ALL SELECT 'hr_position', '质检', 'qc', 3
-  UNION ALL SELECT 'hr_position', '机修', 'maintenance', 4
 ) d
 WHERE NOT EXISTS (
   SELECT 1 FROM t_dict x WHERE x.dict_type = d.dict_type AND x.dict_value = d.dict_value

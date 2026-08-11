@@ -150,15 +150,19 @@ export const DICTS: Array<{
   // 外发加工商（M3 外发单下拉，可在字典管理维护）
   { dict_type: 'processor', dict_label: '示例加工商', dict_value: '示例加工商', sort: 1 },
 
-  // 人事档案：用工属性 / 岗位（HR 模块；可在字典管理维护）
+  // 人事档案：用工属性（HR 模块；可在字典管理维护）
+  // ⚠️ 岗位**不在字典里**——2026-08-11 已升级为 t_position 主数据，见下方 POSITIONS
   { dict_type: 'emp_type', dict_label: '正式工', dict_value: 'formal', sort: 1 },
   { dict_type: 'emp_type', dict_label: '临时工', dict_value: 'temp', sort: 2 },
   { dict_type: 'emp_type', dict_label: '派遣工', dict_value: 'dispatch', sort: 3 },
   { dict_type: 'emp_type', dict_label: '学徒', dict_value: 'apprentice', sort: 4 },
-  { dict_type: 'hr_position', dict_label: '冲压工', dict_value: 'stamping', sort: 1 },
-  { dict_type: 'hr_position', dict_label: '装配工', dict_value: 'assembly', sort: 2 },
-  { dict_type: 'hr_position', dict_label: '质检', dict_value: 'qc', sort: 3 },
-  { dict_type: 'hr_position', dict_label: '机修', dict_value: 'maintenance', sort: 4 },
+  { dict_type: 'emp_type', dict_label: '实习生', dict_value: 'intern', sort: 5 },
+  // 职级（岗位主数据用）
+  { dict_type: 'job_level', dict_label: '员级', dict_value: 'staff', sort: 1 },
+  { dict_type: 'job_level', dict_label: '组长', dict_value: 'group_leader', sort: 2 },
+  { dict_type: 'job_level', dict_label: '班长', dict_value: 'shift_leader', sort: 3 },
+  { dict_type: 'job_level', dict_label: '主管', dict_value: 'supervisor', sort: 4 },
+  { dict_type: 'job_level', dict_label: '经理', dict_value: 'manager', sort: 5 },
   { dict_type: 'marital_status', dict_label: '未婚', dict_value: 'unmarried', sort: 1 },
   { dict_type: 'marital_status', dict_label: '已婚', dict_value: 'married', sort: 2 },
   { dict_type: 'marital_status', dict_label: '离异', dict_value: 'divorced', sort: 3 },
@@ -174,6 +178,23 @@ export const DICTS: Array<{
   { dict_type: 'education', dict_label: '本科', dict_value: 'bachelor', sort: 5 },
   { dict_type: 'education', dict_label: '硕士', dict_value: 'master', sort: 6 },
   { dict_type: 'education', dict_label: '博士', dict_value: 'doctor', sort: 7 },
+];
+
+/**
+ * 岗位主数据种子（2026-08-11 由字典 hr_position 升级而来）。
+ *
+ * `db:init` **不跑 migrations**，漏了这份新库就一个岗位都没有、员工岗位下拉是空的
+ * （本会话已在 `t_department.hr_code` 上踩过同款坑）。存量库由
+ * `migration-position.sql` 从旧字典搬运，两条路径终态一致——**改这里记得同步改那个迁移**。
+ *
+ * `dept_id` 一律留空 = 通用岗位（不限部门）：旧字典没有部门概念，不臆造归属，
+ * 由 HR 上线后在「基础数据 → 岗位管理」里自行指定。
+ */
+export const POSITIONS = [
+  { position_code: 'stamping', position_name: '冲压工', sort: 1 },
+  { position_code: 'assembly', position_name: '装配工', sort: 2 },
+  { position_code: 'qc', position_name: '质检', sort: 3 },
+  { position_code: 'maintenance', position_name: '机修', sort: 4 },
 ];
 
 // ---------- 账号（plainPwd 在 db-init 中 bcrypt 加密）----------

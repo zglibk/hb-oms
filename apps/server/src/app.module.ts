@@ -10,6 +10,7 @@ import { FileModule } from './modules/file/file.module';
 import { SystemModule } from './modules/system/system.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { SupplierModule } from './modules/supplier/supplier.module';
+import { PositionModule } from './modules/position/position.module';
 import { ProcessInfoModule } from './modules/process-info/process-info.module';
 import { OrderModule } from './modules/order/order.module';
 import { OutsourceModule } from './modules/outsource/outsource.module';
@@ -67,6 +68,7 @@ import { EmployeeModule } from './modules/employee/employee.module';
     SystemModule,
     CustomerModule,
     SupplierModule,
+    PositionModule,
     ProcessInfoModule,
     OrderModule,
     OutsourceModule,

@@ -69,6 +69,8 @@ const MIGRATIONS: string[] = [
   'migration-employee.sql',
   // 员工编码规则：厂区列 + 部门人事编码 + 9 个部门回填 + 实习生字典
   'migration-employee-code.sql',
+  // 岗位由字典 hr_position 升级为独立主数据 t_position（含 t_employee.position → position_id）
+  'migration-position.sql',
   // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
   'migration-employee-profile.sql',
 ];
@@ -92,6 +94,9 @@ const forbiddenColumns = [
   't_assembly_batch.order_part_group_id',
   't_finished_item.order_part_group_id',
   't_finished_balance.order_part_group_id',
+  // 岗位于 2026-08-11 由字典值升级为 t_position 引用；旧列若被旧版 schema 重建复活，
+  // 岗位会退回"存字典值"而程序不报错，故显式盯住
+  't_employee.position',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -213,6 +218,13 @@ const expectedColumns = [
   // 员工编码规则：厂区（第1-2位）与部门人事编码（第5-7位）
   't_employee.plant_code',
   't_department.hr_code',
+  // 岗位主数据（由字典 hr_position 升级）
+  't_position.position_code',
+  't_position.position_name',
+  't_position.dept_id',
+  't_position.is_manager',
+  't_position.headcount',
+  't_employee.position_id',
   't_employee.native_place',
   't_employee.education',
   't_employee.education_type',

@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -154,8 +155,15 @@ export class Employee {
   @Column({ name: 'team_group', type: 'varchar', length: 64, nullable: true, comment: '班组（自由文本）' })
   teamGroup: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true, comment: '岗位（字典 hr_position）' })
-  position: string | null;
+  /** 岗位：引用岗位主数据 t_position.id（2026-08-11 由字典 hr_position 升级） */
+  @Index('idx_position')
+  @Column({
+    name: 'position_id',
+    type: 'int',
+    nullable: true,
+    comment: '岗位（t_position.id）',
+  })
+  positionId: number | null;
 
   @Column({ name: 'supervisor_id', type: 'int', nullable: true, comment: '直属车间主管（本表 id）' })
   supervisorId: number | null;

@@ -15,6 +15,7 @@ import * as mysql from 'mysql2/promise';
 import * as bcrypt from 'bcryptjs';
 import {
   DEPARTMENTS,
+  POSITIONS,
   ROLES,
   PERMISSIONS,
   ROLE_PERMISSIONS,
@@ -66,6 +67,7 @@ async function main() {
 
   // 3. 种子数据
   await seedDepartments(db);
+  await seedPositions(db);
   await seedRoles(db);
   await seedPermissions(db);
   await seedRolePermissions(db);
@@ -90,6 +92,19 @@ async function seedDepartments(db: mysql.Connection) {
     );
   }
   console.log(`✓ 部门 ${DEPARTMENTS.length} 条`);
+}
+
+/** 岗位主数据：员工建档的岗位下拉取自这里，新库必须种，否则下拉是空的 */
+async function seedPositions(db: mysql.Connection) {
+  for (const p of POSITIONS) {
+    await db.query(
+      `INSERT INTO t_position (position_code, position_name, sort, status, creator_name, updater_name)
+       VALUES (?, ?, ?, 1, '系统同步', '系统同步')
+       ON DUPLICATE KEY UPDATE position_name = VALUES(position_name), sort = VALUES(sort)`,
+      [p.position_code, p.position_name, p.sort],
+    );
+  }
+  console.log(`✓ 岗位 ${POSITIONS.length} 条`);
 }
 
 async function seedRoles(db: mysql.Connection) {

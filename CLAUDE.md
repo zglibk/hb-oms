@@ -57,7 +57,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
 - `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、**两个订单侧快照服务**（下游建单统一从它们读展示字段，禁止各模块再写一份 SQL）——`ProductSnapshotService`（产品级，给装配/成品出入库/成品期初）与 `PartGroupSnapshotService`（部件组级，给外发件回厂），分层理由见 §5.2；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、supplier（供应商）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、dull-stock（呆滞品管理）、employee（**人事档案**，HR 一级菜单）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、supplier（供应商）、position（岗位主数据）、process-info（开单信息）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、dull-stock（呆滞品管理）、employee（**人事档案**，HR 一级菜单）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
@@ -89,7 +89,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
   - 工艺管理(6)：开单信息
   - **物料管理(7)：成品出入库、成品库存、呆滞品管理、部件台账、期初录入** —— 成品库存口径（单据 + 结存）、呆滞品独立台账、部件半成品台账与上线期初
   - 设备管理(8)：设备信息
-  - **基础数据(10)：客户资料、供应商、部门信息、部件信息** —— 供应商紧挨客户资料（同为往来单位主数据）；部件信息属主数据，与出入库单据不同性质，故归此处
+  - **基础数据(10)：客户资料、供应商、部门信息、岗位管理、部件信息** —— 供应商紧挨客户资料（同为往来单位主数据）；岗位紧挨部门信息（同为组织类主数据）；部件信息属主数据，与出入库单据不同性质，故归此处
   - **HR人力资源管理(15)：人事档案** —— 员工花名册（基本信息含籍贯/民族/婚姻/政治面貌；教育背景含学历/学历类型/专业/毕业院校/毕业时间；用工与车间属性）；可读部门树；V1 暂不向订单等业务模块对外供数
   - 系统管理(90)：用户/角色/菜单权限/数据字典/操作日志/更新日志/系统配置
 - **调整菜单归属只改清单里的 `parent_code` + `sort`，无需迁移 SQL**：`PermissionSyncService` 第二遍对清单中**每一条**（含存量行）无条件 `update({ parentId })`，重启即生效。同理改名/改图标也只改清单。
@@ -134,7 +134,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
    - 删列后同步：`expectedColumns` 移除该列、`forbiddenColumns` 加上它（盯住不得被旧版 schema 重建复活）。
 4. 生产升级由 `deploy/deploy-oms-app.sh` 自动执行（无库跑 `db:init`、有库跑 `db:migrate`），**不要在部署脚本里手抄第二份迁移清单**（hb-mes 曾因此漏跑迁移）。
 
-现有迁移清单见 `db-migrate.ts`（**数组本身即权威清单，顺序即执行顺序**；此处不再复述条数，历史上这个计数反复过期）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_dull_stock` / `t_dull_stock_flow` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_supplier` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
+现有迁移清单见 `db-migrate.ts`（**数组本身即权威清单，顺序即执行顺序**；此处不再复述条数，历史上这个计数反复过期）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_dull_stock` / `t_dull_stock_flow` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_supplier` / `t_position` / `t_process_info`(+history) / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 > **一次性清数据的迁移必须做成「只生效一次」**（`migration-product-level-tracking.sql` 的写法，抄它）：`db:migrate` 每次跑**全量清单**，直接写 `DELETE FROM` 会让上线后任何一次重跑都清空生产数据。做法是用「被删的旧列是否还存在」当守卫——
 > ```sql
@@ -273,7 +273,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 ### 5.5 基础数据 vs 业务流水
 
-- **基础数据**（客户资料、供应商、开单信息、部件信息、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
+- **基础数据**（客户资料、供应商、开单信息、部件信息、**岗位**、字典、用户/角色/部门、设备信息）：可编辑，用 `status` 启停或软删除；**被业务引用后限制删除**（可停用）。
+  - **岗位 `t_position`**：被员工引用（`t_employee.position_id`）时禁止删除，提示改用「停用」——停用同样不进下拉，但已在岗员工与历史档案完好。
   - ⚠️ **供应商是例外，删除不做引用检查**：外发回厂只快照 `processor_name` 名称、**不持有 `supplier_id`**，删主数据动不了历史记录（§5.5 快照原则）。想临时下线用「停用」——停用即不进下拉，历史照旧。加工商下拉 `allow-create`，主数据没维护到的新厂可直接手输，不挡录入。
 - **业务流水**（订单、外发单、装配批次、出入库单）：创建时**快照冗余**基础数据关键字段（客户名、生产单号、产品型号、规格、周期码等），基础数据后续变更**不回写**历史单据；审计字段齐全；确认后的单据只能冲销不能改。
 - 快照字段一律**由服务端从上游表读取落库**，不采信客户端传值（防伪造）。
@@ -409,6 +410,10 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **非正式用工一律带前缀**（规则五，2026-08-11 由 2 类增补到 4 类）：实习生 `S` / 临时工 `L` / 学徒 `A` / 劳务派遣工 `P`，**只有 `formal` 正式工无前缀**。前缀后方 10 位数字的编排逻辑与正式工完全一致（同一组 `厂区+年份+部门` 共用计数），方便人事统一统计。`intern` 字典项由迁移补入 `emp_type`。**不要给规则未列出的类别发明前缀**（附则：编码架构变更须三方评审）。
 - **唯一允许换号的场景是「用工属性变更导致前缀应变」**（规则五：学徒期满转正、派遣工转自有正式工等，均需注销原前缀编号、重新核发，原编号归档留存）。判据用共享包 `needsEmpNoReissue(旧, 新)`（**比较前缀是否变化**，故也覆盖规则没写的 实习生 S → 学徒 A 这类横向变更），且必须由前端显式传 `regenerateEmpNo`（用户在弹窗确认过），服务端二次校验才放行——编号是工牌/考勤/薪资的对账依据，**不做静默改号**。年份位仍取本人入职日期（转正不是重新入职，工龄连续）。
 - 离职编号永久封存：流水号只增不减、不回收，天然满足「严禁二次分配」。离职返聘 = 新建档案、生成全新编号；派遣工用工结束同理（劳动关系属外派公司，本厂只登记用工厂区与部门）。
+- **岗位不是字典，是主数据**（2026-08-11 由 `hr_position` 字典升级）：`t_employee.position_id` 引用 `t_position.id`，与同表 `dept_id` 同款；列表/详情由 `attachNames` 解析出 `positionName`，**解析时不过滤停用岗位**——岗位停用只是不再进下拉，已挂在员工身上的历史岗位仍要显示得出名字。
+  - 岗位下拉走 `GET /position/all`（**跨页引用型只读接口，仅需登录**）：传 `deptId` 回「该部门岗位 + 通用岗位（`dept_id` 为空）」。**通用岗位必须带上**，否则「文员」「司机」这类跨部门岗位在任何部门下都选不到。
+  - **过滤只是录入引导，服务端不校验岗位与部门是否匹配**——借调、一人多岗是现实存在的。前端换部门后若已选岗位不在新范围内会**清空并提示**，另有「显示全部岗位」开关兜底。
+- **人事档案的录入/编辑是独立子页面**（`/hr/employee/form`，2026-08-11 由弹窗改），原因是字段有基本信息/教育背景/用工属性/车间属性四段，弹窗塞不下。按 §一 前端架构注册在 `constantRoutes` 并带 `meta.activeMenu: '/hr/employee'`，否则侧栏不高亮。
 
 **呆滞品管理（2026-08-11，dull-stock 模块）**
 
@@ -543,6 +548,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2l | 外发收敛为回厂流水 | 第二轮简化：连发坯单也取消，三表塌缩为 `t_outsource_part`（一行=一次回厂）。删打印页/单号采番/6 个权限点；首页右卡改「近期外发回厂」。口径见 §5.6 | ✅ 已完成（2026-08-10） |
 | 2m | 业务字段全局开关 | 系统配置新增「业务字段」Tab，现有两个开关：**颜色**（与表面处理配套的业务字段）、**客户图号**（非部件组生产图号）。**录入展示开关 ≠ 数据清理**：停用不删既有数据、编辑不洗历史值。前端走 feature store + `useFeatureFlags`，后端只在导出侧读开关并把两个导出的汇总行改为按表头名定位。口径与新增开关的 6 处改动点见 §5.7 | ✅ 已完成（2026-08-10） |
 | 2n | 跟踪锚点分层 | 装配 / 成品明细 / 成品余额 / 入库闸门 / 台账主行 由**部件组升到订单产品行**，外发件回厂**保持部件组**；台账改「产品级主行 + 部件组展开」，两个 Excel 导出改产品级（按组铺行会让合计翻倍）；新增 `ProductSnapshotService` 与组级快照分层。迁移 `migration-product-level-tracking.sql` 带「清空只生效一次」守卫（已实测重跑不清数据）。口径见 §5.2 | ✅ 已完成（2026-08-10） |
+| 2q | 岗位主数据 + 人事表单子页面 | 岗位由字典 `hr_position` 升级为「基础数据 → 岗位管理」独立主数据 `t_position`（岗位编码/所属部门/职级/是否管理岗/编制人数，列表带在岗人数并超编标红）；`t_employee.position` → `position_id`，下拉按部门过滤且含通用岗位、被引用禁删。人事档案录入改为独立子页面 `/hr/employee/form`（四段字段弹窗塞不下）。⚠️ 迁移时踩到：`migration-employee.sql` 原本每次都重种 hr_position 字典，导致本迁移删掉后又复活，已回头摘除（§三「删列迁移必须加固前序迁移」的同类问题） | ✅ 已完成（2026-08-11） |
 | 2p | 员工编码自动生成 | 按《海宝五金员工编码管理规则》落地：新增员工自动生成 `2位厂区+2位年份标识+3位部门+3位流水号`，非正式人员带 S/L 前缀。新增 `t_employee.plant_code` 与 `t_department.hr_code`（部门编码放主数据、不写死），共享包 `employee-code.ts` 为双端事实源，流水号复用 `NumberGeneratorService`。编号终身不变（跨厂区调动只改 plant_code），唯一例外是试用转正显式换发。口径见 §5.6 | ✅ 已完成（2026-08-11） |
 | 2o | 呆滞品管理 | 「成品期初（不挂订单）」拆成独立模块：`t_dull_stock` + `t_dull_stock_flow` 两表，跟踪 期初/入库/出库/结存 四个数，新增客户与生产单号、单位可选套/支、表面处理联动带出颜色、流水可删并回滚累计数。**独立台账，不与订单台账/成品库存联动**。原纯属性期初形态前后端整体删除（系统未上线，无数据需迁移），成品期初收敛为只能挂订单。口径见 §5.6 | ✅ 已完成（2026-08-11） |
 | 3 | 部件台账 V1 定位 | 仅"期初 + 手工调整留痕"的参考台账，**不与外发/入库单据自动联动**（无报工则无采集点），联动列入 V2 | 📘 已定口径 |

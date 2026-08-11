@@ -163,10 +163,12 @@ export class CreateEmployeeDto {
   @MaxLength(64)
   teamGroup?: string;
 
+  /** 岗位：t_position.id（2026-08-11 由字典值改为主数据引用） */
   @IsOptional()
-  @IsString()
-  @MaxLength(64)
-  position?: string;
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
+  @Type(() => Number)
+  @IsInt({ message: '岗位无效' })
+  positionId?: number;
 
   @IsOptional()
   @Type(() => Number)
@@ -225,8 +227,9 @@ export class QueryEmployeeDto {
   empType?: string;
 
   @IsOptional()
-  @IsString()
-  position?: string;
+  @Type(() => Number)
+  @IsInt()
+  positionId?: number;
 
   @IsOptional()
   @Type(() => Number)
