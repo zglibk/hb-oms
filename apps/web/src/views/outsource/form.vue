@@ -26,34 +26,32 @@
                 </el-radio-group>
                 <span class="mode-tip">
                   <template v-if="isQtyMode">
-                    以加工商<b>送货单的数量</b>为准；重量与单重<b>选填</b>，填了也不会反过来改数量。
+                    （以加工商<span class="mode-tip__em">送货单的数量</span>为准；重量与单重<span class="mode-tip__em">选填</span>，填了也不会反过来改数量。）
                   </template>
                   <template v-else>
-                    填<b>重量与单重</b>自动算出数量（重量 ÷ 单重），算完仍可微调。
+                    （填<span class="mode-tip__em">重量与单重</span>自动算出数量（重量 ÷ 单重），算完仍可微调。）
                   </template>
                 </span>
               </el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="16" class="shared-block__fields">
-            <el-col :xs="24" :sm="12" :md="8" :lg="6">
+            <el-col :xs="24" :sm="12" :md="10" :lg="8">
               <el-form-item label="加工商" prop="processorName">
                 <el-input v-model="form.processorName" placeholder="做表面处理的外协厂" />
               </el-form-item>
             </el-col>
-            <el-col :xs="24" :sm="12" :md="8" :lg="6">
+            <el-col :xs="24" :sm="12" :md="10" :lg="8">
               <el-form-item label="回厂日期" prop="backDate">
-                <el-date-picker v-model="form.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+                <el-date-picker
+                  v-model="form.backDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  class="shared-block__date"
+                />
               </el-form-item>
             </el-col>
           </el-row>
-          <el-alert
-            class="shared-block__alert"
-            type="info"
-            :closable="false"
-            show-icon
-            title="加工商与回厂日期为各行共用；同一天同一家回来的货可一次勾多组。"
-          />
         </div>
 
         <!-- 区 2：回厂明细 -->
@@ -430,32 +428,30 @@ function goBack() {
   &__fields {
     max-width: 720px;
   }
-  &__alert {
-    margin-top: 2px;
+  /* Element Plus 日期选择器默认偏窄，YYYY-MM-DD 会被裁切 */
+  &__date {
+    width: 100% !important;
+    min-width: 180px;
+  }
+  :deep(.shared-block__date.el-date-editor) {
+    width: 100% !important;
+    max-width: none;
   }
   :deep(.el-form-item) {
     margin-bottom: 14px;
   }
-  :deep(.el-alert) {
-    padding: 8px 12px;
-    --el-alert-padding: 8px 12px;
-    background-color: color-mix(in srgb, var(--el-color-danger) 8%, transparent);
-    border-color: color-mix(in srgb, var(--el-color-danger) 28%, transparent);
-  }
-  :deep(.el-alert__title) {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--el-color-danger);
-  }
-  :deep(.el-alert__icon) {
-    color: var(--el-color-danger);
+  :deep(.shared-block__fields .el-form-item) {
+    margin-bottom: 0;
   }
 }
 .mode-tip {
   margin-left: 12px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  b { color: var(--el-text-color-primary); }
+  &__em {
+    color: var(--el-color-danger);
+    font-weight: 400;
+  }
 }
 
 .section-title {
