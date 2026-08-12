@@ -174,30 +174,31 @@
                 <el-switch v-model="p.isNewOrder" :active-value="1" :inactive-value="0" />
               </el-form-item>
             </el-col>
+            <!-- 出口国家与开关同组、不带自己的标签：它只是「是否出口」的补充项。
+                 固定显示（未出口时禁用而非隐藏），免得勾选开关时把后面的字段挤动 -->
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="是否出口" label-width="80px">
-                <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
-              </el-form-item>
-            </el-col>
-            <el-col v-if="p.isExport" :xs="24" :sm="12" :md="6">
-              <el-form-item label="出口国家" label-width="80px">
-                <el-select
-                  v-model="p.exportCountry"
-                  filterable
-                  clearable
-                  placeholder="出口国家"
-                  popper-class="country-popper"
-                  style="width: 100%"
-                >
-                  <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
-                    <div class="country-option">
-                      <span class="country-left">
-                        <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
-                      </span>
-                      <span class="country-en">{{ c.englishName }}</span>
-                    </div>
-                  </el-option>
-                </el-select>
+                <div class="export-line">
+                  <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
+                  <el-select
+                    v-model="p.exportCountry"
+                    :disabled="!p.isExport"
+                    filterable
+                    clearable
+                    placeholder="出口国家"
+                    popper-class="country-popper"
+                    class="export-country"
+                  >
+                    <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
+                      <div class="country-option">
+                        <span class="country-left">
+                          <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
+                        </span>
+                        <span class="country-en">{{ c.englishName }}</span>
+                      </div>
+                    </el-option>
+                  </el-select>
+                </div>
               </el-form-item>
             </el-col>
             <!-- 分体出货：客户把一支滑轨拆开下单（如三节轨拆「外中轨」+「内轨」两行）、
@@ -1124,7 +1125,12 @@ export default { name: 'OrderForm' };
 .split-tip { margin-left: 6px; color: var(--el-text-color-placeholder); cursor: help; vertical-align: middle; }
 .split-na { margin-left: 8px; font-size: 12px; color: var(--el-text-color-placeholder); }
 .split-form-tag { margin-left: 8px; }
-.split-hint { color: var(--el-color-danger); font-weight: 600; }
+.split-hint { color: var(--el-color-danger); }
+/* 是否出口：开关 + 国家下拉同行，下拉吃掉剩余宽度 */
+.export-line {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  .export-country { flex: 1; min-width: 0; }
+}
 .group-grid {
   width: 100%; border-collapse: collapse;
   th, td { border: 1px solid var(--el-border-color); padding: 4px 6px; }
