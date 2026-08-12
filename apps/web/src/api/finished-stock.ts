@@ -160,8 +160,17 @@ export const getStockBalance = (params: {
   onlyInStock?: boolean;
 }) => request.get<any, PageResult<BalanceRow>>('/api/finished-stock/balance', { params });
 
-export const getStockGroupOptions = (params: { keyword?: string; bizType?: string; limit?: number }) =>
-  request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
+/**
+ * 可出入库的订单产品行选项（成品出入库建单 + 期初录入共用）。
+ * `onlyOpening`：期初录入页传 true，只列「期初补录」订单——期初豁免装配闸门，
+ * 挂到正常订单上等于绕过闸门凭空加库存（服务端另有硬校验）。
+ */
+export const getStockGroupOptions = (params: {
+  keyword?: string;
+  bizType?: string;
+  limit?: number;
+  onlyOpening?: boolean;
+}) => request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
 
 export const createFinishedDoc = (data: FinishedDocPayload) =>
   request.post<any, { id: number; docNo: string }>('/api/finished-stock', data);

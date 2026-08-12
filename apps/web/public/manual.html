@@ -731,6 +731,12 @@
         <li><strong>期初不受装配闸门约束</strong>——上线前的存货本来就没在系统里走过装配。</li>
         <li>录错了同样可以红字冲销。</li>
       </ul>
+      <div class="alert alert--warning">
+        <strong>「添加产品」里只会列出打开了「期初补录」开关的订单。</strong>
+        找不到你要的订单？回「订单管理」编辑那张单，把<strong>期初补录</strong>开关打开再来。<br />
+        为什么要这么卡：期初<strong>不过装配闸门</strong>，如果允许挂到正常订单上，就等于跳过装配
+        凭空给那张订单加上完成数和库存。<strong>正常订单的成品请走「成品出入库 → 成品入库」</strong>。
+      </div>
       <div class="alert alert--info">
         <strong>订单早就完结、仓库只是还剩一些货</strong>的，不在这里录——那是呆滞品，
         请到<strong>「物料管理 → 呆滞品管理」</strong>逐批建档，见 <a href="javascript:void(0)" onclick="jump('ch4-5')">4.5</a>。

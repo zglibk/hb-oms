@@ -19,6 +19,11 @@ export interface ProductSnapshot {
   orderId: number;
   /** 订单状态：1进行中 2已完结 9已作废 */
   orderStatus: number;
+  /**
+   * 所属订单是否为「期初补录」单：0正常 1期初补录。
+   * 成品期初建单据此校验——期初豁免装配闸门，挂到正常订单上等于绕过闸门凭空加库存。
+   */
+  orderIsOpening: number;
   orderNo: string | null;
   customerName: string | null;
   /** 生产单号（自订单，与 PO# 一对一；对应手工台账「订单编号」） */
@@ -96,6 +101,7 @@ export class ProductSnapshotService {
               p.dimension_unit    AS dimension_unit,
               p.dimension_mm      AS dimension_mm,
               o.status            AS order_status,
+              o.is_opening        AS order_is_opening,
               o.order_no          AS order_no,
               o.customer_name     AS customer_name,
               o.production_no     AS production_no
@@ -110,6 +116,7 @@ export class ProductSnapshotService {
         orderProductId: Number(r.product_id),
         orderId: Number(r.order_id),
         orderStatus: Number(r.order_status),
+        orderIsOpening: Number(r.order_is_opening) || 0,
         orderNo: r.order_no ?? null,
         customerName: r.customer_name ?? null,
         productionNo: r.production_no ?? null,

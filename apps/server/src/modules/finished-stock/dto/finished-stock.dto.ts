@@ -158,5 +158,15 @@ export class QueryStockGroupOptionDto {
   /** 用途：inbound 入库（附可入库量）/ sale_outbound 出库（附当前结存） */
   @IsOptional() @IsString() @MaxLength(32) bizType?: string;
 
+  /**
+   * 只列「期初补录」订单（`t_order.is_opening = 1`）——期初录入页传 true。
+   *
+   * 本接口与成品出入库建单共用：出入库要列出全部订单，期初只能挂补录单
+   * （期初豁免装配闸门，挂正常订单等于绕过闸门凭空加库存）。
+   * 布尔查询串必须用 toBoolean，不能用 @Type(() => Boolean)——全局 ValidationPipe
+   * 开了 enableImplicitConversion，字符串 "false" 会被隐式转成 true（§一 已踩）。
+   */
+  @IsOptional() @Transform(toBoolean) onlyOpening?: boolean;
+
   @IsOptional() @Type(() => Number) @IsInt() limit?: number;
 }

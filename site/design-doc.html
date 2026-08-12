@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>海宝五金订单跟踪系统（hb-oms）设计文档 V1.0</title>
+<title>设计文档</title>
 <style>
 
   * { box-sizing: border-box; margin: 0; }
@@ -133,6 +133,7 @@
         <a class="toc-l3" href="#46-部件台账tpartbalance属性锚定独立参考台账">4.6 部件台账：t_part_balance（属性锚定，独立参考台账）</a>
         <a class="toc-l3" href="#47-单号登记表numbergeneratorservice-采番禁止自行拼接">4.7 单号登记表（NumberGeneratorService 采番，禁止自行拼接）</a>
         <a class="toc-l3" href="#48-期初录入系统上线初始化菜单常驻可复录">4.8 期初录入（系统上线初始化，菜单常驻可复录）</a>
+        <a class="toc-l3" href="#49-呆滞品管理tdullstock-+-tdullstockflow独立台账">4.9 呆滞品管理：t_dull_stock + t_dull_stock_flow（独立台账）</a>
         <a class="toc-l2" href="#5-台账与统计口径系统核心">5. 台账与统计口径（系统核心）</a>
         <a class="toc-l3" href="#51-订单跟踪台账核心页面按部件组一行——对齐手工台账粒度">5.1 订单跟踪台账（核心页面，按部件组一行——对齐手工台账粒度）</a>
         <a class="toc-l3" href="#52-首页看板销售视角">5.2 首页看板（销售视角）</a>
@@ -143,7 +144,7 @@
         <a class="toc-l2" href="#10-后续扩展v1-明确不做接口与表结构不预埋需求成熟后独立设计">10. 后续扩展（V1 明确不做，接口与表结构不预埋、需求成熟后独立设计）</a>
   </aside>
   <article>
-<h1 id="海宝五金订单跟踪系统hb-oms设计文档-v10">海宝五金订单跟踪系统（hb-oms）设计文档 V1.0<a class="anchor" href="#海宝五金订单跟踪系统hb-oms设计文档-v10" aria-hidden="true">#</a></h1>
+<p>﻿# 海宝五金订单跟踪系统（hb-oms）设计文档 V1.0</p>
 <blockquote>
 <p><strong>状态</strong>：待评审 ｜ <strong>日期</strong>：2026-08-04 ｜ <strong>前身系统</strong>：hb-mes（PMC/MES，排产主线）</p>
 <p>本文档为 hb-oms 项目的权威业务与技术设计底稿，评审通过后作为编码依据；实现与本文档冲突时以本文档为准。</p>
@@ -232,7 +233,7 @@
 <tr>
 <td>7</td>
 <td>期初成品与订单</td>
-<td><strong>先补录历史订单再挂期初</strong>：未完结历史订单补录为正式订单（标记「期初补录」），期初成品挂<strong>部件组</strong>、参与欠数计算；已完结订单的剩余库存用<strong>纯属性期初行</strong>（不挂订单，只计库存数）</td>
+<td><strong>先补录历史订单再挂期初</strong>：未完结历史订单补录为正式订单（标记「期初补录」），期初成品挂<strong>订单产品行</strong>、参与欠数计算；已完结订单剩下的成品<strong>不走期初</strong>，改由「呆滞品管理」逐批建档（§4.9）</td>
 </tr>
 <tr>
 <td>8</td>
@@ -537,7 +538,7 @@
 <tr>
 <td>is_opening</td>
 <td>tinyint</td>
-<td>期初补录标记：0正常 1期初补录（补录订单免外发/交期等非必填校验）</td>
+<td>期初补录标记：0正常 1期初补录（<strong>仅作区分展示，不改变校验与四数口径</strong>）</td>
 </tr>
 <tr>
 <td>remark</td>
@@ -966,14 +967,14 @@
 <td>所属单据</td>
 </tr>
 <tr>
-<td>order_id / order_product_id / order_part_group_id</td>
+<td>order_id / order_product_id</td>
 <td>int idx</td>
-<td>锚点：<strong>部件组</strong>（订单/产品行为冗余列；期初纯属性行三者为 NULL）</td>
+<td>锚点：<strong>订单产品行</strong>（2026-08-10 由部件组升级——入库对象是装配产出的整套滑轨，拆回外/中/内入库与实物不符）；order_id 为冗余列，供订单下游引用探测</td>
 </tr>
 <tr>
 <td>item_no / product_model / dimension_text 等</td>
 <td>varchar</td>
-<td>展示快照（货号/型号含组后缀/规格/产品类型组合/节数）</td>
+<td>展示快照（货号/型号/规格/产品类型组合/节数）</td>
 </tr>
 <tr>
 <td>side</td>
@@ -1008,14 +1009,14 @@
 <th>说明</th>
 </tr>
 </thead><tbody><tr>
-<td>order_id / order_product_id / order_part_group_id</td>
+<td>order_id / order_product_id</td>
 <td>int</td>
-<td>锚点：<strong>部件组</strong>（期初纯属性行为 NULL，改用属性列匹配）</td>
+<td>锚点：<strong>订单产品行</strong>（同 t_finished_item，2026-08-10 由部件组升级）</td>
 </tr>
 <tr>
-<td>item_no / product_type / group_type / rail_section / dimension_mm / surface_type / color</td>
+<td>item_no / product_type / rail_section / dimension_mm / surface_type / color</td>
 <td></td>
-<td>属性快照列（纯属性期初行的匹配与展示依据；product_type 存多选组合串，group_type 部件组类型，surface_type 字典值）</td>
+<td>属性快照列（展示与筛选依据；product_type 存多选组合串，surface_type 字典值）</td>
 </tr>
 <tr>
 <td>side</td>
@@ -1034,14 +1035,13 @@
 </tr>
 </tbody></table></div>
 <ul>
-<li><strong>唯一键</strong>：<code>(order_part_group_id, side, batch_no, attr_key)</code>，锚点列 <code>NOT NULL DEFAULT 0</code>（0 = 不挂订单的纯属性行，规避 MySQL 唯一键多 NULL 不去重）。<ul>
-<li>挂订单的行由「部件组 + 边别 + 批次」唯一，<code>attr_key</code> 恒为空串；</li>
-<li>纯属性期初行改由 <code>attr_key</code>（属性指纹 = <code>货号|产品类型|组类型|节数|规格|表面处理|颜色</code>）兜底唯一。
+<li><strong>唯一键</strong>：<code>(order_product_id, side, batch_no, attr_key)</code>，锚点列 <code>NOT NULL DEFAULT 0</code>（规避 MySQL 唯一键多 NULL 不去重）。余额行一律挂订单产品行，由「产品行 + 边别 + 批次」唯一；<code>attr_key</code> <strong>恒为空串</strong>——它原用于区分「不挂订单的纯属性期初行」，该形态已于 2026-08-11 下线（改由呆滞品管理承载，§4.9），列保留仅因它仍是唯一键的组成部分。
 该逻辑唯一<strong>下沉到数据库唯一键</strong>而非仅靠应用层判重——并发下应用层「先查再插」挡不住重复行。</li>
-</ul>
-</li>
 <li>出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，<strong>禁止直接改 balance</strong>。</li>
-<li><strong>装配入库闸门</strong>：<code>biz_type=&#39;inbound&#39;</code> 入库单<strong>确认时</strong>，按每条明细的 order_part_group_id + side 校验 <code>本次入库量 ≤ 可入库量(§4.4)</code>；超额则拒绝（<code>BadRequestException</code> 中文提示，含部件组、可入库量、本次量）。<code>biz_type=&#39;opening_balance&#39;</code>（期初）与 <code>reversal</code>（红字）<strong>豁免</strong>该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，<code>Σ已入库量</code> 按 direction 自然回落，可入库量随之回补。</li>
+<li><strong>装配入库闸门</strong>：<code>biz_type=&#39;inbound&#39;</code> 入库单<strong>确认时</strong>，按每条明细的 order_product_id + side 校验 <code>本次入库量 ≤ 可入库量(§4.4)</code>；超额则拒绝（<code>BadRequestException</code> 中文提示，含产品、可入库量、本次量）。<code>biz_type=&#39;opening_balance&#39;</code>（期初）与 <code>reversal</code>（红字）<strong>豁免</strong>该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，<code>Σ已入库量</code> 按 direction 自然回落，可入库量随之回补。<blockquote>
+<p>⚠️ 期初豁免闸门是<strong>有意为之</strong>，但也意味着「在正常订单上录期初」会绕过装配闸门凭空增加库存与完成数。故<strong>期初只能挂 <code>is_opening=1</code> 的期初补录订单</strong>：期初页的产品选择器按此过滤（<code>onlyOpening</code>），服务端建单时再逐行硬校验一次，两层都拦。正常订单的成品必须走「装配 → 成品入库」。</p>
+</blockquote>
+</li>
 </ul>
 <h3 id="46-部件台账tpartbalance属性锚定独立参考台账">4.6 部件台账：<code>t_part_balance</code>（属性锚定，独立参考台账）<a class="anchor" href="#46-部件台账tpartbalance属性锚定独立参考台账" aria-hidden="true">#</a></h3>
 <div class="table-wrap"><table><thead><tr>
@@ -1138,11 +1138,58 @@
 </blockquote>
 <h3 id="48-期初录入系统上线初始化菜单常驻可复录">4.8 期初录入（系统上线初始化，菜单常驻可复录）<a class="anchor" href="#48-期初录入系统上线初始化菜单常驻可复录" aria-hidden="true">#</a></h3>
 <ol>
-<li><strong>补录历史订单</strong>：未完结历史订单按正常订单录入，<code>is_opening=1</code>（免附件/来源等非关键校验；豁免逻辑集中在 DTO 校验层）。</li>
-<li><strong>成品期初（挂订单）</strong>：选补录订单的<strong>部件组</strong> → 生成 <code>biz_type=&#39;opening_balance&#39;</code> 入库单（FGO 序列、direction=1）→ 确认后累加 balance。字段自动带出：订单号、生产单号、客户、产品编号（物料代码）、货号、产品型号（含组后缀）、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。</li>
-<li><strong>成品期初（纯属性，不挂订单）</strong>：已完结订单的剩余库存，录属性行（货号/产品类型/节数/规格/表面处理/颜色/边别）+ 数量，只进库存数、不参与任何订单欠数。</li>
-<li><strong>部件期初</strong>：按 7 维属性行录入累加，字段：部件、边别、货号、轨道节数、产品类型、料厚、规格、数量（支）、备注。</li>
+<li><strong>补录历史订单</strong>：未完结历史订单按正常订单录入，勾选「期初补录」标记 <code>is_opening=1</code>。该标记<strong>仅作区分之用</strong>（订单列表打「期初」标签、便于日后统计时剔除），<strong>不改变任何校验，也不影响四数口径</strong>——订单必填项本就只有客户与订单日期，没有可豁免的余地。</li>
+<li><strong>成品期初（挂订单）</strong>：选订单的<strong>产品行</strong>（2026-08-10 由部件组升级）→ 生成 <code>biz_type=&#39;opening_balance&#39;</code> 入库单（FGO 序列、direction=1）→ <strong>建单后同事务立即确认</strong>并累加 balance，不留草稿。字段自动带出：订单号、生产单号、客户、货号、产品型号、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。</li>
+<li><strong>部件期初</strong>：按 7 维属性行录入累加，字段：部件、边别、货号、轨道节数、产品类型、料厚、规格、数量（支）、备注。<strong>整批全有全无</strong>——部件台账是累加语义，部分成功后重提整批会把已成功的行加第二次。</li>
 </ol>
+<blockquote>
+<p><strong>已完结订单剩下的成品不走期初</strong>：2026-08-11 起改由「物料管理 → 呆滞品管理」逐批建档（见 §4.9），原「成品期初（纯属性，不挂订单）」形态已下线。</p>
+</blockquote>
+<h3 id="49-呆滞品管理tdullstock-+-tdullstockflow独立台账">4.9 呆滞品管理：<code>t_dull_stock</code> + <code>t_dull_stock_flow</code>（独立台账）<a class="anchor" href="#49-呆滞品管理tdullstock-+-tdullstockflow独立台账" aria-hidden="true">#</a></h3>
+<p>已完结订单剩下的成品——多做的、退回的、客户不要的。它们已不属于任何订单，故单独建档跟踪。</p>
+<div class="table-wrap"><table><thead><tr>
+<th>字段</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead><tbody><tr>
+<td>item_no / customer_name / production_no</td>
+<td>varchar</td>
+<td>货号、客户、生产单号（<strong>纯文本快照</strong>，不关联主数据，不校验订单是否存在）</td>
+</tr>
+<tr>
+<td>product_model / product_type / rail_section / dimension_mm / surface_type / color / side</td>
+<td>—</td>
+<td>货物属性（与订单产品同口径；表面处理与颜色配套，是辨货主要依据）</td>
+</tr>
+<tr>
+<td>unit</td>
+<td>varchar(16)</td>
+<td>数量单位：<strong>按行自选 set 套 / piece 支</strong>，该行四个数量列一律按本单位计；有流水后不可改</td>
+</tr>
+<tr>
+<td>opening_qty</td>
+<td>int</td>
+<td>期初数：建档时的呆滞存量，可编辑</td>
+</tr>
+<tr>
+<td>inbound_qty / outbound_qty</td>
+<td>int</td>
+<td>入库数 / 出库数：<strong>只由出入库流水驱动</strong>，任何地方不得直接写</td>
+</tr>
+<tr>
+<td>balance_qty</td>
+<td>int</td>
+<td>结存数 = 期初数 + 入库数 − 出库数，<strong>不得为负</strong></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>一行 = 一批呆滞货</strong>，刻意不设属性唯一键：同货号同客户会先后产生多批，逐批建档才追溯得到来源与处置进度。</li>
+<li><strong>独立台账</strong>：与订单跟踪台账四数、成品库存 <code>t_finished_balance</code> <strong>完全不联动</strong>；页面合计用共享包 <code>toPieces</code> 折成支，汇总口径仍统一。</li>
+<li><strong>流水可整条删除</strong>（与部件台账「只能反向调整」不同——呆滞品是可修正的管理账，不是凭证账），删除时同事务回滚累计数，回滚后结存为负则拒绝。</li>
+<li>「变动后结存」<strong>不落库</strong>：流水可删，存快照会在删掉中间一笔后让后续行集体失真，改由服务端按 id 正序累计推导。</li>
+<li>轻量记账行，不采番、无单据号；档案<strong>有流水时禁止删除</strong>。</li>
+</ul>
 <hr>
 <h2 id="5-台账与统计口径系统核心">5. 台账与统计口径（系统核心）<a class="anchor" href="#5-台账与统计口径系统核心" aria-hidden="true">#</a></h2>
 <h3 id="51-订单跟踪台账核心页面按部件组一行——对齐手工台账粒度">5.1 订单跟踪台账（核心页面，按<strong>部件组</strong>一行——对齐手工台账粒度）<a class="anchor" href="#51-订单跟踪台账核心页面按部件组一行——对齐手工台账粒度" aria-hidden="true">#</a></h3>
@@ -1376,9 +1423,9 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <li><strong>订单修改限制</strong>：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。</li>
 <li><strong>卡口守恒</strong>：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，「成品库存」页可按边别下钻。</li>
 <li><strong>回货超发出</strong>允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。</li>
-<li><strong>期初补录订单</strong>（is_opening=1）免非关键必填校验，但四数口径与正常订单完全一致。</li>
+<li><strong>期初补录订单</strong>（is_opening=1）<strong>仅是一个区分标记</strong>：不改变校验、不影响四数口径，与正常订单走完全相同的流程。</li>
 <li><strong>并发</strong>：单号采番走 NumberGeneratorService 原子自增；余额增减在 <code>dataSource.transaction</code> 内行锁（<code>SELECT ... FOR UPDATE</code>）后更新，防并发超扣。</li>
-<li><strong>纯属性期初行</strong>不参与任何订单欠数，仅计入成品库存总量。</li>
+<li><strong>呆滞品是独立台账</strong>：已完结订单剩下的成品在「呆滞品管理」逐批建档，四个数（期初/入库/出库/结存）自成一本账，<strong>不进订单跟踪台账、也不进成品库存</strong>（§4.9）。</li>
 <li><strong>产品类型组合串</strong>一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。</li>
 <li><strong>客户资料</strong>被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。</li>
 <li><strong>工艺信息</strong>被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。</li>

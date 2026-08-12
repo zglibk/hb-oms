@@ -206,6 +206,9 @@ export class FinishedStockService {
     const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
     let where = ' WHERE o.status <> ?';
+    // 期初录入页传 onlyOpening=true：期初只能挂「期初补录」订单，
+    // 挂正常订单等于绕过装配闸门凭空加库存（服务端另有硬校验，见 buildOpeningItems）
+    if (query.onlyOpening) where += ' AND o.is_opening = 1';
     if (query.keyword) {
       where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
                       OR p.item_no LIKE ? OR p.material_code LIKE ?)`;
@@ -370,6 +373,20 @@ export class FinishedStockService {
       const snap = snapshots.get(productId);
       if (!snap) {
         throw new BadRequestException(`第 ${i + 1} 行：订单产品不存在或订单已作废`);
+      }
+      /**
+       * **期初只能挂「期初补录」订单**（2026-08-11 补的闸门）。
+       *
+       * 期初豁免装配闸门（§4.5），若允许挂到正常订单上，就等于绕过
+       * 「Σ已完成装配 − Σ已入库」凭空给该订单加完成数与库存——正常订单的货
+       * 必须走装配再入库。前端选择器已按 is_opening 过滤，这里是服务端硬闸门。
+       */
+      if (snap.orderIsOpening !== 1) {
+        throw new BadRequestException(
+          `第 ${i + 1} 行：订单「${snap.orderNo ?? ''}」不是期初补录单，不能录期初。`
+            + '正常订单的成品请走「成品出入库 → 成品入库」（需先完成装配）；'
+            + '若这确实是上线前的历史订单，请到订单管理把它的「期初补录」开关打开',
+        );
       }
       const side = this.assertSide(it.side, snap, i);
       const key = `p${productId}#${side}#${batchNo}`;

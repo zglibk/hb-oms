@@ -15,8 +15,11 @@
         <!-- ============ 成品期初（挂订单）============ -->
         <el-tab-pane label="成品期初（挂订单）" name="group">
           <div class="tab-tip">
-            适用于<b>未完结的历史订单</b>：先在「订单管理」把订单补录进来（勾选「期初补录」），
+            适用于<b>未完结的历史订单</b>：先在「订单管理」把订单补录进来（<b>必须勾选「期初补录」</b>），
             再在这里按产品录入已完成入库的数量。这部分<b>计入台账「完成数」</b>，参与成品欠数。
+            <br />
+            「添加产品」<b>只列打开了「期初补录」开关的订单</b>——期初不受装配闸门约束，
+            挂到正常订单上等于跳过装配凭空加库存，故一律拦下。
             已完结订单剩下的成品请改到<b>「呆滞品管理」</b>建档。
           </div>
           <div class="toolbar">
@@ -136,9 +139,10 @@
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
-        <span class="picker-tip">含卡口的产品按左右分行录入</span>
+        <span class="picker-tip">只列「期初补录」订单；含卡口的产品按左右分行录入</span>
       </div>
       <el-table ref="pickerRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="52vh"
+        empty-text="没有「期初补录」订单。请先到「订单管理」录入订单并打开「期初补录」开关"
         @selection-change="(v: any[]) => (picked = v)">
         <el-table-column type="selection" width="42" :selectable="isSelectable" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
@@ -210,7 +214,13 @@ function openPicker() {
 async function loadOptions() {
   pickerLoading.value = true;
   try {
-    const opts = await getStockGroupOptions({ keyword: pickerKeyword.value || undefined, limit: 300 });
+    const opts = await getStockGroupOptions({
+      keyword: pickerKeyword.value || undefined,
+      limit: 300,
+      // 只列「期初补录」订单：期初豁免装配闸门，挂正常订单等于绕过闸门凭空加库存。
+      // 服务端 buildOpeningItems 另有硬校验，这里的过滤只是不让人选错。
+      onlyOpening: true,
+    });
     // 复用出入库的产品行选项接口，按边别展开成可选行（期初不看可入库量，闸门对期初豁免）
     pickerRows.value = opts.flatMap((o) =>
       o.sides.map((s) => ({
