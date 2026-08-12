@@ -180,8 +180,13 @@
               <el-form-item label="是否出口" label-width="80px">
                 <div class="export-line">
                   <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
-                  <el-select
+                  <!-- 用虚拟滚动版（el-select-v2）：国家有 250 个，普通 el-select 首次
+                       展开要一次性渲染 250 个选项、连带请求 250 个国旗 SVG，明显卡顿；
+                       虚拟滚动只渲染可视区的十来项，展开即开 -->
+                  <el-select-v2
                     v-model="p.exportCountry"
+                    :options="COUNTRY_OPTIONS"
+                    :props="COUNTRY_FIELD_PROPS"
                     :disabled="!p.isExport"
                     filterable
                     clearable
@@ -189,15 +194,15 @@
                     popper-class="country-popper"
                     class="export-country"
                   >
-                    <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
+                    <template #default="{ item }">
                       <div class="country-option">
                         <span class="country-left">
-                          <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
+                          <span :class="['fi', 'fi-' + item.code.toLowerCase()]" /><span class="country-zh">{{ item.name }}</span>
                         </span>
-                        <span class="country-en">{{ c.englishName }}</span>
+                        <span class="country-en">{{ item.englishName }}</span>
                       </div>
-                    </el-option>
-                  </el-select>
+                    </template>
+                  </el-select-v2>
                 </div>
               </el-form-item>
             </el-col>
@@ -448,6 +453,9 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled, customerDrawingNoEnabled } = useFeatureFlags();
+
+/** 出口国家下拉（el-select-v2）的字段映射：落库值与展示值都用中文国名 */
+const COUNTRY_FIELD_PROPS = { label: 'name', value: 'name' };
 
 /* 输入自动大写：PO#/生产单号/材质/生产图号统一调用 */
 const upperFmt = (v: string) => (v ?? '').toUpperCase();
@@ -1152,7 +1160,10 @@ export default { name: 'OrderForm' };
 </style>
 
 <style lang="scss">
-/* 出口国家下拉：国旗+中文名 左侧，英文全称 右侧（沿袭 hb-mes） */
+/* 出口国家下拉：国旗+中文名 左侧，英文全称 右侧（沿袭 hb-mes）。
+   输入框本身很窄（跟随所在列宽），但选项要放下国旗+中文名+英文全称，
+   故给浮层一个最小宽度；浮层是绝对定位的，不影响表单布局 */
+.country-popper { min-width: 340px !important; }
 .country-popper .country-option {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
   .country-left { display: flex; align-items: center; gap: 8px; min-width: 0;
