@@ -166,6 +166,71 @@
             </div>
           </template>
 
+          <!-- 首行：订单属性（是否新单 / 是否出口 / 出口国家 / 分体出货）。
+               单独一个 el-row，出口国家随开关显隐时不会把下面的业务字段挤得错位 -->
+          <el-row :gutter="12">
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="是否新单" label-width="80px">
+                <el-switch v-model="p.isNewOrder" :active-value="1" :inactive-value="0" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="是否出口" label-width="80px">
+                <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="p.isExport" :xs="24" :sm="12" :md="6">
+              <el-form-item label="出口国家" label-width="80px">
+                <el-select
+                  v-model="p.exportCountry"
+                  filterable
+                  clearable
+                  placeholder="出口国家"
+                  popper-class="country-popper"
+                  style="width: 100%"
+                >
+                  <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
+                    <div class="country-option">
+                      <span class="country-left">
+                        <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
+                      </span>
+                      <span class="country-en">{{ c.englishName }}</span>
+                    </div>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <!-- 分体出货：客户把一支滑轨拆开下单（如三节轨拆「外中轨」+「内轨」两行）、
+                 分开包装出货、不组装成整品。勾选后下方部件组就是出货构成的事实源：
+                 留哪几组这行就出什么货，形态与型号后缀由组构成推导（不落第二个字段） -->
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="分体出货" label-width="80px">
+                <!-- 仅三节轨可开；已开着的异常数据不锁死（否则用户关不掉），见 :disabled 条件 -->
+                <el-switch
+                  v-model="p.isSplit" :active-value="1" :inactive-value="0"
+                  :disabled="!canSplitShipping(p.railSection) && !p.isSplit"
+                />
+                <el-tooltip
+                  placement="top"
+                  :content="canSplitShipping(p.railSection)
+                    ? '客户把一支滑轨拆开下单（如三节轨拆成「外中轨」和「内轨」两行）、分开包装出货、不组装成整品时开启。开启后，下方部件组留哪几组，这一行就出什么货；只出单个部件（如内轨）的行没有装配环节，入库不受装配数量限制。'
+                    : '只有三节轨可以分体出货（二节轨只有外轨和内轨两个部件，业务上不拆单下单）。'"
+                >
+                  <el-icon class="split-tip"><QuestionFilled /></el-icon>
+                </el-tooltip>
+                <span v-if="!canSplitShipping(p.railSection)" class="split-na">仅三节轨</span>
+                <!-- disable-transitions：v-if 在切换时翻转，el-tag 的 zoom 过渡可能走不完留下残影 -->
+                <el-tag
+                  v-if="p.isSplit"
+                  size="small"
+                  :type="splitCoversAll(p) ? 'danger' : 'warning'"
+                  disable-transitions
+                  class="split-form-tag"
+                >{{ splitCoversAll(p) ? '组已覆盖全部部件＝整品' : `出货形态：${splitFormText(p)}` }}</el-tag>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
           <el-row :gutter="12">
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="货号" label-width="80px">
@@ -201,35 +266,6 @@
                 <el-select v-model="p.railSection" style="width: 100%" @change="onRailSectionChange(p)">
                   <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
-              </el-form-item>
-            </el-col>
-            <!-- 分体出货：客户把一支滑轨拆开下单（如三节轨拆「外中轨」+「内轨」两行）、
-                 分开包装出货、不组装成整品。勾选后下方部件组就是出货构成的事实源：
-                 留哪几组这行就出什么货，形态与型号后缀由组构成推导（不落第二个字段） -->
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="分体出货" label-width="80px">
-                <!-- 仅三节轨可开；已开着的异常数据不锁死（否则用户关不掉），见 :disabled 条件 -->
-                <el-switch
-                  v-model="p.isSplit" :active-value="1" :inactive-value="0"
-                  :disabled="!canSplitShipping(p.railSection) && !p.isSplit"
-                />
-                <el-tooltip
-                  placement="top"
-                  :content="canSplitShipping(p.railSection)
-                    ? '客户把一支滑轨拆开下单（如三节轨拆成「外中轨」和「内轨」两行）、分开包装出货、不组装成整品时开启。开启后，下方部件组留哪几组，这一行就出什么货；只出单个部件（如内轨）的行没有装配环节，入库不受装配数量限制。'
-                    : '只有三节轨可以分体出货（二节轨只有外轨和内轨两个部件，业务上不拆单下单）。'"
-                >
-                  <el-icon class="split-tip"><QuestionFilled /></el-icon>
-                </el-tooltip>
-                <span v-if="!canSplitShipping(p.railSection)" class="split-na">仅三节轨</span>
-                <!-- disable-transitions：v-if 在切换时翻转，el-tag 的 zoom 过渡可能走不完留下残影 -->
-                <el-tag
-                  v-if="p.isSplit"
-                  size="small"
-                  :type="splitCoversAll(p) ? 'danger' : 'warning'"
-                  disable-transitions
-                  class="split-form-tag"
-                >{{ splitCoversAll(p) ? '组已覆盖全部部件＝整品' : `出货形态：${splitFormText(p)}` }}</el-tag>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -285,34 +321,6 @@
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="是否新单" label-width="80px">
-                <el-switch v-model="p.isNewOrder" :active-value="1" :inactive-value="0" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="是否出口" label-width="80px">
-                <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
-                <el-select
-                  v-if="p.isExport"
-                  v-model="p.exportCountry"
-                  filterable
-                  clearable
-                  placeholder="出口国家"
-                  popper-class="country-popper"
-                  style="width: 150px; margin-left: 8px"
-                >
-                  <el-option v-for="c in COUNTRY_OPTIONS" :key="c.code" :label="c.name" :value="c.name">
-                    <div class="country-option">
-                      <span class="country-left">
-                        <span :class="['fi', 'fi-' + c.code.toLowerCase()]" /><span class="country-zh">{{ c.name }}</span>
-                      </span>
-                      <span class="country-en">{{ c.englishName }}</span>
-                    </div>
-                  </el-option>
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="交货地址" label-width="80px">
                 <el-input v-model="p.deliveryAddress" />
               </el-form-item>
@@ -322,7 +330,7 @@
           <!-- 部件组（跟踪/台账锚点） -->
           <div class="group-title">
             部件组（跟踪粒度；默认按节数逐部件铺开：三节轨 外/中/内轨，二节轨 外/内轨）
-            <span v-if="p.isSplit" class="split-hint">分体出货：留下的组就是这行实际出货的部件，请删掉不出货的组</span>
+            <span v-if="p.isSplit" class="split-hint">分体出货：留下的组就是这行实际出货的部件，请删掉不需要的部件行</span>
             <el-button
               size="small" link type="primary" :icon="Plus"
               :disabled="!canAddGroup(p)" @click="addGroup(p)"
@@ -1116,7 +1124,7 @@ export default { name: 'OrderForm' };
 .split-tip { margin-left: 6px; color: var(--el-text-color-placeholder); cursor: help; vertical-align: middle; }
 .split-na { margin-left: 8px; font-size: 12px; color: var(--el-text-color-placeholder); }
 .split-form-tag { margin-left: 8px; }
-.split-hint { color: var(--el-color-warning); }
+.split-hint { color: var(--el-color-danger); font-weight: 600; }
 .group-grid {
   width: 100%; border-collapse: collapse;
   th, td { border: 1px solid var(--el-border-color); padding: 4px 6px; }
