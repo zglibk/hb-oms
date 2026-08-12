@@ -115,10 +115,8 @@ export class PositionService {
   async remove(id: number) {
     const row = await this.mustGet(id);
     const used = await this.countEmployees(id);
-    if (used > 0) {
-      throw new BadRequestException(
-        `岗位「${row.positionName}」已被 ${used} 名员工使用，不能删除；如需停用请把状态改为「停用」`,
-      );
+    if (used.total > 0) {
+      throw new BadRequestException(this.buildInUseMessage(row.positionName, used));
     }
     await this.repo.delete(id);
     return { id };
@@ -146,8 +144,12 @@ export class PositionService {
         continue;
       }
       const used = await this.countEmployees(id);
-      if (used > 0) {
-        failed.push(`「${row.positionName}」已被 ${used} 名员工使用，未删除（可改为停用）`);
+      if (used.total > 0) {
+        const detail = [
+          used.active ? `在职 ${used.active} 人` : '',
+          used.left ? `离职 ${used.left} 人` : '',
+        ].filter(Boolean).join('、');
+        failed.push(`「${row.positionName}」已被 ${detail} 引用，未删除（可改为停用）`);
         continue;
       }
       await this.repo.delete(id);
@@ -400,12 +402,40 @@ export class PositionService {
     }));
   }
 
-  private async countEmployees(positionId: number): Promise<number> {
+  /**
+   * 引用该岗位的员工数，**在职与离职分开数**。
+   *
+   * 删除守卫要的是「有没有人引用」，离职档案同样引用着 position_id，
+   * 删了岗位它们的履历就查不出当年是什么岗，所以离职的也要拦。
+   * 但列表的「在岗」只数在职（见 attachCounts），两处口径不同——
+   * 提示文案必须把这两个数分开报，否则会出现
+   * 「列表显示在岗：否，点删除却说被 3 名员工使用」这种自相矛盾。
+   */
+  private async countEmployees(positionId: number): Promise<{
+    total: number;
+    active: number;
+    left: number;
+  }> {
     const rows = await this.repo.manager.query(
-      'SELECT COUNT(*) AS c FROM t_employee WHERE position_id = ?',
+      `SELECT SUM(job_status = 1) AS active, SUM(job_status <> 1) AS \`left\`
+         FROM t_employee WHERE position_id = ?`,
       [positionId],
     );
-    return Number(rows?.[0]?.c ?? 0);
+    const active = Number(rows?.[0]?.active ?? 0);
+    const left = Number(rows?.[0]?.left ?? 0);
+    return { total: active + left, active, left };
+  }
+
+  /** 删除被拒时的中文提示：把在职/离职拆开说清楚，避免与列表的「在岗」口径打架 */
+  private buildInUseMessage(positionName: string, c: { active: number; left: number }) {
+    const parts: string[] = [];
+    if (c.active) parts.push(`在职 ${c.active} 人`);
+    if (c.left) parts.push(`离职 ${c.left} 人`);
+    const detail = parts.join('、');
+    const why = c.active
+      ? '请先把这些员工调到其他岗位'
+      : '离职档案仍要留住当年的岗位信息，故同样不能删';
+    return `岗位「${positionName}」已被 ${detail} 引用，不能删除——${why}；如需下线请把状态改为「停用」`;
   }
 
   /**

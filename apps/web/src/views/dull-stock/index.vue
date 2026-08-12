@@ -173,13 +173,14 @@
       />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="14">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="货号" prop="itemNo">
               <el-input v-model="form.itemNo" placeholder="如 53#" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="客户">
+          <el-col :span="12">
+            <!-- 客户 / 生产单号至少填一项，两者互为条件，见 validateSource -->
+            <el-form-item label="客户" prop="customerName">
               <el-select
                 v-model="form.customerName" filterable allow-create default-first-option
                 clearable placeholder="可选择或直接输入" style="width: 100%"
@@ -188,38 +189,38 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="生产单号">
-              <el-input v-model="form.productionNo" placeholder="呆滞品来源单号" />
+          <el-col :span="12">
+            <el-form-item label="生产单号" prop="productionNo">
+              <el-input v-model="form.productionNo" placeholder="与客户至少填一项" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="产品类型">
               <el-select v-model="form.productTypes" multiple collapse-tags placeholder="可多选" style="width: 100%">
                 <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="节数">
               <el-select v-model="form.railSection" clearable style="width: 100%">
                 <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="规格(mm)">
               <el-input-number v-model="form.dimensionMm" :min="0" :precision="0" :controls="false" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="表面处理">
               <el-select v-model="form.surfaceType" clearable style="width: 100%" @change="onSurfaceChange">
                 <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col v-if="colorEnabled" :span="8">
+          <el-col v-if="colorEnabled" :span="12">
             <el-form-item label="颜色">
               <el-select
                 v-model="form.color" filterable allow-create default-first-option
@@ -229,26 +230,26 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="边别">
               <el-select v-model="form.side" clearable placeholder="非卡口留空" style="width: 100%">
                 <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="单位" prop="unit">
               <el-select v-model="form.unit" :disabled="hasFlow" style="width: 100%">
                 <el-option v-for="o in UNIT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="期初数" prop="openingQty">
               <el-input-number v-model="form.openingQty" :min="0" :precision="0" :controls="false" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="产品型号">
               <el-input v-model="form.productModel" placeholder="留空按 货号+类型 自动拼" />
             </el-form-item>
@@ -317,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, reactive, ref } from 'vue';
+import { computed, nextTick, onActivated, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Search, Plus, EditPen, Delete, Sort, InfoFilled } from '@element-plus/icons-vue';
 import {
@@ -478,11 +479,35 @@ const form = reactive({
   remark: '',
 });
 
+/**
+ * 客户 / 生产单号**至少填一项**。
+ *
+ * 呆滞品脱离了订单，这两项是日后认领这批货的仅有线索，两个都空的档案
+ * 事后没人说得清是谁的货、从哪张单剩下的。二者互为条件，故两个字段各挂
+ * 一条同样的校验，并在任一变动时联动重校，否则填了其中一个另一个的
+ * 红字不会自己消。服务端另有一道同样的校验（前端拦的是手滑，API 直调拦不住）。
+ */
+const validateSource = (_rule: unknown, _value: unknown, callback: (e?: Error) => void) => {
+  const filled = !!form.customerName?.trim() || !!form.productionNo?.trim();
+  callback(filled ? undefined : new Error('客户与生产单号至少填写一项'));
+};
+
 const rules: FormRules = {
   itemNo: [{ required: true, message: '请填写货号', trigger: 'blur' }],
+  customerName: [{ validator: validateSource, trigger: ['blur', 'change'] }],
+  productionNo: [{ validator: validateSource, trigger: ['blur', 'change'] }],
   unit: [{ required: true, message: '请选择单位', trigger: 'change' }],
   openingQty: [{ required: true, message: '请填写期初数', trigger: 'blur' }],
 };
+
+watch(
+  () => [form.customerName, form.productionNo],
+  () => {
+    if (!formVisible.value) return;
+    // 任一填上，另一个的红字要跟着消（validateField 校验不过会 reject，吞掉即可）
+    formRef.value?.validateField(['customerName', 'productionNo']).catch(() => {});
+  },
+);
 
 /** 已有流水的记录不许改单位 */
 const hasFlow = computed(
@@ -524,6 +549,8 @@ function openForm(row?: DullStockRow) {
   form.openingQty = row?.openingQty ?? 0;
   form.remark = row?.remark ?? '';
   formVisible.value = true;
+  // 刚打开就飘红不合理（用户还没动手），把上一次遗留的校验状态清掉
+  nextTick(() => formRef.value?.clearValidate());
 }
 
 async function onSubmitForm() {

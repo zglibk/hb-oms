@@ -136,9 +136,12 @@
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
 
-    <el-dialog v-model="formVisible" :title="editId ? '编辑岗位' : '新增岗位'" width="680px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" size="small">
-        <el-row :gutter="14">
+    <el-dialog
+      v-model="formVisible" :title="editId ? '编辑岗位' : '新增岗位'"
+      width="820px" class="pos-form-dialog"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px" size="small">
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="岗位编码">
               <el-input
@@ -540,6 +543,13 @@ export default { name: 'BasicPosition' };
   b { color: var(--el-text-color-primary); } }
 /* 在岗人数超编：标红，提示需要扩编或调岗 */
 .over-head { color: var(--el-color-danger); font-weight: 600; }
+
+/* 新增/编辑岗位弹窗：9 个字段两列排，光加宽会越来越扁，
+ * 故同时把行距和上下内边距放开，让宽高比落在 1.5~1.6 一带 */
+:deep(.pos-form-dialog) {
+  .el-dialog__body { padding-top: 18px; padding-bottom: 6px; }
+  .el-form-item { margin-bottom: 22px; }
+}
 .mb12 { margin-bottom: 12px; }
 .import-body { display: flex; flex-direction: column; gap: 12px; }
 .import-upload { width: 100%; }

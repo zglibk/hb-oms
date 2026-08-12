@@ -275,10 +275,19 @@ export class DullStockService {
     const itemNo = (dto.itemNo ?? '').trim();
     const productType = normalizeProductTypes(dto.productType ?? '');
     const dimensionMm = Number(dto.dimensionMm) || 0;
+
+    // 客户 / 生产单号至少填一项：呆滞品脱离了订单，这两项是日后认领这批货的
+    // 仅有线索，两个都空的档案事后没人说得清是谁的货。前端也校验，此处防 API 直调。
+    const customerName = (dto.customerName ?? '').trim();
+    const productionNo = (dto.productionNo ?? '').trim();
+    if (!customerName && !productionNo) {
+      throw new BadRequestException('客户与生产单号至少填写一项，否则日后无法追溯这批货的来源');
+    }
+
     return {
       itemNo,
-      customerName: (dto.customerName ?? '').trim(),
-      productionNo: (dto.productionNo ?? '').trim(),
+      customerName,
+      productionNo,
       productModel: (dto.productModel ?? '').trim() || formatProductModel(itemNo, productType),
       productType,
       railSection: (dto.railSection ?? '').trim(),
