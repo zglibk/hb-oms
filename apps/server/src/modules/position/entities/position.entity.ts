@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { POSITION_NATURE } from '@hb-oms/shared';
 
 /**
  * 岗位主数据（基础数据，2026-08-11 由字典 `hr_position` 升级而来）。
@@ -54,22 +55,32 @@ export class Position {
   })
   deptId: number | null;
 
+  /**
+   * 岗位性质（2026-08-12 由布尔的 is_manager 升级为三值——加了「技术岗」之后，
+   * 「是不是管理岗」这个是非题已经表达不了了）。
+   */
   @Column({
-    name: 'job_level',
+    name: 'position_nature',
     type: 'varchar',
-    length: 32,
-    nullable: true,
-    comment: '职级（字典 job_level）',
+    length: 16,
+    default: POSITION_NATURE.NORMAL,
+    comment: '岗位性质：normal普通岗 manager管理岗 tech技术岗',
   })
-  jobLevel: string | null;
+  positionNature: string;
 
+  /**
+   * 职级（`t_job_level.id`）：**本序列内的等级**，不是岗位名称——
+   * 质检员分初/中/高级，工程师分助理/工程师/高级/资深，管理分班组长/主管/经理/高管。
+   * 职级本身归属某个序列（= 岗位性质），表单据此级联过滤。
+   */
+  @Index('idx_job_level')
   @Column({
-    name: 'is_manager',
-    type: 'tinyint',
-    default: 0,
-    comment: '是否管理岗：1是 0否',
+    name: 'job_level_id',
+    type: 'int',
+    nullable: true,
+    comment: '职级（t_job_level.id）',
   })
-  isManager: number;
+  jobLevelId: number | null;
 
   @Column({
     type: 'int',

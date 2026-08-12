@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Position } from './entities/position.entity';
+import { JobLevel } from './entities/job-level.entity';
 import { PositionController } from './position.controller';
 import { PositionService } from './position.service';
+import { JobLevelController } from './job-level.controller';
+import { JobLevelService } from './job-level.service';
 
 /**
  * 岗位主数据（基础数据，2026-08-11 由字典 `hr_position` 升级而来）。
@@ -11,8 +14,8 @@ import { PositionService } from './position.service';
  * 故不导出 service——没有别的模块需要往岗位表里写数。
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Position])],
-  controllers: [PositionController],
-  providers: [PositionService],
+  imports: [TypeOrmModule.forFeature([Position, JobLevel])],
+  controllers: [PositionController, JobLevelController],
+  providers: [PositionService, JobLevelService],
 })
 export class PositionModule {}

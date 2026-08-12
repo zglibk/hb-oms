@@ -157,10 +157,19 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'position:create', perm_name: '新增岗位', perm_type: 2, parent_code: 'basic:position', sort: 1 },
   { perm_code: 'position:update', perm_name: '编辑岗位', perm_type: 2, parent_code: 'basic:position', sort: 2 },
   { perm_code: 'position:delete', perm_name: '删除岗位', perm_type: 2, parent_code: 'basic:position', sort: 3 },
+  { perm_code: 'position:import', perm_name: '批量导入岗位', perm_type: 2, parent_code: 'basic:position', sort: 4 },
+  { perm_code: 'position:export', perm_name: '导出岗位', perm_type: 2, parent_code: 'basic:position', sort: 5 },
+
+  // 职级管理（2026-08-12 由字典 job_level 升级为主数据）：职级是「序列内的等级」，
+  // 按岗位性质分序列，紧挨岗位管理
+  { perm_code: 'basic:job-level', perm_name: '职级管理', perm_type: 1, parent_code: 'basic', menu_path: '/basic/job-level', component: 'basic/job-level/index', icon: 'Rank', sort: 5 },
+  { perm_code: 'job-level:create', perm_name: '新增职级', perm_type: 2, parent_code: 'basic:job-level', sort: 1 },
+  { perm_code: 'job-level:update', perm_name: '编辑职级', perm_type: 2, parent_code: 'basic:job-level', sort: 2 },
+  { perm_code: 'job-level:delete', perm_name: '删除职级', perm_type: 2, parent_code: 'basic:job-level', sort: 3 },
 
   // 部件信息（原物料信息，2026-08 改版；perm_code/路由/组件路径保持 material 内部标识稳定，
   // 2026-08-07 由「物料管理」移入「基础数据」——它本就是主数据，与出入库单据不同性质）
-  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 5 },
+  { perm_code: 'basic:material', perm_name: '部件信息', perm_type: 1, parent_code: 'basic', menu_path: '/basic/material', component: 'system/material/index', icon: 'Grid', sort: 6 },
   { perm_code: 'material:create', perm_name: '新增部件', perm_type: 2, parent_code: 'basic:material', sort: 1 },
   { perm_code: 'material:update', perm_name: '编辑部件', perm_type: 2, parent_code: 'basic:material', sort: 2 },
   { perm_code: 'material:delete', perm_name: '删除部件', perm_type: 2, parent_code: 'basic:material', sort: 3 },

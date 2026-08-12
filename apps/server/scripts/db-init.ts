@@ -16,6 +16,7 @@ import * as bcrypt from 'bcryptjs';
 import {
   DEPARTMENTS,
   POSITIONS,
+  JOB_LEVELS,
   ROLES,
   PERMISSIONS,
   ROLE_PERMISSIONS,
@@ -67,6 +68,7 @@ async function main() {
 
   // 3. 种子数据
   await seedDepartments(db);
+  await seedJobLevels(db);
   await seedPositions(db);
   await seedRoles(db);
   await seedPermissions(db);
@@ -92,6 +94,19 @@ async function seedDepartments(db: mysql.Connection) {
     );
   }
   console.log(`✓ 部门 ${DEPARTMENTS.length} 条`);
+}
+
+/** 职级主数据：岗位表单的职级下拉取自这里（按岗位性质分序列），新库必须种 */
+async function seedJobLevels(db: mysql.Connection) {
+  for (const j of JOB_LEVELS) {
+    await db.query(
+      `INSERT INTO t_job_level (level_name, position_nature, level_rank, sort, status, creator_name, updater_name)
+       VALUES (?, ?, ?, ?, 1, '系统同步', '系统同步')
+       ON DUPLICATE KEY UPDATE level_rank = VALUES(level_rank), sort = VALUES(sort)`,
+      [j.level_name, j.position_nature, j.level_rank, j.sort],
+    );
+  }
+  console.log(`✓ 职级 ${JOB_LEVELS.length} 条`);
 }
 
 /** 岗位主数据：员工建档的岗位下拉取自这里，新库必须种，否则下拉是空的 */

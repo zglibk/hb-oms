@@ -71,8 +71,10 @@ const MIGRATIONS: string[] = [
   'migration-employee-code.sql',
   // 岗位由字典 hr_position 升级为独立主数据 t_position（含 t_employee.position → position_id）
   'migration-position.sql',
-  // 职级字典按公司实际职级序列重定（普工 → 总经理 15 档）
+  // 职级字典按公司实际职级序列重定（该文件的种子段已作废，见文件内说明）
   'migration-job-level.sql',
+  // 岗位性质三值化（普通/管理/技术）+ 职级升级为独立主数据 t_job_level
+  'migration-position-nature.sql',
   // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
   'migration-employee-profile.sql',
 ];
@@ -99,6 +101,10 @@ const forbiddenColumns = [
   // 岗位于 2026-08-11 由字典值升级为 t_position 引用；旧列若被旧版 schema 重建复活，
   // 岗位会退回"存字典值"而程序不报错，故显式盯住
   't_employee.position',
+  // 岗位性质于 2026-08-12 由布尔升级为三值、职级升级为主数据引用；
+  // 这两列若被旧版 schema 重建复活，「技术岗」与分序列职级会静默丢失
+  't_position.is_manager',
+  't_position.job_level',
 ];
 
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
@@ -224,9 +230,14 @@ const expectedColumns = [
   't_position.position_code',
   't_position.position_name',
   't_position.dept_id',
-  't_position.is_manager',
+  't_position.position_nature',
+  't_position.job_level_id',
   't_position.headcount',
   't_employee.position_id',
+  // 职级主数据（由字典 job_level 升级）
+  't_job_level.level_name',
+  't_job_level.position_nature',
+  't_job_level.level_rank',
   't_employee.native_place',
   't_employee.education',
   't_employee.education_type',

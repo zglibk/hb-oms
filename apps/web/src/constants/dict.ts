@@ -65,6 +65,12 @@ export {
   isConvertToFormal,
   needsEmpNoReissue,
   isValidEmpNo,
+  // 岗位性质与职级序列
+  POSITION_NATURE_OPTIONS,
+  POSITION_NATURE as POSITION_NATURE_VALUE,
+  POSITION_NATURE_VALUES,
+  positionNatureLabel,
+  filterJobLevels,
   // 单位换算（1套=2支、1英寸=25mm）
   PIECES_PER_SET,
   UNIT,

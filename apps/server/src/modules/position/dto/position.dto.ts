@@ -1,4 +1,6 @@
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -8,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { POSITION_NATURE_VALUES } from '@hb-oms/shared';
 import { toBoolean } from '../../../common/utils/transform.util';
 
 /**
@@ -37,12 +40,17 @@ export class CreatePositionDto {
   @IsInt({ message: '所属部门无效' })
   deptId?: number;
 
-  @IsOptional() @IsString() @MaxLength(32, { message: '职级不能超过 32 个字符' }) jobLevel?: string;
-
+  /** 职级（t_job_level.id）；须与岗位性质属同一序列，服务端校验 */
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value == null ? undefined : value))
   @Type(() => Number)
-  @IsIn([0, 1], { message: '是否管理岗只能是 0 或 1' })
-  isManager?: number;
+  @IsInt({ message: '职级无效' })
+  jobLevelId?: number;
+
+  /** 岗位性质：普通岗 / 管理岗 / 技术岗 */
+  @IsOptional()
+  @IsIn(POSITION_NATURE_VALUES, { message: '岗位性质只能是 普通岗 / 管理岗 / 技术岗' })
+  positionNature?: string;
 
   @IsOptional()
   @Transform(({ value }) => (value === '' || value == null ? undefined : value))
@@ -73,7 +81,11 @@ export class QueryPositionDto {
 
   @IsOptional() @Type(() => Number) @IsInt() deptId?: number;
 
-  @IsOptional() @Type(() => Number) @IsIn([0, 1]) isManager?: number;
+  @IsOptional()
+  @IsIn(POSITION_NATURE_VALUES, { message: '岗位性质只能是 普通岗 / 管理岗 / 技术岗' })
+  positionNature?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() jobLevelId?: number;
 
   @IsOptional() @Type(() => Number) @IsIn([0, 1]) status?: number;
 
@@ -83,6 +95,21 @@ export class QueryPositionDto {
    * 字符串 "false" 会被隐式转成 true（§一 已踩）。
    */
   @IsOptional() @Transform(toBoolean) onlyCommon?: boolean;
+}
+
+/** 批量删除：逐个尝试，被引用的跳过并回报，不因一条失败整批回滚 */
+export class BatchDeletePositionDto {
+  @IsArray({ message: '请选择要删除的岗位' })
+  @ArrayNotEmpty({ message: '请选择要删除的岗位' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: '岗位ID无效' })
+  ids: number[];
+}
+
+/** 导入：整批校验通过才落库（沿用项目既有导入约定） */
+export class ImportPositionDto {
+  /** 覆盖更新：按「岗位名称 + 所属部门」匹配已有岗位并更新其余字段 */
+  @IsOptional() @Transform(toBoolean) overwrite?: boolean;
 }
 
 /** 下拉专用查询：按部门取可选岗位 */

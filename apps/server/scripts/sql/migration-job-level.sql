@@ -18,30 +18,11 @@
 DELETE FROM t_dict
 WHERE dict_type = 'job_level' AND dict_value IN ('staff', 'group_leader', 'shift_leader');
 
--- 2. 种入新职级序列（幂等；supervisor / manager 已存在则跳过，只补 sort 之外的新档）
-INSERT INTO t_dict (dict_type, dict_label, dict_value, sort, status, creator_name, updater_name)
-SELECT d.dict_type, d.dict_label, d.dict_value, d.sort, 1, '系统同步', '系统同步'
-FROM (
-            SELECT 'job_level' AS dict_type, '普工' AS dict_label, 'general_worker' AS dict_value, 1 AS sort
-  UNION ALL SELECT 'job_level', '操作工',                  'operator',           2
-  UNION ALL SELECT 'job_level', '维修工',                  'maintenance_worker', 3
-  UNION ALL SELECT 'job_level', '机长',                    'machine_leader',     4
-  UNION ALL SELECT 'job_level', '助理',                    'assistant',          5
-  UNION ALL SELECT 'job_level', '专员（计划 / 跟单 / 财务）', 'specialist',       6
-  UNION ALL SELECT 'job_level', '班组长',                  'team_leader',        7
-  UNION ALL SELECT 'job_level', '技术员',                  'technician',         8
-  UNION ALL SELECT 'job_level', '主管',                    'supervisor',         9
-  UNION ALL SELECT 'job_level', '工程师',                  'engineer',          10
-  UNION ALL SELECT 'job_level', '主任',                    'director',          11
-  UNION ALL SELECT 'job_level', '副经理',                  'deputy_manager',    12
-  UNION ALL SELECT 'job_level', '经理',                    'manager',           13
-  UNION ALL SELECT 'job_level', '副总经理',                'deputy_gm',         14
-  UNION ALL SELECT 'job_level', '总经理',                  'general_manager',   15
-) d
-WHERE NOT EXISTS (
-  SELECT 1 FROM t_dict x WHERE x.dict_type = d.dict_type AND x.dict_value = d.dict_value
-);
-
--- 3. 校正保留下来的两档排序（supervisor / manager 建于旧序列，sort 还是 4 / 5）
-UPDATE t_dict SET sort = 9  WHERE dict_type = 'job_level' AND dict_value = 'supervisor' AND sort <> 9;
-UPDATE t_dict SET sort = 13 WHERE dict_type = 'job_level' AND dict_value = 'manager'    AND sort <> 13;
+-- 2. 【已作废】此处原本种入 15 档「普工/操作工/…/总经理」的职级。
+--
+-- 那套实际是**岗位名称**而不是职级，与岗位列表的「岗位名称」列几乎一模一样，
+-- 起不到职级应有的作用。2026-08-12 改为**按序列分等级**（管理/技术/普通三条序列，
+-- 每条内部分档），种子与清理统一由 `migration-position-nature.sql` 负责。
+--
+-- ⚠️ 这段**必须留空**：db:migrate 每次跑全量清单，若还在这里种，
+-- 就会把后一个迁移刚删掉的旧职级又种回来（本会话在 hr_position 上已踩过同款坑）。

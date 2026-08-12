@@ -157,22 +157,8 @@ export const DICTS: Array<{
   { dict_type: 'emp_type', dict_label: '派遣工', dict_value: 'dispatch', sort: 3 },
   { dict_type: 'emp_type', dict_label: '学徒', dict_value: 'apprentice', sort: 4 },
   { dict_type: 'emp_type', dict_label: '实习生', dict_value: 'intern', sort: 5 },
-  // 职级（岗位主数据用）：公司实际职级序列，可在数据字典自行增减
-  { dict_type: 'job_level', dict_label: '普工', dict_value: 'general_worker', sort: 1 },
-  { dict_type: 'job_level', dict_label: '操作工', dict_value: 'operator', sort: 2 },
-  { dict_type: 'job_level', dict_label: '维修工', dict_value: 'maintenance_worker', sort: 3 },
-  { dict_type: 'job_level', dict_label: '机长', dict_value: 'machine_leader', sort: 4 },
-  { dict_type: 'job_level', dict_label: '助理', dict_value: 'assistant', sort: 5 },
-  { dict_type: 'job_level', dict_label: '专员（计划 / 跟单 / 财务）', dict_value: 'specialist', sort: 6 },
-  { dict_type: 'job_level', dict_label: '班组长', dict_value: 'team_leader', sort: 7 },
-  { dict_type: 'job_level', dict_label: '技术员', dict_value: 'technician', sort: 8 },
-  { dict_type: 'job_level', dict_label: '主管', dict_value: 'supervisor', sort: 9 },
-  { dict_type: 'job_level', dict_label: '工程师', dict_value: 'engineer', sort: 10 },
-  { dict_type: 'job_level', dict_label: '主任', dict_value: 'director', sort: 11 },
-  { dict_type: 'job_level', dict_label: '副经理', dict_value: 'deputy_manager', sort: 12 },
-  { dict_type: 'job_level', dict_label: '经理', dict_value: 'manager', sort: 13 },
-  { dict_type: 'job_level', dict_label: '副总经理', dict_value: 'deputy_gm', sort: 14 },
-  { dict_type: 'job_level', dict_label: '总经理', dict_value: 'general_manager', sort: 15 },
+  // ⚠️ 职级**不在字典里**——2026-08-12 升级为 t_job_level 主数据，见下方 JOB_LEVELS。
+  // 原因：职级要按序列（岗位性质）分组，靠字典的 parent_value 手填「上级键值」太容易填错。
   { dict_type: 'marital_status', dict_label: '未婚', dict_value: 'unmarried', sort: 1 },
   { dict_type: 'marital_status', dict_label: '已婚', dict_value: 'married', sort: 2 },
   { dict_type: 'marital_status', dict_label: '离异', dict_value: 'divorced', sort: 3 },
@@ -205,6 +191,31 @@ export const POSITIONS = [
   { position_code: 'assembly', position_name: '装配工', sort: 2 },
   { position_code: 'qc', position_name: '质检', sort: 3 },
   { position_code: 'maintenance', position_name: '机修', sort: 4 },
+];
+
+/**
+ * 职级主数据种子（2026-08-12 由字典 job_level 升级而来）。
+ *
+ * 职级表达的是「**在本序列内的等级**」，不是岗位名称——质检员分初/中/高级，
+ * 工程师分助理/工程师/高级/资深，管理分班组长/主管/经理/高管。
+ * `position_nature` 即所属序列（与岗位性质同一套值），岗位表单据此级联过滤。
+ *
+ * 同 DEPARTMENTS/POSITIONS：`db:init` 不跑 migrations，漏了这份新库职级下拉是空的；
+ * 存量库由 `migration-position-nature.sql` 种，**两处终态必须一致**。
+ */
+export const JOB_LEVELS = [
+  { level_name: '班组长级', position_nature: 'manager', level_rank: 1, sort: 11 },
+  { level_name: '主管级', position_nature: 'manager', level_rank: 2, sort: 12 },
+  { level_name: '经理级', position_nature: 'manager', level_rank: 3, sort: 13 },
+  { level_name: '高管级', position_nature: 'manager', level_rank: 4, sort: 14 },
+  { level_name: '助理工程师', position_nature: 'tech', level_rank: 1, sort: 21 },
+  { level_name: '工程师', position_nature: 'tech', level_rank: 2, sort: 22 },
+  { level_name: '高级工程师', position_nature: 'tech', level_rank: 3, sort: 23 },
+  { level_name: '资深工程师', position_nature: 'tech', level_rank: 4, sort: 24 },
+  { level_name: '初级', position_nature: 'normal', level_rank: 1, sort: 31 },
+  { level_name: '中级', position_nature: 'normal', level_rank: 2, sort: 32 },
+  { level_name: '高级', position_nature: 'normal', level_rank: 3, sort: 33 },
+  { level_name: '技师', position_nature: 'normal', level_rank: 4, sort: 34 },
 ];
 
 // ---------- 账号（plainPwd 在 db-init 中 bcrypt 加密）----------

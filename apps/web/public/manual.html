@@ -157,7 +157,7 @@
     <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
     <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
 
-    <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 编制 设备" onclick="jump('ch8')">第8章 基础数据</a>
+    <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 职级 职级管理 序列 等级 编制 批量导入 导出 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
     <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
@@ -782,12 +782,30 @@
           <tr>
             <td>岗位管理</td><td>基础数据 → 岗位管理</td>
             <td>
-              人事档案「岗位」下拉的来源。除名称外还能记<strong>岗位编码、所属部门、职级、是否管理岗、编制人数</strong>；
+              人事档案「岗位」下拉的来源。除名称外还能记<strong>岗位编码、所属部门、岗位性质、职级、编制人数</strong>；
               <strong>岗位编码不用填</strong>，保存时自动生成（<code>POS001</code> 这样），生成后不可修改；
               列表会把<strong>编制 / 在岗</strong>并排显示，在岗超过编制会标红。<br />
+              <strong>岗位性质</strong>分三种：普通岗 / 管理岗 / 技术岗，它决定这个岗位能选哪些职级。<br />
               <strong>所属部门留空 = 通用岗位</strong>（如文员、司机），任何部门的员工都能选到；
               填了部门的岗位只在该部门下出现。<br />
+              支持<strong>批量导入 / 导出 / 批量删除</strong>：导入先下载模板，模板里<strong>不用填岗位编码</strong>；
+              整批校验通过才入库，有问题会逐行列出原因；同名同部门的岗位默认报错，勾「覆盖更新」则改为更新。
+              批量删除会自动跳过已被员工使用的岗位并告诉你是哪几个。<br />
               已经有员工在用的岗位<strong>不能删除</strong>，要下线请把状态改成「停用」——停用后不再进下拉，在岗员工不受影响。
+            </td>
+          </tr>
+          <tr>
+            <td>职级管理</td><td>基础数据 → 职级管理</td>
+            <td>
+              岗位「职级」下拉的来源。<strong>职级是「本序列内的等级」，不是岗位名称</strong>——
+              比如质检员分初级/中级/高级，工程师分助理工程师/工程师/高级工程师/资深工程师，
+              管理线分班组长级/主管级/经理级/高管级。<br />
+              每条职级归属一个<strong>序列</strong>（就是岗位性质：普通岗 / 管理岗 / 技术岗）。
+              维护岗位时先选岗位性质，职级下拉<strong>只会列出该序列的等级</strong>，不会串。<br />
+              「等级」数字表示序列内的高低（初级 1、中级 2、高级 3），越大越高。
+              不同序列可以有同名职级；已被岗位使用的职级<strong>不能删除</strong>（请改成「停用」），
+              也<strong>不能改所属序列</strong>——改了会让在用它的岗位「性质」和「职级」对不上；
+              要挪序列请在目标序列新建一条，再把那些岗位改挂过去。改名称、改等级、改排序不受影响。
             </td>
           </tr>
           <tr><td>部件信息</td><td>基础数据 → 部件信息</td><td>产品主数据：货号、名称、产品类型、规格、<strong>单重</strong>（登记外发回厂时自动带出）等</td></tr>
@@ -911,10 +929,11 @@
         <li>保存。编号自动生成，提示条会告诉你生成的是哪个号。列表可按关键字、组织、厂区、用工属性、岗位、在职状态筛选。</li>
       </ol>
       <div class="alert alert--info">
-        用工属性、职级、婚姻状况、政治面貌、学历等选项在<strong>系统管理 → 数据字典</strong>维护
-        （类型 <code>emp_type</code> / <code>job_level</code> / <code>marital_status</code> / <code>political_status</code> / <code>education</code>）。
+        用工属性、婚姻状况、政治面貌、学历等选项在<strong>系统管理 → 数据字典</strong>维护
+        （类型 <code>emp_type</code> / <code>marital_status</code> / <code>political_status</code> / <code>education</code>）。
         学历类型为系统固定项（全日制 / 非全日制）。<br />
-        <strong>岗位不在数据字典里</strong>，它是一份独立主数据，在「基础数据 → 岗位管理」维护。
+        <strong>岗位和职级都不在数据字典里</strong>，它们是独立主数据，分别在
+        「基础数据 → 岗位管理」和「基础数据 → 职级管理」维护。
       </div>
     </section>
 

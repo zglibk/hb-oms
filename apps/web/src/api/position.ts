@@ -9,9 +9,12 @@ export interface PositionRow {
   /** 所属部门；null = 通用岗位（不限部门） */
   deptId: number | null;
   deptName?: string | null;
-  jobLevel: string | null;
-  /** 1 是管理岗 / 0 否 */
-  isManager: number;
+  /** 岗位性质：normal普通岗 / manager管理岗 / tech技术岗 */
+  positionNature: string;
+  /** 职级（t_job_level.id）；须与岗位性质同序列 */
+  jobLevelId: number | null;
+  /** 职级名称（服务端解析后带出，停用职级也照常显示） */
+  jobLevelName?: string | null;
   /** 编制人数；null = 不限编 */
   headcount: number | null;
   /** 在岗人数（只数在职员工），与 headcount 对照看是否超编 */
@@ -31,7 +34,7 @@ export interface PositionOption {
   positionCode: string;
   positionName: string;
   deptId: number | null;
-  isManager: number;
+  positionNature: string;
 }
 
 export interface PositionQuery {
@@ -39,7 +42,8 @@ export interface PositionQuery {
   pageSize?: number;
   keyword?: string;
   deptId?: number;
-  isManager?: number;
+  positionNature?: string;
+  jobLevelId?: number;
   status?: number;
   onlyCommon?: boolean;
 }
@@ -48,8 +52,8 @@ export interface PositionQuery {
 export interface PositionPayload {
   positionName: string;
   deptId?: number;
-  jobLevel?: string;
-  isManager?: number;
+  positionNature?: string;
+  jobLevelId?: number;
   headcount?: number;
   sort?: number;
   status?: number;
@@ -74,3 +78,51 @@ export const updatePosition = (id: number, data: PositionPayload) =>
   request.put<any, { id: number; positionCode: string }>(`/api/position/${id}`, data);
 
 export const deletePosition = (id: number) => request.delete(`/api/position/${id}`);
+
+/** 批量删除；服务端逐条尝试，被引用的跳过并在 failed 里说明原因 */
+export const batchDeletePositions = (ids: number[]) =>
+  request.post<any, { deleted: number; failed: string[] }>('/api/position/batch-delete', { ids });
+
+/** 上传 xlsx 批量导入；整批校验通过才落库，失败时 err.errors 逐行回传 */
+export const importPositions = (file: File, overwrite: boolean) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('overwrite', overwrite ? 'true' : 'false');
+  return request.post<any, { total: number; created: number; updated: number }>(
+    '/api/position/import',
+    fd,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+};
+
+/** 走 blob 下载并触发浏览器保存；文件名取响应头的 filename*（与字典导出同一套） */
+async function downloadXlsx(url: string, params: any, fallbackName: string): Promise<void> {
+  const resp: any = await request.get(url, { params, responseType: 'blob', __raw: true } as any);
+  const blob: Blob = resp.data ?? resp;
+  const disposition: string | undefined = resp.headers?.['content-disposition'];
+  let filename = fallbackName;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (star?.[1]) {
+    try {
+      filename = decodeURIComponent(star[1]);
+    } catch {
+      /* 头部异常时用兜底名，不影响下载 */
+    }
+  }
+  const objectUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(objectUrl);
+}
+
+/** 导出当前筛选结果 */
+export const downloadPositionExport = (params: PositionQuery) =>
+  downloadXlsx('/api/position/export', params, '岗位清单.xlsx');
+
+/** 下载导入模板 */
+export const downloadPositionTemplate = () =>
+  downloadXlsx('/api/position/import-template', undefined, '岗位导入模板.xlsx');
