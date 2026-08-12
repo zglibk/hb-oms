@@ -70,7 +70,11 @@
                   <template v-for="p in row.products" :key="p.id">
                     <tr v-for="(g, gi) in p.partGroups" :key="g.id">
                       <td v-if="customerDrawingNoEnabled && gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.customerDrawingNo || '—' }}</td>
-                      <td>{{ g.productModel || productLabel(p) }}</td>
+                      <td>
+                        {{ g.productModel || productLabel(p) }}
+                        <!-- 分体出货：该行按部件组构成分体包装出货（不组装成整品），只在首组行标一次 -->
+                        <el-tag v-if="p.isSplit && gi === 0" size="small" type="warning" disable-transitions>分体</el-tag>
+                      </td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dimensionText(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.orderQty }} {{ unitLabel(p.unit) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.qtyPcs }}</td>

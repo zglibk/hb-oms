@@ -101,6 +101,51 @@ export function expandPartRows(
   ]);
 }
 
+/* ===== 分体出货（t_order_product.is_split，2026-08-12）=====
+ * 客户把一支滑轨拆成多行下单（如三节轨拆「外中轨」+「内轨」两行），各行分开
+ * 包装出货、不组装成整品。分体行的**出货形态不落库**，由该行部件组构成即时
+ * 推导（组列表就是事实源），避免出现第二个需要人工保持一致的字段。 */
+
+/** 部件固定排序（外→中→内）与取字表，分体形态推导用 */
+const PART_ORDER: string[] = PART_TYPE_OPTIONS.map((o) => o.value);
+const PART_CHAR: Record<string, string> = { outer: '外', middle: '中', inner: '内' };
+
+/**
+ * 分体行部件组构成 → 实际出货部件并集（外→中→内固定序去重）；
+ * 二节轨剔除中轨，与 expandPartRows 蓝图同口径。
+ */
+export function splitParts(
+  groupTypes: Array<string | null | undefined>,
+  railSection: string | null | undefined,
+): string[] {
+  const set = new Set<string>();
+  groupTypes.forEach((g) => partGroupParts(g).forEach((p) => set.add(p)));
+  return PART_ORDER.filter(
+    (p) => set.has(p) && (railSection !== 'two_section' || p !== 'middle'),
+  );
+}
+
+/**
+ * 分体形态后缀（产品型号拼接用）：按部件取字生成——{外,中}→外中轨、{内}→内轨、
+ * {中,内}→中内轨……不枚举组合、天然全覆盖；空数组回退「滑轨」保证型号可拼。
+ */
+export function splitSuffix(parts: string[]): string {
+  if (!parts.length) return '滑轨';
+  return `${parts.map((p) => PART_CHAR[p] ?? '').join('')}轨`;
+}
+
+/**
+ * 该产品行是否受装配入库闸门（Σ已完成装配 − Σ已入库）约束：
+ * 分体且只含单一部件（如内轨）→ 没有装配环节，免闸门（否则永远入不了库）；
+ * 整品、或分体但含 ≥2 部件（外中轨仍要把外轨+中轨组装）→ 照常受闸门约束。
+ */
+export function needsAssemblyGate(
+  isSplit: boolean | number | null | undefined,
+  parts: string[],
+): boolean {
+  return !(Boolean(isSplit) && parts.length === 1);
+}
+
 const label = (opts: Array<{ label: string; value: string }>) =>
   new Map(opts.map((o) => [o.value, o.label]));
 

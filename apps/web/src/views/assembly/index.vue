@@ -52,7 +52,13 @@
           </template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品型号" min-width="150" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.productModel || '—' }}
+            <!-- 免装配：分体且单部件出货（如内轨）无装配环节，入库不受装配额度约束 -->
+            <el-tag v-if="row.assemblyExempt" size="small" type="info" disable-transitions>免装配</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
@@ -62,12 +68,15 @@
         <el-table-column label="订单数(支)" prop="qtyPcs" width="100" align="center" />
         <el-table-column label="已完成(支)" width="100" align="center">
           <template #default="{ row }">
-            <span :class="{ 'num-ok': row.doneQty > 0 }">{{ row.doneQty }}</span>
+            <!-- 免装配行显示「—」而不是 0：0 会被读成「一支都没装」 -->
+            <span v-if="row.assemblyExempt" class="num-na">—</span>
+            <span v-else :class="{ 'num-ok': row.doneQty > 0 }">{{ row.doneQty }}</span>
           </template>
         </el-table-column>
         <el-table-column label="未装配(支)" width="100" align="center">
           <template #default="{ row }">
-            <span :class="pendingClass(row)">{{ row.pendingQty }}</span>
+            <span v-if="row.assemblyExempt" class="num-na">—</span>
+            <span v-else :class="pendingClass(row)">{{ row.pendingQty }}</span>
           </template>
         </el-table-column>
         <el-table-column label="批次" width="70" align="center">
@@ -92,6 +101,8 @@
             <app-actions>
               <el-button
                 size="small" v-permission.disable="'assembly:create'" link type="primary" :icon="Tools"
+                :disabled="row.assemblyExempt"
+                :title="row.assemblyExempt ? '分体单部件出货，无装配环节' : undefined"
                 @click="openBatches(row)"
               >录装配</el-button>
             </app-actions>
@@ -194,6 +205,7 @@ export default { name: 'AssemblyList' };
 .pager { margin-top: 12px; }
 .ml4 { margin-left: 4px; }
 .num-ok { color: var(--el-color-success); font-weight: 600; }
+.num-na { color: var(--el-text-color-placeholder); }
 .num-pending { color: var(--el-color-warning); font-weight: 600; }
 .num-over { color: var(--el-color-danger); font-weight: 600; }
 .num-overdue { color: var(--el-color-danger); font-weight: 600; }

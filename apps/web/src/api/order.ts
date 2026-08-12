@@ -46,6 +46,8 @@ export interface OrderProductItem {
   productName: string | null;
   productType: string | null;
   railSection: string | null;
+  /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
+  isSplit: number;
   dimensionMm: number | null;
   dimensionRaw: string | null;
   dimensionUnit: string | null;
@@ -120,6 +122,8 @@ export interface OrderProductPayload {
   productName?: string;
   productType?: string;
   railSection?: string;
+  /** 分体出货标记：0整品 1分体 */
+  isSplit?: number;
   dimensionMm?: number;
   dimensionRaw?: string;
   dimensionUnit?: string;

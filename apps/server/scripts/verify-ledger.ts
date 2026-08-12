@@ -126,7 +126,17 @@ async function main() {
   );
   check(neg.length === 0, '无负数结存行', neg.slice(0, 5));
 
-  console.log('\n【3】装配闸门事后复核：已确认生产入库量 ≤ 已完成装配量（期初豁免）');
+  console.log('\n【3】装配闸门事后复核：已确认生产入库量 ≤ 已完成装配量（期初豁免；免装配分体行豁免）');
+  // 免装配行 = 分体出货(is_split=1)且只含单一部件的产品行（如只出内轨），无装配环节、
+  // 入库不受闸门约束（§5.6）。判定刻意不走共享包：用部件行 DISTINCT part_type 独立重算，
+  // 与业务代码（组类型→partGroupParts 并集）是两条路径，口径分叉时这里会先炸出来。
+  const [splitRows] = await db.query<any[]>(
+    `SELECT p.id AS gid
+       FROM t_order_product p
+      WHERE p.is_split = 1
+        AND (SELECT COUNT(DISTINCT pt.part_type) FROM t_order_part pt WHERE pt.product_id = p.id) = 1`,
+  );
+  const gateExempt = new Set<number>(splitRows.map((r) => Number(r.gid)));
   const [gateRows] = await db.query<any[]>(
     `SELECT fi.order_product_id AS gid, fi.side AS side, fi.quantity AS qty,
             fd.direction AS dir, fd.biz_type AS biz, fo.biz_type AS originBiz
@@ -154,6 +164,7 @@ async function main() {
   let gateChecked = 0;
   for (const [key, inQty] of gateIn) {
     if (inQty === 0) continue;
+    if (gateExempt.has(Number(key.split('#')[0]))) continue;
     gateChecked++;
     const done = asmSideMap.get(key) ?? 0;
     check(inQty <= done, `${key} 已入库 ${inQty} ≤ 已完成装配 ${done}`, { key, inQty, done });

@@ -34,10 +34,14 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
-  /** 产品型号 = 货号 + 类型中文组合 + 「滑轨」（组后缀在展开行里） */
+  /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
   railSection: string | null;
+  /** 分体出货：0整品 1分体 */
+  isSplit: number;
+  /** 免装配：分体且单部件出货（如内轨）无装配环节，装配列不适用 */
+  assemblyExempt: boolean;
   dimensionMm: number | null;
   dimensionText: string | null;
   orderQty: number;
@@ -67,8 +71,10 @@ export interface LedgerRow {
    * 不需要表面处理的产品为 null（不适用，界面显示 —）。
    */
   outsourceOwed: number | null;
-  assembledQty: number;
-  assemblyPendingQty: number;
+  /** 装配完成量；免装配行为 null（不适用，界面显示 —） */
+  assembledQty: number | null;
+  /** 装配未完成量；免装配行为 null */
+  assemblyPendingQty: number | null;
   nextAssemblyPlanDate: string | null;
   overdue: boolean;
 }

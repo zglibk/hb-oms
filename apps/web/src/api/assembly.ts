@@ -41,8 +41,14 @@ export interface AssemblyGroupRow {
   itemNo: string | null;
   materialCode: string | null;
   productModel: string | null;
+  /** 产品名称（同货号拆多行时的辅助区分） */
+  productName: string | null;
   productType: string | null;
   railSection: string | null;
+  /** 分体出货：0整品 1分体（形态已体现在 productModel 后缀，如 45#缓冲外中轨） */
+  isSplit: number;
+  /** 免装配：分体且单部件出货（如内轨）无装配环节——禁建批次，界面打标 */
+  assemblyExempt: boolean;
   dimensionText: string | null;
   /** 该产品各装配批次的车间（去重）；订单环节不再安排装配车间 */
   assemblyWorkshops: string[];

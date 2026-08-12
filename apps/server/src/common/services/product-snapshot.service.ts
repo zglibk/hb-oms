@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
-import { ORDER_STATUS, formatDimension, formatProductModel } from '@hb-oms/shared';
+import {
+  ORDER_STATUS,
+  formatDimension,
+  productLevelModel,
+  splitParts,
+} from '@hb-oms/shared';
 
 /**
  * 订单**产品行**快照（设计文档 §4.2 锚点约定 + §5.5 业务流水快照原则）。
@@ -29,11 +34,22 @@ export interface ProductSnapshot {
   /** 生产单号（自订单，与 PO# 一对一；对应手工台账「订单编号」） */
   productionNo: string | null;
   /**
-   * 产品型号 = 货号 + 产品类型中文组合 + 「滑轨」（如 `53#普通滑轨`）。
-   * 共享包 `formatProductModel` 不传组类型即默认整品后缀「滑轨」——产品级要的正是
-   * 「整套滑轨」这个语义，不该带「外轨/内轨」这类组后缀。
+   * 产品型号（共享包 `productLevelModel` 唯一拼法）：
+   * 整品行 = 货号 + 产品类型中文组合 + 「滑轨」（如 `53#普通滑轨`）——产品级要的正是
+   * 「整套滑轨」这个语义；分体行（isSplit）后缀由部件组构成推导（如 `45#缓冲外中轨`），
+   * 同订单同货号拆成多行时，下游装配/出入库/台账靠它区分。
    */
   productModel: string | null;
+  /** 产品名称（订单表单可填、按图号带工艺带出；同货号多行的辅助区分） */
+  productName: string | null;
+  /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
+  isSplit: number;
+  /**
+   * 该行实际出货部件并集（外→中→内固定序；整品行也如实给出组覆盖的部件）。
+   * 与 isSplit 一起喂共享包 `needsAssemblyGate`——分体且单部件（如内轨）无装配环节，
+   * 成品入库免装配闸门。
+   */
+  splitParts: string[];
   /** 规格展示文本（如 350mm），由共享包 formatDimension 统一拼装 */
   dimensionText: string | null;
   /** 表面处理（字典 surface_type，none = 不外发） */
@@ -92,8 +108,13 @@ export class ProductSnapshotService {
               p.unit              AS unit,
               p.item_no           AS item_no,
               p.material_code     AS material_code,
+              p.product_name      AS product_name,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
+              p.is_split          AS is_split,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
+                 FROM t_order_part_group g
+                WHERE g.order_product_id = p.id) AS group_types,
               p.color             AS color,
               p.surface_type      AS surface_type,
               p.delivery_date     AS delivery_date,
@@ -112,6 +133,8 @@ export class ProductSnapshotService {
     );
 
     rows.forEach((r) => {
+      const isSplit = Number(r.is_split) || 0;
+      const groupTypes = String(r.group_types ?? '').split(',').filter(Boolean);
       map.set(Number(r.product_id), {
         orderProductId: Number(r.product_id),
         orderId: Number(r.order_id),
@@ -120,8 +143,17 @@ export class ProductSnapshotService {
         orderNo: r.order_no ?? null,
         customerName: r.customer_name ?? null,
         productionNo: r.production_no ?? null,
-        // 不传组类型 = 默认整品后缀「滑轨」，产品级正是「整套滑轨」
-        productModel: formatProductModel(r.item_no ?? '', r.product_type ?? ''),
+        // 整品行后缀「滑轨」；分体行后缀由组构成推导（外中轨/内轨…），下游靠它区分同货号多行
+        productModel: productLevelModel(
+          r.item_no ?? '',
+          r.product_type ?? '',
+          isSplit,
+          groupTypes,
+          r.rail_section ?? null,
+        ),
+        productName: r.product_name ?? null,
+        isSplit,
+        splitParts: splitParts(groupTypes, r.rail_section ?? null),
         dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),
         surfaceType: r.surface_type ?? null,
         productType: r.product_type ?? null,

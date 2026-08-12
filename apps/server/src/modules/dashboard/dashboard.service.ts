@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { FINISHED_DOC_STATUS, ORDER_STATUS, formatProductModel } from '@hb-oms/shared';
+import { FINISHED_DOC_STATUS, ORDER_STATUS, productLevelModel } from '@hb-oms/shared';
 // 欠数口径的唯一事实源在 order-owed.util —— 台账、订单自动完结、本看板三处共用同一份
 // 单据族 SQL，禁止在此另写一份 biz_type 判定（分叉后首页与台账数字对不上，最难查）
 import {
@@ -112,6 +112,10 @@ export class DashboardService {
               o.customer_name AS customerName, o.salesman AS salesman,
               o.merchandiser AS merchandiser, o.production_no AS productionNo,
               p.item_no AS itemNo, p.product_type AS productType,
+              p.rail_section AS railSection, p.is_split AS isSplit,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
+                 FROM t_order_part_group g
+                WHERE g.order_product_id = p.id) AS groupTypes,
               p.delivery_date AS deliveryDate,
               p.qty_pcs AS qtyPcs,
               p.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
@@ -267,8 +271,14 @@ export class DashboardService {
       salesman: r.salesman ?? null,
       merchandiser: r.merchandiser ?? null,
       productionNo: r.productionNo ?? null,
-      // 产品级型号：货号 + 类型中文组合 + 「滑轨」
-      productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
+      // 产品级型号：整品行带「滑轨」后缀；分体行后缀由组构成推导（外中轨/内轨…）
+      productModel: productLevelModel(
+        r.itemNo ?? '',
+        r.productType ?? '',
+        Number(r.isSplit) || 0,
+        String(r.groupTypes ?? '').split(',').filter(Boolean),
+        r.railSection ?? null,
+      ),
       deliveryDate: this.dateText(r.deliveryDate),
       days: Number(r.days) || 0,
       qtyPcs: Number(r.qtyPcs) || 0,

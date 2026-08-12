@@ -6,7 +6,7 @@
  * 展示为中文顺序拼接（如「普通自锁」）。
  * 两端一律经本文件函数处理，禁止各自手工拆串。
  */
-import { partGroupSuffix } from './rail';
+import { partGroupSuffix, splitParts, splitSuffix } from './rail';
 
 /** 产品类型候选值（顺序即组合串的规范排序；扩展新类型追加到末尾并同步字典） */
 export const PRODUCT_TYPE_OPTIONS: Array<{ label: string; value: string }> = [
@@ -71,4 +71,21 @@ export function formatProductModel(
   groupType?: string | null,
 ): string {
   return `${itemNo ?? ''}${formatProductTypes(productTypes)}${partGroupSuffix(groupType)}`;
+}
+
+/**
+ * **产品级**型号（装配/成品出入库/台账等产品级快照的唯一拼法，2026-08-12）：
+ * 整品行后缀「滑轨」（如 53#普通滑轨）；分体行（isSplit）后缀由部件组构成推导
+ * （如 45#缓冲外中轨 / 45#缓冲内轨）——同订单同货号拆成多行时，下游各处靠它区分。
+ * groupTypes / railSection 仅分体行参与推导，整品行忽略。
+ */
+export function productLevelModel(
+  itemNo: string | null | undefined,
+  productTypes: string[] | string | null | undefined,
+  isSplit: boolean | number | null | undefined,
+  groupTypes: Array<string | null | undefined>,
+  railSection: string | null | undefined,
+): string {
+  if (!isSplit) return formatProductModel(itemNo, productTypes);
+  return `${itemNo ?? ''}${formatProductTypes(productTypes)}${splitSuffix(splitParts(groupTypes, railSection))}`;
 }

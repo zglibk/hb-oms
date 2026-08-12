@@ -203,6 +203,28 @@
                 </el-select>
               </el-form-item>
             </el-col>
+            <!-- 分体出货：客户把一支滑轨拆开下单（如三节轨拆「外中轨」+「内轨」两行）、
+                 分开包装出货、不组装成整品。勾选后下方部件组就是出货构成的事实源：
+                 留哪几组这行就出什么货，形态与型号后缀由组构成推导（不落第二个字段） -->
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="分体出货" label-width="80px">
+                <el-switch v-model="p.isSplit" :active-value="1" :inactive-value="0" />
+                <el-tooltip
+                  placement="top"
+                  content="客户把一支滑轨拆开下单（如三节轨拆成「外中轨」和「内轨」两行）、分开包装出货、不组装成整品时开启。开启后，下方部件组留哪几组，这一行就出什么货；只出单个部件（如内轨）的行没有装配环节，入库不受装配数量限制。"
+                >
+                  <el-icon class="split-tip"><QuestionFilled /></el-icon>
+                </el-tooltip>
+                <!-- disable-transitions：v-if 在切换时翻转，el-tag 的 zoom 过渡可能走不完留下残影 -->
+                <el-tag
+                  v-if="p.isSplit"
+                  size="small"
+                  :type="splitCoversAll(p) ? 'danger' : 'warning'"
+                  disable-transitions
+                  class="split-form-tag"
+                >{{ splitCoversAll(p) ? '组已覆盖全部部件＝整品' : `出货形态：${splitFormText(p)}` }}</el-tag>
+              </el-form-item>
+            </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="规格" label-width="80px">
                 <el-input v-model="p.dimensionRaw" placeholder="数值" @change="syncDimension(p)">
@@ -292,6 +314,7 @@
           <!-- 部件组（跟踪/台账锚点） -->
           <div class="group-title">
             部件组（跟踪粒度；默认按节数逐部件铺开：三节轨 外/中/内轨，二节轨 外/内轨）
+            <span v-if="p.isSplit" class="split-hint">分体出货：留下的组就是这行实际出货的部件，请删掉不出货的组</span>
             <el-button
               size="small" link type="primary" :icon="Plus"
               :disabled="!canAddGroup(p)" @click="addGroup(p)"
@@ -385,6 +408,8 @@ import {
   partGroupLabel,
   defaultGroupTypes,
   formatProductModel,
+  splitParts,
+  splitSuffix,
   hasSocket,
   normalizeVersion,
   parseProductTypes,
@@ -442,6 +467,8 @@ interface ProductRow {
   customerDrawingNo: string;
   productName: string;
   railSection: string;
+  /** 分体出货：0整品 1分体（形态由部件组构成推导，见模板注释） */
+  isSplit: number;
   dimensionRaw: string;
   dimensionUnit: string;
   dimensionMm: number | null;
@@ -480,6 +507,7 @@ const emptyProduct = (): ProductRow => ({
   customerDrawingNo: '',
   productName: '',
   railSection: 'three_section',
+  isSplit: 0,
   dimensionRaw: '',
   dimensionUnit: 'mm',
   dimensionMm: null,
@@ -605,6 +633,7 @@ async function init() {
           customerDrawingNo: p.customerDrawingNo ?? '',
           productName: p.productName ?? '',
           railSection: p.railSection ?? 'three_section',
+          isSplit: p.isSplit ?? 0,
           dimensionRaw: p.dimensionRaw ?? (p.dimensionMm != null ? String(p.dimensionMm) : ''),
           dimensionUnit: p.dimensionUnit ?? 'mm',
           dimensionMm: p.dimensionMm,
@@ -657,6 +686,17 @@ function copyProduct(pi: number) {
 function removeProduct(pi: number) {
   form.products.splice(pi, 1);
 }
+/* ===== 分体出货：形态由部件组构成推导（与服务端共用共享包口径） ===== */
+/** 分体行出货形态预览：外中轨 / 内轨 / 中内轨…… */
+function splitFormText(p: ProductRow): string {
+  return splitSuffix(splitParts(p.partGroups.map((g) => g.groupType), p.railSection));
+}
+/** 组并集是否已覆盖当前节数的全部部件——那就是整品，分体开关下保存会被服务端拒 */
+function splitCoversAll(p: ProductRow): boolean {
+  const parts = splitParts(p.partGroups.map((g) => g.groupType), p.railSection);
+  return parts.length >= (p.railSection === 'two_section' ? 2 : 3);
+}
+
 /**
  * 该组类型在当前节数/卡口下展不展得出部件行。展不出的（如二节轨的中轨组）
  * 服务端会直接拒绝保存，前端提前挡掉，别把错误留到点保存时才炸。
@@ -852,6 +892,14 @@ function openAttachment(url: string) {
 /* ===== 保存 ===== */
 async function onSave() {
   await formRef.value?.validate();
+  // 分体行守卫：组并集=全部件就是整品（服务端同样会拒），提前拦下并指明行号
+  const badSplit = form.products.findIndex((p) => p.isSplit && splitCoversAll(p));
+  if (badSplit >= 0) {
+    ElMessage.error(
+      `产品 ${badSplit + 1} 开启了「分体出货」但部件组已覆盖全部部件（即整品），请删除不出货的组或关闭分体开关`,
+    );
+    return;
+  }
   // 富文本里插入的图片此前只是本地 blob 预览，保存前统一上传并把 blob URL 换成真实
   // URL；不 flush 就提交，落库的 HTML 里全是刷新即失效的 blob 地址。
   await richEditorRef.value?.flushUploads();
@@ -878,6 +926,7 @@ async function onSave() {
       productName: p.productName || undefined,
       productType: p._types.join(','),
       railSection: p.railSection,
+      isSplit: p.isSplit,
       dimensionMm: p.dimensionMm ?? undefined,
       dimensionRaw: p.dimensionRaw || undefined,
       dimensionUnit: p.dimensionUnit,
@@ -987,6 +1036,10 @@ export default { name: 'OrderForm' };
   font-size: 13px; color: var(--el-text-color-secondary);
   margin: 4px 0 8px; display: flex; align-items: center; gap: 8px;
 }
+/* 分体出货：开关旁的问号提示与形态预览标签、部件组标题里的操作提示 */
+.split-tip { margin-left: 6px; color: var(--el-text-color-placeholder); cursor: help; vertical-align: middle; }
+.split-form-tag { margin-left: 8px; }
+.split-hint { color: var(--el-color-warning); }
 .group-grid {
   width: 100%; border-collapse: collapse;
   th, td { border: 1px solid var(--el-border-color); padding: 4px 6px; }

@@ -8,7 +8,10 @@ import {
   formatDimension,
   formatProductModel,
   hasSocket,
+  needsAssemblyGate,
   needsOutsource,
+  productLevelModel,
+  splitParts,
   UNIT_OPTIONS,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
@@ -99,10 +102,14 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
-  /** 产品型号 = 货号 + 类型中文组合 + 「滑轨」（组后缀在展开行里） */
+  /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
   railSection: string | null;
+  /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
+  isSplit: number;
+  /** 免装配：分体且单部件出货（如内轨）无装配环节，装配三列不适用（null/空） */
+  assemblyExempt: boolean;
   dimensionMm: number | null;
   dimensionText: string | null;
   /** 订单数量与单位（原始录入口径，展示用） */
@@ -148,10 +155,10 @@ export interface LedgerRow {
    * 显示 0 会和"已全部回厂"混淆，界面与导出一律留空。
    */
   outsourceOwed: number | null;
-  /** 装配完成量（actual_date 非空的批次合计） */
-  assembledQty: number;
-  /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
-  assemblyPendingQty: number;
+  /** 装配完成量（actual_date 非空的批次合计）；免装配行为 null（不适用，界面与导出留空） */
+  assembledQty: number | null;
+  /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配）；免装配行为 null */
+  assemblyPendingQty: number | null;
   /** 最早未完成装配批次的计划完成日 */
   nextAssemblyPlanDate: string | null;
   /** 是否逾期：交期已过且仍欠发货 */
@@ -308,7 +315,7 @@ export class OrderLedgerService {
               o.order_no AS orderNo, o.order_date AS orderDate, o.customer_name AS customerName,
               o.salesman AS salesman, o.merchandiser AS merchandiser,
               o.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
-              p.product_type AS productType, p.rail_section AS railSection,
+              p.product_type AS productType, p.rail_section AS railSection, p.is_split AS isSplit,
               p.dimension_raw AS dimensionRaw, p.dimension_unit AS dimensionUnit,
               p.dimension_mm AS dimensionMm, p.order_qty AS orderQty, p.unit AS unit,
               p.surface_type AS surfaceType, p.color AS color,
@@ -345,10 +352,14 @@ export class OrderLedgerService {
         orderNo: r.orderNo ?? null,
         materialCode: r.materialCode ?? null,
         itemNo: r.itemNo ?? null,
-        // 产品级型号：货号 + 类型中文组合 + 「滑轨」（组后缀属于展开行）
+        // 产品级型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；
+        // 分体行后缀由组构成推导，组数据在 attachPartGroups 里才有，先给整品拼法、随后覆盖
         productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
         productType: r.productType ?? null,
         railSection: r.railSection ?? null,
+        isSplit: Number(r.isSplit) || 0,
+        // 免装配判定同样依赖组构成，attachPartGroups 里回填
+        assemblyExempt: false,
         dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
         dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm) || null,
         orderQty: Number(r.orderQty) || 0,
@@ -470,6 +481,17 @@ export class OrderLedgerService {
       r.outsourceOwed = outsourced
         ? groups.reduce((s, g) => s + g.qtyPcs, 0) - r.returnedQty
         : null;
+      // 分体行：型号后缀由组构成推导（外中轨/内轨…）；分体且单部件出货无装配环节，
+      // 装配两列不适用给 null（沿外发欠数对 surface=none 的处理），界面与导出留空
+      if (r.isSplit) {
+        const groupTypes = groups.map((g) => g.groupType);
+        r.productModel = productLevelModel(r.itemNo, r.productType, 1, groupTypes, r.railSection);
+        r.assemblyExempt = !needsAssemblyGate(1, splitParts(groupTypes, r.railSection));
+        if (r.assemblyExempt) {
+          r.assembledQty = null;
+          r.assemblyPendingQty = null;
+        }
+      }
     });
   }
 
@@ -668,7 +690,8 @@ export class OrderLedgerService {
         // 不外发的产品留空而不是 0——0 会被读成「已全部回厂」
         r.outsourceOwed ?? '',
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
-        r.assembledQty,
+        // 免装配行（分体单部件出货）留空而不是 0——0 会被读成「一支都没装」
+        r.assembledQty ?? '',
         r.qtyPcs,
         r.inQty,
         r.productionOwed,
@@ -873,7 +896,8 @@ export class OrderLedgerService {
         joinGroupField(r, (g) => g.materialThickness),
         r.returnedQty,
         labels('assembly_workshop', r.assemblyWorkshops),
-        r.assembledQty,
+        // 免装配行（分体单部件出货）留空而不是 0——同台账导出口径
+        r.assembledQty ?? '',
         r.inQty,
         productionOwed,
         r.outQty,

@@ -79,6 +79,8 @@ const MIGRATIONS: string[] = [
   'migration-employee-profile.sql',
   // 呆滞品 / 部件台账的批量导入导出权限点（仅授权，无表结构变更）
   'migration-stock-import-export.sql',
+  // 分体出货：产品行 is_split 标记（三节轨拆「外中轨」+「内轨」分行下单，形态由组构成推导）
+  'migration-order-split-shipping.sql',
 ];
 
 /**
@@ -180,6 +182,8 @@ const expectedColumns = [
   // 订单字段口径调整：生产单号上移订单级 + 产品级客户图号
   't_order.production_no',
   't_order_product.customer_drawing_no',
+  // 分体出货标记（单部件分体行免装配入库闸门）
+  't_order_product.is_split',
   // 供应商主数据（外发加工商等下拉来源）
   't_supplier.supplier_code',
   't_supplier.supplier_name',

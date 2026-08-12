@@ -260,7 +260,9 @@
         <el-table-column label="成品（支数）" align="center">
           <el-table-column label="装配完成" width="90" align="center">
             <template #default="{ row }">
-              <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
+              <!-- 免装配行（分体单部件出货）为 null：无装配环节，显示 — 与「一支没装」区分 -->
+              <span v-if="row.assembledQty == null" class="num-na">—</span>
+              <span v-else :class="{ 'num-ok': (row.assemblyPendingQty ?? 1) <= 0 }">{{ row.assembledQty }}</span>
             </template>
           </el-table-column>
           <el-table-column label="订单数" width="85" align="center" class-name="col-key">

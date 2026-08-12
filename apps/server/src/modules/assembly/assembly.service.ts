@@ -6,10 +6,13 @@ import {
   assemblySides,
   deriveAssemblyStatus,
   formatDimension,
-  formatProductModel,
   hasSocket,
   isValidSide,
+  needsAssemblyGate,
+  productLevelModel,
   sideLabel,
+  splitParts,
+  splitSuffix,
 } from '@hb-oms/shared';
 import { AssemblyBatch } from './entities/assembly-batch.entity';
 import {
@@ -35,8 +38,14 @@ export interface AssemblyGroupRow {
   itemNo: string | null;
   materialCode: string | null;
   productModel: string | null;
+  /** 产品名称（同货号拆多行时的辅助区分） */
+  productName: string | null;
   productType: string | null;
   railSection: string | null;
+  /** 分体出货：0整品 1分体（形态由部件组构成推导，已体现在 productModel 后缀） */
+  isSplit: number;
+  /** 免装配：分体且单部件出货（如内轨）无装配环节——禁建批次，界面打标 */
+  assemblyExempt: boolean;
   dimensionText: string | null;
   /**
    * 该产品各装配批次的车间（去重）。车间已下沉批次级——订单环节不再安排装配车间，
@@ -150,8 +159,13 @@ export class AssemblyService {
               o.production_no     AS production_no,
               p.item_no           AS item_no,
               p.material_code     AS material_code,
+              p.product_name      AS product_name,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
+              p.is_split          AS is_split,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
+                 FROM t_order_part_group g
+                WHERE g.order_product_id = p.id) AS group_types,
               p.dimension_raw     AS dimension_raw,
               p.dimension_unit    AS dimension_unit,
               p.dimension_mm      AS dimension_mm,
@@ -173,6 +187,8 @@ export class AssemblyService {
       const qtyPcs = Number(r.qty_pcs) || 0;
       const doneQty = Number(r.done_qty) || 0;
       const nextPlanDate = this.dateText(r.next_plan_date);
+      const isSplit = Number(r.is_split) || 0;
+      const groupTypes = String(r.group_types ?? '').split(',').filter(Boolean);
       return {
         orderProductId: Number(r.product_id),
         orderId: Number(r.order_id),
@@ -182,10 +198,19 @@ export class AssemblyService {
         productionNo: r.production_no ?? null,
         itemNo: r.item_no ?? null,
         materialCode: r.material_code ?? null,
-        // 产品级型号：货号 + 产品类型中文组合 + 「滑轨」，不带组后缀
-        productModel: formatProductModel(r.item_no ?? '', r.product_type ?? ''),
+        // 产品级型号：整品带「滑轨」后缀；分体行后缀由组构成推导（外中轨/内轨…）
+        productModel: productLevelModel(
+          r.item_no ?? '',
+          r.product_type ?? '',
+          isSplit,
+          groupTypes,
+          r.rail_section ?? null,
+        ),
+        productName: r.product_name ?? null,
         productType: r.product_type ?? null,
         railSection: r.rail_section ?? null,
+        isSplit,
+        assemblyExempt: !needsAssemblyGate(isSplit, splitParts(groupTypes, r.rail_section ?? null)),
         dimensionText: this.dimensionText(r),
         assemblyWorkshops: this.splitList(r.workshops),
         deliveryDate: this.dateText(r.delivery_date),
@@ -250,19 +275,32 @@ export class AssemblyService {
     );
 
     return {
-      product: product ? { ...product, socket } : null,
+      product: product
+        ? {
+            ...product,
+            socket,
+            assemblyExempt: !needsAssemblyGate(product.isSplit, product.splitParts),
+          }
+        : null,
       sides,
       list,
     };
   }
 
   /** 可入库量查询（§4.4 闸门口径，入库表单前置展示；只读不加锁） */
-  async findInboundQuota(query: QueryInboundQuotaDto): Promise<InboundQuotaRow> {
-    return loadOneInboundQuota(
+  async findInboundQuota(query: QueryInboundQuotaDto): Promise<InboundQuotaRow & { exempt: boolean }> {
+    const row = await loadOneInboundQuota(
       this.dataSource.manager,
       query.orderProductId,
       query.side ?? '',
     );
+    // 免装配行（分体且单部件出货）不受闸门约束：额度数字对它没有意义，
+    // 前端据 exempt 显示「免装配」而不是 0 额度
+    const snap = await this.productSnapshot.loadOne(null, query.orderProductId, {
+      includeCancelledOrder: true,
+    });
+    const exempt = snap ? !needsAssemblyGate(snap.isSplit, snap.splitParts) : false;
+    return { ...row, exempt };
   }
 
   /* ==================== 批次增删改 ==================== */
@@ -275,6 +313,14 @@ export class AssemblyService {
     return this.dataSource.transaction(async (mgr) => {
       const snap = await this.productSnapshot.loadOne(mgr, dto.orderProductId);
       if (!snap) throw new BadRequestException('订单产品不存在，或所属订单已作废');
+
+      // 免装配行（分体且单部件出货，如内轨）没有装配环节：名义批次会摻水装配统计，
+      // 且该行入库本就免闸门，批次没有任何用途，直接拒绝
+      if (!needsAssemblyGate(snap.isSplit, snap.splitParts)) {
+        throw new BadRequestException(
+          `产品「${snap.productModel ?? ''}」为分体出货的${splitSuffix(snap.splitParts)}，无装配环节，不能创建装配批次（该行成品入库不受装配闸门约束）`,
+        );
+      }
 
       const side = this.assertSide(dto.side, snap.productType, snap.productModel);
       const planStartDate = this.normalizeDate(dto.planStartDate);

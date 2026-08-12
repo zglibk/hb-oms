@@ -61,7 +61,9 @@
           </el-table-column>
           <el-table-column :label="limitLabel" width="110" align="center">
             <template #default="{ row }">
-              <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
+              <!-- 免装配行（分体单部件出货）入库不受装配额度约束，额度数字没有意义 -->
+              <el-tag v-if="isInbound && row.exempt" size="small" type="info" disable-transitions>免装配</el-tag>
+              <span v-else :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
             </template>
           </el-table-column>
           <el-table-column label="数量(支)" width="130" align="center">
@@ -97,7 +99,7 @@
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
         <span class="picker-tip">
-          {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
+          {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录；「免装配」行（分体单部件出货）不受此限' : '「当前结存」为出库上限' }}
         </span>
       </div>
       <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="52vh"
@@ -114,7 +116,8 @@
         <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
         <el-table-column :label="limitLabel" width="110" align="center">
           <template #default="{ row }">
-            <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
+            <el-tag v-if="isInbound && row.exempt" size="small" type="info" disable-transitions>免装配</el-tag>
+            <span v-else :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -164,6 +167,8 @@ interface ItemRow {
   dimensionText: string | null;
   /** 入库=可入库量，出库=当前结存 */
   limit: number;
+  /** 免装配（分体且单部件出货）：入库不受装配额度约束，可入库量不适用 */
+  exempt?: boolean;
   quantity: number;
   remark: string;
 }
@@ -187,7 +192,10 @@ const isInbound = computed(
 const bizLabel = computed(() => labelOf(FINISHED_BIZ_TYPE_OPTIONS, form.bizType));
 const limitLabel = computed(() => (isInbound.value ? '可入库量' : '当前结存'));
 const totalQty = computed(() => form.items.reduce((s, it) => s + (it.quantity || 0), 0));
-const overRows = computed(() => form.items.filter((it) => (it.quantity || 0) > it.limit));
+// 入库方向上免装配行不受额度约束，不参与超限提示；出库方向结存上限对它照常有效
+const overRows = computed(() =>
+  form.items.filter((it) => !(isInbound.value && it.exempt) && (it.quantity || 0) > it.limit),
+);
 
 async function init() {
   if (!editId.value) return;
@@ -224,13 +232,16 @@ async function refreshLimits() {
   if (!form.items.length) return;
   const opts = await getStockGroupOptions({ bizType: form.bizType, limit: 500 });
   const map = new Map<string, number>();
-  opts.forEach((o) =>
+  const exemptMap = new Map<number, boolean>();
+  opts.forEach((o) => {
+    exemptMap.set(o.orderProductId, !!o.assemblyExempt);
     o.sides.forEach((s) =>
       map.set(`${o.orderProductId}#${s.side}`, isInbound.value ? s.quota : s.stockQty),
-    ),
-  );
+    );
+  });
   form.items.forEach((it) => {
     it.limit = map.get(`${it.orderProductId}#${it.side}`) ?? 0;
+    it.exempt = exemptMap.get(it.orderProductId) ?? false;
   });
 }
 
@@ -266,6 +277,7 @@ async function loadOptions() {
         dimensionText: o.dimensionText,
         qtyPcs: o.qtyPcs,
         limit: isInbound.value ? s.quota : s.stockQty,
+        exempt: !!o.assemblyExempt,
         quantity: 0,
         remark: '',
       })) as any,
@@ -295,7 +307,9 @@ function confirmPick() {
       productModel: o.productModel,
       dimensionText: o.dimensionText,
       limit: o.limit,
-      // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）
+      exempt: o.exempt,
+      // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）；
+      // 免装配行（入库方向）没有额度上限，数量留给用户填
       quantity: o.limit > 0 ? o.limit : 1,
       remark: '',
     });

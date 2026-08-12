@@ -9,6 +9,7 @@ import {
   hasSocket,
   normalizeProductTypes,
   normalizeVersion,
+  splitParts,
   toPieces,
 } from '@hb-oms/shared';
 import { Order } from './entities/order.entity';
@@ -202,6 +203,7 @@ export class OrderService {
       const productType = normalizeProductTypes(p.productType ?? '');
       const socket = hasSocket(productType);
       const qtyPcs = toPieces(p.orderQty, p.unit);
+      const isSplit = p.isSplit ?? 0;
 
       const product = await mgr.getRepository(OrderProduct).save(
         mgr.getRepository(OrderProduct).create({
@@ -218,6 +220,7 @@ export class OrderService {
           productName: p.productName ?? null,
           productType: productType || null,
           railSection: p.railSection ?? null,
+          isSplit,
           dimensionMm: p.dimensionMm ?? null,
           dimensionRaw: p.dimensionRaw ?? null,
           dimensionUnit: p.dimensionUnit ?? null,
@@ -239,6 +242,18 @@ export class OrderService {
       const groupDtos = p.partGroups?.length
         ? p.partGroups
         : defaultGroupTypes(p.railSection).map((groupType) => ({ groupType }) as any);
+
+      // 分体出货：组构成就是出货形态的事实源。并集若已覆盖当前节数的全部部件，
+      // 那就是整品——「标着分体、实为整品」的矛盾数据会让下游型号/闸门口径失真，直接拒绝
+      if (isSplit) {
+        const parts = splitParts(groupDtos.map((g: any) => g.groupType), p.railSection);
+        const fullCount = p.railSection === 'two_section' ? 2 : 3;
+        if (parts.length >= fullCount) {
+          throw new BadRequestException(
+            `第 ${i + 1} 行产品：勾选了「分体出货」但部件组已覆盖全部部件（即整品）。请删除不出货的部件组，或关闭分体开关`,
+          );
+        }
+      }
       const seenTypes = new Set<string>();
       for (let gi = 0; gi < groupDtos.length; gi++) {
         const g = groupDtos[gi];

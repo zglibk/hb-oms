@@ -98,6 +98,8 @@ export interface StockGroupOption {
   productionNo: string | null;
   itemNo: string | null;
   productModel: string | null;
+  /** 产品名称（同货号拆多行时的辅助区分） */
+  productName: string | null;
   productType: string | null;
   dimensionText: string | null;
   surfaceType: string | null;
@@ -105,6 +107,8 @@ export interface StockGroupOption {
   /** 产品支数（订单数口径） */
   qtyPcs: number;
   socket: boolean;
+  /** 免装配：分体且单部件出货（如内轨），入库不受装配额度约束 */
+  assemblyExempt: boolean;
   sides: StockSideInfo[];
 }
 

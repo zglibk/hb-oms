@@ -67,6 +67,15 @@ export class OrderProduct {
   @Column({ name: 'rail_section', type: 'varchar', length: 32, nullable: true, comment: '轨道节数：two_section二节轨 three_section三节轨' })
   railSection: string | null;
 
+  @Column({
+    name: 'is_split',
+    type: 'tinyint',
+    default: 0,
+    comment:
+      '分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品；出货形态由组构成推导，单部件分体行免装配入库闸门）',
+  })
+  isSplit: number;
+
   @Column({ name: 'dimension_mm', type: 'int', nullable: true, comment: '规格（mm 统一口径，1英寸=25mm）' })
   dimensionMm: number | null;
 

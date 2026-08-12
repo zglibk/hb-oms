@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   product_name     VARCHAR(128) NULL COMMENT '产品名称',
   product_type     VARCHAR(128) NULL COMMENT '产品类型多选组合（字典序逗号拼接，如 standard,self_lock；含 socket 触发卡口规则）',
   rail_section     VARCHAR(32)  NULL COMMENT '轨道节数：two_section二节轨 three_section三节轨',
+  is_split         TINYINT      NOT NULL DEFAULT 0 COMMENT '分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品；出货形态由组构成推导，单部件分体行免装配入库闸门）',
   dimension_mm     INT          NULL COMMENT '规格（mm 统一口径，1英寸=25mm）',
   dimension_raw    VARCHAR(32)  NULL COMMENT '规格原始录入值',
   dimension_unit   VARCHAR(8)   NULL COMMENT '规格录入单位：mm / inch',

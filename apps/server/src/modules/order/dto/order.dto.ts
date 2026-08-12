@@ -79,6 +79,9 @@ export class CreateOrderProductDto {
 
   @IsOptional() @IsString() @MaxLength(32) railSection?: string;
 
+  /** 分体出货：1=该行按部件组构成分体包装出货（不组装成整品），形态由组构成推导 */
+  @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1], { message: '分体出货标记只能是 0 或 1' }) isSplit?: number;
+
   @IsOptional() @Type(() => Number) @IsInt() dimensionMm?: number;
 
   @IsOptional() @IsString() @MaxLength(32) dimensionRaw?: string;
