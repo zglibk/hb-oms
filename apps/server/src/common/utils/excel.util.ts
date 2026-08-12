@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
-import { PRODUCT_TYPE_OPTIONS, normalizeProductTypes } from '@hb-oms/shared';
+import { EXPORT_ROW_LIMIT, PRODUCT_TYPE_OPTIONS, normalizeProductTypes } from '@hb-oms/shared';
+
+// 上限定义在共享包（前端导出前要拿它做预检，两端必须同一个数），此处转出方便本层引用
+export { EXPORT_ROW_LIMIT };
 
 /**
  * Excel 统一排版工具（导出表 / 导入模板共用）。
@@ -155,12 +158,6 @@ export function addTipsSheet(
 }
 
 /* ==================== 导入侧公共件 ==================== */
-
-/**
- * 单次导出行数上限。超限**拒绝而非静默截断**——截断后用户拿到的是一份
- * 看起来完整、实则少了几行的表，比报错危险得多（台账导出已是此口径）。
- */
-export const EXPORT_ROW_LIMIT = 5000;
 
 /** 按 value 取中文 label；取不到就回原值（历史脏数据也要显示得出来，不能变空白） */
 export function labelOf(

@@ -330,7 +330,8 @@ const { exporting, exportWithConfirm } = useExcelExport();
 
 const onExport = () => exportWithConfirm({
   name: '部件台账',
-  count: summary.value.rows,
+  // 实查而不是用页面上的 summary：筛选条件改了但没点「查询」时汇总是旧的
+  getCount: async () => (await getPartStockSummary({ ...query })).rows,
   run: () => downloadPartStockExport({ ...query }),
 });
 

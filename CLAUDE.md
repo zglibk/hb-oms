@@ -193,12 +193,13 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | [excel.util.ts](apps/server/src/common/utils/excel.util.ts) | `styleSheet` 统一排版（**等线 10 号 / 自动列宽 / 隔行浅灰 / 内容区浅灰边框 / 关闭网格线 / 冻结表头**）、`createWorkbook`、`addTipsSheet`（模板的「填写说明」页）、`EXPORT_ROW_LIMIT`(5000)、`labelOf`、`loadFirstSheet`、`cellString`、`parseTypeLabels`、`importRejected` |
 | [excel-response.util.ts](apps/server/src/common/utils/excel-response.util.ts) | `sendXlsx` 文件流响应头（中文名走 RFC 5987） |
 | [ImportDialog.vue](apps/web/src/components/ImportDialog.vue) | 通用导入弹窗：模板下载 + 拖拽上传 + **导入前二次确认** + 逐行错误清单 + 失败计数 + 回滚提示；模块差异只有 标题/提示/模板函数/上传函数，额外选项走 `#options` 插槽 |
-| [useExcelExport.ts](apps/web/src/composables/useExcelExport.ts) | **导出前二次确认** + loading + blob 错误还原 |
+| [useExcelExport.ts](apps/web/src/composables/useExcelExport.ts) | **导出前预检 → 二次确认** + loading + blob 错误还原 |
 | [download.ts](apps/web/src/utils/download.ts) | `downloadXlsx` blob 下载并按响应头取中文文件名、`readBlobError` |
 
 - `styleSheet` **必须在写完所有数据行之后调用**——自动列宽要量全部单元格，提前调只量得到表头。
 - 隔行填充口径：表头下**第一条数据留白、第二条起填灰**（与表头之间隔开一条，视觉上更分得开）。
-- **导出超限/无数据一律拒绝，不给空表或静默截断**（沿用台账导出口径）。
+- **导出超限/无数据一律拒绝，不给空表或静默截断**（沿用台账导出口径）。行数上限 `EXPORT_ROW_LIMIT` 在**共享包**（`shared/src/export.ts`）：服务端做强制拦截、前端做导出前预检，两端各写一份必漂移。
+- **导出顺序是「先预检、再确认」，不能反过来**：`useExcelExport` 会先按当前筛选实查一次条数，**为 0 或超限就直接提示、根本不弹确认框**——先弹确认框、用户点完才被服务端拒绝，等于让人确认一件注定失败的事。条数**每次实查**而不是取页面上的 summary：用户改了筛选却没点「查询」时，页面汇总还是上一次的数，拿它提示会和实际导出的内容对不上。前端预检**不替代服务端守卫**（API 可直调），两道都要留。
 - ⚠️ **导入失败的逐行明细在前端要双取 `err.response.data.errors ?? err.errors`**：HTTP 400 时 `request.ts` 的拦截器 reject 的是**原始 axios 错误**，只读 `err.errors` 永远是 undefined（岗位导入曾因此在浏览器里只显示一句概要，2026-08-12 修）。`err.message` 同理是英文的 axios 文案，要取 `response.data.message`。
 - ⚠️ `AllExceptionsFilter` **只透传白名单字段**（`errors` / `failedCount` / `totalCount`）：批量接口新增回传字段必须在那里一并放行，否则前端拿到 undefined（本会话已踩）。
 
