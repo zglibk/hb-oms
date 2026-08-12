@@ -208,13 +208,20 @@
                  留哪几组这行就出什么货，形态与型号后缀由组构成推导（不落第二个字段） -->
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="分体出货" label-width="80px">
-                <el-switch v-model="p.isSplit" :active-value="1" :inactive-value="0" />
+                <!-- 仅三节轨可开；已开着的异常数据不锁死（否则用户关不掉），见 :disabled 条件 -->
+                <el-switch
+                  v-model="p.isSplit" :active-value="1" :inactive-value="0"
+                  :disabled="!canSplitShipping(p.railSection) && !p.isSplit"
+                />
                 <el-tooltip
                   placement="top"
-                  content="客户把一支滑轨拆开下单（如三节轨拆成「外中轨」和「内轨」两行）、分开包装出货、不组装成整品时开启。开启后，下方部件组留哪几组，这一行就出什么货；只出单个部件（如内轨）的行没有装配环节，入库不受装配数量限制。"
+                  :content="canSplitShipping(p.railSection)
+                    ? '客户把一支滑轨拆开下单（如三节轨拆成「外中轨」和「内轨」两行）、分开包装出货、不组装成整品时开启。开启后，下方部件组留哪几组，这一行就出什么货；只出单个部件（如内轨）的行没有装配环节，入库不受装配数量限制。'
+                    : '只有三节轨可以分体出货（二节轨只有外轨和内轨两个部件，业务上不拆单下单）。'"
                 >
                   <el-icon class="split-tip"><QuestionFilled /></el-icon>
                 </el-tooltip>
+                <span v-if="!canSplitShipping(p.railSection)" class="split-na">仅三节轨</span>
                 <!-- disable-transitions：v-if 在切换时翻转，el-tag 的 zoom 过渡可能走不完留下残影 -->
                 <el-tag
                   v-if="p.isSplit"
@@ -238,7 +245,8 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="表面处理" label-width="80px">
-                <el-select v-model="p.surfaceType" style="width: 100%">
+                <!-- 改成需外发时，组合型组（外中轨/整品）要按部件拆开，否则外发回厂记不清 -->
+                <el-select v-model="p.surfaceType" style="width: 100%" @change="maybeSplitCombinedGroups(p)">
                   <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
@@ -343,7 +351,8 @@
             <tbody>
               <tr v-for="(g, gi) in p.partGroups" :key="g._key">
                 <td>
-                  <el-select v-model="g.groupType" style="width: 100%">
+                  <!-- 需外发时选了组合型组会被自动拆成单部件组（见 maybeSplitCombinedGroups） -->
+                  <el-select v-model="g.groupType" style="width: 100%" @change="maybeSplitCombinedGroups(p)">
                     <el-option
                       v-for="o in PART_GROUP_OPTIONS"
                       :key="o.value"
@@ -408,6 +417,10 @@ import {
   partGroupLabel,
   defaultGroupTypes,
   formatProductModel,
+  needsOutsource,
+  canSplitShipping,
+  isGroupTypeAvailable,
+  splitCombinedGroup,
   splitParts,
   splitSuffix,
   hasSocket,
@@ -698,12 +711,56 @@ function splitCoversAll(p: ProductRow): boolean {
 }
 
 /**
- * 该组类型在当前节数/卡口下展不展得出部件行。展不出的（如二节轨的中轨组）
- * 服务端会直接拒绝保存，前端提前挡掉，别把错误留到点保存时才炸。
- * 判定复用共享包蓝图，不另写节数规则——以后加新组类型自动正确。
+ * 该组类型在当前节数下不可选。两类：展不出部件行的（二节轨的中轨组，服务端会拒），
+ * 以及组名点名了部件却被节数剔除的（二节轨的「外中轨」实际只剩外轨，组名与实际不符）。
+ * 判定全在共享包 isGroupTypeAvailable，前端不另写节数规则。
  */
 function groupTypeUnavailable(p: ProductRow, groupType: string): boolean {
-  return expandPartRows(groupType, p.railSection, hasSocket(p._types), 1).length === 0;
+  return !isGroupTypeAvailable(groupType, p.railSection);
+}
+
+/**
+ * 需外发（表面处理≠无）时，把组合型组（外中轨 / 整品）自动拆成单部件组。
+ *
+ * 为什么必须拆：外发锚定**部件组**——挂一个「外中轨」组的话，① 回厂只能按一条
+ * 记账，分不出外轨、中轨各回了多少；② 单重是按部件建档的，组合型组取不到准确
+ * 单重，按重量折算数量会系统性偏差。与分不分体无关，整品行同样适用。
+ *
+ * 字段（图号/版本/料厚/支数/备注）**原样复制到拆出的各行**：计划员核对时只改
+ * 差异项，比留空让人重录一长串图号省事得多。
+ */
+function maybeSplitCombinedGroups(p: ProductRow) {
+  if (!needsOutsource(p.surfaceType)) return;
+  const notes: string[] = [];
+  // 倒序遍历：splice 会改变后续下标
+  for (let i = p.partGroups.length - 1; i >= 0; i--) {
+    const g = p.partGroups[i];
+    const targets = splitCombinedGroup(g.groupType, p.railSection);
+    if (!targets.length) continue;
+    const label = partGroupLabel(g.groupType);
+    // 同产品行内组类型唯一（uk_product_group），已存在的目标组不能再建
+    const used = new Set(p.partGroups.filter((x) => x !== g).map((x) => x.groupType));
+    const fresh = targets.filter((t) => !used.has(t));
+    if (!fresh.length) {
+      p.partGroups.splice(i, 1);
+      notes.push(`「${label}」的各部件都已有单独的组，已移除该行（避免重复计量）`);
+      continue;
+    }
+    p.partGroups.splice(i, 1, ...fresh.map((t) => ({ ...g, _key: nextKey(), groupType: t })));
+    notes.push(`「${label}」已拆为 ${fresh.map(partGroupLabel).join(' + ')}`);
+  }
+  if (notes.length) {
+    ElMessage({
+      type: 'warning',
+      duration: 6000,
+      showClose: true,
+      dangerouslyUseHTMLString: true,
+      message:
+        '该产品需要表面处理（外发），零件是分开送、分批回厂的，故按部件拆分部件组：<br/>'
+        + notes.join('<br/>')
+        + '<br/>生产图号 / 版本 / 料厚已复制到各行，请核对后修改。',
+    });
+  }
 }
 
 /**
@@ -809,6 +866,18 @@ function groupIsBlank(g: GroupRow): boolean {
  *   切个节数就凭空多出一个中轨组会很莫名其妙。
  */
 async function onRailSectionChange(p: ProductRow) {
+  await syncGroupsForRailSection(p);
+  // 分体仅三节轨（共享包 canSplitShipping）：切到二节轨自动关掉，
+  // 否则开关虽被禁用、值仍是 1，保存时会被服务端硬校验拒绝
+  if (p.isSplit && !canSplitShipping(p.railSection)) {
+    p.isSplit = 0;
+    ElMessage.info('二节轨不支持分体出货，已关闭该开关');
+  }
+  // 节数变了，组合型组要拆成的部件也跟着变（如整品组：三节轨拆三行、二节轨拆两行）
+  maybeSplitCombinedGroups(p);
+}
+
+async function syncGroupsForRailSection(p: ProductRow) {
   const types = p.partGroups.map((g) => g.groupType);
   if (p.railSection === 'two_section') {
     const mi = types.indexOf('middle');
@@ -893,6 +962,13 @@ function openAttachment(url: string) {
 async function onSave() {
   await formRef.value?.validate();
   // 分体行守卫：组并集=全部件就是整品（服务端同样会拒），提前拦下并指明行号
+  const badSection = form.products.findIndex((p) => p.isSplit && !canSplitShipping(p.railSection));
+  if (badSection >= 0) {
+    ElMessage.error(
+      `产品 ${badSection + 1}：只有三节轨可以「分体出货」，请关闭该开关或把轨道节数改回三节轨`,
+    );
+    return;
+  }
   const badSplit = form.products.findIndex((p) => p.isSplit && splitCoversAll(p));
   if (badSplit >= 0) {
     ElMessage.error(
@@ -1038,6 +1114,7 @@ export default { name: 'OrderForm' };
 }
 /* 分体出货：开关旁的问号提示与形态预览标签、部件组标题里的操作提示 */
 .split-tip { margin-left: 6px; color: var(--el-text-color-placeholder); cursor: help; vertical-align: middle; }
+.split-na { margin-left: 8px; font-size: 12px; color: var(--el-text-color-placeholder); }
 .split-form-tag { margin-left: 8px; }
 .split-hint { color: var(--el-color-warning); }
 .group-grid {

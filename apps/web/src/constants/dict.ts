@@ -104,11 +104,14 @@ export {
   partGroupParts,
   defaultGroupTypes,
   expandPartRows,
-  // 分体出货（形态由部件组构成推导；单部件分体行免装配闸门）
+  // 分体出货（形态由部件组构成推导；单部件分体行免装配闸门；仅三节轨可开）
   splitParts,
   splitSuffix,
   needsAssemblyGate,
   productLevelModel,
+  canSplitShipping,
+  isGroupTypeAvailable,
+  splitCombinedGroup,
   // 版本号文本型小数
   normalizeVersion,
 } from '@hb-oms/shared';

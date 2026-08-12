@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import {
   ORDER_STATUS,
+  canSplitShipping,
   defaultGroupTypes,
   expandPartRows,
   formatProductModel,
@@ -246,6 +247,13 @@ export class OrderService {
       // 分体出货：组构成就是出货形态的事实源。并集若已覆盖当前节数的全部部件，
       // 那就是整品——「标着分体、实为整品」的矛盾数据会让下游型号/闸门口径失真，直接拒绝
       if (isSplit) {
+        // 仅三节轨可分体（业务口径，共享包 canSplitShipping）；前端已禁用开关，
+        // 这里兜住 API 直调与切换节数后的残留值
+        if (!canSplitShipping(p.railSection)) {
+          throw new BadRequestException(
+            `第 ${i + 1} 行产品：只有三节轨可以「分体出货」，请关闭该开关`,
+          );
+        }
         const parts = splitParts(groupDtos.map((g: any) => g.groupType), p.railSection);
         const fullCount = p.railSection === 'two_section' ? 2 : 3;
         if (parts.length >= fullCount) {

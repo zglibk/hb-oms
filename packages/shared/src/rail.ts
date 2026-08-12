@@ -111,6 +111,50 @@ const PART_ORDER: string[] = PART_TYPE_OPTIONS.map((o) => o.value);
 const PART_CHAR: Record<string, string> = { outer: '外', middle: '中', inner: '内' };
 
 /**
+ * 是否允许开启「分体出货」——**仅三节轨**（2026-08-12 业务口径）。
+ *
+ * 二节轨只有外/内两个部件，厂里不存在拆单下单的场景；技术上虽然推导得出形态，
+ * 但放开只会多一条误开关的路径。前端据此禁用开关，服务端硬校验兜住 API 直调。
+ */
+export function canSplitShipping(railSection: string | null | undefined): boolean {
+  return railSection === 'three_section';
+}
+
+/**
+ * 该组类型在当前节数下是否可选。两类不可用：
+ * - 展开为空（二节轨的中轨组）——服务端本就会拒绝保存；
+ * - **组名点名了具体部件、却被节数剔除掉一部分**（二节轨的「外中轨」实际只剩外轨）：
+ *   组类型写着外中轨、出货形态却推导成外轨，账面自相矛盾，故一并禁用。
+ *   「整品」是相对语义（有几个部件就含几个），不受这条限制。
+ */
+export function isGroupTypeAvailable(
+  groupType: string | null | undefined,
+  railSection: string | null | undefined,
+): boolean {
+  const actual = expandPartRows(groupType, railSection, false, 1);
+  if (!actual.length) return false;
+  if (groupType === 'whole') return true;
+  return actual.length === partGroupParts(groupType).length;
+}
+
+/**
+ * 组合型组（含 ≥2 个部件，如 外中轨 / 整品）→ 应拆成的**单部件组**类型列表；
+ * 单部件组返回空数组（无需拆）。部件类型值（outer/middle/inner）与单部件组类型
+ * 一一对应，故可直接复用。
+ *
+ * 用途：**表面处理 ≠ 无（需外发）时不该挂组合型组**——外发锚定部件组，挂一个
+ * 「外中轨」组会导致 ① 回厂只能按一条记账、分不出各部件回了多少；② 单重按部件
+ * 建档，组合型组取不到准确单重，重量折算数量会系统性偏差。
+ */
+export function splitCombinedGroup(
+  groupType: string | null | undefined,
+  railSection: string | null | undefined,
+): string[] {
+  const parts = [...new Set(expandPartRows(groupType, railSection, false, 1).map((r) => r.partType))];
+  return parts.length > 1 ? PART_ORDER.filter((p) => parts.includes(p)) : [];
+}
+
+/**
  * 分体行部件组构成 → 实际出货部件并集（外→中→内固定序去重）；
  * 二节轨剔除中轨，与 expandPartRows 蓝图同口径。
  */
