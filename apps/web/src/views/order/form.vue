@@ -85,7 +85,7 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
-            <el-form-item label="下单来源">
+            <el-form-item label="订单来源">
               <el-select v-model="form.orderSource" clearable placeholder="选择来源" style="width: 100%">
                 <el-option v-for="o in ORDER_SOURCE" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
@@ -235,6 +235,14 @@
                 >{{ splitCoversAll(p) ? '组已覆盖全部部件＝整品' : `出货形态：${splitFormText(p)}` }}</el-tag>
               </el-form-item>
             </el-col>
+            <!-- 订单类型只有两个互斥取值，用单选比下拉少一次点开 -->
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="订单类型" label-width="80px">
+                <el-radio-group v-model="p.orderType">
+                  <el-radio v-for="o in ORDER_TYPE" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
           </el-row>
 
           <el-row :gutter="12">
@@ -317,13 +325,6 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="交货日期" label-width="80px">
                 <el-date-picker v-model="p.deliveryDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="订单类型" label-width="80px">
-                <el-select v-model="p.orderType" style="width: 100%">
-                  <el-option v-for="o in ORDER_TYPE" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
