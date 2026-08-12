@@ -71,6 +71,8 @@ const MIGRATIONS: string[] = [
   'migration-employee-code.sql',
   // 岗位由字典 hr_position 升级为独立主数据 t_position（含 t_employee.position → position_id）
   'migration-position.sql',
+  // 职级字典按公司实际职级序列重定（普工 → 总经理 15 档）
+  'migration-job-level.sql',
   // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
   'migration-employee-profile.sql',
 ];

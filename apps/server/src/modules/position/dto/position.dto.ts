@@ -16,10 +16,14 @@ import { toBoolean } from '../../../common/utils/transform.util';
  * 否则字段留空时用户看到的会是「不能超过 64 个字符」这种驴唇不对马嘴的提示。
  */
 export class CreatePositionDto {
+  /**
+   * 岗位编码：**服务端自动采番（POS+3位流水），客户端传了也不采信**；
+   * 编辑接口同样恒取库中值。保留字段仅为兼容旧调用方。
+   */
+  @IsOptional()
+  @IsString()
   @MaxLength(64, { message: '岗位编码不能超过 64 个字符' })
-  @IsNotEmpty({ message: '岗位编码必填' })
-  @IsString({ message: '岗位编码必填' })
-  positionCode: string;
+  positionCode?: string;
 
   @MaxLength(64, { message: '岗位名称不能超过 64 个字符' })
   @IsNotEmpty({ message: '岗位名称必填' })

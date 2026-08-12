@@ -93,18 +93,9 @@ PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 DELETE FROM t_dict WHERE dict_type = 'hr_position';
 
 -- ---------- 6. 职级字典 ----------
-INSERT INTO t_dict (dict_type, dict_label, dict_value, sort, status, creator_name, updater_name)
-SELECT d.dict_type, d.dict_label, d.dict_value, d.sort, 1, '系统同步', '系统同步'
-FROM (
-            SELECT 'job_level' AS dict_type, '员级' AS dict_label, 'staff' AS dict_value, 1 AS sort
-  UNION ALL SELECT 'job_level', '组长', 'group_leader', 2
-  UNION ALL SELECT 'job_level', '班长', 'shift_leader', 3
-  UNION ALL SELECT 'job_level', '主管', 'supervisor', 4
-  UNION ALL SELECT 'job_level', '经理', 'manager', 5
-) d
-WHERE NOT EXISTS (
-  SELECT 1 FROM t_dict x WHERE x.dict_type = d.dict_type AND x.dict_value = d.dict_value
-);
+-- ⚠️ 职级选项已于 2026-08-11 按公司实际职级序列重定，**种子挪到 migration-job-level.sql**。
+-- 这里刻意不再种：db:migrate 每次跑全量清单，这段若还在，就会把已被下一个迁移
+-- 删掉的旧职级（员级/组长/班长）又种回来（本会话在 hr_position 上刚踩过同款坑）。
 
 -- ---------- 7. 权限点 ----------
 -- 清单（permission-manifest.ts）才是 SSOT，启动时会 upsert 并校正 parent_id/名称/排序。

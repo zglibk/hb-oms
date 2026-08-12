@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Position } from './entities/position.entity';
 import { Department } from '../system/entities/department.entity';
 import {
@@ -11,12 +11,18 @@ import {
 } from './dto/position.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { NumberGeneratorService } from '../../common/services/number-generator.service';
+
+/** 岗位编码前缀：POS + 3 位流水（POS001…），全局递增不按部门分组 */
+const POSITION_CODE_PREFIX = 'POS';
+const POSITION_CODE_WIDTH = 3;
 
 @Injectable()
 export class PositionService {
   constructor(
     @InjectRepository(Position)
     private readonly repo: Repository<Position>,
+    private readonly numberGen: NumberGeneratorService,
   ) {}
 
   async findList(query: QueryPositionDto) {
@@ -71,21 +77,30 @@ export class PositionService {
     return one;
   }
 
+  /** 新增：编码由服务端自动采番，客户端传了也不采信 */
   async create(dto: CreatePositionDto, user: CurrentUserPayload) {
     const payload = await this.normalize(dto);
-    await this.assertCodeFree(payload.positionCode);
+    const positionCode = await this.generateCode();
     const saved = await this.repo.save(
-      this.repo.create({ ...payload, ...auditOnCreate(user) }),
+      this.repo.create({ ...payload, positionCode, ...auditOnCreate(user) }),
     );
-    return { id: saved.id };
+    return { id: saved.id, positionCode };
   }
 
+  /**
+   * 编辑：**编码不可改**（恒取库中值）。
+   * 编码是唯一业务键，自动生成后就没有手工改的理由；放开反而会让
+   * 「按编码对账」的外部台账对不上号。要换编码只能删了重建。
+   */
   async update(id: number, dto: UpdatePositionDto, user: CurrentUserPayload) {
-    await this.mustGet(id);
+    const row = await this.mustGet(id);
     const payload = await this.normalize(dto);
-    await this.assertCodeFree(payload.positionCode, id);
-    await this.repo.update(id, { ...payload, ...auditOnUpdate(user) });
-    return { id };
+    await this.repo.update(id, {
+      ...payload,
+      positionCode: row.positionCode,
+      ...auditOnUpdate(user),
+    });
+    return { id, positionCode: row.positionCode };
   }
 
   /**
@@ -150,10 +165,29 @@ export class PositionService {
     return Number(rows?.[0]?.c ?? 0);
   }
 
+  /**
+   * 岗位编码采番：`POS` + 3 位流水（§5.4 单号一律走 NumberGeneratorService）。
+   *
+   * 存量岗位是从旧字典搬来的（stamping / qc 之类），编码格式与此不同、原样保留——
+   * 编码是业务键，为了统一格式去重编老数据得不偿失。
+   *
+   * 采番只保证计数器不重复，万一与历史编码撞上就取下一个（正常不会发生）。
+   */
+  private async generateCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const seq = await this.numberGen.generatePaddedSequence(
+        POSITION_CODE_PREFIX,
+        POSITION_CODE_WIDTH,
+      );
+      const code = `${POSITION_CODE_PREFIX}${seq}`;
+      const exists = await this.repo.findOne({ where: { positionCode: code }, select: ['id'] });
+      if (!exists) return code;
+    }
+    throw new BadRequestException('岗位编码连续生成冲突，请稍后重试');
+  }
+
   private async normalize(dto: CreatePositionDto) {
-    const positionCode = (dto.positionCode ?? '').trim();
     const positionName = (dto.positionName ?? '').trim();
-    if (!positionCode) throw new BadRequestException('岗位编码必填');
     if (!positionName) throw new BadRequestException('岗位名称必填');
 
     // 所属部门填了就得存在，否则岗位会挂到一个查不出名字的部门上
@@ -168,7 +202,6 @@ export class PositionService {
     }
 
     return {
-      positionCode,
       positionName,
       deptId,
       jobLevel: dto.jobLevel?.trim() || null,
@@ -178,16 +211,6 @@ export class PositionService {
       status: dto.status ?? 1,
       remark: dto.remark?.trim() || null,
     };
-  }
-
-  /** 编码唯一（uk_position_code 兜底，此处给中文提示） */
-  private async assertCodeFree(positionCode: string, excludeId?: number) {
-    const exist = await this.repo.findOne({
-      where: excludeId ? { positionCode, id: Not(excludeId) } : { positionCode },
-    });
-    if (exist) {
-      throw new BadRequestException(`岗位编码「${positionCode}」已被「${exist.positionName}」占用`);
-    }
   }
 
   private async mustGet(id: number): Promise<Position> {

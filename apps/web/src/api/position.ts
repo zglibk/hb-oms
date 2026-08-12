@@ -44,8 +44,8 @@ export interface PositionQuery {
   onlyCommon?: boolean;
 }
 
+/** 建档/编辑入参；**不含 positionCode**——编码由服务端采番、编辑时不可改 */
 export interface PositionPayload {
-  positionCode: string;
   positionName: string;
   deptId?: number;
   jobLevel?: string;
@@ -66,10 +66,11 @@ export const getPositionList = (params: PositionQuery) =>
 export const getPositionOptions = (params?: { deptId?: number }) =>
   request.get<any, PositionOption[]>('/api/position/all', { params });
 
+/** 新增：编码由服务端采番并随响应回传 */
 export const createPosition = (data: PositionPayload) =>
-  request.post<any, { id: number }>('/api/position', data);
+  request.post<any, { id: number; positionCode: string }>('/api/position', data);
 
 export const updatePosition = (id: number, data: PositionPayload) =>
-  request.put<any, { id: number }>(`/api/position/${id}`, data);
+  request.put<any, { id: number; positionCode: string }>(`/api/position/${id}`, data);
 
 export const deletePosition = (id: number) => request.delete(`/api/position/${id}`);

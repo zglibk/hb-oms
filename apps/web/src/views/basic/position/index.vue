@@ -117,8 +117,15 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" size="small">
         <el-row :gutter="14">
           <el-col :span="12">
-            <el-form-item label="岗位编码" prop="positionCode">
-              <el-input v-model="form.positionCode" :spellcheck="false" placeholder="唯一，如 qc" />
+            <el-form-item label="岗位编码">
+              <el-input
+                :model-value="editId ? form.positionCode : '保存后自动生成'"
+                disabled :spellcheck="false"
+              />
+              <div class="hint">
+                <template v-if="editId">编码<b>不可修改</b>，它是对账用的唯一业务键</template>
+                <template v-else>保存时自动生成 <b>POS + 3 位流水号</b>，无需手工填写</template>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -274,8 +281,8 @@ const emptyForm = () => ({
 });
 const form = reactive(emptyForm());
 
+// 岗位编码由服务端自动采番，不校验
 const rules: FormRules = {
-  positionCode: [{ required: true, message: '请填写岗位编码', trigger: 'blur' }],
   positionName: [{ required: true, message: '请填写岗位名称', trigger: 'blur' }],
 };
 
@@ -300,7 +307,7 @@ async function onSubmit() {
   saving.value = true;
   try {
     const payload = {
-      positionCode: form.positionCode.trim(),
+      // 编码不回传：新增由服务端采番，编辑时服务端也会无视（编码不可改）
       positionName: form.positionName.trim(),
       deptId: form.deptId ?? undefined,
       jobLevel: form.jobLevel || undefined,
@@ -310,9 +317,13 @@ async function onSubmit() {
       status: form.status,
       remark: form.remark || undefined,
     };
-    if (editId.value) await updatePosition(editId.value, payload);
-    else await createPosition(payload);
-    ElMessage.success(editId.value ? '已保存' : '已新增');
+    if (editId.value) {
+      await updatePosition(editId.value, payload);
+      ElMessage.success('已保存');
+    } else {
+      const res = await createPosition(payload);
+      ElMessage.success(`已新增，岗位编码 ${res?.positionCode ?? ''}`);
+    }
     formVisible.value = false;
     load();
   } finally {
