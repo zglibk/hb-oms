@@ -516,9 +516,12 @@ async function onImport() {
     fileList.value = [];
     load();
   } catch (err: any) {
-    // 服务端整批校验失败时透传 errors 数组（AllExceptionsFilter），逐行摊开给用户
-    if (Array.isArray(err?.errors)) importErrors.value = err.errors;
-    else if (err?.message) importErrors.value = [err.message];
+    // 服务端整批校验失败时透传 errors 数组（AllExceptionsFilter），逐行摊开给用户。
+    // HTTP 400 时拦截器 reject 的是原始 axios 错误，明细在 response.data 里——
+    // 只读 err.errors 会永远拿不到（本会话实测），故与 customer 导入同样双取。
+    const body = err?.response?.data ?? err;
+    if (Array.isArray(body?.errors)) importErrors.value = body.errors;
+    else importErrors.value = [body?.message || err?.message || '导入失败'];
   } finally {
     importing.value = false;
   }

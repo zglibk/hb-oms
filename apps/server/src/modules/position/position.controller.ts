@@ -27,21 +27,8 @@ import {
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { sendXlsx } from '../../common/utils/excel-response.util';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-
-/** xlsx 文件流响应（与字典/部件导出同一套头，中文名走 filename* 兼容各浏览器） */
-function sendXlsx(res: Response, buffer: Buffer, filename: string) {
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  );
-  res.setHeader(
-    'Content-Disposition',
-    `attachment; filename="position.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-  );
-  res.setHeader('Content-Length', buffer.length);
-  res.end(buffer);
-}
 
 /** 读权限口径（§2.1）：岗位管理页用菜单权限点 `basic:position` */
 @Controller('position')

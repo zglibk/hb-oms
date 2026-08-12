@@ -33,6 +33,13 @@
         <el-button size="small" v-permission="'dull-stock:create'" type="primary" :icon="Plus" @click="openForm()">
           新增呆滞品
         </el-button>
+        <el-button size="small" v-permission="'dull-stock:import'" :icon="Upload" @click="importVisible = true">
+          批量导入
+        </el-button>
+        <el-button
+          size="small" v-permission="'dull-stock:export'" :icon="Download"
+          :loading="exporting" @click="onExport"
+        >导出</el-button>
         <span class="tip">
           <el-icon><InfoFilled /></el-icon>
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
@@ -314,13 +321,30 @@
         <el-button size="small" type="primary" :loading="saving" @click="onSubmitFlow">确定</el-button>
       </template>
     </el-dialog>
+
+    <!--
+      批量导入。呆滞品刻意不设唯一键（同货号同客户先后剩下的几批要各建各的档），
+      所以导入是「每行新建一条」，重复导入会重复建档——提示条里必须说清楚。
+    -->
+    <import-dialog
+      v-model="importVisible"
+      title="批量导入呆滞品"
+      tip="每一行都会新建一条呆滞品记录（本模块允许同货号多批，不会合并、不会覆盖）；整批校验通过才入库，任一行有问题会列出行号并整批回滚"
+      confirm-text="即将导入文件「{n}」，每一行都会<b>新建</b>一条呆滞品记录。<br/>同一份文件重复导入会<b>重复建档</b>，请确认没有导过。"
+      :download-template="downloadDullStockTemplate"
+      :do-import="importDullStock"
+      :summarize="(r: any) => `导入成功：新建 ${r.created} 条呆滞品记录`"
+      @done="reload"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onActivated, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Search, Plus, EditPen, Delete, Sort, InfoFilled } from '@element-plus/icons-vue';
+import {
+  Search, Plus, EditPen, Delete, Sort, InfoFilled, Upload, Download,
+} from '@element-plus/icons-vue';
 import {
   getDullStockList,
   getDullStockSummary,
@@ -330,9 +354,14 @@ import {
   deleteDullStock,
   createDullStockFlow,
   deleteDullStockFlow,
+  downloadDullStockExport,
+  downloadDullStockTemplate,
+  importDullStock,
   type DullStockRow,
   type DullStockFlowRow,
 } from '@/api/dull-stock';
+import ImportDialog from '@/components/ImportDialog.vue';
+import { useExcelExport } from '@/composables/useExcelExport';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import {
   SIDE_OPTIONS,
@@ -417,6 +446,16 @@ function reload() {
 }
 load();
 onActivated(load);
+
+/* ===== 批量导入 / 导出 ===== */
+const importVisible = ref(false);
+const { exporting, exportWithConfirm } = useExcelExport();
+
+const onExport = () => exportWithConfirm({
+  name: '呆滞品',
+  count: summary.value.rows,
+  run: () => downloadDullStockExport({ ...query }),
+});
 
 /* ===== 展开行：出入库流水（按需加载） ===== */
 const flows = reactive<Record<number, DullStockFlowRow[]>>({});

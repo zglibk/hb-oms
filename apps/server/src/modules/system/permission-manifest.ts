@@ -109,9 +109,14 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'dull-stock:update', perm_name: '编辑呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 2 },
   { perm_code: 'dull-stock:delete', perm_name: '删除呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 3 },
   { perm_code: 'dull-stock:stock', perm_name: '登记出入库', perm_type: 2, parent_code: 'dull-stock', sort: 4 },
+  { perm_code: 'dull-stock:import', perm_name: '批量导入呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 5 },
+  { perm_code: 'dull-stock:export', perm_name: '导出呆滞品', perm_type: 2, parent_code: 'dull-stock', sort: 6 },
 
   { perm_code: 'part-stock', perm_name: '部件台账', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/part-stock', component: 'part-stock/index', icon: 'Grid', sort: 4 },
   { perm_code: 'part-stock:adjust', perm_name: '调整部件余量', perm_type: 2, parent_code: 'part-stock', sort: 1 },
+  // 导入 = 批量调整余量（部件台账没有「直接设余量」的通道），故与 adjust 同属写权限
+  { perm_code: 'part-stock:import', perm_name: '批量导入调整', perm_type: 2, parent_code: 'part-stock', sort: 2 },
+  { perm_code: 'part-stock:export', perm_name: '导出部件台账', perm_type: 2, parent_code: 'part-stock', sort: 3 },
 
   { perm_code: 'opening', perm_name: '期初录入', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/opening', component: 'opening/index', icon: 'Upload', sort: 5 },
   { perm_code: 'opening:finished', perm_name: '成品期初录入', perm_type: 2, parent_code: 'opening', sort: 1 },

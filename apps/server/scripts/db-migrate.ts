@@ -77,6 +77,8 @@ const MIGRATIONS: string[] = [
   'migration-position-nature.sql',
   // 人事档案扩展：籍贯/民族/学历背景/政治面貌/婚姻状况
   'migration-employee-profile.sql',
+  // 呆滞品 / 部件台账的批量导入导出权限点（仅授权，无表结构变更）
+  'migration-stock-import-export.sql',
 ];
 
 /**

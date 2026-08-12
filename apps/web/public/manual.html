@@ -141,7 +141,7 @@
     <a class="toc-item toc-sub" data-key="销售出库 库存不足" onclick="jump('ch4-2')">4.2 销售出库</a>
     <a class="toc-item toc-sub" data-key="做错了 红字冲销 部分冲销" onclick="jump('ch4-3')">4.3 单据做错了：红字冲销</a>
     <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次" onclick="jump('ch4-4')">4.4 成品库存</a>
-    <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
+    <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除 批量导入 导出 模板 回滚" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
@@ -155,7 +155,7 @@
     <a class="toc-item toc-sub" data-key="补录 历史订单 期初补录开关" onclick="jump('ch7-1')">7.1 先补录未完结的历史订单</a>
     <a class="toc-item toc-sub" data-key="成品期初 挂订单" onclick="jump('ch7-2')">7.2 成品期初</a>
     <a class="toc-item toc-sub" data-key="部件期初 七维 属性" onclick="jump('ch7-3')">7.3 部件期初</a>
-    <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水" onclick="jump('ch7-4')">7.4 部件台账</a>
+    <a class="toc-item toc-sub" data-key="部件台账 余量 调整 流水 批量导入 导出 模板 调整量 回滚" onclick="jump('ch7-4')">7.4 部件台账</a>
 
     <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 职级 职级管理 序列 等级 编制 批量导入 导出 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
@@ -592,6 +592,28 @@
         这说明你要删的其实是那笔出库记录，先删它。
       </div>
       <p><strong>整条呆滞品记录</strong>只有在<strong>一笔流水都没有</strong>的时候才能删除，否则要先把流水删干净——不然已经发生的进出就凭空消失了。</p>
+
+      <h3>批量导入 / 导出</h3>
+      <p>
+        货多的时候不用一条条建档，点工具栏的<strong>「批量导入」</strong>，先<strong>下载导入模板</strong>，
+        照着填好再传上来。模板里附了一页<strong>「填写说明」</strong>，每一列该怎么填都写在里面。
+      </p>
+      <div class="alert alert--warn">
+        <strong>导入的每一行都会新建一条记录</strong>，不会合并、不会覆盖——因为同一个货号同一个客户，
+        先后剩下的几批本来就要分开建档。<strong>所以同一份文件不要导入两次，会重复建档。</strong>
+      </div>
+      <ul>
+        <li><strong>「客户」和「生产单号」至少要填一个</strong>，规则跟手工建档一样。</li>
+        <li><strong>入库数、出库数不能导入</strong>：它们是出入库流水的累计值，只能在页面上逐笔「登记出入库」，这样每一笔进出才有据可查。导入只能填<strong>期初数</strong>。</li>
+        <li>
+          <strong>有一行不合格，整批都不会入库</strong>。系统会告诉你<strong>哪一行、错在哪、一共几条有问题</strong>，
+          数据<strong>整批回滚</strong>，库里不会留下半批。按提示改完整个文件重新上传即可，不用担心前面的行被导过了。
+        </li>
+      </ul>
+      <p>
+        <strong>「导出」</strong>导的是<strong>当前筛选结果</strong>（不是全部数据），导出前会让你确认一次。
+        想导全部就先把筛选条件清空。单次最多 5000 行，超了会提示你缩小范围——不会悄悄少导几行。
+      </p>
     </section>
 
     <!-- ============ 第5章 ============ -->
@@ -764,6 +786,31 @@
       <div class="alert alert--info">
         <strong>当前版本部件台账是一本「参考账」</strong>：只有期初和手工调整，<strong>不会跟着外发、入库自动加减</strong>。因为系统不做车间报工，部件的产出没有采集点。需要用它对账时，请配合人工盘点。
       </div>
+
+      <h3>批量导入 / 导出</h3>
+      <p>
+        盘点完一大批部件时不用一行行调，点<strong>「批量导入」</strong>，先<strong>下载导入模板</strong>照着填。
+        模板附了一页<strong>「填写说明」</strong>，每列怎么填都写在里面。
+      </p>
+      <div class="alert alert--warn">
+        <strong>导入的是「调整量」，不是「余量」。</strong>
+        模板里那一列填的是<strong>要增减多少</strong>（正数加、负数减），系统会在现有余量上加减，并给每一行留一条流水。
+        这跟页面上的「调整余量」是同一回事，只是一次做很多行。<br />
+        所以<strong>同一份文件不要导入两次</strong>——会再加一遍。
+      </div>
+      <ul>
+        <li><strong>货号、部件、边别、节数、产品类型、料厚、规格这 7 项共同决定是哪一行台账</strong>，任一项不同就是另一行。填之前建议先导出一份看看现有的行是怎么写的。</li>
+        <li><strong>调整量不能填 0</strong>（没有意义的空流水），<strong>调整原因必填</strong>，会记进流水。</li>
+        <li>
+          <strong>有一行不合格，整批都不会入库</strong>。系统会告诉你<strong>哪一行、错在哪、一共几条有问题</strong>，
+          数据<strong>整批回滚</strong>。<strong>某一行会把余量扣成负数</strong>也算不合格，同样整批退回——
+          不会出现「前几行加了、后面失败」这种半截账。
+        </li>
+      </ul>
+      <p>
+        <strong>「导出」</strong>导的是<strong>当前筛选结果</strong>，导出前会让你确认一次。想导全部就先清空筛选条件。
+        单次最多 5000 行，超了会提示缩小范围——不会悄悄少导几行。
+      </p>
     </section>
 
     <!-- ============ 第8章 ============ -->

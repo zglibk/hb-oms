@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { downloadXlsx } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /**
@@ -118,3 +119,23 @@ export const deleteDullStockFlow = (flowId: number) =>
   request.delete<any, { id: number; dullId: number; balanceQty: number }>(
     `/api/dull-stock/flow/${flowId}`,
   );
+
+/** 导出当前筛选结果（服务端按筛选全量导出，超 5000 行会拒绝） */
+export const downloadDullStockExport = (params: DullStockQuery) =>
+  downloadXlsx('/api/dull-stock/export', params, '呆滞品清单.xlsx');
+
+/** 下载导入模板（只含建档字段；入库数/出库数不可导入） */
+export const downloadDullStockTemplate = () =>
+  downloadXlsx('/api/dull-stock/import-template', undefined, '呆滞品导入模板.xlsx');
+
+/**
+ * 批量导入建档。整批全有全无：任一行有问题会整批回滚，
+ * 逐行原因经 err.errors 回传，err.failedCount / err.totalCount 给出计数。
+ */
+export const importDullStock = (file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return request.post<any, { total: number; created: number }>('/api/dull-stock/import', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};

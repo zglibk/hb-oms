@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { downloadXlsx } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /** 岗位主数据行 */
@@ -94,30 +95,6 @@ export const importPositions = (file: File, overwrite: boolean) => {
     { headers: { 'Content-Type': 'multipart/form-data' } },
   );
 };
-
-/** 走 blob 下载并触发浏览器保存；文件名取响应头的 filename*（与字典导出同一套） */
-async function downloadXlsx(url: string, params: any, fallbackName: string): Promise<void> {
-  const resp: any = await request.get(url, { params, responseType: 'blob', __raw: true } as any);
-  const blob: Blob = resp.data ?? resp;
-  const disposition: string | undefined = resp.headers?.['content-disposition'];
-  let filename = fallbackName;
-  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
-  if (star?.[1]) {
-    try {
-      filename = decodeURIComponent(star[1]);
-    } catch {
-      /* 头部异常时用兜底名，不影响下载 */
-    }
-  }
-  const objectUrl = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = objectUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(objectUrl);
-}
 
 /** 导出当前筛选结果 */
 export const downloadPositionExport = (params: PositionQuery) =>

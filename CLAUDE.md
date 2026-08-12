@@ -186,6 +186,22 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 同类业务复用统一封装：单号走 `NumberGeneratorService`、Excel 导入导出走既有模式、前端表格分页走 `AppTable`/`AppPagination`。**发现第二处相似实现时，先抽公共封装再继续**。
 
+**Excel 导入导出的公共件（2026-08-12 起，新增导出/导入一律复用，禁止各模块手写字体边框）**：
+
+| 位置 | 职责 |
+|---|---|
+| [excel.util.ts](apps/server/src/common/utils/excel.util.ts) | `styleSheet` 统一排版（**等线 10 号 / 自动列宽 / 隔行浅灰 / 内容区浅灰边框 / 关闭网格线 / 冻结表头**）、`createWorkbook`、`addTipsSheet`（模板的「填写说明」页）、`EXPORT_ROW_LIMIT`(5000)、`labelOf`、`loadFirstSheet`、`cellString`、`parseTypeLabels`、`importRejected` |
+| [excel-response.util.ts](apps/server/src/common/utils/excel-response.util.ts) | `sendXlsx` 文件流响应头（中文名走 RFC 5987） |
+| [ImportDialog.vue](apps/web/src/components/ImportDialog.vue) | 通用导入弹窗：模板下载 + 拖拽上传 + **导入前二次确认** + 逐行错误清单 + 失败计数 + 回滚提示；模块差异只有 标题/提示/模板函数/上传函数，额外选项走 `#options` 插槽 |
+| [useExcelExport.ts](apps/web/src/composables/useExcelExport.ts) | **导出前二次确认** + loading + blob 错误还原 |
+| [download.ts](apps/web/src/utils/download.ts) | `downloadXlsx` blob 下载并按响应头取中文文件名、`readBlobError` |
+
+- `styleSheet` **必须在写完所有数据行之后调用**——自动列宽要量全部单元格，提前调只量得到表头。
+- 隔行填充口径：表头下**第一条数据留白、第二条起填灰**（与表头之间隔开一条，视觉上更分得开）。
+- **导出超限/无数据一律拒绝，不给空表或静默截断**（沿用台账导出口径）。
+- ⚠️ **导入失败的逐行明细在前端要双取 `err.response.data.errors ?? err.errors`**：HTTP 400 时 `request.ts` 的拦截器 reject 的是**原始 axios 错误**，只读 `err.errors` 永远是 undefined（岗位导入曾因此在浏览器里只显示一句概要，2026-08-12 修）。`err.message` 同理是英文的 axios 文案，要取 `response.data.message`。
+- ⚠️ `AllExceptionsFilter` **只透传白名单字段**（`errors` / `failedCount` / `totalCount`）：批量接口新增回传字段必须在那里一并放行，否则前端拿到 undefined（本会话已踩）。
+
 ### 4.4 先设计后编码
 
 任何新增功能，动手写代码前必须先梳理并确认三件事：
@@ -406,6 +422,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **余量只有一个写入口 `POST /part-stock/adjust`**：按 7 维定位（不存在则建行）累加 `delta` 并写一条 `t_part_adjust` 流水。**刻意不提供「直接设置余量」的接口**——§4.6 要求「不直接改数无痕」，一切变动必须带 delta + 原因，否则事后无法回答「这个数怎么来的」。期初录入与手工调整走同一入口，靠 `source`（opening/manual）区分，期初同样留痕。
 - 调整后余量不得为负；`delta` 不接受 0（无意义的空流水）；行锁后累加防并发丢失。
 - V1 是**独立参考台账**：不与外发/成品单据联动（§2.1，无报工则无采集点），联动列入 V2（§10）。
+- **批量导入导出（2026-08-12）**：导入是**批量调整**而非「设置余量」——模板列是「调整量(±) + 调整原因」，每行按 7 维定位后累加并留一条流水。**模板绝不能给一列「余量」让人填目标值**，那等于绕开流水直接设数，破坏「不直接改数无痕」。整批一个事务、全有全无（累加语义下部分成功会让重提整批的行被加第二次）；「调整后余量为负」也在事务内，触发即整批回滚。
 - **必填字段的每个约束都要给中文 message**：字段缺省时多个约束同时失败，只要有一个没给 message，用户看到的就是「must be a string」这类英文（本模块已踩，E2E 抓出）。
 
 **人事档案与员工编码（employee 模块）**
@@ -438,6 +455,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **流水可整条删除**（与部件台账 `t_part_adjust` 的「只能反向调整」不同——呆滞品是可修正的管理账，不是凭证账）：删除时同事务回滚该笔对累计数的影响。删入库流水会让结存减少，若已出掉就会为负 → 拒绝（说明该删的是那笔出库）。
 - **「变动后结存」刻意不落库**：流水可删，存了快照就会在删掉中间一笔后让后续所有行集体失真、还得回填。改由 service 按 `id ASC` 从档案期初数累计推导后返回。
 - **只跟踪成品**：无 `group_type`、不涉及部件，也不建部件版呆滞品。
+- **批量导入导出（2026-08-12）**：导入**每行新建一条**（本模块刻意无唯一键，同货号多批各建各的），故**没有「覆盖更新」开关**，重复导入会重复建档——弹窗提示与模板说明页都必须写明这一点。模板只含建档字段（含期初数），**入库数/出库数不可导入**（它们是流水累计值，唯一写入口是「登记出入库」）。整批全有全无：部分成功不会把数加错，但用户改完坏行重提整批时成功的那些会**再建一遍**。
 - 客户/生产单号是**纯文本快照**，不关联 `t_customer`、不校验订单是否存在（客户下拉 `allow-create`，主数据没维护到的不挡录入，同外发加工商）。
 - 轻量记账行，**不采番、无单据号**（§5.4）；档案**有流水时禁止删除**（§5.5「被业务引用后限制删除」）。
 - 前端「表面处理 → 颜色」**联动带出**（电泳→黑色、喷涂→白色，新增行默认电泳/黑色），映射在 `web/constants/dict.ts` 的 `SURFACE_DEFAULT_COLOR`（仅前端用，不进共享包，服务端不校验）；**用户手改过颜色后不再覆盖**。

@@ -2,12 +2,27 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
+  RAIL_SECTION_OPTIONS,
+  SIDE_OPTIONS,
   STOCK_DIRECTION,
+  UNIT,
   UNIT_OPTIONS,
   formatProductModel,
+  formatProductTypes,
   normalizeProductTypes,
   toPieces,
 } from '@hb-oms/shared';
+import {
+  EXPORT_ROW_LIMIT,
+  addTipsSheet,
+  cellString,
+  createWorkbook,
+  importRejected,
+  labelOf,
+  loadFirstSheet,
+  parseTypeLabels,
+  styleSheet,
+} from '../../common/utils/excel.util';
 import { DullStock } from './entities/dull-stock.entity';
 import { DullStockFlow } from './entities/dull-stock-flow.entity';
 import {
@@ -189,6 +204,239 @@ export class DullStockService {
     }
     await this.repo.delete(id);
     return { id };
+  }
+
+  /* ==================== 导出 / 导入 ==================== */
+
+  /** 导出当前筛选结果（列序对齐页面，四个数一并带出便于对账） */
+  async exportExcel(query: QueryDullStockDto): Promise<Buffer> {
+    const all = await this.findList({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
+    if (!all.list.length) {
+      throw new BadRequestException('当前筛选条件下没有数据可导出，请调整筛选条件后重试');
+    }
+    if (all.list.length > EXPORT_ROW_LIMIT) {
+      throw new BadRequestException(
+        `当前筛选结果 ${all.total} 行，超过单次导出上限 ${EXPORT_ROW_LIMIT} 行，请缩小筛选范围后重试`,
+      );
+    }
+
+    const wb = createWorkbook();
+    const ws = wb.addWorksheet('呆滞品');
+    ws.columns = [
+      { header: '货号' },
+      { header: '客户' },
+      { header: '生产单号' },
+      { header: '产品型号' },
+      { header: '产品类型' },
+      { header: '节数' },
+      { header: '规格(mm)' },
+      { header: '表面处理' },
+      { header: '颜色' },
+      { header: '边别' },
+      { header: '单位' },
+      { header: '期初数' },
+      { header: '入库数' },
+      { header: '出库数' },
+      { header: '结存数' },
+      { header: '备注' },
+    ];
+    for (const r of all.list as any[]) {
+      ws.addRow([
+        r.itemNo || '',
+        r.customerName || '',
+        r.productionNo || '',
+        r.productModel || '',
+        formatProductTypes(r.productType || ''),
+        labelOf(RAIL_SECTION_OPTIONS, r.railSection),
+        r.dimensionMm || 0,
+        r.surfaceType || '',
+        r.color || '',
+        labelOf(SIDE_OPTIONS, r.side),
+        unitLabel(r.unit),
+        r.openingQty || 0,
+        r.inboundQty || 0,
+        r.outboundQty || 0,
+        r.balanceQty || 0,
+        r.remark || '',
+      ]);
+    }
+    styleSheet(ws, { centerColumns: [6, 7, 10, 11, 12, 13, 14, 15] });
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /**
+   * 导入模板：只含**建档**字段（含期初数），不含入库数/出库数。
+   * 那两个数是流水累计值，唯一写入口是「登记出入库」（§4.6），
+   * 模板给列让人填，填了也不会生效，反而误导。
+   */
+  async buildImportTemplate(): Promise<Buffer> {
+    const wb = createWorkbook();
+    const ws = wb.addWorksheet('呆滞品导入');
+    ws.columns = [
+      { header: '货号*' },
+      { header: '客户' },
+      { header: '生产单号' },
+      { header: '产品型号' },
+      { header: '产品类型' },
+      { header: '节数' },
+      { header: '规格(mm)' },
+      { header: '表面处理' },
+      { header: '颜色' },
+      { header: '边别' },
+      { header: '单位*' },
+      { header: '期初数*' },
+      { header: '备注' },
+    ];
+    ws.addRow(['53#', '海尔', 'SC2508001', '', '普通,自锁', '三节轨', 450, '电泳', '黑色', '', '支', 200, '示例行，导入前请删除']);
+    styleSheet(ws, { centerColumns: [6, 7, 10, 11, 12] });
+
+    addTipsSheet(wb, [
+      ['一行 = 一批货', '呆滞品**刻意不设唯一键**：同货号同客户先后剩下的几批要各建各的档，所以导入的每一行都会**新建一条记录**，不会合并、不会覆盖。'],
+      ['重复导入会怎样', '会**重复建档**。同一份文件不要导入两次；导入失败时整批回滚，可以放心改完重来。'],
+      ['货号', '必填。'],
+      ['客户 / 生产单号', '**两者至少填一项**。呆滞品脱离了订单，这两项是日后认领这批货的仅有线索，都空着事后没人说得清是谁的货。'],
+      ['产品型号', '留空会按「货号 + 产品类型」自动拼。'],
+      ['产品类型', '可多选，用逗号分隔，如「普通,自锁」。'],
+      ['节数', `可填 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}，留空表示不区分。`],
+      ['表面处理 / 颜色', '按实物填，如 电泳 / 黑色。这两项是认货的主要依据，建议填全。'],
+      ['边别', '产品类型含「卡口」时填 左 / 右；不含卡口请留空。'],
+      ['单位', `必填，${UNIT_OPTIONS.map((o) => o.label).join(' / ')}。本行的四个数量都按这个单位计（1 套 = 2 支），页面顶部合计会统一折成支。`],
+      ['期初数', '必填，不小于 0 的整数，指这批货一开始有多少。'],
+      ['入库数 / 出库数', '**不能导入**：它们是出入库流水的累计值，只能在页面上逐笔「登记出入库」，这样每一笔进出才有据可查。'],
+      ['导入规则', '整批校验通过才落库；任一行有问题会列出逐行原因并**整批回滚**，不会导入一半。'],
+    ]);
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /**
+   * 批量导入建档。**整批全有全无**（同一个事务）。
+   *
+   * 这里的全有全无与部件台账的理由不同：呆滞品每行都是新建，部分成功不会把数加错，
+   * 但用户改完坏行重提整批时，成功的那些会**再建一遍**，留下一堆重复档案。
+   */
+  async importFromExcel(buffer: Buffer, user: CurrentUserPayload) {
+    const ws = await loadFirstSheet(buffer);
+
+    const sideByLabel = new Map(SIDE_OPTIONS.map((o) => [o.label, o.value]));
+    const railByLabel = new Map(RAIL_SECTION_OPTIONS.map((o) => [o.label, o.value]));
+    const unitByLabel = new Map(UNIT_OPTIONS.map((o) => [o.label, o.value]));
+
+    const errors: string[] = [];
+    const parsed: Array<{ rowNo: number; dto: CreateDullStockDto }> = [];
+
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return; // 表头
+      const [itemNo, customerName, productionNo, productModel, typeText, railLabel,
+        dimension, surfaceType, color, sideLabel, unitLabelText, openingQty, remark] =
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((c) => cellString(row.getCell(c)));
+      if (![itemNo, customerName, productionNo, typeText, unitLabelText, openingQty].some(Boolean)) return;
+
+      const at = `第 ${idx} 行`;
+      const rowErrors: string[] = [];
+
+      if (!itemNo) rowErrors.push('货号必填');
+      // 与建档/编辑同一条规则（服务端 normalizeAttrs 也会再拦一次）
+      if (!customerName && !productionNo) rowErrors.push('客户与生产单号至少填写一项');
+
+      let side = '';
+      if (sideLabel) {
+        const hit = sideByLabel.get(sideLabel);
+        if (!hit) rowErrors.push(`边别「${sideLabel}」无效，只能是 左 / 右`);
+        else side = hit;
+      }
+
+      let railSection = '';
+      if (railLabel) {
+        const hit = railByLabel.get(railLabel);
+        if (!hit) rowErrors.push(`节数「${railLabel}」无效，只能是 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}`);
+        else railSection = hit;
+      }
+
+      const { value: productType, invalid } = parseTypeLabels(typeText);
+      if (invalid.length) rowErrors.push(`产品类型「${invalid.join('、')}」无效`);
+
+      let dimensionMm = 0;
+      if (dimension) {
+        const n = Number(dimension);
+        if (!Number.isInteger(n) || n < 0) rowErrors.push(`规格「${dimension}」必须是不小于 0 的整数`);
+        else dimensionMm = n;
+      }
+
+      let unit = UNIT.PIECE as string;
+      if (!unitLabelText) rowErrors.push('单位必填');
+      else {
+        const hit = unitByLabel.get(unitLabelText)
+          ?? (UNIT_OPTIONS.some((o) => o.value === unitLabelText) ? unitLabelText : undefined);
+        if (!hit) rowErrors.push(`单位「${unitLabelText}」无效，只能是 ${UNIT_OPTIONS.map((o) => o.label).join(' / ')}`);
+        else unit = hit;
+      }
+
+      let opening = 0;
+      if (!openingQty) rowErrors.push('期初数必填');
+      else {
+        const n = Number(openingQty);
+        if (!Number.isInteger(n) || n < 0) rowErrors.push(`期初数「${openingQty}」必须是不小于 0 的整数`);
+        else opening = n;
+      }
+
+      if (rowErrors.length) {
+        errors.push(`${at}：${rowErrors.join('；')}`);
+        return;
+      }
+
+      parsed.push({
+        rowNo: idx,
+        dto: {
+          itemNo,
+          customerName: customerName || undefined,
+          productionNo: productionNo || undefined,
+          productModel: productModel || undefined,
+          productType,
+          railSection,
+          dimensionMm,
+          surfaceType: surfaceType || undefined,
+          color: color || undefined,
+          side,
+          unit,
+          openingQty: opening,
+          remark: remark || undefined,
+        } as CreateDullStockDto,
+      });
+    });
+
+    if (errors.length) throw importRejected(errors, parsed.length + errors.length);
+    if (!parsed.length) throw new BadRequestException('Excel 中没有可导入的数据行');
+
+    return this.dataSource.transaction(async (mgr) => {
+      const repo = mgr.getRepository(DullStock);
+      let created = 0;
+      for (const p of parsed) {
+        try {
+          const attrs = this.normalizeAttrs(p.dto);
+          await repo.save(
+            repo.create({
+              ...attrs,
+              unit: p.dto.unit,
+              openingQty: p.dto.openingQty,
+              inboundQty: 0,
+              outboundQty: 0,
+              // 建档时还没有任何流水，结存即期初
+              balanceQty: p.dto.openingQty,
+              ...auditOnCreate(user),
+            }),
+          );
+          created += 1;
+        } catch (e: any) {
+          const why = e?.response?.message ?? e?.message ?? '未知错误';
+          throw importRejected([`第 ${p.rowNo} 行：${why}`], parsed.length);
+        }
+      }
+      return { total: parsed.length, created };
+    });
   }
 
   /* ==================== 出入库流水（入库数/出库数的唯一写入口） ==================== */

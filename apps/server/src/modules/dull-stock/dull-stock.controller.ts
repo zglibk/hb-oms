@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,7 +9,12 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { DullStockService } from './dull-stock.service';
 import {
   CreateDullStockDto,
@@ -19,6 +25,8 @@ import {
 } from './dto/dull-stock.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { sendXlsx } from '../../common/utils/excel-response.util';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 /**
@@ -49,11 +57,43 @@ export class DullStockController {
     return this.service.findFlowList(query);
   }
 
+  /** 导出当前筛选结果；@SkipTransform 返回文件流，**必须注册在 `:id` 之前** */
+  @Get('export')
+  @SkipTransform()
+  @RequirePermissions('dull-stock:export')
+  @OperationLog('呆滞品管理', '导出呆滞品')
+  async exportExcel(@Query() query: QueryDullStockDto, @Res() res: Response) {
+    const buffer = await this.service.exportExcel(query);
+    sendXlsx(res, buffer, '呆滞品清单.xlsx');
+  }
+
+  /** 下载导入模板（只含建档字段；入库数/出库数不可导入，理由见 service） */
+  @Get('import-template')
+  @SkipTransform()
+  @RequirePermissions('dull-stock:import')
+  async importTemplate(@Res() res: Response) {
+    const buffer = await this.service.buildImportTemplate();
+    sendXlsx(res, buffer, '呆滞品导入模板.xlsx');
+  }
+
   @Post()
   @RequirePermissions('dull-stock:create')
   @OperationLog('呆滞品管理', '新增呆滞品')
   async create(@Body() dto: CreateDullStockDto, @CurrentUser() user: CurrentUserPayload) {
     return this.service.create(dto, user);
+  }
+
+  /** 批量导入建档，**整批全有全无**；失败时 errors 逐行回传 */
+  @Post('import')
+  @RequirePermissions('dull-stock:import')
+  @OperationLog('呆滞品管理', '批量导入呆滞品')
+  @UseInterceptors(FileInterceptor('file'))
+  async importExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('请选择要导入的 Excel 文件');
+    return this.service.importFromExcel(file.buffer, user);
   }
 
   /**

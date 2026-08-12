@@ -42,6 +42,13 @@
         <el-button size="small" v-permission="'part-stock:adjust'" type="primary" :icon="Plus" @click="openAdjust()">
           调整余量
         </el-button>
+        <el-button size="small" v-permission="'part-stock:import'" :icon="Upload" @click="importVisible = true">
+          批量导入
+        </el-button>
+        <el-button
+          size="small" v-permission="'part-stock:export'" :icon="Download"
+          :loading="exporting" @click="onExport"
+        >导出</el-button>
         <span class="tip">
           <el-icon><InfoFilled /></el-icon>
           V1 为<b>独立参考台账</b>：只有「期初录入 + 手工调整」两个入口，
@@ -224,21 +231,42 @@
         <el-button size="small" type="primary" :loading="saving" @click="onSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!--
+      批量导入 = **批量调整余量**。部件台账没有「直接设余量」的通道（§4.6 不直接改数无痕），
+      所以模板填的是调整量与原因，导入会在现有余量上加减并逐行留流水——
+      重复导入会再加一遍，提示条里必须讲清楚。
+    -->
+    <import-dialog
+      v-model="importVisible"
+      title="批量导入调整余量"
+      tip="导入的是「调整量」而不是「余量」：每行会在现有余量上加减并留一条流水。整批校验通过才落库，任一行失败整批回滚"
+      confirm-text="即将导入文件「{n}」，每一行都会按<b>调整量</b>在现有余量上<b>加减</b>并留一条流水。<br/>同一份文件重复导入会<b>再加一遍</b>，请确认没有导过。"
+      :download-template="downloadPartStockTemplate"
+      :do-import="importPartStock"
+      :summarize="(r: any) => `导入成功：${r.affected} 行余量已调整`"
+      @done="reload"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, reactive, ref } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { Search, Plus, EditPen, InfoFilled } from '@element-plus/icons-vue';
+import { Search, Plus, EditPen, InfoFilled, Upload, Download } from '@element-plus/icons-vue';
 import {
   getPartStockList,
   getPartStockSummary,
   getPartAdjustList,
   adjustPartStock,
+  downloadPartStockExport,
+  downloadPartStockTemplate,
+  importPartStock,
   type PartBalanceRow,
   type PartAdjustRow,
 } from '@/api/part-stock';
+import ImportDialog from '@/components/ImportDialog.vue';
+import { useExcelExport } from '@/composables/useExcelExport';
 import {
   PART_TYPE_OPTIONS,
   SIDE_OPTIONS,
@@ -295,6 +323,16 @@ function reload() {
 }
 load();
 onActivated(load);
+
+/* ===== 批量导入 / 导出 ===== */
+const importVisible = ref(false);
+const { exporting, exportWithConfirm } = useExcelExport();
+
+const onExport = () => exportWithConfirm({
+  name: '部件台账',
+  count: summary.value.rows,
+  run: () => downloadPartStockExport({ ...query }),
+});
 
 /* ===== 展开行：变动流水 ===== */
 const flows = reactive<Record<number, PartAdjustRow[]>>({});
