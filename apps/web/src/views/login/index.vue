@@ -429,8 +429,12 @@ function onCaptchaDialogClosed() {
   closedBySuccess = false;
 }
 
-/** 记住密码存储键 */
-const REMEMBER_KEY = 'hb_mes_remember';
+/**
+ * 记住密码存储键。`hb_oms_` 前缀（2026-08-12 改，原 `hb_mes_remember` 与
+ * MES 生产同源同键同结构——在一边勾记住密码，另一边登录页会把这边的账号
+ * 密码原样回填进去）。**刻意不迁移旧键**：旧值可能是 MES 的凭据。
+ */
+const REMEMBER_KEY = 'hb_oms_remember';
 /** 记住密码有效期：48 小时（与提示文案「2 天内有效」对齐） */
 const REMEMBER_TTL_MS = 48 * 60 * 60 * 1000;
 

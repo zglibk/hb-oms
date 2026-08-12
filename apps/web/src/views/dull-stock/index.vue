@@ -500,10 +500,18 @@ const rules: FormRules = {
   openingQty: [{ required: true, message: '请填写期初数', trigger: 'blur' }],
 };
 
+/**
+ * openForm 赋值期间抑制联动重校。缺了它会打开弹窗就闪红字：
+ * openForm 的字段赋值触发本 watch 时 formVisible 已翻真，validateField 的
+ * 异步错误态与 nextTick 里的 clearValidate 存在微任务竞争，竞争结果取决于
+ * async-validator 内部实现——不能赌，用标志位把这段窗口整个关掉。
+ */
+let suppressCrossValidate = false;
+
 watch(
   () => [form.customerName, form.productionNo],
   () => {
-    if (!formVisible.value) return;
+    if (!formVisible.value || suppressCrossValidate) return;
     // 任一填上，另一个的红字要跟着消（validateField 校验不过会 reject，吞掉即可）
     formRef.value?.validateField(['customerName', 'productionNo']).catch(() => {});
   },
@@ -533,6 +541,7 @@ function onSurfaceChange(next: string) {
 }
 
 function openForm(row?: DullStockRow) {
+  suppressCrossValidate = true;
   editRow.value = row ?? null;
   form.itemNo = row?.itemNo ?? '';
   form.customerName = row?.customerName ?? '';
@@ -549,8 +558,11 @@ function openForm(row?: DullStockRow) {
   form.openingQty = row?.openingQty ?? 0;
   form.remark = row?.remark ?? '';
   formVisible.value = true;
-  // 刚打开就飘红不合理（用户还没动手），把上一次遗留的校验状态清掉
-  nextTick(() => formRef.value?.clearValidate());
+  // 刚打开就飘红不合理（用户还没动手）：清掉上一次遗留的校验状态，再放开联动重校
+  nextTick(() => {
+    formRef.value?.clearValidate();
+    suppressCrossValidate = false;
+  });
 }
 
 async function onSubmitForm() {

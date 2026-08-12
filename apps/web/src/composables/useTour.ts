@@ -15,7 +15,11 @@ import { ref } from 'vue';
 //                   老用户看过的是「按部件组跟踪」，口径变了必须让他们重看一遍。
 // v5（2026-08-11）：物料管理下新增「呆滞品管理」，「成品期初（不挂订单）」同步下线——
 //                   老用户还会去期初页找那个页签，得让他们知道换地方了。
-const TOUR_DONE_KEY = 'hb_mes_tour_done_v5';
+// 2026-08-12：键名前缀 hb_mes_ → hb_oms_（与 MES 生产同源，localStorage 键统一改前缀防冲突）。
+//             版本号不动；旧键值一次性迁移，老用户不因改名重看。迁移是安全的：
+//             MES 的 tour key 停在 _v1，`hb_mes_tour_done_v5` 只可能是 OMS 自己写的。
+const TOUR_DONE_KEY = 'hb_oms_tour_done_v5';
+const LEGACY_TOUR_DONE_KEY = 'hb_mes_tour_done_v5';
 
 const tourOpen = ref(false);
 
@@ -33,6 +37,17 @@ function safeSet(key: string, value: string) {
   } catch {
     /* 隐私模式等场景忽略：本会话内仍有效，下次会再弹一次 */
   }
+}
+
+// 旧键值一次性迁移（模块加载即执行；localStorage 不可用时静默跳过）
+try {
+  const legacy = localStorage.getItem(LEGACY_TOUR_DONE_KEY);
+  if (legacy) {
+    if (!localStorage.getItem(TOUR_DONE_KEY)) localStorage.setItem(TOUR_DONE_KEY, legacy);
+    localStorage.removeItem(LEGACY_TOUR_DONE_KEY);
+  }
+} catch {
+  /* 与 safeGet/safeSet 同口径：隐私模式等场景忽略 */
 }
 
 export function useTour() {

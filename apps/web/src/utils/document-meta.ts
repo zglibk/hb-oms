@@ -18,8 +18,12 @@ interface DocumentMetaOptions {
   logoUrl?: string | null;
 }
 
-/** 系统名称缓存键：用于下次启动时同步应用标题，消除标签名闪烁 */
-const SYSTEM_NAME_CACHE_KEY = 'hb_mes_system_name';
+/**
+ * 系统名称缓存键：用于下次启动时同步应用标题，消除标签名闪烁。
+ * `hb_oms_` 前缀（2026-08-12 改）：与 MES 生产同源，原同名键会互相污染——
+ * 打开 MES 先闪 OMS 的系统名。不迁移旧值，缺缓存时下次接口返回即重建。
+ */
+const SYSTEM_NAME_CACHE_KEY = 'hb_oms_system_name';
 
 /** 默认系统名称（无缓存、接口未返回时的兜底） */
 const DEFAULT_SYSTEM_NAME = '海宝五金订单跟踪系统';

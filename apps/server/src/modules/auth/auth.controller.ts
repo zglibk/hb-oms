@@ -19,7 +19,11 @@ import {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  /** 登录：独立限流 5 次/分/IP（滑块设计文档进阶项4），配合账号锁定 */
+  /**
+   * 登录：独立限流 5 次/分/IP（滑块设计文档进阶项4），配合账号锁定。
+   * 不标 @OperationLog（§4.3 豁免）：拦截器从 JWT 取操作人，登录前拿不到；
+   * 登录成败已由用户表的成功/失败计数簿记（§5.5），再记一遍是重复账。
+   */
   @Public()
   @Post('login')
   @UseGuards(RateLimitGuard)
@@ -28,6 +32,7 @@ export class AuthController {
     return this.authService.login(dto, req);
   }
 
+  /** 刷新 token：不标 @OperationLog（§4.3 豁免）——纯 token 机械动作，每 401 自动触发，记了全是噪音 */
   @Public()
   @Post('refresh')
   refresh(@Body('refreshToken') refreshToken: string) {

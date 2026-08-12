@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import dayjs from 'dayjs';
 
@@ -35,7 +35,8 @@ export class NumberGeneratorService {
     const seq = await this.generateSequence(key, manager);
     const max = 10 ** width - 1;
     if (seq > max) {
-      throw new Error(`序号已超过 ${width} 位上限（key=${key}）`);
+      // 系统级不变式失败（非业务错误），用 InternalServerErrorException 让用户看到中文而非英文兜底
+      throw new InternalServerErrorException(`序号已超过 ${width} 位上限，请联系管理员（key=${key}）`);
     }
     return String(seq).padStart(width, '0');
   }
@@ -69,7 +70,8 @@ export class NumberGeneratorService {
     // mysql2 返回 ResultSetHeader，insertId 即本次 LAST_INSERT_ID 的值
     const seq = Number(result?.insertId ?? 0);
     if (!seq) {
-      throw new Error(`单号采番失败：未取得序号（key=${key}）`);
+      // 同上：系统级异常给中文提示，避免透出英文兜底文案
+      throw new InternalServerErrorException(`单号采番失败，请重试或联系管理员（key=${key}）`);
     }
     return seq;
   }

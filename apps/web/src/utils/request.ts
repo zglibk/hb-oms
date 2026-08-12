@@ -12,8 +12,15 @@ export interface ApiResult<T = any> {
   data: T;
 }
 
-const TOKEN_KEY = 'hb_mes_token';
-const REFRESH_KEY = 'hb_mes_refresh';
+/**
+ * localStorage 键一律 `hb_oms_` 前缀：生产环境 OMS 与 hb-mes 同机同端口（同源），
+ * localStorage 共享，原先沿用 MES 的 `hb_mes_token` 会让两套系统互相顶掉对方的
+ * 登录态（两边 JWT 密钥不同，被顶的一方直接被踢下线）。2026-08-12 改名。
+ * **刻意不迁移旧键的值**——存量 `hb_mes_token` 里存的可能正是 MES 的 token，
+ * 迁过来就是把 bug 固化；代价只是 OMS 用户重新登录一次。
+ */
+const TOKEN_KEY = 'hb_oms_token';
+const REFRESH_KEY = 'hb_oms_refresh';
 let memoryAccessToken = '';
 let memoryRefreshToken = '';
 
