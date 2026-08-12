@@ -302,7 +302,6 @@
 <script setup lang="ts">
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
 import {
   Search,
   Download,
@@ -322,6 +321,7 @@ import {
   type LedgerRowDetail,
   type LedgerSummary,
 } from '@/api/ledger';
+import { useExcelExport } from '@/composables/useExcelExport';
 import {
   PRODUCT_TYPE_OPTIONS,
   UNIT_OPTIONS,
@@ -419,37 +419,38 @@ async function onExpandChange(row: LedgerRow, expanded: unknown) {
  * span-method 已无用武之地，随之整段删除。 */
 
 /* ===== 导出 Excel ===== */
-const exporting = ref(false);
-async function onExport() {
-  if (!total.value) {
-    ElMessage.warning('当前筛选无台账数据，无需导出');
-    return;
-  }
-  exporting.value = true;
-  try {
-    // 只传筛选条件，不传分页——导出的是当前筛选的全量，不是当前这一页
-    const blob = await exportLedger({
-      keyword: query.keyword || undefined,
-      salesman: query.salesman || undefined,
-      merchandiser: query.merchandiser || undefined,
-      surfaceType: query.surfaceType,
-      assemblyWorkshop: query.assemblyWorkshop,
-      productType: query.productType,
-      onlyOwed: query.onlyOwed,
-      onlyOverdue: query.onlyOverdue,
-      deliveryFrom: deliveryRange.value?.[0],
-      deliveryTo: deliveryRange.value?.[1],
-    });
+const { exporting, exportWithConfirm } = useExcelExport();
+
+/** 导出用的筛选条件（不含分页——导的是当前筛选全量，不是当前这一页） */
+function exportFilters() {
+  return {
+    keyword: query.keyword || undefined,
+    salesman: query.salesman || undefined,
+    merchandiser: query.merchandiser || undefined,
+    surfaceType: query.surfaceType,
+    assemblyWorkshop: query.assemblyWorkshop,
+    productType: query.productType,
+    onlyOwed: query.onlyOwed,
+    onlyOverdue: query.onlyOverdue,
+    deliveryFrom: deliveryRange.value?.[0],
+    deliveryTo: deliveryRange.value?.[1],
+  };
+}
+
+const onExport = () => exportWithConfirm({
+  name: '台账',
+  // 实查而不是用页面上的 total：筛选条件改了但没点「查询」时 total 还是上一次的
+  getCount: async () => (await getLedger({ ...exportFilters(), page: 1, pageSize: 1 })).total,
+  run: async () => {
+    const blob = await exportLedger(exportFilters());
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `订单跟踪台账_${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-  } finally {
-    exporting.value = false;
-  }
-}
+  },
+});
 
 onActivated(load);
 

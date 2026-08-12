@@ -163,6 +163,7 @@ import {
 } from '@/api/system';
 import { useClientPager } from '@/composables/useClientPager';
 import { refreshDict } from '@/composables/useDict';
+import { useExcelExport } from '@/composables/useExcelExport';
 
 const loading = ref(false);
 const list = ref<any[]>([]);
@@ -237,21 +238,21 @@ async function onDelete(row: any) {
 }
 
 /* 导出 Excel：有勾选则仅导出勾选记录，否则导出全部（与分页无关） */
-const exporting = ref(false);
-async function onExport() {
-  exporting.value = true;
-  try {
+const { exporting, exportWithConfirm } = useExcelExport();
+const onExport = () => exportWithConfirm({
+  name: '字典',
+  // 字典是客户端分页，list 已是当前类型的全量，不存在「筛选变了但没查询」的口径差
+  getCount: async () => (selectedRows.value.length || list.value.length),
+  scopeText: (n) => (selectedRows.value.length
+    ? `导出<b>选中的 ${n}</b> 条字典项`
+    : `导出当前类型的全部 <b>${n}</b> 条字典项`),
+  run: async () => {
     const ids = selectedRows.value.length
       ? selectedRows.value.map((r) => r.id)
       : undefined;
     await exportDictList(curType.value, ids);
-    ElMessage.success('导出成功');
-  } catch {
-    ElMessage.error('导出失败，请重试');
-  } finally {
-    exporting.value = false;
-  }
-}
+  },
+});
 
 /* 批量导入 */
 const importVisible = ref(false);

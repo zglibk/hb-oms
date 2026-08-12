@@ -521,6 +521,10 @@ export class MaterialService {
     }
     qb.orderBy('m.itemNo', 'ASC').addOrderBy('m.materialCode', 'ASC');
     const list = await qb.getMany();
+    // 空结果拒绝而不是给一张只有表头的空表（与其余导出同口径）
+    if (!list.length) {
+      throw new BadRequestException('当前筛选条件下没有部件可导出，请调整筛选条件后重试');
+    }
 
     const dictOptions = await this.loadDictOptions();
     const toLabel = (type: string, val: string | null): string => {

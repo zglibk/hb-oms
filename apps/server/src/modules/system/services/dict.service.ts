@@ -270,6 +270,10 @@ export class DictService {
     } else {
       list = await this.findList(dictType);
     }
+    // 空结果拒绝而不是给一张只有表头的空表（与其余导出同口径）
+    if (!list.length) {
+      throw new BadRequestException('当前条件下没有字典项可导出，请调整筛选条件后重试');
+    }
     const cols = IMPORT_COLUMNS;
 
     const wb = new ExcelJS.Workbook();

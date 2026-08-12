@@ -144,6 +144,7 @@ import {
   exportProcessInfos,
   type ProcessInfoItem,
 } from '@/api/process-info';
+import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -251,14 +252,14 @@ function openHistory(row: ProcessInfoItem) {
 }
 
 /* ===== 导出 ===== */
-const exporting = ref(false);
-async function onExport() {
-  if (!total.value) {
-    ElMessage.warning('当前筛选无记录，无需导出');
-    return;
-  }
-  exporting.value = true;
-  try {
+const { exporting, exportWithConfirm } = useExcelExport();
+const onExport = () => exportWithConfirm({
+  name: '开单信息',
+  // 实查而不是用页面上的 total：筛选条件改了但没点「查询」时 total 还是上一次的
+  getCount: async () => (await getProcessInfoList({
+    keyword: query.keyword || undefined, page: 1, pageSize: 1,
+  })).total,
+  run: async () => {
     const blob = await exportProcessInfos({ keyword: query.keyword || undefined });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -266,10 +267,8 @@ async function onExport() {
     a.download = `开单信息_${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-  } finally {
-    exporting.value = false;
-  }
-}
+  },
+});
 
 /* ===== 批量导入 ===== */
 const importVisible = ref(false);

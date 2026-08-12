@@ -29,6 +29,8 @@ export function useExcelExport() {
   async function exportWithConfirm(opts: {
     name: string;
     getCount?: () => Promise<number>;
+    /** 自定义确认框正文首句（如「导出选中的 N 条」）；不传用默认的「按当前筛选条件导出 N 条」 */
+    scopeText?: (count: number) => string;
     run: () => Promise<void>;
   }): Promise<void> {
     exporting.value = true;
@@ -58,9 +60,10 @@ export function useExcelExport() {
       }
 
       // ---------- 2. 确认 ----------
-      const scope = count === undefined
-        ? '按当前筛选条件导出'
-        : `按当前筛选条件导出 <b>${count}</b> 条${opts.name}记录`;
+      let scope: string;
+      if (opts.scopeText && count !== undefined) scope = opts.scopeText(count);
+      else if (count === undefined) scope = '按当前筛选条件导出';
+      else scope = `按当前筛选条件导出 <b>${count}</b> 条${opts.name}记录`;
       try {
         await ElMessageBox.confirm(
           `${scope}。<br/>导出的是<b>当前筛选结果</b>而不是全部数据，如需完整数据请先清空筛选条件。`,

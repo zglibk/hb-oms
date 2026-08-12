@@ -2,7 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
-import { POSITION_NATURE, POSITION_NATURE_OPTIONS, positionNatureLabel } from '@hb-oms/shared';
+import {
+  EXPORT_ROW_LIMIT,
+  POSITION_NATURE,
+  POSITION_NATURE_OPTIONS,
+  positionNatureLabel,
+} from '@hb-oms/shared';
 import { Position } from './entities/position.entity';
 import { JobLevel } from './entities/job-level.entity';
 import { Department } from '../system/entities/department.entity';
@@ -160,7 +165,16 @@ export class PositionService {
 
   /** 导出当前筛选结果（列序与页面一致，便于对照） */
   async exportExcel(query: QueryPositionDto): Promise<Buffer> {
-    const all = await this.findList({ ...query, page: 1, pageSize: 5000 });
+    const all = await this.findList({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
+    // 空结果与超限一律拒绝，不给空表也不静默截断（与其余导出同口径）
+    if (!all.list.length) {
+      throw new BadRequestException('当前筛选条件下没有岗位可导出，请调整筛选条件后重试');
+    }
+    if (all.list.length > EXPORT_ROW_LIMIT) {
+      throw new BadRequestException(
+        `当前筛选结果 ${all.total} 行，超过单次导出上限 ${EXPORT_ROW_LIMIT} 行，请缩小筛选范围后重试`,
+      );
+    }
     const wb = new ExcelJS.Workbook();
     wb.creator = '海宝五金 OMS';
     wb.created = new Date();

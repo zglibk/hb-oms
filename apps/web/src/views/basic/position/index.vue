@@ -289,6 +289,7 @@ import {
   positionNatureLabel,
   filterJobLevels,
 } from '@/constants/dict';
+import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -469,7 +470,7 @@ async function onBatchDelete() {
 }
 
 /* ===== 导入 / 导出 ===== */
-const exporting = ref(false);
+const { exporting, exportWithConfirm } = useExcelExport();
 const importVisible = ref(false);
 const importing = ref(false);
 const overwrite = ref(false);
@@ -477,14 +478,12 @@ const pendingFile = ref<File | null>(null);
 const fileList = ref<UploadFile[]>([]);
 const importErrors = ref<string[]>([]);
 
-async function onExport() {
-  exporting.value = true;
-  try {
-    await downloadPositionExport({ ...query });
-  } finally {
-    exporting.value = false;
-  }
-}
+const onExport = () => exportWithConfirm({
+  name: '岗位',
+  // 实查而不是用页面上的 total：筛选条件改了但没点「查询」时 total 还是上一次的
+  getCount: async () => (await getPositionList({ ...query, page: 1, pageSize: 1 })).total,
+  run: () => downloadPositionExport({ ...query }),
+});
 
 async function onDownloadTemplate() {
   await downloadPositionTemplate();

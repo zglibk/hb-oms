@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import {
+  EXPORT_ROW_LIMIT,
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   formatDimension,
@@ -41,8 +42,11 @@ import { SystemConfigService } from '../system-config/system-config.service';
 /**
  * 单次导出行数上限。超过就拒绝——静默截断出去的表用户不会知道少了行，
  * 拿去对账比不给更糟。
+ *
+ * 取自共享包：前端导出前要拿同一个数做预检，两端各写一份迟早漂移
+ * （本文件原先自带一份 5000 的副本，2026-08-12 收敛）。
  */
-const EXPORT_MAX_ROWS = 5000;
+const EXPORT_MAX_ROWS = EXPORT_ROW_LIMIT;
 
 /**
  * 取台账行下各部件组的某个字段，去重后按组序用「/」并列。
