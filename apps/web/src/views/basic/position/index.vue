@@ -94,11 +94,17 @@
         <el-table-column label="职级" width="110" align="center">
           <template #default="{ row }">{{ row.jobLevelName || '—' }}</template>
         </el-table-column>
+        <!--
+          「在岗」显示为 是/否 标记（有没有人在这个岗位上），不摊开人数。
+          具体人数与超编与否放进悬浮提示，超编仍标红——标红时人数才是要看的东西。
+        -->
         <el-table-column label="编制 / 在岗" width="120" align="center">
           <template #default="{ row }">
-            <span :class="{ 'over-head': isOverHead(row) }">
-              {{ row.headcount ?? '不限' }} / {{ row.employeeCount ? row.employeeCount : '无' }}
-            </span>
+            <el-tooltip :content="headcountTip(row)" placement="top">
+              <span :class="{ 'over-head': isOverHead(row) }">
+                {{ row.headcount ?? '不限' }} / {{ row.employeeCount ? '是' : '否' }}
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="排序" prop="sort" width="70" align="center" />
@@ -314,6 +320,16 @@ const selected = ref<PositionRow[]>([]);
 /** 在岗人数超过编制 → 标红提醒 */
 const isOverHead = (row: PositionRow) =>
   row.headcount != null && (row.employeeCount ?? 0) > row.headcount;
+
+/** 悬浮提示：列上只给「有没有人在岗」，具体人数与超编情况放这里 */
+function headcountTip(row: PositionRow) {
+  const on = row.employeeCount ?? 0;
+  const head = row.headcount == null ? '编制不限' : `编制 ${row.headcount} 人`;
+  if (!on) return `${head}，当前无人在岗`;
+  return isOverHead(row)
+    ? `${head}，当前在岗 ${on} 人，已超编 ${on - (row.headcount as number)} 人`
+    : `${head}，当前在岗 ${on} 人`;
+}
 
 async function load() {
   loading.value = true;
