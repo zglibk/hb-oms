@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 七段数码管单字（0–9），风格参考电子表：亮段霓虹绿、暗段幽灵灰、深底。
+ * 七段数码管单字（0–9），风格参考电子表：亮段霓虹绿、暗段浅灰幽灵段（无黑底）。
  * 倒计时各位用 :key 切换时会整段重挂，形成「换图」效果。
  */
 import { computed } from 'vue';
@@ -42,7 +42,6 @@ function isOn(s: Seg) {
     aria-hidden="true"
     :key="`${ch}-${flipKey}`"
   >
-    <rect class="seven-seg__bg" x="0" y="0" width="44" height="72" rx="4" ry="4" />
     <polygon class="seg" :class="{ 'is-on': isOn('a') }" points="10,6 34,6 30,11 14,11" />
     <polygon class="seg" :class="{ 'is-on': isOn('b') }" points="35,7 39,11 39,31 35,35 31,31 31,11" />
     <polygon class="seg" :class="{ 'is-on': isOn('c') }" points="35,37 39,41 39,61 35,65 31,61 31,41" />
@@ -61,14 +60,11 @@ function isOn(s: Seg) {
   flex-shrink: 0;
   animation: seven-seg-pop 0.18s ease;
 }
-.seven-seg__bg {
-  fill: #2a2e33;
-}
 .seg {
-  fill: #3a4048;
+  fill: #d0d5dc;
   &.is-on {
     fill: #b8f000;
-    filter: drop-shadow(0 0 1px rgba(184, 240, 0, 0.55));
+    filter: drop-shadow(0 0 1px rgba(184, 240, 0, 0.45));
   }
 }
 @keyframes seven-seg-pop {
