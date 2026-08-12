@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 七段数码管单字（0–9），风格参考电子表：亮段霓虹绿、暗段浅灰幽灵段（无黑底）。
+ * 七段数码管单字（0–9），风格参考电子表：亮段深灰、暗段浅灰幽灵段（无底板）。
+ * 配色为**浅色卡片**准备——白底上不用霓虹绿，靠明暗差而非颜色区分亮灭。
  * 倒计时各位用 :key 切换时会整段重挂，形成「换图」效果。
  */
 import { computed } from 'vue';
@@ -60,11 +61,16 @@ function isOn(s: Seg) {
   flex-shrink: 0;
   animation: seven-seg-pop 0.18s ease;
 }
+/*
+ * 白底卡片上不能用霓虹绿：亮段在浅色背景上几乎看不清（实际使用中反馈）。
+ * 改为「亮段深灰 / 暗段浅灰」，靠明度差区分，不靠颜色——
+ * 深灰同时也是本项目侧栏那套配色（#1E293B~#334155）的近亲，风格统一。
+ * 深灰配霓虹光晕不成立，drop-shadow 一并去掉。
+ */
 .seg {
-  fill: #d0d5dc;
+  fill: #dfe3e8;
   &.is-on {
-    fill: #b8f000;
-    filter: drop-shadow(0 0 1px rgba(184, 240, 0, 0.45));
+    fill: #2f3742;
   }
 }
 @keyframes seven-seg-pop {
