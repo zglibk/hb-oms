@@ -29,24 +29,14 @@ export interface CalendarBrief {
   lunarText: string;
   nextJieQi: NextJieQiInfo | null;
   yearLeftDays: number;
-  /** 不足一天部分的 hh:mm:ss（相对本年最后一刻） */
-  yearLeftHms: string;
+  /** 不足一天部分：时 / 分 / 秒（相对本年最后一刻） */
+  yearLeftHours: number;
+  yearLeftMinutes: number;
+  yearLeftSeconds: number;
   year: number;
   nextHoliday: NextHolidayInfo | null;
   /** 今天若为法定休息日则返回节日名 */
   todayHolidayName: string | null;
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function formatHms(totalSec: number): string {
-  const s = Math.max(0, Math.floor(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${pad2(h)}:${pad2(m)}:${pad2(sec)}`;
 }
 
 function startOfToday(date: Date): Solar {
@@ -107,7 +97,10 @@ export function getCalendarBrief(date = new Date()): CalendarBrief {
   const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
   const msLeft = Math.max(0, yearEnd.getTime() - date.getTime());
   const yearLeftDays = Math.floor(msLeft / 86_400_000);
-  const yearLeftHms = formatHms((msLeft % 86_400_000) / 1000);
+  const remSec = Math.floor((msLeft % 86_400_000) / 1000);
+  const yearLeftHours = Math.floor(remSec / 3600);
+  const yearLeftMinutes = Math.floor((remSec % 3600) / 60);
+  const yearLeftSeconds = remSec % 60;
 
   const week = WEEK_LABELS[solar.getWeek()] ?? solar.getWeekInChinese();
   const solarText = `${year}年${solar.getMonth()}月${solar.getDay()}日 星期${week}`;
@@ -124,7 +117,9 @@ export function getCalendarBrief(date = new Date()): CalendarBrief {
     lunarText,
     nextJieQi: buildNextJieQi(solar, date),
     yearLeftDays,
-    yearLeftHms,
+    yearLeftHours,
+    yearLeftMinutes,
+    yearLeftSeconds,
     year,
     nextHoliday: findNextHoliday(solar),
     todayHolidayName,

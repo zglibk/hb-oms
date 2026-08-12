@@ -56,12 +56,32 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="业务员">
-              <el-input v-model="form.salesman" />
+              <el-select
+                v-model="form.salesman"
+                clearable
+                filterable
+                allow-create
+                default-first-option
+                placeholder="选择或直接输入"
+                style="width: 100%"
+              >
+                <el-option v-for="n in ORDER_SALESMAN_OPTIONS" :key="n" :label="n" :value="n" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="跟单员">
-              <el-input v-model="form.merchandiser" />
+              <el-select
+                v-model="form.merchandiser"
+                clearable
+                filterable
+                allow-create
+                default-first-option
+                placeholder="选择或直接输入"
+                style="width: 100%"
+              >
+                <el-option v-for="n in ORDER_MERCHANDISER_OPTIONS" :key="n" :label="n" :value="n" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -373,6 +393,8 @@ import {
   toMm,
   toPieces,
   COUNTRY_OPTIONS,
+  ORDER_SALESMAN_OPTIONS,
+  ORDER_MERCHANDISER_OPTIONS,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';

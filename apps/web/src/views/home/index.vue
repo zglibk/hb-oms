@@ -72,7 +72,18 @@
               <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
             </svg>
             <el-tag size="small" effect="plain" type="warning" round>年余</el-tag>
-            <b>{{ cal.year }} 年还剩 <em>{{ cal.yearLeftDays }}</em> 天 <em class="cal-hms">{{ cal.yearLeftHms }}</em></b>
+            <span class="year-cd" :aria-label="yearCdLabel">
+              <SevenSegNumber :value="cal.year" :pad="4" class="year-cd__digits" />
+              <span class="year-cd__lbl">年还剩</span>
+              <SevenSegNumber :value="cal.yearLeftDays" class="year-cd__digits" />
+              <span class="year-cd__lbl">天</span>
+              <SevenSegNumber :value="cal.yearLeftHours" :pad="2" class="year-cd__digits" />
+              <span class="year-cd__lbl">小时</span>
+              <SevenSegNumber :value="cal.yearLeftMinutes" :pad="2" class="year-cd__digits" />
+              <span class="year-cd__lbl">分</span>
+              <SevenSegNumber :value="cal.yearLeftSeconds" :pad="2" class="year-cd__digits" />
+              <span class="year-cd__lbl">秒</span>
+            </span>
           </span>
         </div>
       </div>
@@ -235,6 +246,7 @@ import { loadDict } from '@/composables/useDict';
 
 import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
+import SevenSegNumber from '@/components/SevenSegNumber.vue';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -282,7 +294,7 @@ loadDict('surface_type').then((rows: any[]) => {
   surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
-/** 每秒刷新：驱动年余 hh:mm:ss 与时段欢迎色 */
+/** 每秒刷新：驱动年余倒计时（天/时/分/秒）与时段欢迎色 */
 const nowTick = ref(Date.now());
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
@@ -327,6 +339,11 @@ const politeName = computed(() => {
 
 /** 欢迎区日历摘要（公历 / 农历+节气 / 节假 / 年余倒计时） */
 const cal = computed(() => getCalendarBrief(new Date(nowTick.value)));
+
+const yearCdLabel = computed(() => {
+  const c = cal.value;
+  return `${c.year} 年还剩 ${c.yearLeftDays} 天 ${c.yearLeftHours} 小时 ${c.yearLeftMinutes} 分 ${c.yearLeftSeconds} 秒`;
+});
 
 async function load() {
   if (!canDashboard.value) return; // 无权限：不请求，避免整页 403 提示
@@ -467,12 +484,6 @@ export default { name: 'HomeDashboard' };
     font-weight: 400;
   }
 
-  .cal-hms {
-    font-variant-numeric: tabular-nums;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-    letter-spacing: 0.02em;
-  }
-
   &__icon {
     width: 18px;
     height: 18px;
@@ -492,11 +503,36 @@ export default { name: 'HomeDashboard' };
   }
   &--year {
     .cal-chip__icon { color: var(--el-color-warning); }
-    b em { color: var(--el-color-warning); }
   }
   &--holiday {
     .cal-chip__icon { color: var(--el-color-danger); }
     b em { color: var(--el-color-danger); }
+  }
+}
+
+.year-cd {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+  line-height: 1;
+
+  &__lbl {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--el-text-color-secondary);
+    white-space: nowrap;
+  }
+
+  &__digits {
+    /* 数码字明显高于旁边文案 */
+    :deep(.seven-seg) {
+      width: 13px;
+      height: 22px;
+    }
   }
 }
 

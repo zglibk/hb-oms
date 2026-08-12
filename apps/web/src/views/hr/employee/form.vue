@@ -1,258 +1,294 @@
 <template>
   <div class="page">
-    <el-card shadow="never" v-loading="loading">
-      <div class="form-header">
-        <div class="form-title">
-          <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
-          <span class="title-text">{{ editId ? '编辑员工' : '新增员工' }}</span>
-          <span v-if="editId && form.empNo" class="title-no">{{ form.empNo }}</span>
+    <el-card shadow="never" class="form-card" v-loading="loading">
+      <div class="form-shell">
+        <div class="form-header">
+          <div class="form-title">
+            <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
+            <span class="title-text">{{ editId ? '编辑员工' : '新增员工' }}</span>
+            <span v-if="editId && form.empNo" class="title-no">{{ form.empNo }}</span>
+          </div>
+          <div>
+            <el-button size="small" @click="goBack">取消</el-button>
+            <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
+          </div>
         </div>
-        <div>
-          <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
-        </div>
+
+        <el-form ref="formRef" class="emp-form" :model="form" :rules="rules" label-width="100px" size="small">
+          <div class="form-block">
+            <div class="form-sec">基本信息</div>
+            <el-row :gutter="16">
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item>
+                  <template #label>
+                    <span class="field-label">
+                      员工编号
+                      <el-tooltip
+                        placement="top"
+                        :trigger="hintTrigger"
+                        :content="editId ? '编号终身不变，调岗/调厂区都不换号' : '厂区+年份+部门+流水号，保存时自动生成'"
+                      >
+                        <span class="hint-bang" tabindex="0" role="button" aria-label="编号说明">!</span>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-input :model-value="editId ? form.empNo : codePreviewText" disabled :spellcheck="false" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="姓名" prop="empName">
+                  <el-input v-model="form.empName" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item prop="plantCode">
+                  <template #label>
+                    <span class="field-label">
+                      厂区
+                      <el-tooltip placement="top" :trigger="hintTrigger" content="编号第 1-2 位">
+                        <span class="hint-bang" tabindex="0" role="button" aria-label="厂区说明">!</span>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-select v-model="form.plantCode" placeholder="请选择" style="width: 100%">
+                    <el-option v-for="o in EMP_PLANT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="性别" prop="gender">
+                  <el-radio-group v-model="form.gender">
+                    <el-radio :value="1">男</el-radio>
+                    <el-radio :value="2">女</el-radio>
+                    <el-radio :value="0">未知</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="身份证">
+                  <el-input v-model="form.idCard" maxlength="18" placeholder="选填，可带出生日" @blur="onIdCardBlur" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="出生日期">
+                  <el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="联系方式">
+                  <el-input v-model="form.phone" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="籍贯">
+                  <el-input v-model="form.nativePlace" placeholder="如：广东东莞" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="民族">
+                  <el-input v-model="form.ethnicity" placeholder="如：汉族" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="婚姻状况">
+                  <el-select v-model="form.maritalStatus" clearable style="width: 100%">
+                    <el-option v-for="o in maritalOpts" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="政治面貌">
+                  <el-select v-model="form.politicalStatus" clearable style="width: 100%">
+                    <el-option v-for="o in politicalOpts" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="16" :md="16" :sm="24" :xs="24">
+                <el-form-item label="住址">
+                  <el-input v-model="form.address" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="8" :md="8" :sm="24" :xs="24">
+                <el-form-item label="紧急联系人">
+                  <el-input v-model="form.emergencyContact" placeholder="如：张三 138xxxx" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+
+          <div class="form-block">
+            <div class="form-sec">教育背景</div>
+            <el-row :gutter="16">
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="学历">
+                  <el-select v-model="form.education" clearable style="width: 100%">
+                    <el-option v-for="o in educationOpts" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="学历类型">
+                  <el-select v-model="form.educationType" clearable placeholder="选填" style="width: 100%">
+                    <el-option v-for="o in EDUCATION_TYPE" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="专业">
+                  <el-input v-model="form.major" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="毕业时间">
+                  <el-date-picker
+                    v-model="form.graduateDate" type="month" value-format="YYYY-MM-DD"
+                    placeholder="选择年月" style="width: 100%"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="毕业院校">
+                  <el-input v-model="form.graduateSchool" placeholder="最终毕业院校" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+
+          <div class="form-block">
+            <div class="form-sec">用工属性</div>
+            <el-row :gutter="16">
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="用工属性" prop="empType">
+                  <el-select v-model="form.empType" style="width: 100%">
+                    <el-option v-for="o in empTypeOpts" :key="o.value" :label="o.label" :value="o.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="在职状态" prop="jobStatus">
+                  <el-radio-group v-model="form.jobStatus">
+                    <el-radio v-for="o in JOB_STATUS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item prop="hireDate">
+                  <template #label>
+                    <span class="field-label">
+                      入职日期
+                      <el-tooltip placement="top" :trigger="hintTrigger" content="决定编号第 3-4 位年份标识">
+                        <span class="hint-bang" tabindex="0" role="button" aria-label="入职日期说明">!</span>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-date-picker v-model="form.hireDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="试用期(月)">
+                  <el-input-number v-model="form.probationMonths" :min="0" :max="36" :controls="false" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="合同到期日">
+                  <el-date-picker v-model="form.contractEndDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="档案状态">
+                  <el-switch
+                    v-model="form.status" :active-value="1" :inactive-value="0"
+                    active-text="启用" inactive-text="停用"
+                    :disabled="form.jobStatus === JOB_STATUS_VALUE.LEFT"
+                  />
+                </el-form-item>
+              </el-col>
+              <template v-if="form.jobStatus === JOB_STATUS_VALUE.LEFT">
+                <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                  <el-form-item label="离职日期" prop="leaveDate">
+                    <el-date-picker v-model="form.leaveDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                  <el-form-item label="离职原因">
+                    <el-input v-model="form.leaveReason" />
+                  </el-form-item>
+                </el-col>
+              </template>
+            </el-row>
+          </div>
+
+          <div class="form-block">
+            <div class="form-sec">车间属性</div>
+            <el-row :gutter="16">
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item prop="deptId">
+                  <template #label>
+                    <span class="field-label">
+                      所属组织
+                      <el-tooltip placement="top" :trigger="hintTrigger" content="括号内为人事编码（编号第 5-7 位）">
+                        <span class="hint-bang" tabindex="0" role="button" aria-label="所属组织说明">!</span>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-tree-select
+                    v-model="form.deptId"
+                    :data="deptTreeLabeled"
+                    :props="{ label: 'codeLabel', children: 'children' }"
+                    node-key="id"
+                    check-strictly
+                    clearable
+                    default-expand-all
+                    placeholder="选自部门信息"
+                    style="width: 100%"
+                    @change="onDeptChange"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="岗位">
+                  <div class="position-field">
+                    <el-select v-model="form.positionId" clearable filterable placeholder="选自岗位管理" style="width: 100%">
+                      <el-option
+                        v-for="o in positionOpts"
+                        :key="o.id"
+                        :label="o.deptId ? o.positionName : `${o.positionName}（通用）`"
+                        :value="o.id"
+                      />
+                    </el-select>
+                    <el-checkbox v-model="showAllPositions" size="small" class="position-all" @change="loadPositions">
+                      全部
+                    </el-checkbox>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="班组">
+                  <el-input v-model="form.teamGroup" placeholder="自由填写" />
+                </el-form-item>
+              </el-col>
+              <el-col :lg="6" :md="8" :sm="12" :xs="24">
+                <el-form-item label="直属主管">
+                  <el-select v-model="form.supervisorId" clearable filterable style="width: 100%" placeholder="本表在职员工">
+                    <el-option
+                      v-for="o in supervisorOpts"
+                      :key="o.id"
+                      :label="`${o.empName}（${o.empNo}）`"
+                      :value="o.id"
+                      :disabled="o.id === editId"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item label="备注">
+                  <el-input v-model="form.remark" type="textarea" :rows="2" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+        </el-form>
       </div>
-
-      <!-- 一行 6 列（lg 及以上），label 相应收窄到 82px，否则窄列里输入框会被 label 挤没 -->
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="82px" size="small">
-        <div class="form-sec">基本信息</div>
-        <el-row :gutter="16">
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="员工编号">
-              <el-input :model-value="editId ? form.empNo : codePreviewText" disabled :spellcheck="false" />
-              <div class="code-hint">
-                <template v-if="editId">编号<b>终身不变</b>，调岗/调厂区都不换号</template>
-                <template v-else>厂区+年份+部门+流水号，<b>保存时自动生成</b></template>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="姓名" prop="empName">
-              <el-input v-model="form.empName" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="厂区" prop="plantCode">
-              <el-select v-model="form.plantCode" placeholder="请选择" style="width: 100%">
-                <el-option v-for="o in EMP_PLANT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-              <div class="code-hint">编号第 1-2 位</div>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="性别" prop="gender">
-              <el-radio-group v-model="form.gender">
-                <el-radio :value="1">男</el-radio>
-                <el-radio :value="2">女</el-radio>
-                <el-radio :value="0">未知</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="身份证">
-              <el-input v-model="form.idCard" maxlength="18" placeholder="选填，可带出生日" @blur="onIdCardBlur" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="出生日期">
-              <el-date-picker v-model="form.birthDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="联系方式">
-              <el-input v-model="form.phone" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="籍贯">
-              <el-input v-model="form.nativePlace" placeholder="如：广东东莞" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="民族">
-              <el-input v-model="form.ethnicity" placeholder="如：汉族" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="婚姻状况">
-              <el-select v-model="form.maritalStatus" clearable style="width: 100%">
-                <el-option v-for="o in maritalOpts" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="政治面貌">
-              <el-select v-model="form.politicalStatus" clearable style="width: 100%">
-                <el-option v-for="o in politicalOpts" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <!-- 住址内容长，占两列 -->
-          <el-col :lg="8" :md="12" :sm="24" :xs="24">
-            <el-form-item label="住址">
-              <el-input v-model="form.address" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="紧急联系人">
-              <el-input v-model="form.emergencyContact" placeholder="如：张三 138xxxx" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div class="form-sec">教育背景</div>
-        <el-row :gutter="16">
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="学历">
-              <el-select v-model="form.education" clearable style="width: 100%">
-                <el-option v-for="o in educationOpts" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="学历类型">
-              <el-select v-model="form.educationType" clearable placeholder="选填" style="width: 100%">
-                <el-option v-for="o in EDUCATION_TYPE" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="专业">
-              <el-input v-model="form.major" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="毕业时间">
-              <el-date-picker
-                v-model="form.graduateDate" type="month" value-format="YYYY-MM-DD"
-                placeholder="选择年月" style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <!-- 院校名长，占两列 -->
-          <el-col :lg="8" :md="12" :sm="24" :xs="24">
-            <el-form-item label="毕业院校">
-              <el-input v-model="form.graduateSchool" placeholder="最终毕业院校" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div class="form-sec">用工属性</div>
-        <el-row :gutter="16">
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="用工属性" prop="empType">
-              <el-select v-model="form.empType" style="width: 100%">
-                <el-option v-for="o in empTypeOpts" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="在职状态" prop="jobStatus">
-              <el-radio-group v-model="form.jobStatus">
-                <el-radio v-for="o in JOB_STATUS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="入职日期" prop="hireDate">
-              <el-date-picker v-model="form.hireDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-              <div class="code-hint">决定编号第 3-4 位年份标识</div>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="试用期(月)">
-              <el-input-number v-model="form.probationMonths" :min="0" :max="36" :controls="false" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="合同到期日">
-              <el-date-picker v-model="form.contractEndDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="档案状态">
-              <el-switch
-                v-model="form.status" :active-value="1" :inactive-value="0"
-                active-text="启用" inactive-text="停用"
-                :disabled="form.jobStatus === JOB_STATUS_VALUE.LEFT"
-              />
-            </el-form-item>
-          </el-col>
-          <template v-if="form.jobStatus === JOB_STATUS_VALUE.LEFT">
-            <el-col :lg="4" :md="6" :sm="12" :xs="24">
-              <el-form-item label="离职日期" prop="leaveDate">
-                <el-date-picker v-model="form.leaveDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-              </el-form-item>
-            </el-col>
-            <el-col :lg="4" :md="6" :sm="12" :xs="24">
-              <el-form-item label="离职原因">
-                <el-input v-model="form.leaveReason" />
-              </el-form-item>
-            </el-col>
-          </template>
-        </el-row>
-
-        <div class="form-sec">车间属性</div>
-        <el-row :gutter="16">
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="所属组织" prop="deptId">
-              <el-tree-select
-                v-model="form.deptId"
-                :data="deptTreeLabeled"
-                :props="{ label: 'codeLabel', children: 'children' }"
-                node-key="id"
-                check-strictly
-                clearable
-                default-expand-all
-                placeholder="选自部门信息"
-                style="width: 100%"
-                @change="onDeptChange"
-              />
-              <div class="code-hint">括号内为<b>人事编码</b>（编号第 5-7 位）</div>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="岗位">
-              <el-select v-model="form.positionId" clearable filterable placeholder="选自岗位管理" style="width: 100%">
-                <el-option
-                  v-for="o in positionOpts"
-                  :key="o.id"
-                  :label="o.deptId ? o.positionName : `${o.positionName}（通用）`"
-                  :value="o.id"
-                />
-              </el-select>
-              <div class="code-hint">
-                <el-checkbox v-model="showAllPositions" size="small" @change="loadPositions">
-                  显示全部岗位
-                </el-checkbox>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="班组">
-              <el-input v-model="form.teamGroup" placeholder="自由填写" />
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="直属主管">
-              <el-select v-model="form.supervisorId" clearable filterable style="width: 100%" placeholder="本表在职员工">
-                <el-option
-                  v-for="o in supervisorOpts"
-                  :key="o.id"
-                  :label="`${o.empName}（${o.empNo}）`"
-                  :value="o.id"
-                  :disabled="o.id === editId"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="4" :md="6" :sm="12" :xs="24">
-            <el-form-item label="备注">
-              <el-input v-model="form.remark" type="textarea" :rows="2" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
     </el-card>
   </div>
 </template>
@@ -291,6 +327,9 @@ const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null
 const loading = ref(false);
 const saving = ref(false);
 const formRef = ref<FormInstance>();
+
+/** 「!」说明：悬停或点击均可弹出（Element Plus Tooltip 支持数组 trigger） */
+const hintTrigger = ['hover', 'click'] as const;
 
 /** 编辑时的原始档案：换发编号要拿它比对用工属性是否变化 */
 const original = ref<EmployeeRow | null>(null);
@@ -564,12 +603,22 @@ export default { name: 'EmployeeForm' };
 </script>
 
 <style scoped lang="scss">
+.form-card {
+  :deep(.el-card__body) {
+    padding: 16px 20px 24px;
+  }
+}
+.form-shell {
+  max-width: 1120px;
+  width: 100%;
+  margin: 0 auto;
+}
 .form-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .form-title {
@@ -585,19 +634,68 @@ export default { name: 'EmployeeForm' };
     border-radius: 4px;
   }
 }
+.emp-form {
+  :deep(.el-form-item) {
+    margin-bottom: 16px;
+  }
+  :deep(.el-input-number),
+  :deep(.el-date-editor) {
+    width: 100%;
+  }
+}
+.form-block {
+  border: 1px solid var(--el-border-color-extra-light);
+  border-radius: 8px;
+  padding: 14px 16px 4px;
+  margin-bottom: 16px;
+  background-color: #f8fafc;
+  &:last-child { margin-bottom: 0; }
+}
 .form-sec {
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-primary);
   border-left: 3px solid var(--el-color-primary);
   padding-left: 8px;
-  margin: 8px 0 14px;
+  margin: 0 0 14px;
+  line-height: 1.3;
 }
-/** 编码规则相关字段的行内说明：告诉 HR 这一项决定编号的第几位 */
-.code-hint {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
-  b { color: var(--el-text-color-primary); }
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.hint-bang {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: var(--el-color-warning);
+  cursor: help;
+  flex-shrink: 0;
+  vertical-align: middle;
+  user-select: none;
+  &:hover, &:focus-visible {
+    background: var(--el-color-warning-dark-2);
+    outline: none;
+  }
+}
+.position-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  .el-select { flex: 1; min-width: 0; }
+  .position-all {
+    flex-shrink: 0;
+    margin-right: 0;
+    white-space: nowrap;
+  }
 }
 </style>

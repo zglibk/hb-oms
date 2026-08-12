@@ -195,3 +195,18 @@ const COUNTRY_EN_NAMES = i18nIsoCountries.getNames('en');
 export const COUNTRY_OPTIONS: CountryOption[] = Object.entries(
   i18nIsoCountries.getNames('zh'),
 ).map(([code, name]) => ({ code, name, englishName: COUNTRY_EN_NAMES[code] || code }));
+
+/**
+ * 订单表单「业务员 / 跟单员」下拉（V1 硬编码名单）。
+ * 落库仍是姓名字符串；日后改字典或接 HR 人事档案时只换选项来源即可。
+ */
+export const ORDER_SALESMAN_OPTIONS = ['李世诚', '杨波', '张博', '龚日初'] as const;
+export const ORDER_MERCHANDISER_OPTIONS = [
+  '马昊',
+  '梁波',
+  '李关娇',
+  '魏永红',
+  '谭梓莹',
+  '蒲彩虹',
+  '麦铨铭',
+] as const;
