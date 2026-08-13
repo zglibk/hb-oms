@@ -216,5 +216,5 @@ export const ORDER_MERCHANDISER_OPTIONS = [
   '魏永红',
   '谭梓莹',
   '蒲彩虹',
-  '麦铨铭',
+  '麦铨明',
 ] as const;
