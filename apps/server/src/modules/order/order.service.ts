@@ -45,6 +45,7 @@ export class OrderService {
     const pageSize = query.pageSize ?? 20;
     const qb = this.orderRepo.createQueryBuilder('o');
     if (query.status != null) qb.andWhere('o.status = :st', { st: query.status });
+    if (query.poNo) qb.andWhere('o.poNo = :poNo', { poNo: query.poNo });
     if (query.dateFrom) qb.andWhere('o.orderDate >= :df', { df: query.dateFrom });
     if (query.dateTo) qb.andWhere('o.orderDate <= :dt', { dt: query.dateTo });
     if (query.keyword) {

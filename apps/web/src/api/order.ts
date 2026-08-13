@@ -99,6 +99,8 @@ export interface OrderQuery {
   status?: number;
   dateFrom?: string;
   dateTo?: string;
+  /** PO# 精确匹配（新建保存前的同 PO# 软提醒用） */
+  poNo?: string;
 }
 
 /** 提交负载：产品行嵌套部件组（部件行由服务端蓝图展开，仅传微调） */

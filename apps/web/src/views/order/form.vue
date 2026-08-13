@@ -6,6 +6,7 @@
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
           <span class="title-text">{{ editId ? '编辑订单' : '新增订单' }}</span>
           <span v-if="orderNo" class="title-sub">{{ orderNo }}</span>
+          <span v-else-if="copyFromNo" class="title-sub">已复制 {{ copyFromNo }} 的内容，PO#/生产单号/交期已清空，请核对后保存</span>
         </div>
         <div>
           <el-button size="small" @click="goBack">取消</el-button>
@@ -420,6 +421,7 @@ import { Back, Plus, Delete, Upload, CopyDocument, QuestionFilled, ArrowDown, Ar
 import {
   createOrder,
   getOrderDetail,
+  getOrderList,
   updateOrder,
   type OrderPayload,
   type OrderProductPayload,
@@ -472,6 +474,14 @@ const upperFmt = (v: string) => (v ?? '').toUpperCase();
 const route = useRoute();
 const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
+/**
+ * 复制来源订单 id（列表「复制」进入）：按详情回显业务内容做模板，走新建保存、单号重新采番。
+ * 不继承：PO#/生产单号（新客户订单文件必然是新号）、订单日期（重置今天）、交期（新单交期
+ * 几乎必然不同，沿用漏改比重填代价高）、附件（多为旧单的客户来单文件）、期初标记、审计信息。
+ */
+const copyFromId = ref<number | null>(route.query.copyFrom ? Number(route.query.copyFrom) : null);
+/** 复制来源的系统单号（标题区提示用） */
+const copyFromNo = ref('');
 /** 审计追溯原始行（编辑态由详情接口带回，走全局 AuditInfo 展示） */
 const auditRow = ref<any>(null);
 const orderNo = ref('');
@@ -647,20 +657,28 @@ async function init() {
   try {
     customers.value = await getAllCustomers();
     customerOptions.value = customers.value;
-    if (editId.value) {
-      const row = await getOrderDetail(editId.value);
-      orderNo.value = row.orderNo;
-      auditRow.value = row; // 底部审计条（创建人/更新人/时间）
+    const sourceId = editId.value ?? copyFromId.value;
+    if (sourceId) {
+      // 复制模式与编辑模式共用同一条回显路径，差异只在「不继承的字段」（见 copyFromId 注释）
+      const isCopy = !editId.value;
+      const row = await getOrderDetail(sourceId);
+      if (isCopy) {
+        copyFromNo.value = row.orderNo;
+      } else {
+        orderNo.value = row.orderNo;
+        auditRow.value = row; // 底部审计条（创建人/更新人/时间）
+      }
       Object.assign(form, {
-        poNo: row.poNo ?? '',
-        productionNo: row.productionNo ?? '',
+        poNo: isCopy ? '' : row.poNo ?? '',
+        productionNo: isCopy ? '' : row.productionNo ?? '',
         customerId: row.customerId ?? undefined,
         customerName: row.customerName,
-        orderDate: (row.orderDate || '').slice(0, 10),
+        orderDate: isCopy ? new Date().toISOString().slice(0, 10) : (row.orderDate || '').slice(0, 10),
         salesman: row.salesman ?? '',
         merchandiser: row.merchandiser ?? '',
         orderSource: row.orderSource ?? '',
-        isOpening: row.isOpening ?? 0,
+        // 期初单复制出来的一定是正常单
+        isOpening: isCopy ? 0 : row.isOpening ?? 0,
         remark: row.remark ?? '',
         otherReq: row.otherReq ?? '',
         products: row.products.map((p) => ({
@@ -685,7 +703,7 @@ async function init() {
           sheetMaterial: p.sheetMaterial ?? '',
           orderQty: p.orderQty,
           unit: p.unit,
-          deliveryDate: p.deliveryDate ? String(p.deliveryDate).slice(0, 10) : '',
+          deliveryDate: isCopy ? '' : p.deliveryDate ? String(p.deliveryDate).slice(0, 10) : '',
           deliveryAddress: p.deliveryAddress ?? '',
           remark: p.remark ?? '',
           partGroups: p.partGroups.map((g) => ({
@@ -699,7 +717,7 @@ async function init() {
           })),
         })),
       });
-      attachments.value = parseAttachments(row.attachmentIds);
+      attachments.value = isCopy ? [] : parseAttachments(row.attachmentIds);
       customerPick.value =
         row.customerId && customers.value.some((c) => c.id === row.customerId)
           ? row.customerId
@@ -1021,6 +1039,8 @@ async function onSave() {
     salesman: form.salesman || undefined,
     merchandiser: form.merchandiser || undefined,
     orderSource: form.orderSource || undefined,
+    // 期初补录开关必须显式带上：漏传时服务端新建兜底为 0，期初录入页会选不到这张订单
+    isOpening: form.isOpening,
     attachmentIds: JSON.stringify(attachments.value),
     remark: form.remark || undefined,
     otherReq: form.otherReq || undefined,
@@ -1060,6 +1080,18 @@ async function onSave() {
       })),
     })),
   };
+  // 同 PO# 软提醒（仅新建）：同 PO 的追加/变更另建新单是合法操作，故只提醒不拦截，
+  // 防的是无意中的重复录单（客户同一份订单文件被录了两遍）
+  if (!editId.value && form.poNo) {
+    const dup = await getOrderList({ page: 1, pageSize: 1, poNo: form.poNo });
+    if (dup.total > 0) {
+      await ElMessageBox.confirm(
+        `系统里已存在 ${dup.total} 张 PO# 为「${form.poNo}」的订单。若本单是同 PO 的追加或变更可继续保存；请确认不是重复录单。`,
+        '同 PO# 提醒',
+        { type: 'warning', confirmButtonText: '继续保存', cancelButtonText: '返回核对' },
+      );
+    }
+  }
   saving.value = true;
   try {
     if (editId.value) {

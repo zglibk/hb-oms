@@ -124,7 +124,7 @@
     <a class="toc-item toc-sub" data-key="订单 填写顺序 四级 产品 部件组" onclick="jump('ch1-1')">1.1 填写顺序：四级结构</a>
     <a class="toc-item toc-sub" data-key="订单 关键字段 PO 生产单号 客户图号 单位" onclick="jump('ch1-2')">1.2 关键字段怎么填</a>
     <a class="toc-item toc-sub" data-key="部件组 拆分 整品 外轨 中轨 内轨 外中轨 节数 按第一行填充 批量 分体 分体出货 拆开下单" onclick="jump('ch1-3')">1.3 部件组怎么拆</a>
-    <a class="toc-item toc-sub" data-key="订单列表 编辑 完结 重开 删除" onclick="jump('ch1-4')">1.4 订单列表常用操作</a>
+    <a class="toc-item toc-sub" data-key="订单列表 编辑 完结 重开 删除 复制 模板 相同订单 重复下单 同PO" onclick="jump('ch1-4')">1.4 订单列表常用操作</a>
 
     <a class="toc-item" data-key="外发 回厂 电镀 表面处理 第二步" onclick="jump('ch2')">第2章 第二步：外发件回厂（可选）</a>
     <a class="toc-item toc-sub" data-key="要不要外发 表面处理 无 镀锌" onclick="jump('ch2-1')">2.1 什么时候要外发</a>
@@ -208,7 +208,7 @@
         </tbody>
       </table>
       <div class="alert alert--tip">
-        看不到某个菜单 = 你的角色没有该权限，不是系统坏了。找管理员在「系统管理 → 角色管理」里加权限，<strong>加完需要重新登录才生效</strong>。
+        看不到某个菜单 = 你的角色没有该权限，不是系统坏了。页面里<strong>点不动的灰色按钮</strong>也是同一回事：功能在，只是你这个岗位没被授权（鼠标移上去是禁止光标）。找管理员在「系统管理 → 角色管理」里加权限，<strong>加完需要重新登录才生效</strong>。
       </div>
 
       <h2 class="section__title" id="ch0-3">0.3 登录与界面</h2>
@@ -357,6 +357,7 @@
         <thead><tr><th>操作</th><th>什么时候能用</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>编辑</td><td>未被下游单据引用时</td><td>已登记过外发回厂/装配批次/出入库单的订单不能改，要改先把下游记录处理掉</td></tr>
+          <tr><td>复制</td><td>任何订单（含已作废）</td><td>拿历史订单当模板建新单，见下面「复制历史订单建新单」</td></tr>
           <tr><td>完结</td><td>进行中的订单</td><td>表示不再跟踪。<strong>完结不锁单据</strong>，已完结订单照样可以继续出入库</td></tr>
           <tr><td>重开</td><td>已完结的订单</td><td>客户追加提货时用</td></tr>
           <tr><td>删除</td><td>未被下游单据引用时</td><td><strong>连同产品行、部件组、部件明细一起删掉，不可恢复</strong>。谁删的系统有记录</td></tr>
@@ -366,6 +367,19 @@
         <strong>为什么是「删除」不是「作废」：</strong>能作废的单据本来就是还没走下游流程的空单，留一条「已作废」记录对账没有意义，只会让列表越积越脏，所以直接删干净。已经走过流程的订单，系统会拦住不让删。
       </div>
       <p>展开列表行前面的箭头，可以看到该订单下每个产品的部件组明细（客户图号、型号、规格、图号、料厚、交期）。</p>
+
+      <h3 class="subsection__title">复制历史订单建新单</h3>
+      <p>客户经常下<strong>相同或相近的订单</strong>。这时不用从头录：在订单列表找到那张历史订单，点操作列的「<strong>复制</strong>」，表单会把它的<strong>产品行、部件组、图号料厚、备注（含图文订单备注）</strong>全部预填好，你只改不一样的地方（通常就是规格、数量、交期），保存即成一张<strong>全新的订单</strong>（系统单号重新生成）。</p>
+      <ul>
+        <li><strong>这些内容不会带过来，要重新填</strong>：PO#、生产单号（新订单文件必然是新号）、交期（防止沿用旧交期忘了改）、订单附件（旧单的客户文件不该挂到新单上）；订单日期自动重置为今天。</li>
+        <li>客户昨天下了单、今天又下一张<strong>只有数量或规格不同</strong>的：复制昨天的单，改掉数量（和规格），填上今天的 PO# 保存——<strong>不要去改昨天那张订单</strong>，两张客户订单文件就该是两张系统订单，台账才对得上客户的对账单。</li>
+      </ul>
+      <div class="alert alert--info">
+        <strong>客户新发来的订单连 PO# 都和之前一样怎么办？</strong>分两种情况：<br />
+        ① 原订单<strong>还没走</strong>外发/装配/出入库——这其实是客户对同一张 PO 的变更，直接<strong>编辑原订单</strong>改数量、加产品行即可；<br />
+        ② 原订单<strong>已经走了</strong>下游流程（系统禁改）——把<strong>增量部分</strong>复制成新单，<strong>PO# 照填同一个</strong>（系统允许重复），生产单号加后缀区分（如 <code>GLI46212-A</code> / <code>GLI46212-B</code>），备注写明「同 PO 追加」。对账时按 PO# 搜索，两张单加总就是客户这张 PO 的总量。<br />
+        新建保存时如果系统里已有同 PO# 的订单，会弹一个提醒让你确认——同 PO 追加属正常操作，点「继续保存」即可；提醒防的是<strong>把同一份订单文件重复录两遍</strong>。
+      </div>
 
       <h3 class="subsection__title">导出总计划</h3>
       <p>订单列表工具栏的「<strong>导出总计划</strong>」按钮，把当前筛选条件下的订单导成 Excel，<strong>一行 = 一个产品</strong>，带客户、订单编号、货号、规格、数量、图号料厚，以及成品入库 / 成品欠数 / 成品出货 / 发货欠数 / 库存数这几个进度数。</p>

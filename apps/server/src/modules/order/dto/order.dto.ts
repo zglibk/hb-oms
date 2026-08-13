@@ -189,6 +189,9 @@ export class QueryOrderDto {
   /** 关键字：订单号/PO#/客户/生产单号/货号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
+  /** PO# 精确匹配（新建订单保存前的同 PO# 软提醒用；作废单也计入——重复录单后被作废的历史同样值得提醒） */
+  @IsOptional() @IsString() poNo?: string;
+
   @IsOptional() @Type(() => Number) @IsInt() status?: number;
 
   @IsOptional() @IsDateString() dateFrom?: string;
