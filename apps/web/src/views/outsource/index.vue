@@ -80,7 +80,7 @@
         <el-table-column label="单重" width="90" align="center">
           <template #default="{ row }">{{ Number(row.unitWeight) }}</template>
         </el-table-column>
-        <el-table-column label="数量(支)" width="95" align="center">
+        <el-table-column label="回货数量(支)" width="118" align="center">
           <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
         </el-table-column>
         <el-table-column label="备注" prop="remark" min-width="120" class-name="col-left" show-overflow-tooltip />
