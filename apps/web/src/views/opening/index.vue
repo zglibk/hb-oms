@@ -83,13 +83,6 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="边别" width="110">
-              <template #default="{ row }">
-                <el-select v-model="row.side" clearable placeholder="非卡口留空" style="width: 100%">
-                  <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-                </el-select>
-              </template>
-            </el-table-column>
             <el-table-column label="货号 *" width="120">
               <template #default="{ row }"><el-input v-model="row.itemNo" placeholder="如 53#" /></template>
             </el-table-column>
@@ -107,8 +100,15 @@
                 </el-select>
               </template>
             </el-table-column>
+            <el-table-column label="边别" width="110">
+              <template #default="{ row }">
+                <el-select v-model="row.side" clearable placeholder="非卡口留空" style="width: 100%">
+                  <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+                </el-select>
+              </template>
+            </el-table-column>
             <el-table-column label="料厚" width="130">
-              <template #default="{ row }"><el-input v-model="row.materialThickness" placeholder="如 1.2×1.0×1.2" /></template>
+              <template #default="{ row }"><el-input v-model="row.materialThickness" placeholder="如 1.2" /></template>
             </el-table-column>
             <el-table-column label="规格(mm)" width="105">
               <template #default="{ row }">
