@@ -148,7 +148,7 @@
                   </template>
                 </el-tab-pane>
               </el-tabs>
-              <el-button v-if="canLedger" link type="primary" @click="go('/ledger')">查看台账</el-button>
+              <el-button v-permission="'ledger'" link type="primary" @click="go('/ledger')">查看台账</el-button>
             </div>
           </template>
 
@@ -205,7 +205,7 @@
                   :type="counts.recentOutsource ? 'primary' : 'info'"
                 >{{ counts.recentOutsource }}</el-tag>
               </span>
-              <el-button v-if="canOutsource" link type="primary" @click="go('/outsource')">查看外发</el-button>
+              <el-button v-permission="'outsource'" link type="primary" @click="go('/outsource')">查看外发</el-button>
             </div>
           </template>
           <div v-if="!hasOutsource" class="list-empty">
@@ -275,7 +275,6 @@ const counts = computed(() => summary.value.counts);
 const canLedger = computed(() => userStore.hasPermission('ledger'));
 /** 看板数据权限：无此权限则整块汇总不请求也不渲染 */
 const canDashboard = computed(() => userStore.hasPermission('stat:dashboard'));
-const canOutsource = computed(() => userStore.hasPermission('outsource'));
 const hasOutsource = computed(() => summary.value.recentOutsource.length > 0);
 
 /* ===== 逾期 / 临近交期 页签 ===== */

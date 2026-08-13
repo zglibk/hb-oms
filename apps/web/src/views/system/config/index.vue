@@ -245,9 +245,11 @@
           </div>
         </el-tab-pane>
 
-        <!-- Tab4：危险操作（仅 admin 可见） -->
+        <!-- Tab4：危险操作（仅 admin 可见）。
+             整个页签隐藏而非禁用：页签标题由 el-tabs 头部另行渲染，
+             禁用面板 div 拦不住用户切到该页签。 -->
         <el-tab-pane
-          v-permission="'system:danger'"
+          v-permission.hide="'system:danger'"
           label="危险操作"
           name="danger"
         >
