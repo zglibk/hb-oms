@@ -23,6 +23,8 @@ import { InboundQuotaRow, loadInboundQuota, loadOneInboundQuota, quotaKey } from
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { ProductSnapshotService } from '../../common/services/product-snapshot.service';
+import { EXPORT_ROW_LIMIT, createWorkbook, styleSheet } from '../../common/utils/excel.util';
+import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
 /** 装配管理列表行：按**订单产品行**一行，附该产品的装配进度聚合 */
 export interface AssemblyGroupRow {
@@ -454,6 +456,148 @@ export class AssemblyService {
   private normalizeDate(v: string | null | undefined): string | null {
     const s = String(v ?? '').trim();
     return s ? s.slice(0, 10) : null;
+  }
+
+  /* ==================== 导出 ==================== */
+
+  /**
+   * 导出装配记录（计划员用）。两张表一次给全：
+   *   Sheet1「装配汇总」——一行一个产品，对齐装配管理页的列（完成情况总览）；
+   *   Sheet2「装配批次明细」——汇总表那些产品的逐批记录（谁哪天装完了多少支）。
+   *
+   * 四数不另写聚合 SQL：直接复用 `findList`（与页面、闸门同一口径）——
+   * 另写一份迟早分叉，届时「页面 100、导出 98」最难查（§4.4）。
+   */
+  async exportExcel(query: QueryAssemblyDto): Promise<Buffer> {
+    const all = await this.findList({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
+    if (!all.list.length) {
+      throw new BadRequestException('当前筛选条件下没有装配记录可导出，请调整筛选条件后重试');
+    }
+    if (all.list.length > EXPORT_ROW_LIMIT) {
+      throw new BadRequestException(
+        `当前筛选结果 ${all.total} 行，超过单次导出上限 ${EXPORT_ROW_LIMIT} 行，请缩小筛选范围后重试`,
+      );
+    }
+
+    // 车间是字典值（workshop2 之类），导出必须落中文——车间拿表贴工位、对手工账（§4.4）
+    const labeler = dictLabeler(await loadDictLabels(this.dataSource, ['assembly_workshop']));
+
+    const wb = createWorkbook();
+
+    /* ---------- Sheet1：装配汇总（一行一个产品） ---------- */
+    const ws = wb.addWorksheet('装配汇总');
+    ws.columns = [
+      { header: '订单编号' },
+      { header: '客户' },
+      { header: '货号' },
+      { header: '产品型号' },
+      { header: '产品名称' },
+      { header: '规格' },
+      { header: '装配车间' },
+      { header: '订单数(支)' },
+      { header: '已排产(支)' },
+      { header: '已完成(支)' },
+      { header: '未装配(支)' },
+      { header: '批次数' },
+      { header: '装配进度' },
+      { header: '待完成计划日' },
+      { header: '最近完成日' },
+      { header: '交期' },
+      { header: '是否逾期' },
+    ];
+    for (const r of all.list) {
+      ws.addRow([
+        r.productionNo || r.orderNo || '',
+        r.customerName || '',
+        r.itemNo || '',
+        r.productModel || '',
+        r.productName || '',
+        r.dimensionText || '',
+        r.assemblyWorkshops.map((w) => labeler('assembly_workshop', w)).join('/'),
+        r.qtyPcs,
+        r.plannedQty,
+        r.doneQty,
+        r.pendingQty,
+        r.batchCount,
+        this.progressText(r),
+        r.nextPlanDate || '',
+        r.lastActualDate || '',
+        r.deliveryDate || '',
+        r.overdue ? '是' : '',
+      ]);
+    }
+    styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] });
+
+    /* ---------- Sheet2：装配批次明细（汇总表那些产品的逐批记录） ---------- */
+    const productIds = all.list.map((r) => r.orderProductId);
+    const batches = await this.batchRepo
+      .createQueryBuilder('b')
+      .where('b.orderProductId IN (:...ids)', { ids: productIds })
+      // 完成的排前面且按完成日期倒序（计划员最关心刚装完的），未完成的沉底按计划日
+      .orderBy('b.actualDate', 'DESC')
+      .addOrderBy('b.planDate', 'ASC')
+      .addOrderBy('b.id', 'ASC')
+      .getMany();
+    const productMap = new Map(all.list.map((r) => [r.orderProductId, r]));
+
+    const wsB = wb.addWorksheet('装配批次明细');
+    wsB.columns = [
+      { header: '订单编号' },
+      { header: '客户' },
+      { header: '产品型号' },
+      { header: '规格' },
+      { header: '边别' },
+      { header: '装配车间' },
+      { header: '计划开始' },
+      { header: '计划完成' },
+      { header: '实际完成' },
+      { header: '装配数量(支)' },
+      { header: '状态' },
+      { header: '备注' },
+      { header: '登记人' },
+      { header: '登记时间' },
+    ];
+    for (const b of batches) {
+      const p = productMap.get(b.orderProductId);
+      wsB.addRow([
+        p?.productionNo || p?.orderNo || '',
+        p?.customerName || '',
+        p?.productModel || '',
+        p?.dimensionText || '',
+        sideLabel(b.side) || '',
+        labeler('assembly_workshop', b.workshop),
+        this.dateText(b.planStartDate) || '',
+        this.dateText(b.planDate) || '',
+        this.dateText(b.actualDate) || '',
+        b.qty,
+        b.actualDate ? '已完成' : '计划中',
+        b.remark || '',
+        // 完成时间常由后来编辑补录，最后更新人即完成登记人（与装配批次页同口径）
+        b.updaterName || b.creatorName || '',
+        this.minuteText(b.updatedAt ?? b.createdAt),
+      ]);
+    }
+    styleSheet(wsB, { centerColumns: [4, 5, 6, 7, 8, 9, 10, 11, 14] });
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /** 产品级装配进度文案（与列表页 progressTag 同口径，超装配单独标注） */
+  private progressText(r: AssemblyGroupRow): string {
+    if (r.doneQty <= 0) return '未开始';
+    if (r.pendingQty > 0) return `装配中 ${r.doneQty}/${r.qtyPcs}`;
+    if (r.pendingQty < 0) return '已装完(超)';
+    return '已装完';
+  }
+
+  /** 审计时间戳 → 到分钟（导出表里精确到秒没有意义，还占列宽） */
+  private minuteText(v: any): string {
+    if (!v) return '';
+    const d = v instanceof Date ? v : new Date(v);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   private dateText(v: any): string | null {

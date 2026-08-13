@@ -78,6 +78,7 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'assembly:create', perm_name: '新增装配批次', perm_type: 2, parent_code: 'assembly', sort: 1 },
   { perm_code: 'assembly:update', perm_name: '编辑装配批次', perm_type: 2, parent_code: 'assembly', sort: 2 },
   { perm_code: 'assembly:delete', perm_name: '删除装配批次', perm_type: 2, parent_code: 'assembly', sort: 3 },
+  { perm_code: 'assembly:export', perm_name: '导出装配记录', perm_type: 2, parent_code: 'assembly', sort: 4 },
 
 
   // ===== 工艺管理 =====

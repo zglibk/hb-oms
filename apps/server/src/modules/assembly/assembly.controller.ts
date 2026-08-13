@@ -1,5 +1,8 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AssemblyService } from './assembly.service';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { sendXlsx } from '../../common/utils/excel-response.util';
 import {
   CreateAssemblyBatchDto,
   QueryAssemblyBatchDto,
@@ -24,6 +27,19 @@ export class AssemblyController {
   @RequirePermissions('assembly')
   async list(@Query() query: QueryAssemblyDto) {
     return this.service.findList(query);
+  }
+
+  /**
+   * 导出装配记录（汇总 + 批次明细两张表）；@SkipTransform 返回文件流。
+   * 与列表同筛选条件，服务端对空结果与超限一律拒绝（不给空表、不静默截断）。
+   */
+  @Get('export')
+  @SkipTransform()
+  @RequirePermissions('assembly:export')
+  @OperationLog('装配管理', '导出装配记录')
+  async exportExcel(@Query() query: QueryAssemblyDto, @Res() res: Response) {
+    const buffer = await this.service.exportExcel(query);
+    sendXlsx(res, buffer, '装配记录.xlsx');
   }
 
   /** 某产品行的批次明细 + 分边别小计与可入库量；注册在 :id 型路由之前 */

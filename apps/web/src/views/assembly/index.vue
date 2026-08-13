@@ -41,6 +41,17 @@
     </el-card>
 
     <el-card shadow="never">
+      <div class="toolbar">
+        <el-button
+          size="small"
+          v-permission="'assembly:export'"
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="exporting"
+          @click="onExport"
+        >导出到Excel</el-button>
+      </div>
       <div class="tip-bar">
         <el-icon><InfoFilled /></el-icon>
         装配按<b>产品</b>跟踪（装出来的是整套滑轨），一个产品可分多批录入；填了「实际完成时间」即视为该批完成，其数量计入成品入库的可入库量。
@@ -108,9 +119,10 @@
 <script setup lang="ts">
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, Tools, InfoFilled } from '@element-plus/icons-vue';
-import { getAssemblyList, type AssemblyGroupRow } from '@/api/assembly';
+import { Search, Tools, InfoFilled, Download } from '@element-plus/icons-vue';
+import { getAssemblyList, downloadAssemblyExport, type AssemblyGroupRow } from '@/api/assembly';
 import { loadDict } from '@/composables/useDict';
+import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -150,6 +162,27 @@ async function load() {
 load();
 onActivated(load);
 
+/* ===== 导出（预检 → 确认 → 下载，统一走 useExcelExport） ===== */
+const { exporting, exportWithConfirm } = useExcelExport();
+/** 导出参数与列表查询一致（不含分页），预检条数每次按当前筛选实查 */
+function exportParams() {
+  return {
+    keyword: query.keyword,
+    workshop: query.workshop,
+    onlyUnfinished: query.onlyUnfinished,
+    onlyOverdue: query.onlyOverdue,
+    deliveryFrom: deliveryRange.value?.[0],
+    deliveryTo: deliveryRange.value?.[1],
+  };
+}
+function onExport() {
+  return exportWithConfirm({
+    name: '装配',
+    getCount: async () => (await getAssemblyList({ ...exportParams(), page: 1, pageSize: 1 })).total,
+    run: () => downloadAssemblyExport(exportParams()),
+  });
+}
+
 /* ===== 装配批次子页面（原弹窗，2026-08-13 改版）；返回本页时 onActivated 自动刷新 ===== */
 const router = useRouter();
 function openBatches(row: AssemblyGroupRow) {
@@ -184,6 +217,7 @@ export default { name: 'AssemblyList' };
 </script>
 
 <style scoped lang="scss">
+.toolbar { margin-bottom: 12px; }
 .tip-bar {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px;

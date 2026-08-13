@@ -87,6 +87,8 @@ const MIGRATIONS: string[] = [
   'migration-assembly-required-workshop9.sql',
   // 订单产品级「产品要求描述」（配套开关列在 migration-field-switches.sql 追加）
   'migration-product-requirement.sql',
+  // 装配管理「导出装配记录」权限点（仅授权，无表结构变更）
+  'migration-assembly-export.sql',
 ];
 
 /**

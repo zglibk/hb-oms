@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { downloadXlsx } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /** 装配批次行（锚定订单**产品行** + 边别） */
@@ -128,6 +129,13 @@ export type AssemblyBatchUpdatePayload = Omit<AssemblyBatchPayload, 'orderProduc
 
 export const getAssemblyList = (params: AssemblyQuery) =>
   request.get<any, PageResult<AssemblyGroupRow>>('/api/assembly', { params });
+
+/**
+ * 导出装配记录（按当前筛选全量导出，超 5000 行会被服务端拒绝）。
+ * 文件含两张表：装配汇总（一行一个产品）与装配批次明细（逐批完成记录）。
+ */
+export const downloadAssemblyExport = (params: AssemblyQuery) =>
+  downloadXlsx('/api/assembly/export', params, '装配记录.xlsx');
 
 export const getAssemblyBatches = (params: {
   orderProductId: number;
