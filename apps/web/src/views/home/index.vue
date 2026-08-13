@@ -303,12 +303,13 @@ const owedTruncated = computed(() => owedRows.value.length >= summary.value.topL
 /* ===== 待办列表自动滚动 ===== */
 
 /**
- * 列表可见高度（px）：表头 + 约 5 行。
+ * 列表可见高度（px）：表头 34 + 10 行 × 32（size="small" 实测值）。
  *
- * 接口每块返回 10 条（topLimit），卡片只露一半、余下靠自动滚动轮播——三张 10 行
- * 的表全展开会把首页拉得很长，一屏放不下欢迎区与统计卡。
+ * 2026-08-13 由 5 行改 10 行（使用方要求）：接口每块返回 10 条（topLimit），
+ * 因此常态下三张表都能一屏看全、不再滚动；只有条数超过 10 行才触发自动轮播。
+ * 改行数只改这个数——行高变了先量一遍 el-table 的实际 header/row 高度再算。
  */
-const LIST_MAX_HEIGHT = 196;
+const LIST_MAX_HEIGHT = 354;
 
 const owedTableRef = ref<any>(null);
 const outsourceTableRef = ref<any>(null);

@@ -1,21 +1,21 @@
 import { onActivated, onBeforeUnmount, onDeactivated, ref } from 'vue';
 
 interface AutoScrollOptions {
-  /** 正向滚动速度（px/秒），车间大屏远看时 20~30 比较跟得上 */
+  /** 滚动速度（px/秒），车间大屏远看时 20~30 比较跟得上 */
   speed?: number;
   /** 到顶 / 到底后的停顿时长（ms），给人看清首尾行的时间 */
   holdMs?: number;
-  /** 回卷速度倍数：滚到底后往回走得快一些，避免倒放感太强 */
-  rewindFactor?: number;
 }
 
 /**
- * 列表内容超出可见高度时自动匀速滚动，鼠标移入暂停。
+ * 列表内容超出可见高度时自动匀速向下滚动，到底后回到顶部循环，鼠标移入暂停。
  *
- * 用在首页几张待办卡（逾期未发货 / 临近交期 / 近期外发回厂）：接口每块返回 10 条，
- * 卡片只给 5 行左右的高度，剩下的靠滚动轮播，不必把首页拉得很长。
+ * 用在首页几张待办卡（逾期未发货 / 临近交期 / 近期外发回厂）：内容超出卡片给的
+ * 高度时靠滚动轮播，不必把首页拉得很长。
  *
- * 到底后**回卷**而不是跳回顶部：跳回来会让人以为列表刷新过、丢了正在看的那行。
+ * **只向下滚，到底停一下直接跳回顶部**（2026-08-13 修）：原实现到底后原速往回卷，
+ * 看着像录像倒放，且同一批行来回扫两遍，使用方反馈是 bug。跳回顶部是滚动播报的
+ * 常规做法——顶部也停顿一次，避免刚跳回就立刻开滚、让人看不清第一行。
  *
  * 几个实现要点：
  * - 位置自己累加（`pos`）而不是每帧读 `scrollTop`：慢速下每帧位移不到 1px，
@@ -29,13 +29,13 @@ export function useAutoScroll(
 ) {
   const speed = options.speed ?? 26;
   const holdMs = options.holdMs ?? 1400;
-  const rewindFactor = options.rewindFactor ?? 4;
 
   const paused = ref(false);
   let raf = 0;
   let prevTs = 0;
   let holdUntil = 0;
-  let dir: 1 | -1 = 1;
+  /** 已滚到底、正在底部停顿：停顿结束后跳回顶部 */
+  let atEnd = false;
   let pos = 0;
   let needSync = false;
 
@@ -49,22 +49,29 @@ export function useAutoScroll(
     const max = el.scrollHeight - el.clientHeight;
     if (max <= 1) {
       pos = 0;
+      atEnd = false;
       return;
     }
     if (needSync) {
       pos = el.scrollTop;
       needSync = false;
     }
+
+    // 底部停顿结束：瞬间回到顶部，并在顶部再停一次（否则刚跳回就开滚，第一行看不清）
+    if (atEnd) {
+      atEnd = false;
+      pos = 0;
+      el.scrollTop = 0;
+      holdUntil = ts + holdMs;
+      return;
+    }
+
     // dt 上限兜住标签页切回来的一次巨大时间差，否则会瞬间冲到底
-    pos += dir * speed * (dir === 1 ? 1 : rewindFactor) * Math.min(dt, 0.1);
-    pos = Math.min(max, Math.max(0, pos));
+    pos = Math.min(max, pos + speed * Math.min(dt, 0.1));
     el.scrollTop = pos;
 
-    if (dir === 1 && pos >= max) {
-      dir = -1;
-      holdUntil = ts + holdMs;
-    } else if (dir === -1 && pos <= 0) {
-      dir = 1;
+    if (pos >= max) {
+      atEnd = true;
       holdUntil = ts + holdMs;
     }
   }
@@ -95,7 +102,7 @@ export function useAutoScroll(
   /** 数据或页签切换后回到顶部重新开始 */
   function reset() {
     pos = 0;
-    dir = 1;
+    atEnd = false;
     holdUntil = 0;
     prevTs = 0;
     const el = resolveEl();
