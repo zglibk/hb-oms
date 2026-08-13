@@ -8,8 +8,10 @@
       </div>
       <div>
         <el-button size="small" :icon="Printer" :disabled="loading || !order" @click="onPrint">打印</el-button>
+        <!-- 与列表入口按钮同权限：直接输 URL 进来的无权用户不该看到可点的按钮
+             （后端接口另有 order:export 守卫，这里只是别让人点了才 403） -->
         <el-button
-          size="small" type="primary" :icon="Download"
+          size="small" type="primary" :icon="Download" v-permission.disable="'order:export'"
           :loading="downloading" :disabled="loading || !order" @click="onDownloadPdf"
         >导出PDF</el-button>
       </div>
