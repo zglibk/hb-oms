@@ -117,9 +117,13 @@
         <div v-if="hasOtherReq" class="rich-content" v-html="order.otherReq"></div>
 
         <!-- ==================== 签名栏（固定结构，不来自富文本） ==================== -->
+        <!--
+          制单 = 订单**跟单员**（这张单业务上归谁跟，纸质单填的就是他），
+          刻意不取录单账号 creatorName——录单的可能是文员代录，与单据责任人是两回事。
+          业务审核 = 订单业务员，同为系统内已知的人，不必手签。
+        -->
         <footer class="doc-signatures">
-          <div>制单：<span class="sign-value">{{ order.creatorName || '' }}</span></div>
-          <!-- 业务审核填订单业务员（与制单同为系统内已知的人，不必手签） -->
+          <div>制单：<span class="sign-value">{{ order.merchandiser || '' }}</span></div>
           <div>业务审核：<span class="sign-value">{{ order.salesman || '' }}</span></div>
           <div>生产部审核：<span class="sign-line"></span></div>
           <div>技术部审核：<span class="sign-line"></span></div>
@@ -463,10 +467,11 @@ export default { name: 'OrderPrint' };
 .rich-content :deep(img) { break-inside: avoid; }
 
 /* ===== 签名栏（margin-top:auto 把它顶到页面底部，见 .print-sheet 的 flex 说明） ===== */
+/* 四项整体水平居中：用 center + 固定间距，而不是 space-between 顶到两端 */
 .doc-signatures {
   display: flex;
-  justify-content: space-between;
-  gap: 8mm;
+  justify-content: center;
+  gap: 14mm;
   margin-top: auto;
   padding-top: 8mm;
   break-inside: avoid;
