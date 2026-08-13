@@ -4,13 +4,14 @@
       <el-button size="small" :icon="ArrowLeft" @click="goBack">返回列表</el-button>
       <div class="preview-toolbar__title">
         <strong>生产任务单</strong>
-        <span>A4 纵向；「导出PDF」在打印对话框把目标打印机选为「另存为 PDF」即可</span>
+        <span>A4 纵向；「导出PDF」直接下载文件，无需打印对话框</span>
       </div>
       <div>
         <el-button size="small" :icon="Printer" :disabled="loading || !order" @click="onPrint">打印</el-button>
-        <el-button size="small" type="primary" :icon="Download" :disabled="loading || !order" @click="onPrint">
-          导出PDF
-        </el-button>
+        <el-button
+          size="small" type="primary" :icon="Download"
+          :loading="downloading" :disabled="loading || !order" @click="onDownloadPdf"
+        >导出PDF</el-button>
       </div>
     </header>
 
@@ -133,8 +134,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import { ArrowLeft, Printer, Download } from '@element-plus/icons-vue';
-import { getOrderDetail, type OrderItem, type OrderProductItem } from '@/api/order';
+import {
+  getOrderDetail,
+  downloadOrderTaskPdf,
+  type OrderItem,
+  type OrderProductItem,
+} from '@/api/order';
+import { readBlobError } from '@/utils/download';
 import {
   formatProductTypes,
   formatDimension,
@@ -298,6 +306,23 @@ init();
 function onPrint() {
   window.print();
 }
+
+/**
+ * 导出 PDF：服务端用无头浏览器渲染**这张打印页**再回传文件，点一下直接下载。
+ * 不走 window.print()——那必然弹打印对话框，用户还要自己选「另存为 PDF」。
+ */
+const downloading = ref(false);
+async function onDownloadPdf() {
+  downloading.value = true;
+  try {
+    await downloadOrderTaskPdf(id, `生产任务单-${order.value?.productionNo || order.value?.orderNo}.pdf`);
+  } catch (err) {
+    ElMessage.error(await readBlobError(err));
+  } finally {
+    downloading.value = false;
+  }
+}
+
 function goBack() {
   router.push('/order');
 }
@@ -449,12 +474,6 @@ export default { name: 'OrderPrint' };
     background: #fff !important;
   }
 
-  /* 打印页注册在 Layout 下（沿先例）：侧栏/顶栏在打印时整体隐藏 */
-  :global(.sidebar),
-  :global(.sidebar-mask),
-  :global(.header) { display: none !important; }
-  :global(.app-layout) { display: block !important; }
-
   /* 页边距收窄（打印机不可打印区通常 ≥5mm，再小会被截） */
   @page { size: A4 portrait; margin: 6mm 5mm; }
 
@@ -471,8 +490,12 @@ export default { name: 'OrderPrint' };
 
   .print-sheet {
     width: auto;
-    /* 保持 flex 撑满一页，签名栏才会贴在页面底部（A4 297mm − 上下页边距 12mm） */
-    min-height: 285mm;
+    /*
+     * 撑满一页让签名栏贴底：A4 297mm − 上下页边距 12mm = 285mm 可用高度，
+     * 这里取 283mm 留 2mm 余量——设成正好 285mm 时，任何一点渲染舍入都会
+     * 溢出成第二页空白（已实测）。
+     */
+    min-height: 283mm;
     margin: 0;
     padding: 0;
     box-shadow: none;

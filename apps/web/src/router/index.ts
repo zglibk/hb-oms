@@ -16,6 +16,19 @@ const constantRoutes: RouteRecordRaw[] = [
     component: () => import('@/views/login/index.vue'),
     meta: { title: '登录' },
   },
+  /*
+   * 打印页**刻意不挂在 Layout 下**：Layout 的 el-main 自带 16px 内边距、
+   * 侧栏顶栏在打印媒体下仍占布局高度，会把 A4 纸面整体顶下十几毫米，
+   * 导致每张单据都多出一页空白（已实测）。顶层路由 = 纯净页面，
+   * 打印与服务端 PDF 渲染都不必再去 hack Layout 的内部结构。
+   * 登录校验不受影响：router.beforeEach 对所有非 /login 路由一律检查 token。
+   */
+  {
+    path: '/order/print',
+    name: 'OrderPrint',
+    component: () => import('@/views/order/print.vue'),
+    meta: { title: '生产任务单' },
+  },
   {
     path: '/',
     name: 'Layout',
@@ -59,12 +72,6 @@ const constantRoutes: RouteRecordRaw[] = [
         name: 'OrderForm',
         component: () => import('@/views/order/form.vue'),
         meta: { title: '订单录入', activeMenu: '/order' },
-      },
-      {
-        path: 'order/print',
-        name: 'OrderPrint',
-        component: () => import('@/views/order/print.vue'),
-        meta: { title: '生产任务单', activeMenu: '/order' },
       },
       {
         path: 'outsource/form',

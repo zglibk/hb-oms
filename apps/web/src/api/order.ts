@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { downloadFile } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /** 订单部件行（服务端按蓝图展开；客户端仅可微调追溯码/备注） */
@@ -179,3 +180,10 @@ export const finishOrder = (id: number) => request.post(`/api/order/${id}/finish
 export const reopenOrder = (id: number) => request.post(`/api/order/${id}/reopen`);
 /** 删除订单（取代作废）：仅未被外发/装配/出入库引用时可删，连带删四级数据 */
 export const deleteOrder = (id: number) => request.delete(`/api/order/${id}`);
+
+/**
+ * 《生产任务单》PDF：服务端用无头浏览器渲染 /order/print 打印页出 PDF，
+ * 点一下直接下载（不弹打印对话框）。文件名以响应头为准，兜底用调用方给的。
+ */
+export const downloadOrderTaskPdf = (id: number, fallbackName: string) =>
+  downloadFile(`/api/order/${id}/task-order-pdf`, undefined, fallbackName);

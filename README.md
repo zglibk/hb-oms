@@ -94,7 +94,8 @@ npm run build   # 读取根目录设计文档 md，生成 site/index.html 与 si
 | 后端进程 | PM2 `hb-oms-server`，`127.0.0.1:8100` → `location /oms/api/`（proxy_pass 到 `:8100/api/`） |
 | 上传文件 | `/var/www/hb-oms/app/apps/server/uploads` → `location /oms/uploads/` |
 | 数据库 | 本机 MySQL `haibao_oms`（root 密码沿用 hb-mes .env） |
-| 服务端 .env | `/var/www/hb-oms/app/apps/server/.env`（deploy 脚本首次自动生成：PORT=8100、DB_NAME=haibao_oms、随机 JWT_SECRET） |
+| 服务端 .env | `/var/www/hb-oms/app/apps/server/.env`（deploy 脚本首次自动生成：PORT=8100、DB_NAME=haibao_oms、随机 JWT_SECRET；新增键由脚本的 `ensure_env` 幂等补入存量 .env） |
+| 无头浏览器 | Google Chrome 官方 deb，供《生产任务单》PDF 渲染。deploy 脚本检测缺失时自动装，**失败只警告不中断部署**（PDF 不可用，其余功能照常）。渲染进程按需启动、空闲 60s 自动关闭，常态不占内存 |
 | Nginx 配置 | `/etc/nginx/conf.d/hb-mes.conf`（共用 server 块，脚本幂等插入 /oms/* location，自动备份+`nginx -t` 回滚） |
 
 ### 发版流程（本地 Windows 开发机执行）

@@ -8,11 +8,13 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { OrderService } from './order.service';
 import { OrderLedgerService } from './order-ledger.service';
+import { PdfService } from '../../common/services/pdf.service';
 import { CreateOrderDto, QueryOrderDto, UpdateOrderDto } from './dto/order.dto';
 import { QueryLedgerDetailDto, QueryLedgerDto } from './dto/ledger.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -29,6 +31,7 @@ export class OrderController {
   constructor(
     private readonly service: OrderService,
     private readonly ledgerService: OrderLedgerService,
+    private readonly pdfService: PdfService,
   ) {}
 
   @Get()
@@ -97,6 +100,47 @@ export class OrderController {
       `attachment; filename="${encodeURIComponent('总计划.xlsx')}"`,
     );
     res.send(buf);
+  }
+
+  /**
+   * 《生产任务单》PDF（服务端渲染打印页出 PDF，前端一键下载、无需打印对话框）。
+   *
+   * 实现上**不另拼一份 HTML 模板**：用无头浏览器打开前端那张打印页
+   * （`/order/print?id=`）截成 PDF——版式与屏幕上看到的、以及 Ctrl+P 打出来的
+   * 完全是同一份，避免两套模板必然发生的漂移。
+   *
+   * 路径放在 `:id` 之前？不需要——它是 `:id/xxx` 两段式，与单段的 `:id` 不冲突；
+   * 但仍须在**任何** `:id/:sub` 通配之前，故置于 detail 上方保持醒目。
+   */
+  @Get(':id/task-order-pdf')
+  @RequirePermissions('order:export')
+  @SkipTransform()
+  async exportTaskOrderPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const order = await this.service.findOne(id); // 不存在直接 404，省得白起浏览器
+    const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const buf = await this.pdfService.renderPrintPage(this.printPageUrl(id), token);
+    const filename = `生产任务单-${order.productionNo || order.orderNo}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="task-order.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
+  }
+
+  /**
+   * 打印页在**服务器内网**的地址。
+   * 生产：Nginx 的 `/oms/admin/`（SPA base）；开发：Vite dev server 5174。
+   * 由 PRINT_BASE_URL 配置，两端都走各自的代理拿 `/api`，无需另开白名单。
+   */
+  private printPageUrl(id: number): string {
+    const base = (process.env.PRINT_BASE_URL || 'http://127.0.0.1:5174').replace(/\/+$/, '');
+    return `${base}/order/print?id=${id}`;
   }
 
   @Get(':id')

@@ -37,10 +37,42 @@ MAX_IMAGE_SIZE=10485760
 MAX_PDF_SIZE=20971520
 
 CACHE_DRIVER=memory
+
+PRINT_BASE_URL=http://127.0.0.1/oms/admin
 EOF
   echo "    已生成 $SERVER_DIR/.env（DB 密码沿用 hb-mes，JWT 密钥随机生成）"
 else
   echo "    .env 已存在，跳过（如需重置请手动编辑）"
+fi
+
+# 存量 .env 补齐新增键（上面的模板只在首次生成时用得上，老环境要单独补）
+ensure_env() {
+  local key="$1" val="$2"
+  if ! grep -q "^${key}=" "$SERVER_DIR/.env"; then
+    printf '\n%s=%s\n' "$key" "$val" >> "$SERVER_DIR/.env"
+    echo "    .env 补入 ${key}"
+  fi
+}
+# 《生产任务单》PDF：无头浏览器打开前端打印页的内网地址（Nginx 上的 SPA base）
+ensure_env PRINT_BASE_URL "http://127.0.0.1/oms/admin"
+
+# 《生产任务单》PDF 需要一个无头浏览器（puppeteer-core 不自带，用系统装的）。
+# 装 Google Chrome 官方 deb 而不是 apt 的 chromium：Ubuntu 22.04 的 chromium-browser
+# 只是 snap 转接包，snap 版在 root + 无头下常被 AppArmor 拦住。
+# **失败只警告不中断**：PDF 是附加能力，不该因为它装不上就让整个系统部署失败。
+if ! command -v google-chrome-stable >/dev/null 2>&1 && [ ! -x /usr/bin/chromium ]; then
+  echo "==> 1.5/5 安装无头浏览器（供《生产任务单》PDF 渲染）"
+  DEB="/tmp/google-chrome-stable_current_amd64.deb"
+  if curl -fsSL -o "$DEB" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$DEB" >/dev/null 2>&1 \
+      && echo "    已安装 $(google-chrome-stable --version 2>/dev/null || echo Chrome)" \
+      || echo "    ⚠ Chrome 安装失败，PDF 导出将不可用（其余功能不受影响）"
+    rm -f "$DEB"
+  else
+    echo "    ⚠ Chrome 下载失败，PDF 导出将不可用（其余功能不受影响）"
+  fi
+else
+  echo "==> 1.5/5 无头浏览器已就绪，跳过"
 fi
 
 echo "==> 2/5 安装依赖并构建（shared + server；前端产物本地构建上传，不在服务器构建）"

@@ -1,7 +1,7 @@
 import request from '@/utils/request';
 
 /**
- * 走 blob 下载并触发浏览器保存。
+ * 走 blob 下载并触发浏览器保存（**与文件类型无关**，xlsx / pdf 通用）。
  *
  * 文件名优先取响应头 `Content-Disposition` 里的 `filename*=UTF-8''`（服务端 sendXlsx
  * 统一按 RFC 5987 编码中文名），取不到再用调用方给的兜底名。
@@ -9,7 +9,7 @@ import request from '@/utils/request';
  * 之所以要 `__raw`：request.ts 的拦截器默认解包 `ApiResult`，而文件流不是那个结构，
  * 必须拿到原始响应才能读到响应头。
  */
-export async function downloadXlsx(
+export async function downloadFile(
   url: string,
   params: any,
   fallbackName: string,
@@ -37,6 +37,12 @@ export async function downloadXlsx(
   document.body.removeChild(a);
   window.URL.revokeObjectURL(objectUrl);
 }
+
+/**
+ * Excel 导出沿用的名字（实现即上面的通用下载）。
+ * 保留别名而不是全量改调用点：现役 9 个导出端点都在用它，改名收益为零、改错风险不小。
+ */
+export const downloadXlsx = downloadFile;
 
 /**
  * 导出接口失败时，服务端返回的是 **blob 形态的 JSON 错误体**（因为请求声明了
