@@ -158,7 +158,14 @@
             <span>{{ isOverdueTab ? '暂无逾期，交付良好' : `未来 ${summary.upcomingDays} 天内没有到期且欠货的订单` }}</span>
           </div>
           <template v-else>
-            <el-table :data="owedRows" size="small">
+            <el-table
+              ref="owedTableRef"
+              :data="owedRows"
+              size="small"
+              :max-height="LIST_MAX_HEIGHT"
+              @mouseenter="owedScroll.pause()"
+              @mouseleave="owedScroll.resume()"
+            >
               <el-table-column label="客户" prop="customerName" min-width="100" show-overflow-tooltip />
               <el-table-column label="订单编号" min-width="105" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
@@ -213,7 +220,14 @@
             <span>暂无外发回厂记录</span>
           </div>
           <template v-else>
-            <el-table :data="summary.recentOutsource" size="small">
+            <el-table
+              ref="outsourceTableRef"
+              :data="summary.recentOutsource"
+              size="small"
+              :max-height="LIST_MAX_HEIGHT"
+              @mouseenter="outsourceScroll.pause()"
+              @mouseleave="outsourceScroll.resume()"
+            >
               <el-table-column label="回厂日期" width="105">
                 <template #default="{ row }">{{ row.backDate || '—' }}</template>
               </el-table-column>
@@ -240,12 +254,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { loadDict } from '@/composables/useDict';
+import { useAutoScroll } from '@/composables/useAutoScroll';
 
 import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
@@ -284,6 +299,42 @@ const owedRows = computed(() =>
   isOverdueTab.value ? summary.value.overdueOrders : summary.value.upcomingOrders,
 );
 const owedTruncated = computed(() => owedRows.value.length >= summary.value.topLimit);
+
+/* ===== 待办列表自动滚动 ===== */
+
+/**
+ * 列表可见高度（px）：表头 + 约 5 行。
+ *
+ * 接口每块返回 10 条（topLimit），卡片只露一半、余下靠自动滚动轮播——三张 10 行
+ * 的表全展开会把首页拉得很长，一屏放不下欢迎区与统计卡。
+ */
+const LIST_MAX_HEIGHT = 196;
+
+const owedTableRef = ref<any>(null);
+const outsourceTableRef = ref<any>(null);
+
+/**
+ * el-table 的实际滚动元素：body-wrapper 里包着一层 el-scrollbar，滚的是它的 wrap。
+ * 兜一个 body-wrapper 本身，万一哪天换成原生滚动条（`native`）也不至于失效。
+ */
+function scrollWrapOf(table: any): HTMLElement | null {
+  const root: HTMLElement | undefined = table?.$el;
+  if (!root) return null;
+  return (
+    root.querySelector<HTMLElement>('.el-table__body-wrapper .el-scrollbar__wrap') ??
+    root.querySelector<HTMLElement>('.el-table__body-wrapper')
+  );
+}
+
+const owedScroll = useAutoScroll(() => scrollWrapOf(owedTableRef.value));
+const outsourceScroll = useAutoScroll(() => scrollWrapOf(outsourceTableRef.value));
+onMounted(() => {
+  owedScroll.start();
+  outsourceScroll.start();
+});
+
+/** 换页签等于换了一份数据，停在半路的滚动位置对新列表没有意义 */
+watch(owedTab, () => owedScroll.reset());
 
 /** 没有逾期、却有临近到期的，默认停在「临近交期」页，省用户一次点击 */
 function pickDefaultTab() {
@@ -353,6 +404,11 @@ async function load() {
   try {
     summary.value = await getDashboardSummary();
     pickDefaultTab();
+    // 刷新后行数变了，滚动位置要回到第一行
+    void nextTick(() => {
+      owedScroll.reset();
+      outsourceScroll.reset();
+    });
   } finally {
     loading.value = false;
   }
