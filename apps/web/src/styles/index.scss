@@ -232,9 +232,10 @@ a {
     padding-right: 0;
   }
 
-  /* 操作列按钮使用表格小字号 */
+  /* 操作列按钮比数据行再小一档：操作文案是辅助信息，不该和数据抢注意力，
+     同时省出列宽（多按钮的操作列最容易被文字撑爆） */
   .el-table__cell .el-button {
-    font-size: var(--hb-font-size-small);
+    font-size: var(--hb-font-size-xs);
   }
 
   /* ----------------------------------------------------------
@@ -317,10 +318,10 @@ a {
     vertical-align: middle;
   }
 
-  /* 「更多」触发按钮：字号继承操作列 12px，与其它按钮完全一致；
+  /* 「更多」触发按钮：字号与操作列其它按钮完全一致；
      inline-flex + align-items:center 保证文字与下拉箭头垂直居中 */
   .el-table__cell .app-actions__more {
-    font-size: var(--hb-font-size-small);
+    font-size: var(--hb-font-size-xs);
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
@@ -376,7 +377,8 @@ a {
     justify-content: flex-start;
     margin: 0;
     padding: 0.375rem 0.75rem;
-    font-size: var(--hb-font-size-small);
+    /* 与表格内平铺的操作按钮同档，折叠前后字号不跳 */
+    font-size: var(--hb-font-size-xs);
     width: 100%;
   }
   /* 纵向排列，取消 Element Plus 相邻按钮的左间距 */

@@ -19,6 +19,7 @@ import './styles/index.scss';
 import './styles/responsive.scss';
 import { applyCachedTitle } from './utils/document-meta';
 import { patchElTooltip } from './utils/tooltip';
+import { patchElInput } from './utils/input';
 
 // 尽早同步应用缓存的系统名称到标签标题，消除硬编码标题到动态标题的跳变
 applyCachedTitle();
@@ -48,6 +49,8 @@ app.use(router);
 app.use(ElementPlus, { locale: zhCn, size: 'small' });
 // content 文案自动按「1. / 2、」等数字序号换行（须在 ElementPlus 注册之后覆盖）
 patchElTooltip(app);
+// 普通文本输入框默认带清除按钮（须在 ElementPlus 注册之后覆盖）
+patchElInput(app);
 setupDirectives(app);
 
 // 应用启动时还原持久化的主题色
