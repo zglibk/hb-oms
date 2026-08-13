@@ -6,7 +6,7 @@
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
           <span class="title-text">{{ editId ? '编辑订单' : '新增订单' }}</span>
           <span v-if="orderNo" class="title-sub">{{ orderNo }}</span>
-          <span v-else-if="copyFromNo" class="title-sub">已复制 {{ copyFromNo }} 的内容，PO#/生产单号/交期已清空，请核对后保存</span>
+          <span v-else-if="copyHint" class="title-sub title-sub--copy">{{ copyHint }}</span>
         </div>
         <div>
           <el-button size="small" @click="goBack">取消</el-button>
@@ -476,12 +476,37 @@ const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
 /**
  * 复制来源订单 id（列表「复制」进入）：按详情回显业务内容做模板，走新建保存、单号重新采番。
- * 不继承：PO#/生产单号（新客户订单文件必然是新号）、订单日期（重置今天）、交期（新单交期
- * 几乎必然不同，沿用漏改比重填代价高）、附件（多为旧单的客户来单文件）、期初标记、审计信息。
+ * 不继承：PO#（新客户订单文件必然是新号）、订单日期（重置今天）、交期（新单交期几乎必然
+ * 不同，沿用漏改比重填代价高）、附件（多为旧单的客户来单文件）、期初标记、审计信息。
+ * 生产单号预填后缀递推的建议值（见 suggestNextProductionNo），完全可改可清空。
  */
 const copyFromId = ref<number | null>(route.query.copyFrom ? Number(route.query.copyFrom) : null);
-/** 复制来源的系统单号（标题区提示用） */
-const copyFromNo = ref('');
+/** 复制模式的标题区提示（在 init 里按是否预填了生产单号组装） */
+const copyHint = ref('');
+
+/**
+ * 复制模式的生产单号建议值：同 PO 追加的车间惯例是字母后缀递推（GLI46212-A → GLI46212-B）。
+ * 只认「-大写字母串」结尾并按 26 进制递增（-Z → -AA）；无字母后缀视原单为第一批，直接补「-B」。
+ * 刻意不处理数字结尾——「GLI-46212」这类尾段是单号本体，不是批次后缀，递增会造出假号。
+ * 只是建议值，业务员可改可清空。
+ */
+function suggestNextProductionNo(no: string): string {
+  if (!no) return '';
+  const m = no.match(/^(.*)-([A-Z]+)$/);
+  if (!m) return `${no}-B`;
+  const chars = m[2].split('');
+  let i = chars.length - 1;
+  while (i >= 0) {
+    if (chars[i] !== 'Z') {
+      chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+      break;
+    }
+    chars[i] = 'A';
+    i--;
+  }
+  if (i < 0) chars.unshift('A');
+  return `${m[1]}-${chars.join('')}`;
+}
 /** 审计追溯原始行（编辑态由详情接口带回，走全局 AuditInfo 展示） */
 const auditRow = ref<any>(null);
 const orderNo = ref('');
@@ -663,14 +688,17 @@ async function init() {
       const isCopy = !editId.value;
       const row = await getOrderDetail(sourceId);
       if (isCopy) {
-        copyFromNo.value = row.orderNo;
+        copyHint.value =
+          `已复制 ${row.orderNo} 的内容，PO#/交期已清空` +
+          (row.productionNo ? '，生产单号为递推建议值（可改可清空）' : '') +
+          '，请核对后保存';
       } else {
         orderNo.value = row.orderNo;
         auditRow.value = row; // 底部审计条（创建人/更新人/时间）
       }
       Object.assign(form, {
         poNo: isCopy ? '' : row.poNo ?? '',
-        productionNo: isCopy ? '' : row.productionNo ?? '',
+        productionNo: isCopy ? suggestNextProductionNo(row.productionNo ?? '') : row.productionNo ?? '',
         customerId: row.customerId ?? undefined,
         customerName: row.customerName,
         orderDate: isCopy ? new Date().toISOString().slice(0, 10) : (row.orderDate || '').slice(0, 10),
@@ -1144,6 +1172,8 @@ export default { name: 'OrderForm' };
   .form-title { display: flex; align-items: center; gap: 12px; }
   .title-text { font-size: 16px; font-weight: 600; }
   .title-sub { color: var(--el-text-color-secondary); font-size: 13px; }
+  /* 复制模式提示用紫色突出：既区别于灰色单号，也不与主色蓝/警告橙混淆 */
+  .title-sub--copy { color: #722ed1; }
 }
 .section-title {
   font-size: 14px; font-weight: 600; color: var(--el-text-color-primary);
