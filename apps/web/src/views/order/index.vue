@@ -46,6 +46,14 @@
           :loading="exporting"
           @click="onExportTotalPlan"
         >导出总计划</el-button>
+        <!-- 规格查看单位：只影响主行「规格」列展示，不改库（与台账页同款，1 英寸=25mm） -->
+        <span class="dim-unit-ctl">
+          <span class="dim-unit-label">规格单位</span>
+          <el-radio-group v-model="dimViewUnit" size="small">
+            <el-radio-button :value="DIMENSION_UNIT.MM">mm</el-radio-button>
+            <el-radio-button :value="DIMENSION_UNIT.INCH">寸</el-radio-button>
+          </el-radio-group>
+        </span>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
         <el-table-column type="expand" width="36" fixed="left">
@@ -106,8 +114,8 @@
         <el-table-column label="产品名称" min-width="110" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ joinProducts(row, (p) => p.productName ?? '') }}</template>
         </el-table-column>
-        <el-table-column label="规格" min-width="110" show-overflow-tooltip>
-          <template #default="{ row }">{{ joinProducts(row, dimensionText) }}</template>
+        <el-table-column :label="dimColLabel" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ joinProducts(row, dimViewText) }}</template>
         </el-table-column>
         <el-table-column label="订单日期" prop="orderDate" width="105">
           <template #default="{ row }">{{ (row.orderDate || '').slice(0, 10) }}</template>
@@ -193,8 +201,10 @@ import {
   ORDER_STATUS,
   ORDER_STATUS_VALUE,
   UNIT_OPTIONS,
+  DIMENSION_UNIT,
   formatProductModel,
   formatDimension,
+  formatDimensionView,
   labelOf,
   tagTypeOf,
 } from '@/constants/dict';
@@ -317,6 +327,15 @@ function joinProducts(row: OrderItem, pick: (p: OrderProductItem) => string): st
   const vals = [...new Set(row.products.map(pick).filter((v) => v && v !== '—'))];
   return vals.length ? vals.join(' / ') : '—';
 }
+/** 规格查看单位：仅影响主行「规格」列展示，不改库；默认 mm（与台账页同款口径，1 英寸=25mm） */
+const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
+const dimColLabel = computed(() =>
+  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
+);
+/** 多规格订单先逐产品换算再由 joinProducts 去重并列（400mm/450mm → 16寸/18寸） */
+function dimViewText(p: OrderProductItem): string {
+  return formatDimensionView(p.dimensionMm, dimViewUnit.value);
+}
 
 /* ===== 状态操作 ===== */
 const actingId = ref<number | null>(null);
@@ -357,7 +376,10 @@ export default { name: 'OrderList' };
 </script>
 
 <style scoped lang="scss">
-.toolbar { margin-bottom: 12px; }
+.toolbar { margin-bottom: 12px; display: flex; align-items: center; }
+/* 规格单位切换靠右（标题行右对齐） */
+.dim-unit-ctl { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.dim-unit-label { color: var(--el-text-color-regular); white-space: nowrap; font-size: 13px; }
 .pager { margin-top: 12px; }
 .expand-wrap { padding: 8px 16px 8px 56px; }
 .expand-grid {

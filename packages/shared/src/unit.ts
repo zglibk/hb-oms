@@ -97,7 +97,8 @@ export function formatDimension(
 
 /**
  * 按查看单位格式化规格（台账等界面临时切单位用，不改库）。
- * 英寸侧展示简称「寸」（1 寸 = 25mm，与录入口径一致）。
+ * 英寸侧展示简称「寸」（1 寸 = 25mm，与录入口径一致），**四舍五入取整**——
+ * 寸视图只用于内部粗略交流（322mm 显示 13寸 而不是 12.88寸），精确值看 mm 视图。
  */
 export function formatDimensionView(
   mm: number | null | undefined,
@@ -106,8 +107,7 @@ export function formatDimensionView(
   if (mm == null || Number.isNaN(Number(mm))) return '';
   const n = Number(mm);
   if (viewUnit === DIMENSION_UNIT.INCH) {
-    const cun = Math.round((n / INCH_TO_MM) * 100) / 100;
-    return `${cun}寸`;
+    return `${Math.round(n / INCH_TO_MM)}寸`;
   }
   return `${n}mm`;
 }
