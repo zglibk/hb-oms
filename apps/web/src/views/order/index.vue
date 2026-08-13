@@ -102,11 +102,17 @@
         <el-table-column label="生产单号" prop="productionNo" width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="客户" prop="customerName" min-width="90" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品名称" min-width="110" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">{{ joinProducts(row, (p) => p.productName ?? '') }}</template>
+        </el-table-column>
+        <el-table-column label="规格" min-width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ joinProducts(row, dimensionText) }}</template>
+        </el-table-column>
         <el-table-column label="订单日期" prop="orderDate" width="105">
           <template #default="{ row }">{{ (row.orderDate || '').slice(0, 10) }}</template>
         </el-table-column>
-        <el-table-column label="产品数" width="70">
+        <el-table-column label="款数" width="70">
           <template #default="{ row }">{{ row.products.length }}</template>
         </el-table-column>
         <el-table-column label="总支数" width="90">
@@ -124,7 +130,7 @@
             <el-tag v-if="row.isOpening" size="small" type="info" style="margin-left: 4px">期初</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
@@ -305,6 +311,11 @@ function dimensionText(p: OrderProductItem): string {
 }
 function totalPcs(row: OrderItem): number {
   return row.products.reduce((s, p) => s + (p.qtyPcs || 0), 0);
+}
+/** 主行聚合列（产品名称/规格）：各产品行取值去重后用「 / 」并列，空值与占位符不参与 */
+function joinProducts(row: OrderItem, pick: (p: OrderProductItem) => string): string {
+  const vals = [...new Set(row.products.map(pick).filter((v) => v && v !== '—'))];
+  return vals.length ? vals.join(' / ') : '—';
 }
 
 /* ===== 状态操作 ===== */
