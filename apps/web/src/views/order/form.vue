@@ -180,7 +180,11 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="是否出口" label-width="80px">
                 <div class="export-line">
-                  <el-switch v-model="p.isExport" :active-value="1" :inactive-value="0" />
+                  <!-- 勾上出口就开始预热国旗图，等用户点开下拉时大旗已在缓存里 -->
+                  <el-switch
+                    v-model="p.isExport" :active-value="1" :inactive-value="0"
+                    @change="preloadCountryFlags()"
+                  />
                   <!-- 用虚拟滚动版（el-select-v2）：国家有 250 个，普通 el-select 首次
                        展开要一次性渲染 250 个选项、连带请求 250 个国旗 SVG，明显卡顿；
                        虚拟滚动只渲染可视区的十来项，展开即开 -->
@@ -194,6 +198,7 @@
                     placeholder="出口国家"
                     popper-class="country-popper"
                     class="export-country"
+                    @visible-change="preloadCountryFlags()"
                   >
                     <template #default="{ item }">
                       <div class="country-option">
@@ -461,6 +466,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { preloadCountryFlags, preloadCountryFlagsWhenIdle } from '@/utils/flag-preload';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
@@ -759,6 +765,9 @@ async function init() {
   }
 }
 init();
+// 出口国家的国旗共约 1.9MB，等下拉打开再下载来不及（见 flag-preload.ts）：
+// 进页面就排队预热，用户填到出口字段时图已在缓存里
+preloadCountryFlagsWhenIdle();
 
 /* ===== 产品行操作 ===== */
 function addProduct() {
@@ -1240,16 +1249,25 @@ export default { name: 'OrderForm' };
 
 <style lang="scss">
 /* 出口国家下拉：国旗+中文名 左侧，英文全称 右侧（沿袭 hb-mes）。
-   输入框本身很窄（跟随所在列宽），但选项要放下国旗+中文名+英文全称，
-   故给浮层一个最小宽度；浮层是绝对定位的，不影响表单布局 */
-.country-popper { min-width: 340px !important; }
+   浮层宽度与内部虚拟列表宽度统一在 styles/index.scss 的 .country-popper 段定义
+   （原先这里重复声明过一遍 min-width，改宽度时容易只改一处） */
+/* 挤压优先级：国旗恒定完整 > 中文名 > 英文名先截断。
+   名字最长的几行（福克兰群岛 Falkland Islands (Malvinas)、密克罗尼西亚联邦
+   Federated States of Micronesia）放不下时，原先英文名带 flex-shrink:0 不让收缩，
+   被压缩的就成了没写 flex 的国旗——宽度直接压到 0，看着像「这些国家没有国旗」，
+   中英文也糊在一起。故国旗必须 flex:none，两侧文字都要能收缩并省略号截断。 */
 .country-popper .country-option {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
-  .country-left { display: flex; align-items: center; gap: 8px; min-width: 0;
-    .fi { font-size: 16px; line-height: 1; box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08); border-radius: 2px; overflow: hidden; }
-    .country-zh { font-size: 13px; font-weight: 500; }
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0;
+  .country-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto;
+    /* 浅灰底是占位：纹章类国旗（塞尔维亚等 142 面）超过内联阈值、要单独下载，
+       未到位时留一个灰块，比空白更像「图在加载」而不是「这国没有旗」 */
+    .fi { flex: none; font-size: 16px; line-height: 1; box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08); border-radius: 2px; overflow: hidden; background-color: #f1f5f9; }
+    .country-zh { font-size: 13px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
-  .country-en { color: var(--el-text-color-placeholder); font-size: 12px; flex-shrink: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* shrink 权重给到 3：空间不足时先压英文名，中文名是主标识、尽量留全。
+     margin-left:auto + text-align:right 一并靠右：前者把整块推到行尾（不依赖
+     父级的 space-between），后者让框内文字也贴右，短名字不会浮在框左侧 */
+  .country-en { color: var(--el-text-color-placeholder); font-size: 12px; flex: 0 3 auto; min-width: 0; max-width: 150px; margin-left: auto; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 .customer-2col-popper {

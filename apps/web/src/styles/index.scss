@@ -607,16 +607,34 @@ a {
  * - 面板宽度：确保中文国名 + 英文全称能完整显示
  * - 行高、圆角、阴影、滚动条适度美化
  * ============================================================ */
-.country-popper.el-select-dropdown {
-  min-width: 340px !important;
+/* ⚠️ 选择器只能是 `.country-popper`：popper-class 落在**外层** .el-popper 上，
+ * .el-select-dropdown 是它的子元素。原先写成 `.country-popper.el-select-dropdown`
+ * （同一元素要同时具备两个类）匹配不到任何元素，整段样式一直是死代码。 */
+.country-popper {
+  /* 输入框很窄（跟随所在列宽），但选项要放下国旗 + 中文国名 + 英文全称 */
+  min-width: 360px !important;
   max-width: 420px !important;
   border-radius: 8px !important;
   box-shadow: 0 6px 24px rgba(15, 23, 42, 0.14) !important;
   border: 1px solid #e4e7ed;
 }
 
-/* 选项行：加大纵向内边距，让国旗与文字呼吸感更强 */
+/* el-select-v2 的下拉宽度是 JS 算出来的 inline style（取输入框宽度），上面的
+ * min-width 只拉宽了外层 popper，里面这几层拿到的还是那个窄值——每行就只有输入框
+ * 那么宽，行右边界离面板右边界差一大截，行内靠右对齐的英文名看着像没生效。
+ * inline style 只能用 !important 压过去，且 **.el-select-dropdown 这一层不能漏**：
+ * 它是带 inline width 的那个元素，漏掉它，内层的 width:100% 就还是按窄值算。 */
+.country-popper .el-select-dropdown,
+.country-popper .el-vl__wrapper,
+.country-popper .el-vl__window,
+.country-popper .el-select-dropdown__list {
+  width: 100% !important;
+}
+
+/* 选项行：加大纵向内边距，让国旗与文字呼吸感更强。
+   宽度要减掉自身左右 margin，否则 100% 会溢出 12px */
 .country-popper .el-select-dropdown__item {
+  width: calc(100% - 12px) !important;
   padding: 0 14px;
   height: 36px;
   line-height: 36px;

@@ -72,6 +72,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart`、`AppStatCard` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`），**禁止在页面内重复造轮子**。
 - **新手引导与操作手册是一对，改功能要一起改**：引导（`layout/index.vue` 的 `TOUR_STEP_DEFS`，el-tour，按业务主线高亮侧栏菜单，步骤按用户可见菜单动态过滤）与手册（`apps/web/public/manual.html`，纯静态、按业务时间线分章）**章节顺序一一对应**，引导最后一步就指向手册。**任何改动用户操作方式的功能，必须同步更新手册对应章节**；引导内容大改时递增 `useTour.ts` 的 `TOUR_DONE_KEY` 版本号（当前 `hb_oms_tour_done_v5`）让老用户重看，并在该文件的版本注释里记一行原因。手册链接一律用 `${import.meta.env.BASE_URL}manual.html` 拼，**别写死**（生产 base 是 `/oms/admin/`、开发是 `/`）。
 - `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
+- **订单表单「出口国家」下拉的国旗必须靠 [flag-preload.ts](apps/web/src/utils/flag-preload.ts) 在进页面时预热**（271 面 4x3 约 1.9MB，其中 142 面带纹章的超过 Vite 内联阈值、要真发请求；实测 8 并发本地也要 1.2 秒）。下拉用 `el-select-v2` 虚拟滚动，**不要为了「让国旗都显示」改回全量渲染**——那只是把「滚到哪行请求哪行」换成「打开面板一次全发」，第一次打开照样一片空白格，还额外背上 250 个 DOM 节点的卡顿。图在不在取决于请求何时发出，与渲染多少行无关。预热另有两个坑：URL 必须从**已生效的 CSS 规则**里现取（写死路径或用 `import.meta.glob` 都会与 CSS 实际引用的 URL 不一致，缓存命中不了）；**只取 4x3**，连 1x1 方形变体一起取会让下载量翻倍到近 4MB。
 - **Element Plus 组件的全局默认行为一律在 `main.ts` 统一覆盖，禁止各页面逐处重复写**（个别场景可在组件上显式传值反转）。现役三项：
  - `el-dialog` 默认 `close-on-click-modal=false`（防误点遮罩丢表单数据）——直接改 props 默认值；
  - `el-tooltip` 的 `content` 按「1. / 2、」数字序号自动换行（[utils/tooltip.ts](apps/web/src/utils/tooltip.ts) 的 `patchElTooltip`）；
