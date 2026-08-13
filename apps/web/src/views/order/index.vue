@@ -124,7 +124,7 @@
             <el-tag v-if="row.isOpening" size="small" type="info" style="margin-left: 4px">期初</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
@@ -134,6 +134,12 @@
                 :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED"
                 @click="openEdit(row)"
               >编辑</el-button>
+              <!-- 生产任务单打印页（A4，可另存 PDF）；已作废订单不该再下发生产，禁用 -->
+              <el-button
+                size="small" v-permission.disable="'order:export'" link type="primary" :icon="Printer"
+                :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED"
+                @click="router.push({ path: '/order/print', query: { id: row.id } })"
+              >导出单据</el-button>
               <el-button
                 v-if="row.status === ORDER_STATUS_VALUE.ACTIVE"
                 size="small" v-permission.disable="'order:finish'" link type="success" :icon="CircleCheck"
@@ -162,7 +168,7 @@
 import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft, Download } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft, Download, Printer } from '@element-plus/icons-vue';
 import {
   getOrderList,
   finishOrder,
