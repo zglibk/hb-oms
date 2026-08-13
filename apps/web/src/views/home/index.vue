@@ -217,6 +217,9 @@
               <el-table-column label="回厂日期" width="105">
                 <template #default="{ row }">{{ row.backDate || '—' }}</template>
               </el-table-column>
+              <el-table-column label="生产单号" width="118" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
+              </el-table-column>
               <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip />
               <el-table-column label="产品型号" prop="productModel" min-width="130" show-overflow-tooltip />
               <el-table-column label="表面处理" width="90" align="center">

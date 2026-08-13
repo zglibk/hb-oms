@@ -38,6 +38,8 @@ export interface DashboardOutsourceRow {
   color: string | null;
   productModel: string | null;
   productionNo: string | null;
+  /** 订单号快照：生产单号为空时的回落显示值（同外发列表口径） */
+  orderNo: string | null;
   returnQty: number;
 }
 

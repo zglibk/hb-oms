@@ -68,6 +68,8 @@ export interface DashboardOutsourceRow {
   color: string | null;
   productModel: string | null;
   productionNo: string | null;
+  /** 订单号快照：生产单号为空时的回落显示值（同外发列表口径） */
+  orderNo: string | null;
   returnQty: number;
 }
 
@@ -244,7 +246,7 @@ export class DashboardService {
       `SELECT id, back_date AS backDate, processor_name AS processorName,
               surface_type AS surfaceType, color AS color,
               product_model AS productModel, production_no AS productionNo,
-              return_qty AS returnQty
+              order_no AS orderNo, return_qty AS returnQty
          FROM t_outsource_part
         ORDER BY back_date DESC, id DESC
         LIMIT ?`,
@@ -258,6 +260,7 @@ export class DashboardService {
       color: r.color ?? null,
       productModel: r.productModel ?? null,
       productionNo: r.productionNo ?? null,
+      orderNo: r.orderNo ?? null,
       returnQty: Number(r.returnQty) || 0,
     }));
   }
