@@ -3,6 +3,8 @@
     <el-card shadow="never">
       <div class="toolbar">
         <el-button size="small" v-permission="'changelog:create'" type="primary" :icon="Plus" @click="openCreate">新增版本</el-button>
+        <!-- 时间轴展示页（面向全员的阅读视图，接口登录即可访问，无需额外权限） -->
+        <el-button size="small" type="primary" plain :icon="Clock" @click="router.push('/changelog')">时间轴视图</el-button>
       </div>
       <app-table :data="paged" v-loading="loading" border stripe :page="page" :page-size="size">
         <el-table-column label="版本号" width="120">
@@ -107,7 +109,10 @@
 defineOptions({ name: 'SystemChangelog' });
 
 import { ref, reactive, onMounted, onActivated } from 'vue';
-import { Plus, Delete, Edit } from '@element-plus/icons-vue';
+import { useRouter } from 'vue-router';
+import { Plus, Delete, Edit, Clock } from '@element-plus/icons-vue';
+
+const router = useRouter();
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import {
   getChangelogListAll,

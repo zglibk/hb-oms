@@ -74,6 +74,14 @@ const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '订单录入', activeMenu: '/order' },
       },
       {
+        // 更新日志时间轴展示页（布局照搬 hb-mes）：入口在 系统管理→更新日志 管理页工具栏
+        path: 'changelog',
+        name: 'ChangelogView',
+        component: () => import('@/views/changelog/index.vue'),
+        // 标题刻意与管理页（更新日志）区分：两页同名会在页签栏出现两个「更新日志」
+        meta: { title: '更新日志时间轴', activeMenu: '/system/changelog' },
+      },
+      {
         // 装配批次由弹窗改子页面（2026-08-13）：头信息+分边卡+批次表+完成历史+录入表单弹窗塞不下
         path: 'assembly/batches',
         name: 'AssemblyBatches',
