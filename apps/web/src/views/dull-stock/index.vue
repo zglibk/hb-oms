@@ -110,19 +110,19 @@
         <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
-        <el-table-column label="节数" width="100" align="center">
+        <el-table-column label="节数" width="75" align="center">
           <template #default="{ row }">{{ railSectionLabel(row.railSection) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="规格" width="100" align="center">
+        <el-table-column label="规格" width="75" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
         </el-table-column>
-        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="60" align="center">
           <template #default="{ row }">{{ row.color || '—' }}</template>
         </el-table-column>
-        <el-table-column label="边别" width="70" align="center">
+        <el-table-column label="边别" width="52" align="center">
           <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
         </el-table-column>
         <el-table-column label="单位" width="64" align="center">
@@ -144,12 +144,14 @@
         <el-table-column label="备注" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="结存数" width="90" align="center" fixed="right">
+        <el-table-column label="结存数" width="100" align="center" fixed="right">
           <template #default="{ row }">
-            <span :class="row.balanceQty > 0 ? 'num-ok' : 'num-zero'">{{ row.balanceQty }}</span>
+            <span :class="row.balanceQty > 0 ? 'num-ok' : 'num-zero'">
+              {{ row.balanceQty }}{{ unitLabel(row.unit) }}
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
@@ -239,7 +241,13 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="边别">
-              <el-select v-model="form.side" clearable placeholder="非卡口留空" style="width: 100%">
+              <el-select
+                v-model="form.side"
+                clearable
+                :disabled="!sideEnabled"
+                :placeholder="sideEnabled ? '请选择左右' : '非卡口不可选'"
+                style="width: 100%"
+              >
                 <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
@@ -375,6 +383,7 @@ import {
   railSectionLabel,
   normalizeProductTypes,
   parseProductTypes,
+  hasSocket,
   labelOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
@@ -562,6 +571,13 @@ const hasFlow = computed(
   () => !!editRow.value && (editRow.value.inboundQty > 0 || editRow.value.outboundQty > 0),
 );
 
+/** 边别只在产品类型含「卡口」时可用（含卡口才分左右） */
+const sideEnabled = computed(() => hasSocket(form.productTypes));
+
+watch(sideEnabled, (on) => {
+  if (!on) form.side = '';
+});
+
 const previewBalance = computed(() =>
   editRow.value
     ? (form.openingQty || 0) + editRow.value.inboundQty - editRow.value.outboundQty
@@ -620,7 +636,7 @@ async function onSubmitForm() {
       dimensionMm: form.dimensionMm || undefined,
       surfaceType: form.surfaceType || undefined,
       color: form.color || undefined,
-      side: form.side || '',
+      side: sideEnabled.value ? (form.side || '') : '',
       unit: form.unit,
       openingQty: form.openingQty || 0,
       remark: form.remark || undefined,
