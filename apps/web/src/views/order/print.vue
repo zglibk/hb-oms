@@ -25,11 +25,17 @@
           <div class="doc-meta__row">
             <div class="doc-meta__item">
               <span class="doc-meta__label">生产订单:</span>
-              <span class="doc-meta__value doc-meta__value--boxed">{{ order.productionNo || order.orderNo }}</span>
+              <span class="doc-meta__value">{{ order.productionNo || order.orderNo }}</span>
             </div>
             <div class="doc-meta__item">
               <span class="doc-meta__label">订单日期:</span>
-              <span class="doc-meta__value">{{ cnDate(order.orderDate) }}</span>
+              <!-- 日期数字加粗、年月日汉字不加粗（对照纸质单写法） -->
+              <span class="doc-meta__value">
+                <template v-if="orderDateParts">
+                  <b>{{ orderDateParts.y }}</b>年<b>{{ orderDateParts.m }}</b>月<b>{{ orderDateParts.d }}</b>日
+                </template>
+                <template v-else>—</template>
+              </span>
             </div>
           </div>
           <div class="doc-meta__row">
@@ -39,7 +45,15 @@
             </div>
             <div class="doc-meta__item">
               <span class="doc-meta__label">订单交期:</span>
-              <span class="doc-meta__value">{{ deliveryText || '—' }}</span>
+              <span class="doc-meta__value">
+                <template v-if="deliveryParts.length">
+                  <template v-for="(p, i) in deliveryParts" :key="i">
+                    <span v-if="i > 0">、</span>
+                    <b>{{ p.y }}</b>年<b>{{ p.m }}</b>月<b>{{ p.d }}</b>日
+                  </template>
+                </template>
+                <template v-else>—</template>
+              </span>
             </div>
           </div>
         </div>
@@ -104,7 +118,8 @@
         <!-- ==================== 签名栏（固定结构，不来自富文本） ==================== -->
         <footer class="doc-signatures">
           <div>制单：<span class="sign-value">{{ order.creatorName || '' }}</span></div>
-          <div>业务审核：<span class="sign-line"></span></div>
+          <!-- 业务审核填订单业务员（与制单同为系统内已知的人，不必手签） -->
+          <div>业务审核：<span class="sign-value">{{ order.salesman || '' }}</span></div>
           <div>生产部审核：<span class="sign-line"></span></div>
           <div>技术部审核：<span class="sign-line"></span></div>
         </footer>
@@ -155,22 +170,27 @@ const order = ref<OrderItem | null>(null);
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 const originalTitle = document.title;
 
-/** yyyy-MM-dd → yyyy年M月d日（纸质单的中文日期写法，去前导零） */
-function cnDate(v: string | null | undefined): string {
-  const s = String(v ?? '').slice(0, 10);
-  const [y, m, d] = s.split('-');
-  if (!y || !m || !d) return s;
-  return `${y}年${Number(m)}月${Number(d)}日`;
+/**
+ * yyyy-MM-dd → { y, m, d }（去前导零）。
+ * 拆成三段而不是拼成整串：纸质单上**数字加粗、年月日汉字不加粗**，
+ * 模板里要分别包 <b>，返回字符串就没法只加粗数字了。
+ */
+function cnDateParts(v: string | null | undefined): { y: string; m: number; d: number } | null {
+  const [y, m, d] = String(v ?? '').slice(0, 10).split('-');
+  if (!y || !m || !d) return null;
+  return { y, m: Number(m), d: Number(d) };
 }
 
+const orderDateParts = computed(() => cnDateParts(order.value?.orderDate));
+
 /** 订单交期 = 产品行交期去重并列（纸质单页头只有一格，多交期用「、」并排） */
-const deliveryText = computed(() => {
+const deliveryParts = computed(() => {
   const dates = [...new Set(
     (order.value?.products ?? [])
       .map((p) => (p.deliveryDate ? String(p.deliveryDate).slice(0, 10) : ''))
       .filter(Boolean),
   )];
-  return dates.map(cnDate).join('、');
+  return dates.map(cnDateParts).filter((v): v is { y: string; m: number; d: number } => !!v);
 });
 
 const surfaceLabel = (v: string | null) => {
@@ -324,13 +344,20 @@ export default { name: 'OrderPrint' };
   overflow: auto;
 }
 
-/* A4 纵向；高度不固定——富文本长度不定，流式排版由浏览器自动分页 */
+/*
+ * A4 纵向；高度不固定——富文本长度不定，流式排版由浏览器自动分页。
+ * flex 列布局 + 签名栏 margin-top:auto：内容不满一页时签名栏被推到页面底部
+ * （对照纸质单）；内容跨页时签名栏自然跟在正文之后。
+ * 左右内边距收窄到 6mm，配合 @page margin 让表格更舒展。
+ */
 .print-sheet {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 210mm;
   min-height: 292mm;
   margin: 0 auto 16px;
-  padding: 10mm 12mm;
+  padding: 8mm 6mm;
   background: #fff;
   box-shadow: 0 3px 18px rgb(0 0 0 / 14%);
   color: #111;
@@ -349,14 +376,15 @@ export default { name: 'OrderPrint' };
 .doc-meta__item { display: flex; align-items: center; gap: 8px; }
 .doc-meta__label { font-weight: 700; }
 .doc-meta__value { min-width: 32mm; }
-.doc-meta__value--boxed { padding: 0 8px; border: 1px solid #333; }
 
 /* ===== 主表格 ===== */
+/* 等宽字体：数字/字母按 Consolas 等宽排列，中文回落宋体（标题区不受影响） */
 .task-table {
   width: 100%;
   margin-top: 2.5mm;
   border-collapse: collapse;
   table-layout: fixed;
+  font-family: Consolas, 'Courier New', SimSun, monospace;
 }
 .task-table th,
 .task-table td {
@@ -398,12 +426,13 @@ export default { name: 'OrderPrint' };
 .rich-content :deep(tr),
 .rich-content :deep(img) { break-inside: avoid; }
 
-/* ===== 签名栏 ===== */
+/* ===== 签名栏（margin-top:auto 把它顶到页面底部，见 .print-sheet 的 flex 说明） ===== */
 .doc-signatures {
   display: flex;
   justify-content: space-between;
   gap: 8mm;
-  margin-top: 8mm;
+  margin-top: auto;
+  padding-top: 8mm;
   break-inside: avoid;
 }
 .sign-value { display: inline-block; min-width: 22mm; }
@@ -426,7 +455,8 @@ export default { name: 'OrderPrint' };
   :global(.header) { display: none !important; }
   :global(.app-layout) { display: block !important; }
 
-  @page { size: A4 portrait; margin: 8mm; }
+  /* 页边距收窄（打印机不可打印区通常 ≥5mm，再小会被截） */
+  @page { size: A4 portrait; margin: 6mm 5mm; }
 
   .print-preview-page,
   .sheet-stage {
@@ -441,7 +471,8 @@ export default { name: 'OrderPrint' };
 
   .print-sheet {
     width: auto;
-    min-height: 0;
+    /* 保持 flex 撑满一页，签名栏才会贴在页面底部（A4 297mm − 上下页边距 12mm） */
+    min-height: 285mm;
     margin: 0;
     padding: 0;
     box-shadow: none;
