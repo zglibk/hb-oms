@@ -571,8 +571,8 @@ const form = reactive({
   products: [emptyProduct()] as ProductRow[],
 });
 
-/** 订单备注版块折叠态：新建时展开引导填写，编辑时有内容才展开 */
-const reqCollapsed = ref(false);
+/** 订单备注版块折叠态：默认折叠；编辑时有正文才展开 */
+const reqCollapsed = ref(true);
 const richEditorRef = ref<InstanceType<typeof RichEditor>>();
 /** el-switch 需要独立的读写代理，直接绑 form.isOpening 在 reactive 上也可，此处保持显式 */
 const isOpeningOrder = computed({
@@ -692,6 +692,9 @@ async function init() {
         row.customerId && customers.value.some((c) => c.id === row.customerId)
           ? row.customerId
           : row.customerName || '';
+      // 编辑时有正文才展开，空的 <p><br></p> 仍保持折叠
+      const reqText = (row.otherReq ?? '').replace(/<[^>]+>/g, '').trim();
+      reqCollapsed.value = !reqText;
     }
   } finally {
     pageLoading.value = false;
