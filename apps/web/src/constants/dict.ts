@@ -84,6 +84,7 @@ export {
   toMm,
   normalizeDimensionText,
   formatDimension,
+  formatDimensionView,
   // 产品类型多选组合
   PRODUCT_TYPE_OPTIONS,
   parseProductTypes,

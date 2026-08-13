@@ -76,11 +76,20 @@
 
     <el-card shadow="never">
       <div class="tip-bar">
-        <el-icon><InfoFilled /></el-icon>
-        <span>
-          数量分两栏：<b>部件</b>按<b>零件</b>计（一套三节轨含外/中/内 3 个零件），
-          <b>成品</b>按<b>整轨</b>计。所以「外发欠数」比「订单数」大是正常的。
-        </span>
+        <div class="tip-bar__left">
+          <el-icon><InfoFilled /></el-icon>
+          <span>
+            数量分两栏：<b>部件</b>按<b>零件</b>计（一套三节轨含外/中/内 3 个零件），
+            <b>成品</b>按<b>整轨</b>计。所以「外发欠数」比「订单数」大是正常的。
+          </span>
+        </div>
+        <div class="tip-bar__right">
+          <span class="dim-unit-label">规格单位</span>
+          <el-radio-group v-model="dimViewUnit" size="small">
+            <el-radio-button :value="DIMENSION_UNIT.MM">mm</el-radio-button>
+            <el-radio-button :value="DIMENSION_UNIT.INCH">寸</el-radio-button>
+          </el-radio-group>
+        </div>
       </div>
       <app-table
         :data="list" v-loading="loading" border stripe
@@ -214,8 +223,8 @@
           <template #default="{ row }">{{ row.materialCode || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="规格" width="105" align="center">
-          <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
+        <el-table-column :label="dimColLabel" width="110" align="center">
+          <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
         </el-table-column>
         <el-table-column label="数量/单位" width="95" align="center">
           <template #default="{ row }">{{ row.orderQty }}{{ unitLabel(row.unit) }}</template>
@@ -300,7 +309,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, reactive, ref } from 'vue';
+import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   Search,
@@ -325,6 +334,8 @@ import { useExcelExport } from '@/composables/useExcelExport';
 import {
   PRODUCT_TYPE_OPTIONS,
   UNIT_OPTIONS,
+  DIMENSION_UNIT,
+  formatDimensionView,
   FINISHED_BIZ_TYPE_OPTIONS,
   sideLabel,
   partGroupLabel,
@@ -338,6 +349,15 @@ import AppStatCard from '@/components/AppStatCard.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
+
+/** 规格查看单位：仅影响本页列表展示，不改库；默认 mm（内部存储口径） */
+const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
+const dimColLabel = computed(() =>
+  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
+);
+function dimText(mm: number | null | undefined) {
+  return formatDimensionView(mm, dimViewUnit.value) || '—';
+}
 
 const router = useRouter();
 const loading = ref(false);
@@ -502,9 +522,30 @@ export default { name: 'OrderLedger' };
 }
 .pager { margin-top: 12px; }
 .tip-bar {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12px; color: var(--el-text-color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
   b { color: var(--el-text-color-primary); }
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+}
+.dim-unit-label {
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
 }
 /* 四数列加浅底，从一堆属性列里凸显出来 */
 :deep(.col-key) { background: var(--el-fill-color-light); }

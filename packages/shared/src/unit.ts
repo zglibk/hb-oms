@@ -94,3 +94,20 @@ export function formatDimension(
   if (String(unit).trim() === DIMENSION_UNIT.INCH) return `${raw}"（${mm}mm）`;
   return `${mm}mm`;
 }
+
+/**
+ * 按查看单位格式化规格（台账等界面临时切单位用，不改库）。
+ * 英寸侧展示简称「寸」（1 寸 = 25mm，与录入口径一致）。
+ */
+export function formatDimensionView(
+  mm: number | null | undefined,
+  viewUnit: typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH,
+): string {
+  if (mm == null || Number.isNaN(Number(mm))) return '';
+  const n = Number(mm);
+  if (viewUnit === DIMENSION_UNIT.INCH) {
+    const cun = Math.round((n / INCH_TO_MM) * 100) / 100;
+    return `${cun}寸`;
+  }
+  return `${n}mm`;
+}
