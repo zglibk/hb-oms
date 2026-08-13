@@ -1,24 +1,26 @@
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    title="装配批次"
-    width="1040px"
-    top="6vh"
-    @update:model-value="(v: boolean) => emit('update:modelValue', v)"
-    @open="load"
-  >
-    <div v-loading="loading" class="bd-body">
+  <div class="page">
+    <el-card shadow="never" v-loading="loading">
+      <div class="form-header">
+        <div class="form-title">
+          <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
+          <span class="title-text">装配批次</span>
+          <span v-if="data?.product" class="title-sub">{{ data.product.productModel || '—' }}</span>
+        </div>
+        <div>
+          <el-button size="small" @click="goBack">关闭</el-button>
+        </div>
+      </div>
+
+      <!-- 订单侧头信息 -->
       <div v-if="data?.product" class="bd-head">
-        <span class="bd-model">{{ data.product.productModel || '—' }}</span>
-        <span class="bd-meta">{{ data.product.orderNo || '—' }}</span>
+        <span class="bd-meta">订单号 {{ data.product.orderNo || '—' }}</span>
         <span class="bd-meta">生产单号 {{ data.product.productionNo || '—' }}</span>
         <span class="bd-meta">{{ data.product.customerName || '—' }}</span>
         <span class="bd-meta">规格 {{ data.product.dimensionText || '—' }}</span>
         <span class="bd-meta">订单数 <b>{{ data.product.qtyPcs }}</b> 支</span>
-        <!-- disable-transitions 必须加：el-tag 默认带 zoom 过渡，而本弹窗是复用的
-             （换产品时 v-if 在弹窗隐藏状态下翻转），leave 过渡收不到 transitionend
-             就永远走不完，节点被留在 DOM 里 —— 下次开一个不含卡口的产品，这个
-             「含卡口」标签会被原样复活。 -->
+        <!-- disable-transitions：同产品间切换时 v-if 翻转可能发生在不可见状态，
+             el-tag 的 zoom 过渡收不到 transitionend 会把节点留在 DOM 里（弹窗时代实测踩过） -->
         <el-tag v-if="data.product.socket" size="small" type="warning" disable-transitions>含卡口 · 左右分开核算</el-tag>
       </div>
 
@@ -40,7 +42,8 @@
         </div>
       </div>
 
-      <!-- 批次列表 -->
+      <!-- 批次列表（排产全貌 + 编辑/删除入口） -->
+      <div class="bd-section-title">批次列表</div>
       <el-table :data="data?.list ?? []" border stripe size="small" empty-text="暂无装配批次，请在下方录入">
         <el-table-column type="index" label="#" width="46" align="center" />
         <el-table-column v-if="socket" label="边别" width="70" align="center">
@@ -85,12 +88,51 @@
         </el-table-column>
       </el-table>
 
-      <!-- 录入 / 编辑批次 -->
-      <div class="bd-form">
-        <div class="bd-form-title">
-          {{ editingId ? `编辑第 ${editingIndex} 批` : '录入新批次' }}
-          <el-button v-if="editingId" size="small" link type="info" @click="resetDraft">取消编辑</el-button>
+      <!-- 装配完成历史：按实际完成日期倒序的完成履历（谁在什么时候登记完成了多少支） -->
+      <template v-if="doneHistory.length">
+        <div class="bd-section-title">
+          装配完成历史
+          <span class="bd-section-sub">已完成 {{ doneHistory.length }} 批 · 共 {{ doneQtyTotal }} 支</span>
+          <el-button
+            link size="small" type="primary"
+            :icon="historyCollapsed ? ArrowDown : ArrowUp"
+            @click="historyCollapsed = !historyCollapsed"
+          >{{ historyCollapsed ? '展开' : '收起' }}</el-button>
         </div>
+        <el-table v-show="!historyCollapsed" :data="doneHistory" border stripe size="small" max-height="260">
+          <el-table-column type="index" label="#" width="46" align="center" />
+          <el-table-column label="完成日期" width="115" align="center">
+            <template #default="{ row }">{{ dateText(row.actualDate) }}</template>
+          </el-table-column>
+          <el-table-column v-if="socket" label="边别" width="70" align="center">
+            <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="装配车间" width="100" align="center">
+            <template #default="{ row }">{{ dictLabel(workshopDict, row.workshop) }}</template>
+          </el-table-column>
+          <el-table-column label="数量(支)" width="90" align="center">
+            <template #default="{ row }">
+              <span class="qty-done">{{ row.qty }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="登记人" width="100" align="center">
+            <template #default="{ row }">{{ registrant(row) }}</template>
+          </el-table-column>
+          <el-table-column label="登记时间" width="150" align="center">
+            <template #default="{ row }">{{ minuteText(row.updatedAt ?? row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.remark || '—' }}</template>
+          </el-table-column>
+        </el-table>
+      </template>
+
+      <!-- 录入 / 编辑批次：标题放盒子外，竖条与上方两节标题垂直对齐 -->
+      <div class="bd-section-title">
+        {{ editingId ? `编辑第 ${editingIndex} 批` : '录入新批次' }}
+        <el-button v-if="editingId" size="small" link type="info" @click="resetDraft">取消编辑</el-button>
+      </div>
+      <div class="bd-form">
         <el-form :inline="true" size="small" @submit.prevent>
           <el-form-item v-if="socket" label="边别" required>
             <el-select v-model="draft.side" :disabled="!!editingId" style="width: 90px" placeholder="选择">
@@ -148,18 +190,15 @@
           本批录入后该{{ socket ? '边别' : '产品' }}已录装配量将超过订单数（超装配属正常，可继续提交）
         </div>
       </div>
-    </div>
-
-    <template #footer>
-      <el-button size="small" @click="emit('update:modelValue', false)">关闭</el-button>
-    </template>
-  </el-dialog>
+    </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Delete, Edit, CircleCheck, Clock, WarningFilled } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowUp, Back, Delete, Edit, CircleCheck, Clock, WarningFilled } from '@element-plus/icons-vue';
 import {
   getAssemblyBatches,
   createAssemblyBatch,
@@ -172,11 +211,10 @@ import { ASSEMBLY_STATUS, SIDE_OPTIONS, labelOf, sideLabel, tagTypeOf } from '@/
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 
-const props = defineProps<{ modelValue: boolean; orderProductId: number | null }>();
-const emit = defineEmits<{
-  (e: 'update:modelValue', v: boolean): void;
-  (e: 'changed'): void;
-}>();
+const route = useRoute();
+const router = useRouter();
+/** 锚点产品行：来自装配列表「录装配」跳转的 query（同页切产品时 watch 重新加载） */
+const orderProductId = computed(() => (route.query.orderProductId ? Number(route.query.orderProductId) : null));
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -249,27 +287,47 @@ function defaultQty(): number {
 }
 
 async function load() {
-  if (!props.orderProductId) return;
+  if (!orderProductId.value) return;
   loading.value = true;
   try {
-    data.value = await getAssemblyBatches({ orderProductId: props.orderProductId });
+    data.value = await getAssemblyBatches({ orderProductId: orderProductId.value });
     resetDraft();
   } finally {
     loading.value = false;
   }
 }
-watch(
-  () => props.orderProductId,
-  () => {
-    if (props.modelValue) load();
-  },
-);
+load();
+watch(orderProductId, () => {
+  if (orderProductId.value) load();
+});
 watch(
   () => draft.side,
   () => {
     if (!editingId.value) draft.qty = defaultQty();
   },
 );
+
+/* ===== 装配完成历史（actual_date 非空即已完成，§5.6 不依赖 status 列） ===== */
+/** 默认折叠：标题行的批数/支数合计常看，逐条明细按需展开（同订单表单「订单备注」交互） */
+const historyCollapsed = ref(true);
+const doneHistory = computed<AssemblyBatchRow[]>(() =>
+  (data.value?.list ?? [])
+    .filter((b) => b.actualDate)
+    .sort((a, b) => {
+      const d = String(b.actualDate).localeCompare(String(a.actualDate));
+      return d !== 0 ? d : b.id - a.id;
+    }),
+);
+const doneQtyTotal = computed(() => doneHistory.value.reduce((s, b) => s + (b.qty || 0), 0));
+/** 登记人口径：完成时间常由后来编辑补录，最后更新人即完成登记人；从未编辑过则为录入人 */
+function registrant(row: AssemblyBatchRow): string {
+  return row.updaterName || row.creatorName || '—';
+}
+function minuteText(v: string | Date | null | undefined): string {
+  if (!v) return '—';
+  const s = typeof v === 'string' ? v : v.toISOString();
+  return s.slice(0, 16).replace('T', ' ');
+}
 
 /** 本批录入后该边别已录量是否超过订单数（超装配允许，仅提示） */
 const overAssembled = computed(() => {
@@ -294,7 +352,7 @@ function startEdit(row: AssemblyBatchRow) {
 }
 
 async function onSubmit() {
-  if (!props.orderProductId) return;
+  if (!orderProductId.value) return;
   if (socket.value && !draft.side) {
     ElMessage.warning('该产品含卡口，请选择左/右边别');
     return;
@@ -326,14 +384,13 @@ async function onSubmit() {
       ElMessage.success('批次已更新');
     } else {
       await createAssemblyBatch({
-        orderProductId: props.orderProductId,
+        orderProductId: orderProductId.value,
         side: socket.value ? draft.side : '',
         ...body,
       });
       ElMessage.success('批次已录入');
     }
     await load();
-    emit('changed');
   } finally {
     submitting.value = false;
   }
@@ -353,7 +410,6 @@ async function onRemove(row: AssemblyBatchRow) {
     ElMessage.success('已删除');
     if (editingId.value === row.id) resetDraft();
     await load();
-    emit('changed');
   } finally {
     removingId.value = null;
   }
@@ -366,20 +422,30 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 function dateText(v: string | null): string {
   return v ? String(v).slice(0, 10) : '—';
 }
+function goBack() {
+  router.push('/assembly');
+}
 </script>
 
 <script lang="ts">
-export default { name: 'AssemblyBatchDialog' };
+export default { name: 'AssemblyBatches' };
 </script>
 
 <style scoped lang="scss">
-.bd-body { max-height: 72vh; overflow-y: auto; }
+.form-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 14px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  .form-title { display: flex; align-items: center; gap: 12px; }
+  .title-text { font-size: 16px; font-weight: 600; }
+  .title-sub { color: var(--el-text-color-secondary); font-size: 13px; }
+}
 .bd-head {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding-bottom: 10px; margin-bottom: 10px;
   border-bottom: 1px solid var(--el-border-color-lighter);
-  .bd-model { font-size: 15px; font-weight: 600; }
   .bd-meta { color: var(--el-text-color-secondary); font-size: 13px; }
+  .bd-meta b { color: var(--el-text-color-primary); }
 }
 .bd-sides {
   display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
@@ -397,13 +463,18 @@ export default { name: 'AssemblyBatchDialog' };
     b.bad { color: var(--el-color-danger); }
   }
 }
+/* 完成历史的数量：绿色标示（完成量与分边卡「已完成」同色系） */
+.qty-done { color: var(--el-color-success); font-weight: 600; }
+.bd-section-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; margin: 12px 0 8px;
+  /* 左侧主色竖条模拟标题图标（与订单表单 .section-title 同款） */
+  border-left: 4px solid var(--el-color-primary); padding-left: 8px;
+  .bd-section-sub { color: var(--el-text-color-secondary); font-weight: 400; font-size: 12px; }
+}
 .bd-form {
-  margin-top: 12px; background: var(--el-fill-color-lighter);
+  background: var(--el-fill-color-lighter);
   border-radius: 6px; padding: 10px 12px 4px;
-  .bd-form-title {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 13px; font-weight: 600; margin-bottom: 8px;
-  }
   .bd-unit { margin-left: 4px; color: var(--el-text-color-secondary); font-size: 12px; }
 }
 .bd-hint {

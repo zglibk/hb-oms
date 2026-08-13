@@ -102,20 +102,18 @@
       </app-table>
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
-
-    <batch-dialog v-model="batchVisible" :order-product-id="batchProductId" @changed="load" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onActivated, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { Search, Tools, InfoFilled } from '@element-plus/icons-vue';
 import { getAssemblyList, type AssemblyGroupRow } from '@/api/assembly';
 import { loadDict } from '@/composables/useDict';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
-import BatchDialog from './components/BatchDialog.vue';
 
 const loading = ref(false);
 const list = ref<AssemblyGroupRow[]>([]);
@@ -152,12 +150,10 @@ async function load() {
 load();
 onActivated(load);
 
-/* ===== 批次弹窗 ===== */
-const batchVisible = ref(false);
-const batchProductId = ref<number | null>(null);
+/* ===== 装配批次子页面（原弹窗，2026-08-13 改版）；返回本页时 onActivated 自动刷新 ===== */
+const router = useRouter();
 function openBatches(row: AssemblyGroupRow) {
-  batchProductId.value = row.orderProductId;
-  batchVisible.value = true;
+  router.push({ name: 'AssemblyBatches', query: { orderProductId: row.orderProductId } });
 }
 
 /* ===== 展示辅助 ===== */

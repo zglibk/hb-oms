@@ -74,6 +74,13 @@ const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '订单录入', activeMenu: '/order' },
       },
       {
+        // 装配批次由弹窗改子页面（2026-08-13）：头信息+分边卡+批次表+完成历史+录入表单弹窗塞不下
+        path: 'assembly/batches',
+        name: 'AssemblyBatches',
+        component: () => import('@/views/assembly/batches.vue'),
+        meta: { title: '装配批次', activeMenu: '/assembly' },
+      },
+      {
         path: 'outsource/form',
         name: 'OutsourceForm',
         component: () => import('@/views/outsource/form.vue'),
