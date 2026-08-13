@@ -85,6 +85,8 @@ const MIGRATIONS: string[] = [
   'migration-stock-balance-import-export.sql',
   // 免装配口径下线 + 入库单班组改车间（注释订正）+ assembly_workshop 字典补装九
   'migration-assembly-required-workshop9.sql',
+  // 订单产品级「产品要求描述」（配套开关列在 migration-field-switches.sql 追加）
+  'migration-product-requirement.sql',
 ];
 
 /**
@@ -188,6 +190,8 @@ const expectedColumns = [
   't_order_product.customer_drawing_no',
   // 分体出货标记（形态由组构成推导；分体行同样走装配与闸门）
   't_order_product.is_split',
+  // 产品要求描述（客户对该产品的特殊要求，随业务字段开关显隐）
+  't_order_product.product_requirement',
   // 供应商主数据（外发加工商等下拉来源）
   't_supplier.supplier_code',
   't_supplier.supplier_name',
@@ -223,6 +227,7 @@ const expectedColumns = [
   't_system_config.customer_drawing_no_enabled',
   // 呆滞品颜色（独立于全局颜色开关）
   't_system_config.dull_stock_color_enabled',
+  't_system_config.product_requirement_enabled',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）

@@ -267,6 +267,7 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   product_name     VARCHAR(128) NULL COMMENT '产品名称',
   product_type     VARCHAR(128) NULL COMMENT '产品类型多选组合（字典序逗号拼接，如 standard,self_lock；含 socket 触发卡口规则）',
   rail_section     VARCHAR(32)  NULL COMMENT '轨道节数：two_section二节轨 three_section三节轨',
+  product_requirement VARCHAR(255) NULL COMMENT '产品要求描述（客户对该产品的特殊要求，如测试标准/包装要求；可由业务字段开关全局停用录入与展示）',
   is_split         TINYINT      NOT NULL DEFAULT 0 COMMENT '分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品；出货形态由组构成推导；分体行同样走装配环节与入库闸门）',
   dimension_mm     INT          NULL COMMENT '规格（mm 统一口径，1英寸=25mm）',
   dimension_raw    VARCHAR(32)  NULL COMMENT '规格原始录入值',
@@ -373,6 +374,7 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   color_field_enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '颜色字段启用开关：1启用 0停用（停用后全系统隐藏颜色的录入与展示，不删除既有数据）',
   customer_drawing_no_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
   dull_stock_color_enabled TINYINT     NOT NULL DEFAULT 1 COMMENT '呆滞品颜色字段启用开关：1启用 0停用；**独立于 color_field_enabled**，只管呆滞品管理页的颜色列与建档弹窗',
+  product_requirement_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '产品要求描述字段启用开关：1启用 0停用（停用后隐藏订单产品级「产品要求描述」的录入与展示，不删除既有数据）',
   -- 元数据
   updated_by              INT          NULL COMMENT '最后更新人ID',
   updater_name            VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',

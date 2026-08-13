@@ -216,6 +216,20 @@
               </div>
             </el-form-item>
 
+            <el-form-item label="产品要求描述">
+              <el-switch
+                :model-value="form.productRequirementEnabled === 1"
+                active-text="启用"
+                inactive-text="停用"
+                @update:model-value="(v: any) => (form.productRequirementEnabled = v ? 1 : 0)"
+              />
+              <div class="switch-hint switch-hint--block">
+                订单产品级的特殊要求文本（如测试标准、包装要求），录订单时随产品行登记。
+                影响范围：订单表单（「轨道节数」与「规格」之间）、订单列表展开行，
+                以及总计划导出的「产品要求描述」列。
+              </div>
+            </el-form-item>
+
             <el-form-item>
               <el-button size="small"
                 v-permission="'config:update'"
@@ -393,6 +407,7 @@ const form = reactive<SystemConfig>({
   colorFieldEnabled: 1,
   customerDrawingNoEnabled: 1,
   dullStockColorEnabled: 1,
+  productRequirementEnabled: 1,
 });
 
 /* 裁剪组件 ref */

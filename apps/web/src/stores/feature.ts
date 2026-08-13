@@ -22,6 +22,7 @@ const DEFAULTS: FeatureFlags = {
   customerDrawingNoEnabled: true,
   // 呆滞品颜色**独立开关**，与 colorFieldEnabled 互不影响
   dullStockColorEnabled: true,
+  productRequirementEnabled: true,
 };
 
 type FeatureState = FeatureFlags & {

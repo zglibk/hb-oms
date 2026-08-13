@@ -251,6 +251,11 @@
                 <el-input v-model="p.itemNo" placeholder="如 53#" />
               </el-form-item>
             </el-col>
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-form-item label="产品名称" label-width="80px">
+                <el-input v-model="p.productName" />
+              </el-form-item>
+            </el-col>
             <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
                  可在「系统配置 → 业务字段」全局停用；停用时只是不显示输入框，
                  p.customerDrawingNo 仍随表单原样回传，不洗掉历史值 -->
@@ -260,11 +265,6 @@
                   v-model="p.customerDrawingNo" placeholder="客户来图图号"
                   :spellcheck="false" :formatter="upperFmt" :parser="upperFmt"
                 />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="产品名称" label-width="80px">
-                <el-input v-model="p.productName" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -280,6 +280,14 @@
                 <el-select v-model="p.railSection" style="width: 100%" @change="onRailSectionChange(p)">
                   <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
+              </el-form-item>
+            </el-col>
+            <!-- 产品要求描述：客户对该产品的特殊要求（如测试标准/包装要求）。
+                 可在「系统配置 → 业务字段」全局停用；停用时只是不显示输入框，
+                 p.productRequirement 仍随表单原样回传，不洗掉历史值 -->
+            <el-col v-if="productRequirementEnabled" :xs="24" :sm="12" :md="6">
+              <el-form-item label="产品要求描述" label-width="98px">
+                <el-input v-model="p.productRequirement" maxlength="255" placeholder="客户对该产品的特殊要求（选填）" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -453,7 +461,7 @@ import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
-const { colorEnabled, customerDrawingNoEnabled } = useFeatureFlags();
+const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
 
 /** 出口国家下拉（el-select-v2）的字段映射：落库值与展示值都用中文国名 */
 const COUNTRY_FIELD_PROPS = { label: 'name', value: 'name' };
@@ -498,6 +506,8 @@ interface ProductRow {
   customerDrawingNo: string;
   productName: string;
   railSection: string;
+  /** 产品要求描述（客户对该产品的特殊要求；随业务字段开关显隐） */
+  productRequirement: string;
   /** 分体出货：0整品 1分体（形态由部件组构成推导，见模板注释） */
   isSplit: number;
   dimensionRaw: string;
@@ -538,6 +548,7 @@ const emptyProduct = (): ProductRow => ({
   customerDrawingNo: '',
   productName: '',
   railSection: 'three_section',
+  productRequirement: '',
   isSplit: 0,
   dimensionRaw: '',
   dimensionUnit: 'mm',
@@ -664,6 +675,7 @@ async function init() {
           customerDrawingNo: p.customerDrawingNo ?? '',
           productName: p.productName ?? '',
           railSection: p.railSection ?? 'three_section',
+          productRequirement: p.productRequirement ?? '',
           isSplit: p.isSplit ?? 0,
           dimensionRaw: p.dimensionRaw ?? (p.dimensionMm != null ? String(p.dimensionMm) : ''),
           dimensionUnit: p.dimensionUnit ?? 'mm',
@@ -1023,6 +1035,7 @@ async function onSave() {
       productName: p.productName || undefined,
       productType: p._types.join(','),
       railSection: p.railSection,
+      productRequirement: p.productRequirement || undefined,
       isSplit: p.isSplit,
       dimensionMm: p.dimensionMm ?? undefined,
       dimensionRaw: p.dimensionRaw || undefined,

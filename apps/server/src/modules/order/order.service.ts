@@ -221,6 +221,7 @@ export class OrderService {
           productName: p.productName ?? null,
           productType: productType || null,
           railSection: p.railSection ?? null,
+          productRequirement: p.productRequirement ?? null,
           isSplit,
           dimensionMm: p.dimensionMm ?? null,
           dimensionRaw: p.dimensionRaw ?? null,

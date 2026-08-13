@@ -764,6 +764,7 @@ export class OrderLedgerService {
       `SELECT p.id            AS productId,
               p.product_name  AS productName,
               p.customer_drawing_no AS customerDrawingNo,
+              p.product_requirement AS productRequirement,
               p.sheet_material AS sheetMaterial,
               p.is_new_order  AS isNewOrder,
               p.remark        AS remark,
@@ -792,8 +793,11 @@ export class OrderLedgerService {
     const statusText = (s: number) =>
       s === ORDER_STATUS.FINISHED ? '已完结' : s === ORDER_STATUS.CANCELLED ? '已作废' : '进行中';
     // 业务字段开关：停用的字段整列不输出（同台账导出）
-    const { colorFieldEnabled: colorEnabled, customerDrawingNoEnabled: cdnEnabled } =
-      await this.systemConfig.getFeatureFlags();
+    const {
+      colorFieldEnabled: colorEnabled,
+      customerDrawingNoEnabled: cdnEnabled,
+      productRequirementEnabled: reqEnabled,
+    } = await this.systemConfig.getFeatureFlags();
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('总计划');
@@ -810,6 +814,8 @@ export class OrderLedgerService {
       ...(cdnEnabled ? [{ header: '客户图号', width: 14 }] : []),
       { header: '产品类型', width: 12 },
       { header: '产品类别', width: 10 },
+      // 位置贴表单语义：节数（产品类别）之后、规格之前
+      ...(reqEnabled ? [{ header: '产品要求描述', width: 20 }] : []),
       { header: '部件组', width: 12 },
       { header: '规格', width: 12 },
       { header: '订单数量', width: 10 },
@@ -870,6 +876,7 @@ export class OrderLedgerService {
         ...(cdnEnabled ? [ex.customerDrawingNo ?? ''] : []),
         labels('product_type', f.productType),
         label('rail_section', f.railSection),
+        ...(reqEnabled ? [ex.productRequirement ?? ''] : []),
         labels('part_group_type', r.partGroups.map((g) => g.groupType ?? '').filter(Boolean)),
         f.dimensionText ?? '',
         f.orderQty,

@@ -54,9 +54,10 @@
               <table class="expand-grid">
                 <thead>
                   <tr>
-                    <!-- 客户图号可在「系统配置 → 业务字段」全局停用，th 与 td 必须同条件 -->
+                    <!-- 客户图号/产品要求描述可在「系统配置 → 业务字段」全局停用，th 与 td 必须同条件 -->
                     <th v-if="customerDrawingNoEnabled">客户图号</th>
                     <th>产品型号</th>
+                    <th v-if="productRequirementEnabled">产品要求描述</th>
                     <th>规格</th>
                     <th>数量</th>
                     <th>支数</th>
@@ -75,6 +76,7 @@
                         <!-- 分体出货：该行按部件组构成分体包装出货（不组装成整品），只在首组行标一次 -->
                         <el-tag v-if="p.isSplit && gi === 0" size="small" type="warning" disable-transitions>分体</el-tag>
                       </td>
+                      <td v-if="productRequirementEnabled && gi === 0" :rowspan="p.partGroups.length">{{ p.productRequirement || '—' }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dimensionText(p) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.orderQty }} {{ unitLabel(p.unit) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.qtyPcs }}</td>
@@ -186,7 +188,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
-const { customerDrawingNoEnabled } = useFeatureFlags();
+const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const loading = ref(false);

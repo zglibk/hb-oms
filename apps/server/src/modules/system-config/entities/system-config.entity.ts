@@ -94,6 +94,16 @@ export class SystemConfig {
   })
   dullStockColorEnabled: number;
 
+  /** 「产品要求描述」启用开关（订单产品级的特殊要求文本，2026-08-13 加） */
+  @Column({
+    name: 'product_requirement_enabled',
+    type: 'tinyint',
+    default: 1,
+    comment:
+      '产品要求描述字段启用开关：1启用 0停用（停用后隐藏订单产品级「产品要求描述」的录入与展示，不删除既有数据）',
+  })
+  productRequirementEnabled: number;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

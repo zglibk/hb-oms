@@ -282,6 +282,8 @@ export interface SystemConfig {
   customerDrawingNoEnabled: number;
   /** 「呆滞品颜色」字段启用开关：1启用 0停用（**独立于** colorFieldEnabled） */
   dullStockColorEnabled: number;
+  /** 「产品要求描述」字段启用开关：1启用 0停用（订单产品级的特殊要求文本） */
+  productRequirementEnabled: number;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;
@@ -302,6 +304,8 @@ export interface FeatureFlags {
    * 与订单/外发口径要不要颜色是两回事，故各管各的（见后端实体注释）。
    */
   dullStockColorEnabled: boolean;
+  /** 「产品要求描述」字段是否启用（订单产品级的特殊要求文本） */
+  productRequirementEnabled: boolean;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */

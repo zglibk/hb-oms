@@ -67,6 +67,10 @@ export class OrderProduct {
   @Column({ name: 'rail_section', type: 'varchar', length: 32, nullable: true, comment: '轨道节数：two_section二节轨 three_section三节轨' })
   railSection: string | null;
 
+  /** 产品要求描述：客户对该产品的特殊要求（可由「系统配置 → 业务字段」全局停用，§5.7） */
+  @Column({ name: 'product_requirement', type: 'varchar', length: 255, nullable: true, comment: '产品要求描述（客户对该产品的特殊要求，如测试标准/包装要求；可由业务字段开关全局停用录入与展示）' })
+  productRequirement: string | null;
+
   @Column({
     name: 'is_split',
     type: 'tinyint',

@@ -40,6 +40,7 @@ export class SystemConfigService {
         colorFieldEnabled: 1,
         customerDrawingNoEnabled: 1,
         dullStockColorEnabled: 1,
+        productRequirementEnabled: 1,
       });
       row = await this.repo.save(row);
     }
@@ -64,6 +65,7 @@ export class SystemConfigService {
     colorFieldEnabled: boolean;
     customerDrawingNoEnabled: boolean;
     dullStockColorEnabled: boolean;
+    productRequirementEnabled: boolean;
   }> {
     const row = await this.get();
     return {
@@ -71,6 +73,7 @@ export class SystemConfigService {
       customerDrawingNoEnabled: Number(row.customerDrawingNoEnabled) === 1,
       // 呆滞品颜色独立开关，不与 colorFieldEnabled 相与——两者各管各的（见实体注释）
       dullStockColorEnabled: Number(row.dullStockColorEnabled) === 1,
+      productRequirementEnabled: Number(row.productRequirementEnabled) === 1,
     };
   }
 

@@ -79,6 +79,12 @@ export class CreateOrderProductDto {
 
   @IsOptional() @IsString() @MaxLength(32) railSection?: string;
 
+  /** 产品要求描述（客户对该产品的特殊要求；随业务字段开关显隐，停用时前端仍原样回传保历史值） */
+  @IsOptional()
+  @IsString({ message: '产品要求描述必须是文本' })
+  @MaxLength(255, { message: '产品要求描述不能超过 255 个字符' })
+  productRequirement?: string;
+
   /** 分体出货：1=该行按部件组构成分体包装出货（不组装成整品），形态由组构成推导 */
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1], { message: '分体出货标记只能是 0 或 1' }) isSplit?: number;
 

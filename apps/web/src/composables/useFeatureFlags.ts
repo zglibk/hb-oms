@@ -15,6 +15,7 @@ export function useFeatureFlags(): {
   colorEnabled: ComputedRef<boolean>;
   customerDrawingNoEnabled: ComputedRef<boolean>;
   dullStockColorEnabled: ComputedRef<boolean>;
+  productRequirementEnabled: ComputedRef<boolean>;
 } {
   const store = useFeatureStore();
   return {
@@ -27,5 +28,7 @@ export function useFeatureFlags(): {
      * **独立于 colorEnabled**，呆滞品页只认这一个，不要再与全局颜色开关相与。
      */
     dullStockColorEnabled: computed(() => store.dullStockColorEnabled),
+    /** 「产品要求描述」是否启用（订单产品级的特殊要求文本） */
+    productRequirementEnabled: computed(() => store.productRequirementEnabled),
   };
 }
