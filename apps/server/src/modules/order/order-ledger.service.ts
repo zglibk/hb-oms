@@ -8,10 +8,8 @@ import {
   formatDimension,
   formatProductModel,
   hasSocket,
-  needsAssemblyGate,
   needsOutsource,
   productLevelModel,
-  splitParts,
   UNIT_OPTIONS,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
@@ -109,8 +107,6 @@ export interface LedgerRow {
   railSection: string | null;
   /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
   isSplit: number;
-  /** 免装配：分体且单部件出货（如内轨）无装配环节，装配三列不适用（null/空） */
-  assemblyExempt: boolean;
   dimensionMm: number | null;
   dimensionText: string | null;
   /** 订单数量与单位（原始录入口径，展示用） */
@@ -156,10 +152,10 @@ export interface LedgerRow {
    * 显示 0 会和"已全部回厂"混淆，界面与导出一律留空。
    */
   outsourceOwed: number | null;
-  /** 装配完成量（actual_date 非空的批次合计）；免装配行为 null（不适用，界面与导出留空） */
-  assembledQty: number | null;
-  /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配）；免装配行为 null */
-  assemblyPendingQty: number | null;
+  /** 装配完成量（actual_date 非空的批次合计）；分体行同样要装配，一律出数字 */
+  assembledQty: number;
+  /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
+  assemblyPendingQty: number;
   /** 最早未完成装配批次的计划完成日 */
   nextAssemblyPlanDate: string | null;
   /** 是否逾期：交期已过且仍欠发货 */
@@ -359,8 +355,6 @@ export class OrderLedgerService {
         productType: r.productType ?? null,
         railSection: r.railSection ?? null,
         isSplit: Number(r.isSplit) || 0,
-        // 免装配判定同样依赖组构成，attachPartGroups 里回填
-        assemblyExempt: false,
         dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
         dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm) || null,
         orderQty: Number(r.orderQty) || 0,
@@ -482,16 +476,11 @@ export class OrderLedgerService {
       r.outsourceOwed = outsourced
         ? groups.reduce((s, g) => s + g.qtyPcs, 0) - r.returnedQty
         : null;
-      // 分体行：型号后缀由组构成推导（外中轨/内轨…）；分体且单部件出货无装配环节，
-      // 装配两列不适用给 null（沿外发欠数对 surface=none 的处理），界面与导出留空
+      // 分体行：型号后缀由组构成推导（外中轨/内轨…）。装配两列不再特判——
+      // 分体行（含内轨等单部件行）同样要装配自身小零件，与整品行一样出数字
       if (r.isSplit) {
         const groupTypes = groups.map((g) => g.groupType);
         r.productModel = productLevelModel(r.itemNo, r.productType, 1, groupTypes, r.railSection);
-        r.assemblyExempt = !needsAssemblyGate(1, splitParts(groupTypes, r.railSection));
-        if (r.assemblyExempt) {
-          r.assembledQty = null;
-          r.assemblyPendingQty = null;
-        }
       }
     });
   }
@@ -690,8 +679,7 @@ export class OrderLedgerService {
         // 不外发的产品留空而不是 0——0 会被读成「已全部回厂」
         r.outsourceOwed ?? '',
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
-        // 免装配行（分体单部件出货）留空而不是 0——0 会被读成「一支都没装」
-        r.assembledQty ?? '',
+        r.assembledQty,
         r.qtyPcs,
         r.inQty,
         r.productionOwed,
@@ -895,8 +883,7 @@ export class OrderLedgerService {
         joinGroupField(r, (g) => g.materialThickness),
         r.returnedQty,
         labels('assembly_workshop', r.assemblyWorkshops),
-        // 免装配行（分体单部件出货）留空而不是 0——同台账导出口径
-        r.assembledQty ?? '',
+        r.assembledQty,
         r.inQty,
         productionOwed,
         r.outQty,

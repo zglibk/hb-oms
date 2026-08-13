@@ -25,18 +25,15 @@
               <el-date-picker v-model="form.docDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <template v-if="isInbound">
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="班组">
-                <el-input v-model="form.workTeam" placeholder="选填，供追溯" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="机台号">
-                <el-input v-model="form.machineNo" placeholder="选填，供追溯" />
-              </el-form-item>
-            </el-col>
-          </template>
+          <el-col v-if="isInbound" :xs="24" :sm="12" :md="6">
+            <!-- 展示名 2026-08-13 由「班组」改为「车间」，字段仍是 workTeam（命名稳定性约定）；
+                 选项走 assembly_workshop 字典（装一~装九），历史自由文本值原样回显 -->
+            <el-form-item label="车间">
+              <el-select v-model="form.workTeam" clearable placeholder="选填，供追溯" style="width: 100%">
+                <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :md="12">
             <el-form-item label="备注">
               <el-input v-model="form.remark" />
@@ -61,9 +58,7 @@
           </el-table-column>
           <el-table-column :label="limitLabel" width="110" align="center">
             <template #default="{ row }">
-              <!-- 免装配行（分体单部件出货）入库不受装配额度约束，额度数字没有意义 -->
-              <el-tag v-if="isInbound && row.exempt" size="small" type="info" disable-transitions>免装配</el-tag>
-              <span v-else :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
+              <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
             </template>
           </el-table-column>
           <el-table-column label="数量(支)" width="130" align="center">
@@ -99,7 +94,7 @@
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
         <span class="picker-tip">
-          {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录；「免装配」行（分体单部件出货）不受此限' : '「当前结存」为出库上限' }}
+          {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
         </span>
       </div>
       <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="52vh"
@@ -116,8 +111,7 @@
         <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
         <el-table-column :label="limitLabel" width="110" align="center">
           <template #default="{ row }">
-            <el-tag v-if="isInbound && row.exempt" size="small" type="info" disable-transitions>免装配</el-tag>
-            <span v-else :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
+            <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -148,6 +142,7 @@ import {
   tagTypeOf,
   sideLabel,
 } from '@/constants/dict';
+import { loadDict } from '@/composables/useDict';
 
 const route = useRoute();
 const router = useRouter();
@@ -167,8 +162,6 @@ interface ItemRow {
   dimensionText: string | null;
   /** 入库=可入库量，出库=当前结存 */
   limit: number;
-  /** 免装配（分体且单部件出货）：入库不受装配额度约束，可入库量不适用 */
-  exempt?: boolean;
   quantity: number;
   remark: string;
 }
@@ -177,9 +170,14 @@ const form = reactive({
   bizType: (route.query.bizType as string) || FINISHED_BIZ_TYPE.INBOUND,
   docDate: new Date().toISOString().slice(0, 10),
   workTeam: '',
-  machineNo: '',
   remark: '',
   items: [] as ItemRow[],
+});
+
+/** 车间下拉（字典 assembly_workshop：装一~装九），与装配批次同一套选项 */
+const workshopDict = ref<Array<{ label: string; value: string }>>([]);
+loadDict('assembly_workshop').then((rows: any[]) => {
+  workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
 const rules: FormRules = {
@@ -192,10 +190,7 @@ const isInbound = computed(
 const bizLabel = computed(() => labelOf(FINISHED_BIZ_TYPE_OPTIONS, form.bizType));
 const limitLabel = computed(() => (isInbound.value ? '可入库量' : '当前结存'));
 const totalQty = computed(() => form.items.reduce((s, it) => s + (it.quantity || 0), 0));
-// 入库方向上免装配行不受额度约束，不参与超限提示；出库方向结存上限对它照常有效
-const overRows = computed(() =>
-  form.items.filter((it) => !(isInbound.value && it.exempt) && (it.quantity || 0) > it.limit),
-);
+const overRows = computed(() => form.items.filter((it) => (it.quantity || 0) > it.limit));
 
 async function init() {
   if (!editId.value) return;
@@ -206,7 +201,6 @@ async function init() {
     form.bizType = doc.bizType;
     form.docDate = String(doc.docDate).slice(0, 10);
     form.workTeam = doc.workTeam ?? '';
-    form.machineNo = doc.machineNo ?? '';
     form.remark = doc.remark ?? '';
     form.items = (doc.items ?? []).map((it) => ({
       orderProductId: it.orderProductId,
@@ -232,16 +226,13 @@ async function refreshLimits() {
   if (!form.items.length) return;
   const opts = await getStockGroupOptions({ bizType: form.bizType, limit: 500 });
   const map = new Map<string, number>();
-  const exemptMap = new Map<number, boolean>();
   opts.forEach((o) => {
-    exemptMap.set(o.orderProductId, !!o.assemblyExempt);
     o.sides.forEach((s) =>
       map.set(`${o.orderProductId}#${s.side}`, isInbound.value ? s.quota : s.stockQty),
     );
   });
   form.items.forEach((it) => {
     it.limit = map.get(`${it.orderProductId}#${it.side}`) ?? 0;
-    it.exempt = exemptMap.get(it.orderProductId) ?? false;
   });
 }
 
@@ -277,7 +268,6 @@ async function loadOptions() {
         dimensionText: o.dimensionText,
         qtyPcs: o.qtyPcs,
         limit: isInbound.value ? s.quota : s.stockQty,
-        exempt: !!o.assemblyExempt,
         quantity: 0,
         remark: '',
       })) as any,
@@ -307,9 +297,7 @@ function confirmPick() {
       productModel: o.productModel,
       dimensionText: o.dimensionText,
       limit: o.limit,
-      exempt: o.exempt,
-      // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）；
-      // 免装配行（入库方向）没有额度上限，数量留给用户填
+      // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）
       quantity: o.limit > 0 ? o.limit : 1,
       remark: '',
     });
@@ -335,7 +323,6 @@ async function onSave() {
     bizType: form.bizType,
     docDate: form.docDate,
     workTeam: form.workTeam || undefined,
-    machineNo: form.machineNo || undefined,
     remark: form.remark || undefined,
     items: form.items.map((it, i) => ({
       orderProductId: it.orderProductId,

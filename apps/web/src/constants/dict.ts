@@ -104,10 +104,9 @@ export {
   partGroupParts,
   defaultGroupTypes,
   expandPartRows,
-  // 分体出货（形态由部件组构成推导；单部件分体行免装配闸门；仅三节轨可开）
+  // 分体出货（形态由部件组构成推导；仅三节轨可开。分体行同样走装配与闸门）
   splitParts,
   splitSuffix,
-  needsAssemblyGate,
   productLevelModel,
   canSplitShipping,
   isGroupTypeAvailable,

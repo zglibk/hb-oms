@@ -9,7 +9,6 @@ import {
   STOCK_DIRECTION,
   hasSocket,
   isValidSide,
-  needsAssemblyGate,
   sideLabel,
 } from '@hb-oms/shared';
 import { FinishedDoc } from './entities/finished-doc.entity';
@@ -295,8 +294,6 @@ export class FinishedStockService {
         color: r.color ?? null,
         qtyPcs: Number(r.qtyPcs) || 0,
         socket,
-        // 免装配（分体且单部件出货）：入库不受装配额度约束，前端显示「免装配」而非额度
-        assemblyExempt: snap ? !needsAssemblyGate(snap.isSplit, snap.splitParts) : false,
         sides,
       };
     });
@@ -602,7 +599,8 @@ export class FinishedStockService {
           direction: directionOf(dto.bizType),
           docDate: dto.docDate,
           workTeam: dto.workTeam ?? null,
-          machineNo: dto.machineNo ?? null,
+          // 机台号已停用录入（2026-08-13）：新单恒空，历史列保留
+          machineNo: null,
           originDocId: null,
           status: FINISHED_DOC_STATUS.DRAFT,
           remark: dto.remark ?? null,
@@ -741,7 +739,7 @@ export class FinishedStockService {
       await mgr.getRepository(FinishedDoc).update(id, {
         docDate: dto.docDate,
         workTeam: dto.workTeam ?? null,
-        machineNo: dto.machineNo ?? null,
+        // 机台号已停用录入：编辑**不触碰**该列——历史草稿上的旧值保留，不被洗成 null
         remark: dto.remark ?? null,
         ...auditOnUpdate(user),
       });
@@ -925,35 +923,24 @@ export class FinishedStockService {
         else byProductSide.set(k, { productId: item.orderProductId, side: item.side, qty, item });
       });
       if (byProductSide.size) {
-        // 免装配行（分体且单部件出货，如内轨）没有装配环节，不受闸门约束（§5.6），
-        // 从额度校验中剔除（结存不得为负等其余守卫照旧）；
-        // 快照缺失时按「受闸门约束」处理，宁可误拦不可漏拦
-        const snaps = await this.productSnapshot.load(
+        // 所有产品行（含分体单部件行如内轨）一律受闸门约束
+        // ——原「免装配剔除」已于 2026-08-13 按使用部门反馈取消（内轨也要装配自身小零件）
+        const gated = [...byProductSide.values()];
+        const quota = await loadInboundQuota(
           mgr,
-          [...byProductSide.values()].map((v) => v.productId),
-          { includeCancelledOrder: true },
+          gated.map((v) => ({ orderProductId: v.productId, side: v.side })),
+          { lock: true },
         );
-        const gated = [...byProductSide.values()].filter((v) => {
-          const s = snaps.get(v.productId);
-          return !s || needsAssemblyGate(s.isSplit, s.splitParts);
-        });
-        if (gated.length) {
-          const quota = await loadInboundQuota(
-            mgr,
-            gated.map((v) => ({ orderProductId: v.productId, side: v.side })),
-            { lock: true },
-          );
-          for (const v of gated) {
-            const q = quota.get(quotaKey(v.productId, v.side));
-            const allowed = q?.quota ?? 0;
-            if (v.qty > allowed) {
-              const st = v.side ? `（${sideLabel(v.side)}边）` : '';
-              throw new BadRequestException(
-                `产品「${v.item.productModel ?? ''}」${st}本次入库 ${v.qty} 支，` +
-                  `超过可入库量 ${allowed} 支（已完成装配 ${q?.assembledQty ?? 0} 支、已入库 ${q?.inboundQty ?? 0} 支）；` +
-                  `请先在装配管理补录已完成的装配批次`,
-              );
-            }
+        for (const v of gated) {
+          const q = quota.get(quotaKey(v.productId, v.side));
+          const allowed = q?.quota ?? 0;
+          if (v.qty > allowed) {
+            const st = v.side ? `（${sideLabel(v.side)}边）` : '';
+            throw new BadRequestException(
+              `产品「${v.item.productModel ?? ''}」${st}本次入库 ${v.qty} 支，` +
+                `超过可入库量 ${allowed} 支（已完成装配 ${q?.assembledQty ?? 0} 支、已入库 ${q?.inboundQty ?? 0} 支）；` +
+                `请先在装配管理补录已完成的装配批次`,
+            );
           }
         }
       }

@@ -103,8 +103,10 @@
         <el-table-column label="数量(支)" width="90" align="center">
           <template #default="{ row }">{{ row.totalQty ?? 0 }}</template>
         </el-table-column>
-        <el-table-column label="班组/机台" width="110" align="center">
-          <template #default="{ row }">{{ [row.workTeam, row.machineNo].filter(Boolean).join('/') || '—' }}</template>
+        <!-- 展示名 2026-08-13 由「班组/机台」改为「车间」（机台号停用录入）；
+             workTeam 现存字典值，历史自由文本班组名回落原样显示 -->
+        <el-table-column label="车间" width="90" align="center">
+          <template #default="{ row }">{{ workshopLabel(row.workTeam) }}</template>
         </el-table-column>
         <el-table-column label="制单人" prop="creatorName" width="90" align="center">
           <template #default="{ row }">{{ row.creatorName || '—' }}</template>
@@ -177,6 +179,17 @@ import {
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import { loadDict } from '@/composables/useDict';
+
+/** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
+const workshopDict = ref<Array<{ label: string; value: string }>>([]);
+loadDict('assembly_workshop').then((rows: any[]) => {
+  workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+});
+function workshopLabel(v: string | null): string {
+  if (!v) return '—';
+  return workshopDict.value.find((o) => o.value === v)?.label ?? v;
+}
 
 const router = useRouter();
 const loading = ref(false);

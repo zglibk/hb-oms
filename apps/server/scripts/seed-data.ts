@@ -140,6 +140,7 @@ export const DICTS: Array<{
   { dict_type: 'assembly_workshop', dict_label: '装六', dict_value: 'assembly_6', sort: 6 },
   { dict_type: 'assembly_workshop', dict_label: '装七', dict_value: 'assembly_7', sort: 7 },
   { dict_type: 'assembly_workshop', dict_label: '装八', dict_value: 'assembly_8', sort: 8 },
+  { dict_type: 'assembly_workshop', dict_label: '装九', dict_value: 'assembly_9', sort: 9 },
 
   // 表面处理颜色（常用值，可在字典管理维护）
   { dict_type: 'surface_color', dict_label: '黑色', dict_value: '黑色', sort: 1 },

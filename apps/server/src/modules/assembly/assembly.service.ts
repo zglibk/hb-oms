@@ -8,11 +8,8 @@ import {
   formatDimension,
   hasSocket,
   isValidSide,
-  needsAssemblyGate,
   productLevelModel,
   sideLabel,
-  splitParts,
-  splitSuffix,
 } from '@hb-oms/shared';
 import { AssemblyBatch } from './entities/assembly-batch.entity';
 import {
@@ -42,10 +39,12 @@ export interface AssemblyGroupRow {
   productName: string | null;
   productType: string | null;
   railSection: string | null;
-  /** 分体出货：0整品 1分体（形态由部件组构成推导，已体现在 productModel 后缀） */
+  /**
+   * 分体出货：0整品 1分体（形态由部件组构成推导，已体现在 productModel 后缀）。
+   * 分体行（含单部件行如内轨）同样要装配自身小零件，与整品行一样录批次、受闸门
+   * ——原「免装配」口径已于 2026-08-13 按使用部门反馈取消。
+   */
   isSplit: number;
-  /** 免装配：分体且单部件出货（如内轨）无装配环节——禁建批次，界面打标 */
-  assemblyExempt: boolean;
   dimensionText: string | null;
   /**
    * 该产品各装配批次的车间（去重）。车间已下沉批次级——订单环节不再安排装配车间，
@@ -210,7 +209,6 @@ export class AssemblyService {
         productType: r.product_type ?? null,
         railSection: r.rail_section ?? null,
         isSplit,
-        assemblyExempt: !needsAssemblyGate(isSplit, splitParts(groupTypes, r.rail_section ?? null)),
         dimensionText: this.dimensionText(r),
         assemblyWorkshops: this.splitList(r.workshops),
         deliveryDate: this.dateText(r.delivery_date),
@@ -275,32 +273,19 @@ export class AssemblyService {
     );
 
     return {
-      product: product
-        ? {
-            ...product,
-            socket,
-            assemblyExempt: !needsAssemblyGate(product.isSplit, product.splitParts),
-          }
-        : null,
+      product: product ? { ...product, socket } : null,
       sides,
       list,
     };
   }
 
   /** 可入库量查询（§4.4 闸门口径，入库表单前置展示；只读不加锁） */
-  async findInboundQuota(query: QueryInboundQuotaDto): Promise<InboundQuotaRow & { exempt: boolean }> {
-    const row = await loadOneInboundQuota(
+  async findInboundQuota(query: QueryInboundQuotaDto): Promise<InboundQuotaRow> {
+    return loadOneInboundQuota(
       this.dataSource.manager,
       query.orderProductId,
       query.side ?? '',
     );
-    // 免装配行（分体且单部件出货）不受闸门约束：额度数字对它没有意义，
-    // 前端据 exempt 显示「免装配」而不是 0 额度
-    const snap = await this.productSnapshot.loadOne(null, query.orderProductId, {
-      includeCancelledOrder: true,
-    });
-    const exempt = snap ? !needsAssemblyGate(snap.isSplit, snap.splitParts) : false;
-    return { ...row, exempt };
   }
 
   /* ==================== 批次增删改 ==================== */
@@ -314,13 +299,8 @@ export class AssemblyService {
       const snap = await this.productSnapshot.loadOne(mgr, dto.orderProductId);
       if (!snap) throw new BadRequestException('订单产品不存在，或所属订单已作废');
 
-      // 免装配行（分体且单部件出货，如内轨）没有装配环节：名义批次会摻水装配统计，
-      // 且该行入库本就免闸门，批次没有任何用途，直接拒绝
-      if (!needsAssemblyGate(snap.isSplit, snap.splitParts)) {
-        throw new BadRequestException(
-          `产品「${snap.productModel ?? ''}」为分体出货的${splitSuffix(snap.splitParts)}，无装配环节，不能创建装配批次（该行成品入库不受装配闸门约束）`,
-        );
-      }
+      // 分体行（含内轨等单部件行）同样要装配自身小零件，与整品行一样录批次
+      // ——原「免装配禁建批次」限制已于 2026-08-13 按使用部门反馈取消
 
       const side = this.assertSide(dto.side, snap.productType, snap.productModel);
       const planStartDate = this.normalizeDate(dto.planStartDate);

@@ -63,9 +63,12 @@ export class CreateFinishedDocDto {
   @IsDateString({}, { message: '单据日期格式不正确' })
   docDate: string;
 
+  /**
+   * 车间（字典 assembly_workshop 值，如 assembly_1）。字段名按命名稳定性约定
+   * 保持 workTeam / work_team 不变——2026-08-13 由自由文本「班组」改为车间下拉。
+   * 机台号（machineNo）已同日停用录入：DTO 不再接收，历史列保留（编辑时不覆写）。
+   */
   @IsOptional() @IsString() @MaxLength(64) workTeam?: string;
-
-  @IsOptional() @IsString() @MaxLength(64) machineNo?: string;
 
   @IsOptional() @IsString() @MaxLength(255) remark?: string;
 

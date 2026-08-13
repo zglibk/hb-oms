@@ -178,17 +178,8 @@ export function splitSuffix(parts: string[]): string {
   return `${parts.map((p) => PART_CHAR[p] ?? '').join('')}轨`;
 }
 
-/**
- * 该产品行是否受装配入库闸门（Σ已完成装配 − Σ已入库）约束：
- * 分体且只含单一部件（如内轨）→ 没有装配环节，免闸门（否则永远入不了库）；
- * 整品、或分体但含 ≥2 部件（外中轨仍要把外轨+中轨组装）→ 照常受闸门约束。
- */
-export function needsAssemblyGate(
-  isSplit: boolean | number | null | undefined,
-  parts: string[],
-): boolean {
-  return !(Boolean(isSplit) && parts.length === 1);
-}
+// 「免装配」判定 needsAssemblyGate 已于 2026-08-13 整体下线（使用部门反馈：
+// 内轨等单部件分体行同样要装配自身小零件）——所有产品行一律走装配环节、受入库闸门约束。
 
 const label = (opts: Array<{ label: string; value: string }>) =>
   new Map(opts.map((o) => [o.value, o.label]));

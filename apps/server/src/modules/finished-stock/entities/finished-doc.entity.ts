@@ -48,10 +48,11 @@ export class FinishedDoc {
   @Column({ name: 'doc_date', type: 'date', comment: '单据日期' })
   docDate: string;
 
-  @Column({ name: 'work_team', type: 'varchar', length: 64, nullable: true, comment: '班组（入库单可选，供追溯）' })
+  @Column({ name: 'work_team', type: 'varchar', length: 64, nullable: true, comment: '车间（字典 assembly_workshop 值；入库单可选，供追溯。2026-08-13 前为自由文本班组名，历史值原样保留）' })
   workTeam: string | null;
 
-  @Column({ name: 'machine_no', type: 'varchar', length: 64, nullable: true, comment: '机台号（入库单可选，供追溯）' })
+  /** 机台号已于 2026-08-13 停用录入（列保留供历史单据追溯，新单不再写入） */
+  @Column({ name: 'machine_no', type: 'varchar', length: 64, nullable: true, comment: '机台号（已于 2026-08-13 停用录入，列保留供历史单据追溯）' })
   machineNo: string | null;
 
   @Index('idx_origin_doc')

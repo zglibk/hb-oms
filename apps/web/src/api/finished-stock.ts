@@ -42,7 +42,9 @@ export interface FinishedDocRow {
   /** 1入库 -1出库 */
   direction: number;
   docDate: string;
+  /** 车间（字典 assembly_workshop 值；2026-08-13 前是自由文本班组名，历史值原样返回） */
   workTeam: string | null;
+  /** 机台号已停用录入，仅历史单据有值 */
   machineNo: string | null;
   originDocId: number | null;
   status: number;
@@ -108,8 +110,6 @@ export interface StockGroupOption {
   /** 产品支数（订单数口径） */
   qtyPcs: number;
   socket: boolean;
-  /** 免装配：分体且单部件出货（如内轨），入库不受装配额度约束 */
-  assemblyExempt: boolean;
   sides: StockSideInfo[];
 }
 
@@ -136,8 +136,8 @@ export interface FinishedItemPayload {
 export interface FinishedDocPayload {
   bizType: string;
   docDate: string;
+  /** 车间（字典 assembly_workshop 值）；机台号已停用录入，payload 不再携带 */
   workTeam?: string;
-  machineNo?: string;
   remark?: string;
   items: FinishedItemPayload[];
 }

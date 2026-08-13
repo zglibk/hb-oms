@@ -4,7 +4,6 @@ import {
   ORDER_STATUS,
   formatDimension,
   productLevelModel,
-  splitParts,
 } from '@hb-oms/shared';
 
 /**
@@ -42,14 +41,12 @@ export interface ProductSnapshot {
   productModel: string | null;
   /** 产品名称（订单表单可填、按图号带工艺带出；同货号多行的辅助区分） */
   productName: string | null;
-  /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
-  isSplit: number;
   /**
-   * 该行实际出货部件并集（外→中→内固定序；整品行也如实给出组覆盖的部件）。
-   * 与 isSplit 一起喂共享包 `needsAssemblyGate`——分体且单部件（如内轨）无装配环节，
-   * 成品入库免装配闸门。
+   * 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品）。
+   * 分体行（含内轨等单部件行）同样要装配自身小零件——原「免装配」口径已于
+   * 2026-08-13 按使用部门反馈取消，快照的 `splitParts` 字段随之删除。
    */
-  splitParts: string[];
+  isSplit: number;
   /** 规格展示文本（如 350mm），由共享包 formatDimension 统一拼装 */
   dimensionText: string | null;
   /** 表面处理（字典 surface_type，none = 不外发） */
@@ -153,7 +150,6 @@ export class ProductSnapshotService {
         ),
         productName: r.product_name ?? null,
         isSplit,
-        splitParts: splitParts(groupTypes, r.rail_section ?? null),
         dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),
         surfaceType: r.surface_type ?? null,
         productType: r.product_type ?? null,
