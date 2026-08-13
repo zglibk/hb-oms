@@ -29,9 +29,19 @@
     </el-card>
 
     <el-card shadow="never">
-      <div class="tip-bar">
-        <el-icon><InfoFilled /></el-icon>
-        库存只由出入库单据的<b>确认</b>与<b>红字冲销</b>驱动，不能直接修改；结存按「产品 + 边别 + 批次」分行。
+      <div class="toolbar">
+        <el-button size="small" v-permission="'stock-balance:import'" :icon="Upload" @click="importVisible = true">
+          批量导入
+        </el-button>
+        <el-button
+          size="small" v-permission="'stock-balance:export'" :icon="Download"
+          :loading="exporting" @click="onExport"
+        >导出到Excel</el-button>
+        <span class="tip">
+          <el-icon><InfoFilled /></el-icon>
+          库存只由出入库单据的<b>确认</b>与<b>红字冲销</b>驱动，<b>不能直接修改</b>；结存按「产品 + 边别 + 批次」分行。
+          「批量导入」搬的是<b>上线前的存量</b>，会生成一张<b>期初单</b>入账，同样有单可查、可红字冲销。
+        </span>
         <span class="total">当前筛选结存合计 <b>{{ totalQty }}</b> 支</span>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
@@ -71,18 +81,46 @@
       </app-table>
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
+
+    <import-dialog
+      v-model="importVisible"
+      title="批量导入成品库存"
+      tip="用于把上线前手工账上的成品库存搬进系统。导入会生成一张「期初单」并立即生效，由单据驱动库存——不是直接改库存数，录错可红字冲销。只能挂打开了「期初补录」开关的订单"
+      confirm-text="即将导入文件「{n}」，系统会生成一张<b>期初单并立即生效</b>，相应产品的库存随之增加。<br/>同一份文件重复导入会<b>重复加库存</b>，请确认没有导过。"
+      :download-template="downloadStockBalanceTemplate"
+      :do-import="doImport"
+      :summarize="summarizeImport"
+      @done="reload"
+    >
+      <template #options>
+        <div class="import-opt">
+          <span class="import-opt__label">期初单日期</span>
+          <el-date-picker v-model="importDocDate" type="date" value-format="YYYY-MM-DD" size="small" :clearable="false" style="width: 160px" />
+          <el-input v-model="importRemark" size="small" placeholder="整单备注（选填）" style="width: 240px" />
+        </div>
+      </template>
+    </import-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onActivated, reactive, ref } from 'vue';
-import { Search, InfoFilled } from '@element-plus/icons-vue';
-import { getStockBalance, type BalanceRow } from '@/api/finished-stock';
+import { ElMessage } from 'element-plus';
+import { Search, InfoFilled, Upload, Download } from '@element-plus/icons-vue';
+import {
+  getStockBalance,
+  downloadStockBalanceExport,
+  downloadStockBalanceTemplate,
+  importStockBalance,
+  type BalanceRow,
+} from '@/api/finished-stock';
 import { SIDE_OPTIONS, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
+import ImportDialog from '@/components/ImportDialog.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -123,6 +161,32 @@ function reload() {
 load();
 onActivated(load);
 
+/* ===== 导出 ===== */
+const { exporting, exportWithConfirm } = useExcelExport();
+
+const onExport = () => exportWithConfirm({
+  name: '库存',
+  // 实查而不是用页面上的 total：筛选条件改了但没点「查询」时，页面上的数还是上一次的
+  getCount: async () => (await getStockBalance({ ...query, page: 1, pageSize: 1 })).total,
+  run: () => downloadStockBalanceExport({ ...query }),
+});
+
+/* ===== 批量导入（生成期初单，由单据驱动库存） ===== */
+const importVisible = ref(false);
+const importDocDate = ref(new Date().toISOString().slice(0, 10));
+const importRemark = ref('');
+
+const doImport = (file: File) =>
+  importStockBalance(file, importDocDate.value, importRemark.value || undefined);
+
+function summarizeImport(r: any): string {
+  // 期初可能让某些订单交清而自动完结（§3.1），不提示的话用户会以为订单状态被人偷改了
+  if (r?.finished?.length) {
+    ElMessage.success(`订单 ${r.finished.join('、')} 已交清，自动完结`);
+  }
+  return `导入成功：已生成期初单 ${r?.docNo ?? ''}，${r?.total ?? 0} 行库存已入账`;
+}
+
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';
   return opts.find((o) => o.value === v)?.label ?? v;
@@ -134,12 +198,20 @@ export default { name: 'StockBalance' };
 </script>
 
 <style scoped lang="scss">
-.tip-bar {
-  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12px; color: var(--el-text-color-secondary);
-  b { color: var(--el-text-color-primary); }
-  .total { margin-left: auto; }
+.toolbar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+  .tip {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 12px; color: var(--el-text-color-secondary);
+    b { color: var(--el-text-color-primary); }
+  }
+  .total { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); }
   .total b { color: var(--el-color-primary); font-size: 14px; }
+}
+/* 导入弹窗的额外选项（期初单日期 + 整单备注） */
+.import-opt {
+  display: flex; align-items: center; gap: 8px;
+  &__label { font-size: 13px; color: var(--el-text-color-regular); }
 }
 .pager { margin-top: 12px; }
 .num-ok { color: var(--el-color-success); font-weight: 600; }

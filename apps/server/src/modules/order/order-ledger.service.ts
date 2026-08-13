@@ -24,6 +24,7 @@ import {
   OUTBOUND_FAMILY_SQL,
 } from './order-owed.util';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
 /**
  * ===== 订单跟踪台账：本系统的核心产出（设计文档 §5.1）=====
@@ -615,9 +616,8 @@ export class OrderLedgerService {
     }
 
     // 表面处理与装配车间落库的是字典值（如 spray / assembly_2），导出必须转中文
-    const dict = await this.loadDictLabels(['surface_type', 'assembly_workshop']);
-    const label = (type: string, v: string | null) =>
-      v ? (dict.get(`${type}:${v}`) ?? v) : '';
+    const dict = await loadDictLabels(this.dataSource, ['surface_type', 'assembly_workshop']);
+    const label = dictLabeler(dict);
     const unitLabel = (v: string | null) =>
       UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
     // 「颜色」字段停用时整列不输出——台账页也不显示，导出留一列空值只是噪音
@@ -790,11 +790,10 @@ export class OrderLedgerService {
       extraRows.map((r) => [Number(r.productId), r]),
     );
 
-    const dict = await this.loadDictLabels([
+    const dict = await loadDictLabels(this.dataSource, [
       'surface_type', 'assembly_workshop', 'product_type', 'rail_section', 'part_group_type',
     ]);
-    const label = (type: string, v: string | null) =>
-      v ? (dict.get(`${type}:${v}`) ?? v) : '';
+    const label = dictLabeler(dict);
     /** 多值（逗号串或数组）逐个转中文，用 / 并列 */
     const labels = (type: string, vs: string[] | string | null) => {
       const arr = Array.isArray(vs) ? vs : this.splitList(vs);
@@ -937,16 +936,6 @@ export class OrderLedgerService {
     ws.getCell(`A${ws.rowCount + 2}`).value =
       `导出时间：${today} | 产品行数：${planRows.length} | 部件组行数：${list.length}`;
     return Buffer.from(await wb.xlsx.writeBuffer());
-  }
-
-  /** 字典值 → 中文标签，键为 `${dictType}:${dictValue}`（只取启用项） */
-  private async loadDictLabels(types: string[]): Promise<Map<string, string>> {
-    const rows: any[] = await this.dataSource.query(
-      `SELECT dict_type, dict_value, dict_label FROM t_dict
-        WHERE dict_type IN (${types.map(() => '?').join(',')}) AND status = 1`,
-      types,
-    );
-    return new Map(rows.map((r) => [`${r.dict_type}:${r.dict_value}`, r.dict_label]));
   }
 
   /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */

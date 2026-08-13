@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { downloadXlsx } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /** 出入库明细行（锚定订单**产品行** + 边别） */
@@ -154,7 +155,7 @@ export const getFinishedDocList = (params: FinishedDocQuery) =>
 export const getFinishedDocDetail = (id: number) =>
   request.get<any, FinishedDocRow & { totalQty: number }>(`/api/finished-stock/${id}`);
 
-export const getStockBalance = (params: {
+export interface StockBalanceQuery {
   page?: number;
   pageSize?: number;
   keyword?: string;
@@ -162,7 +163,37 @@ export const getStockBalance = (params: {
   side?: string;
   surfaceType?: string;
   onlyInStock?: boolean;
-}) => request.get<any, PageResult<BalanceRow>>('/api/finished-stock/balance', { params });
+}
+
+export const getStockBalance = (params: StockBalanceQuery) =>
+  request.get<any, PageResult<BalanceRow>>('/api/finished-stock/balance', { params });
+
+/** 导出当前筛选的成品库存（服务端按筛选全量导出，超 5000 行会拒绝） */
+export const downloadStockBalanceExport = (params: StockBalanceQuery) =>
+  downloadXlsx('/api/finished-stock/balance/export', params, '成品库存.xlsx');
+
+/** 下载导入模板：已预填可录期初的产品行，只需填「期初数量」列 */
+export const downloadStockBalanceTemplate = () =>
+  downloadXlsx('/api/finished-stock/balance/import-template', undefined, '成品库存导入模板.xlsx');
+
+/**
+ * 批量导入成品库存。
+ *
+ * 落地成**一张 FGO 期初单并立即生效**，由单据驱动余额——库存不会被直接改写
+ * （§5.6：确认是唯一驱动余额的入口）。整批全有全无：任一行有问题会整批回滚，
+ * 逐行原因经 err.errors 回传，err.failedCount / err.totalCount 给出计数。
+ */
+export const importStockBalance = (file: File, docDate: string, remark?: string) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('docDate', docDate);
+  if (remark) fd.append('remark', remark);
+  return request.post<any, { total: number; docNo: string; itemCount: number } & FinishSyncResult>(
+    '/api/finished-stock/balance/import',
+    fd,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+};
 
 /**
  * 可出入库的订单产品行选项（成品出入库建单 + 期初录入共用）。

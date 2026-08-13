@@ -140,7 +140,7 @@
     <a class="toc-item toc-sub" data-key="成品入库 确认 草稿" onclick="jump('ch4-1')">4.1 成品入库</a>
     <a class="toc-item toc-sub" data-key="销售出库 库存不足" onclick="jump('ch4-2')">4.2 销售出库</a>
     <a class="toc-item toc-sub" data-key="做错了 红字冲销 部分冲销" onclick="jump('ch4-3')">4.3 单据做错了：红字冲销</a>
-    <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次" onclick="jump('ch4-4')">4.4 成品库存</a>
+    <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次 批量导入 导出 模板 期初单 搬账 上线" onclick="jump('ch4-4')">4.4 成品库存</a>
     <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除 批量导入 导出 模板 回滚" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
@@ -548,6 +548,53 @@
       <h2 class="section__title" id="ch4-4">4.4 成品库存</h2>
       <p>菜单位置：<strong>物料管理 → 成品库存</strong>。按<strong>产品</strong>（卡口分左右）显示当前结存，可按客户、订单、型号等筛选。</p>
       <div class="alert alert--info">这一页<strong>只能看不能改</strong>：成品结存是出入库单据算出来的，改数一律走入库单/出库单/红字冲销。这一点和「部件台账」不同——部件台账可以手工调整。</div>
+
+      <h3>导出到 Excel</h3>
+      <p>
+        工具栏的<strong>「导出到Excel」</strong>导的是<strong>当前筛选结果</strong>（不是当前这一页，也不是全部数据），
+        末尾带一行合计。想导全部就先把筛选条件清空。导出前会先<strong>数一下有多少条</strong>再让你确认；
+        单次最多 5000 行，超了会提示缩小范围——不会悄悄少导几行。
+        <strong>一条都没有时会直接告诉你「没有可导出的记录」，不会再多问一遍要不要导。</strong>
+      </p>
+
+      <h3>批量导入（上线搬账用）</h3>
+      <p>
+        系统刚上线时，手工账上已经有一批成品库存要搬进来。一条条录太慢，可以用工具栏的<strong>「批量导入」</strong>。
+      </p>
+      <div class="alert alert--info">
+        <strong>导入不是「直接改库存数」。</strong>它会生成一张<strong>期初单并立即生效</strong>，库存是被这张单据顶上去的——
+        跟你手工录入库单是同一个道理。这张单在「成品出入库」里查得到，录错了可以<strong>红字冲销</strong>。
+        本系统的库存永远只由单据驱动，没有任何一个入口能绕过单据改数。
+      </div>
+      <p><strong>操作步骤</strong>：</p>
+      <ul>
+        <li>
+          点「批量导入」→ <strong>下载导入模板</strong>。模板里<strong>已经把可以录期初的产品行全部填好了</strong>
+          （订单号、客户、型号、规格、边别、订单数都带出来），你<strong>只需要在「期初数量」列填数</strong>，
+          没有库存的行留空或整行删掉就行。
+        </li>
+        <li>
+          <strong>前两列（产品行ID、订单号）不要改</strong>。系统靠它们认这批货挂在哪张订单的哪个产品上，
+          导入时还会把两者对一遍，对不上直接报错——这样即使排序时不小心只排了一列，也不会静默导到别的订单上。
+        </li>
+        <li>含卡口的产品在模板里<strong>已经拆成左、右两行</strong>，分别填数量即可，边别列不用自己动。</li>
+        <li>模板附了一页<strong>「填写说明」</strong>，每列怎么填都写在里面。</li>
+      </ul>
+      <div class="alert alert--warn">
+        <strong>只有打开了「期初补录」开关的订单才会出现在模板里。</strong>
+        期初是<strong>不走装配闸门</strong>的（上线前的存量本来就没在系统里装配过），
+        要是允许挂到正常订单上，就等于绕过「已装配 − 已入库」凭空加库存。<br />
+        正常订单的成品请走<strong>「成品出入库 → 成品入库」</strong>，先完成装配再入库；
+        如果这确实是上线前的历史订单，先到「订单管理」把它的<strong>「期初补录」</strong>开关打开，再重新下载模板。
+      </div>
+      <ul>
+        <li>
+          <strong>有一行不合格，整批都不会入库</strong>。系统会告诉你<strong>哪一行、错在哪、一共几条有问题</strong>，
+          数据<strong>整批回滚</strong>。按提示改完整个文件重新上传即可，不用担心前面的行被导过了。
+        </li>
+        <li><strong>同一份文件不要导入两次</strong>：每次导入都会生成一张新的期初单，库存会被加第二遍。真导重了就把多出来的那张单红字冲销掉。</li>
+      </ul>
+
       <p>单号前缀速查：</p>
       <table class="field-table">
         <thead><tr><th>前缀</th><th>单据</th></tr></thead>

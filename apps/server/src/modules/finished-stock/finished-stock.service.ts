@@ -5,6 +5,7 @@ import {
   FINISHED_BIZ_TYPE,
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
+  SIDE_OPTIONS,
   STOCK_DIRECTION,
   hasSocket,
   isValidSide,
@@ -33,6 +34,17 @@ import {
   ProductSnapshotService,
 } from '../../common/services/product-snapshot.service';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
+import { SystemConfigService } from '../system-config/system-config.service';
+import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import {
+  EXPORT_ROW_LIMIT,
+  addTipsSheet,
+  cellString,
+  createWorkbook,
+  importRejected,
+  loadFirstSheet,
+  styleSheet,
+} from '../../common/utils/excel.util';
 
 /** 单据类型 → 采番前缀（设计文档 §4.7：期初走 FGO 序列） */
 function prefixOf(bizType: string): string {
@@ -56,6 +68,9 @@ export class FinishedStockService {
     // 成品锚产品行，故读产品级快照（部件组级快照留给外发用）
     private readonly productSnapshot: ProductSnapshotService,
     private readonly numberGenerator: NumberGeneratorService,
+    // 「颜色」是可停用的业务字段（§5.7），导出列随开关增减；导出文件由服务端生成，
+    // 前端的列显隐管不到，故这里也要读一次开关
+    private readonly systemConfig: SystemConfigService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -285,6 +300,293 @@ export class FinishedStockService {
         sides,
       };
     });
+  }
+
+  /* ==================== 成品库存导入 / 导出 ==================== */
+
+  /**
+   * 导出当前筛选的成品库存（结存）。
+   *
+   * **直接复用 `findBalance`，不为导出另写聚合 SQL**——两份 SQL 迟早分叉，
+   * 届时「页面 100、导出 98」最难查（同台账导出口径，§9-2e）。
+   */
+  async exportBalance(query: QueryBalanceDto): Promise<Buffer> {
+    const all = await this.findBalance({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
+    // 空结果一律拒绝，不给一张只有表头的空表——拿去对账最危险（§4.3）
+    if (!all.list.length) {
+      throw new BadRequestException('当前筛选条件下没有库存数据可导出，请调整筛选条件后重试');
+    }
+    if (all.list.length > EXPORT_ROW_LIMIT) {
+      throw new BadRequestException(
+        `当前筛选结果 ${all.total} 行，超过单次导出上限 ${EXPORT_ROW_LIMIT} 行，请缩小筛选范围后重试`,
+      );
+    }
+
+    const { colorFieldEnabled } = await this.systemConfig.getFeatureFlags();
+    const label = dictLabeler(await loadDictLabels(this.dataSource, ['surface_type']));
+
+    type Row = (typeof all.list)[number];
+    // 列序对齐页面，便于与屏幕上的表并排核对
+    const columns: Array<{ header: string; pick: (r: Row) => string | number; center?: boolean }> = [
+      { header: '货号', pick: (r) => r.itemNo || '', center: true },
+      { header: '产品型号', pick: (r) => r.productModel || '' },
+      { header: '规格', pick: (r) => r.dimensionText || '', center: true },
+      { header: '表面处理', pick: (r) => label('surface_type', r.surfaceType), center: true },
+      // 「颜色」停用时整列不输出——页面也不显示，导出留一列空值只是噪音（§5.7）
+      ...(colorFieldEnabled
+        ? [{ header: '颜色', pick: (r: Row) => r.color || '', center: true }]
+        : []),
+      { header: '边别', pick: (r) => sideLabel(r.side), center: true },
+      { header: '订单号', pick: (r) => r.orderNo || '' },
+      { header: '生产单号', pick: (r) => r.productionNo || '' },
+      { header: '客户', pick: (r) => r.customerName || '' },
+      { header: '批次', pick: (r) => r.batchNo || '', center: true },
+      { header: '结存(支)', pick: (r) => r.quantity, center: true },
+    ];
+
+    const wb = createWorkbook();
+    const ws = wb.addWorksheet('成品库存');
+    ws.columns = columns.map((c) => ({ header: c.header }));
+    all.list.forEach((r) => ws.addRow(columns.map((c) => c.pick(r))));
+
+    // 汇总行**按表头名定位**：颜色列随开关增减，位置写死必错位（§5.7）
+    const totalRow: Array<string | number> = new Array(columns.length).fill('');
+    const put = (header: string, v: string | number) => {
+      const i = columns.findIndex((c) => c.header === header);
+      if (i >= 0) totalRow[i] = v;
+    };
+    put('货号', '合计');
+    put('结存(支)', all.list.reduce((s, r) => s + (r.quantity || 0), 0));
+    ws.addRow(totalRow);
+
+    // styleSheet 必须在写完所有数据行之后调用——自动列宽要量全部单元格
+    styleSheet(ws, {
+      centerColumns: columns.map((c, i) => (c.center ? i + 1 : 0)).filter(Boolean),
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /**
+   * 成品库存导入模板：**预填所有可录期初的产品行**，只留「期初数量」空着让人填。
+   *
+   * 之所以不是一张空表：库存行锚定 `(订单产品行, 边别)`，让人手抄订单号 + 型号再由
+   * 服务端反查，同订单同货号多行时根本分不清是哪一行；预填的「产品行ID」是唯一可靠的
+   * 定位键。上线搬账时对着手工账逐行填数量即可，也不必再回系统查订单号。
+   */
+  async buildBalanceImportTemplate(): Promise<Buffer> {
+    // 与期初录入页的「添加产品」选择器同源：期初只能挂「期初补录」订单
+    const options = await this.findGroupOptions({ onlyOpening: true, limit: 500 });
+
+    const wb = createWorkbook();
+    const ws = wb.addWorksheet('成品库存导入');
+    ws.columns = [
+      { header: '产品行ID*' },
+      { header: '订单号' },
+      { header: '客户' },
+      { header: '生产单号' },
+      { header: '产品型号' },
+      { header: '规格' },
+      { header: '边别' },
+      { header: '订单数(支)' },
+      { header: '期初数量*' },
+      { header: '批次' },
+      { header: '备注' },
+    ];
+    options.forEach((o: any) => {
+      // 含卡口的产品按左右分行——库存本就分边别记账
+      (o.sides ?? []).forEach((s: any) => {
+        ws.addRow([
+          o.orderProductId,
+          o.orderNo || '',
+          o.customerName || '',
+          o.productionNo || '',
+          o.productModel || '',
+          o.dimensionText || '',
+          sideLabel(s.side),
+          o.qtyPcs || 0,
+          '', // 期初数量：留空由人填
+          '',
+          '',
+        ]);
+      });
+    });
+    styleSheet(ws, { centerColumns: [1, 6, 7, 8, 9, 10] });
+
+    addTipsSheet(wb, [
+      ['这张表是做什么的', '把**上线前手工账上的成品库存**批量搬进系统。表里已按「期初补录」订单预填好可录的产品行，你只需要在**期初数量**列填数——没有库存的行留空或删掉即可。'],
+      ['产品行ID', '**必填，请勿修改**。它是系统定位库存挂在哪个订单产品上的唯一依据，改了就会导错订单。若要新增系统里没有的行，请先到「订单管理」补录订单并打开「期初补录」开关，再重新下载模板。'],
+      ['订单号', '**核对用，请勿修改**。导入时会与产品行ID 反查出的订单号比对，对不上直接报错——这样即使 ID 列被误改（比如排序时只排了一列），也不会静默导到别的订单上。'],
+      ['期初数量', '必填，**大于 0 的整数**，单位是**支**（1 套 = 2 支）。留空的行会被跳过，不会导入。'],
+      ['边别', '含卡口的产品已按 左 / 右 拆成两行，请分别填数量；不含卡口的行边别是空的，**不要自己填**。'],
+      ['批次', '选填。同一产品行 + 边别下按批次分开记账；不分批次就留空。同一份文件里「产品行ID + 边别 + 批次」不能重复，重复请自行合并数量。'],
+      ['导入会产生什么', '生成**一张 FGO 期初单并立即生效**，库存随之增加。这张单在「物料管理 → 成品出入库」里可查、录错可**红字冲销**——库存不会被凭空改写，每一笔都有据可查。'],
+      ['为什么只能挂「期初补录」订单', '期初**豁免装配闸门**（上线前的存量没有装配过程）。若允许挂到正常订单上，就等于绕过「已装配 − 已入库」凭空加库存。正常订单的成品请走「成品出入库 → 成品入库」，先完成装配再入库。'],
+      ['导入规则', '整批校验通过才写入；任一行有问题会列出逐行原因并**整批回滚**，不会导入一半。修正后重新上传即可，不会重复计数。'],
+    ]);
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /**
+   * 批量导入成品库存。
+   *
+   * ⚠️ **不直接写 `t_finished_balance`**（§5.6 核心不变式：确认是唯一驱动余额的入口）。
+   * 导入的行汇成一张 FGO 期初单，走 `createOpeningBalance` 由单据驱动余额——
+   * 库存有单可查、录错可红字冲销。直写余额表会让库存与单据流水对不上，
+   * 而余额表本身没有审计字段，届时谁也说不清那个数是怎么来的。
+   *
+   * 校验分两段：这里**逐行收集**全部问题一次性回给用户（Excel 导入的错通常是成片的，
+   * 一次报一条要来回十几趟）；`buildOpeningItems` 的服务端硬校验仍然生效，是兜底。
+   */
+  async importBalanceFromExcel(
+    buffer: Buffer,
+    opts: { docDate?: string; remark?: string },
+    user: CurrentUserPayload,
+  ) {
+    const ws = await loadFirstSheet(buffer);
+    const sideByLabel = new Map(SIDE_OPTIONS.map((o) => [o.label, o.value]));
+
+    /** 先把表读成结构化行，产品行ID 汇总后一次性查快照 */
+    const raw: Array<{
+      rowNo: number;
+      productId: number;
+      orderNoText: string;
+      sideText: string;
+      batchNo: string;
+      qtyText: string;
+      remark: string;
+    }> = [];
+    const errors: string[] = [];
+
+    ws.eachRow((row, idx) => {
+      if (idx === 1) return; // 表头
+      const [idText, orderNoText, , , , , sideText, , qtyText, batchNo, remark] =
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((c) => cellString(row.getCell(c)));
+
+      // 模板是预填的：没填数量的行就是「这行没库存」，跳过而不是报错
+      if (!qtyText) return;
+      if (!idText && !orderNoText) return;
+
+      const at = `第 ${idx} 行`;
+      const productId = Number(idText);
+      if (!idText) {
+        errors.push(`${at}：产品行ID 必填（请勿删除模板的第一列）`);
+        return;
+      }
+      if (!Number.isInteger(productId) || productId <= 0) {
+        errors.push(`${at}：产品行ID「${idText}」不是有效的编号，请勿修改该列`);
+        return;
+      }
+      raw.push({ rowNo: idx, productId, orderNoText, sideText, batchNo, qtyText, remark });
+    });
+
+    if (!raw.length && !errors.length) {
+      throw new BadRequestException(
+        'Excel 中没有填了「期初数量」的行。请在模板的「期初数量」列填上数量后再导入',
+      );
+    }
+
+    const snapshots = await this.productSnapshot.load(
+      null,
+      raw.map((r) => r.productId),
+      { includeCancelledOrder: false },
+    );
+
+    const seen = new Map<string, number>();
+    const items: Array<{
+      orderProductId: number;
+      side: string;
+      batchNo: string;
+      quantity: number;
+      remark?: string;
+    }> = [];
+
+    for (const r of raw) {
+      const at = `第 ${r.rowNo} 行`;
+      const rowErrors: string[] = [];
+      const snap = snapshots.get(r.productId);
+
+      if (!snap) {
+        errors.push(`${at}：产品行ID ${r.productId} 不存在或所属订单已作废，请重新下载模板`);
+        continue;
+      }
+      // 订单号交叉核对：ID 列被误改（如只对一列排序）时不至于静默导到别的订单上
+      if (r.orderNoText && snap.orderNo && r.orderNoText !== snap.orderNo) {
+        errors.push(
+          `${at}：订单号「${r.orderNoText}」与产品行ID ${r.productId} 实际所属的订单`
+            + `「${snap.orderNo}」不一致，请重新下载模板，不要改动前两列`,
+        );
+        continue;
+      }
+      if (snap.orderIsOpening !== 1) {
+        errors.push(
+          `${at}：订单「${snap.orderNo ?? ''}」不是期初补录单，不能录期初。`
+            + '正常订单的成品请走「成品出入库 → 成品入库」（需先完成装配）；'
+            + '若这确实是上线前的历史订单，请到订单管理把它的「期初补录」开关打开',
+        );
+        continue;
+      }
+
+      // 边别：含卡口必须分左右，不含卡口必须留空（与建单同一口径）
+      let side = '';
+      if (r.sideText) {
+        const hit = sideByLabel.get(r.sideText)
+          ?? (SIDE_OPTIONS.some((o) => o.value === r.sideText) ? r.sideText : undefined);
+        if (!hit) rowErrors.push(`边别「${r.sideText}」无效，只能是 左 / 右`);
+        else side = hit;
+      }
+      const socket = hasSocket(snap.productType);
+      if (!rowErrors.length && !isValidSide(side, socket)) {
+        rowErrors.push(
+          socket
+            ? `产品「${snap.productModel ?? ''}」含卡口，必须按 左 / 右 分行填写`
+            : `产品「${snap.productModel ?? ''}」不含卡口，边别必须留空`,
+        );
+      }
+
+      const quantity = Number(r.qtyText);
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        rowErrors.push(`期初数量「${r.qtyText}」必须是大于 0 的整数`);
+      }
+
+      const key = `p${r.productId}#${side}#${r.batchNo}`;
+      const dup = seen.get(key);
+      if (dup) {
+        rowErrors.push(
+          `与第 ${dup} 行重复（同一产品行 + 边别 + 批次），请合并成一行填写`,
+        );
+      }
+
+      if (rowErrors.length) {
+        errors.push(`${at}：${rowErrors.join('；')}`);
+        continue;
+      }
+      seen.set(key, r.rowNo);
+      items.push({
+        orderProductId: r.productId,
+        side,
+        batchNo: r.batchNo,
+        quantity,
+        remark: r.remark || undefined,
+      });
+    }
+
+    if (errors.length) throw importRejected(errors, raw.length);
+    if (!items.length) throw new BadRequestException('Excel 中没有可导入的数据行');
+
+    // 汇成一张期初单：整批一个事务，全有全无（部分成功后用户改完重提会重复加库存）
+    const res = await this.createOpeningBalance(
+      {
+        docDate: opts.docDate || new Date().toISOString().slice(0, 10),
+        remark: opts.remark || '成品库存批量导入',
+        items,
+      } as OpeningFinishedDto,
+      user,
+    );
+    return { total: items.length, ...res };
   }
 
   /* ==================== 建单 / 编辑 ==================== */

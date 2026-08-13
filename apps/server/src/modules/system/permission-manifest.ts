@@ -101,6 +101,10 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
 
   { perm_code: 'stock-balance', perm_name: '成品库存', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
+  // 导入 = 批量搬上线前的存量，落地成一张 FGO 期初单（余额只能由单据驱动，§5.6），
+  // 故它是「能凭空加库存」的写权限，与只读的导出分开授予
+  { perm_code: 'stock-balance:import', perm_name: '批量导入成品库存', perm_type: 2, parent_code: 'stock-balance', sort: 1 },
+  { perm_code: 'stock-balance:export', perm_name: '导出成品库存', perm_type: 2, parent_code: 'stock-balance', sort: 2 },
 
   // 呆滞品管理（2026-08-11 由「成品期初（不挂订单）」拆分独立）：已完结订单剩下的成品，
   // 逐批建档跟踪 期初/入库/出库/结存 四个数。紧挨成品库存，同为成品口径

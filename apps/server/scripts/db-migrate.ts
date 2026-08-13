@@ -81,6 +81,8 @@ const MIGRATIONS: string[] = [
   'migration-stock-import-export.sql',
   // 分体出货：产品行 is_split 标记（三节轨拆「外中轨」+「内轨」分行下单，形态由组构成推导）
   'migration-order-split-shipping.sql',
+  // 成品库存的批量导入导出权限点（仅授权，无表结构变更）
+  'migration-stock-balance-import-export.sql',
 ];
 
 /**

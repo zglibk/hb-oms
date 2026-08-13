@@ -1,4 +1,19 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { FinishedStockService } from './finished-stock.service';
 import {
   CreateFinishedDocDto,
@@ -13,6 +28,8 @@ import {
   RequirePermissions,
 } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { sendXlsx } from '../../common/utils/excel-response.util';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 
 /**
@@ -34,6 +51,47 @@ export class FinishedStockController {
   @RequirePermissions('stock-balance')
   async balance(@Query() query: QueryBalanceDto) {
     return this.service.findBalance(query);
+  }
+
+  /**
+   * 导出当前筛选的成品库存；@SkipTransform 返回文件流。
+   * 与下面两个 balance/* 路由一样，**必须注册在 `:id` 之前**。
+   */
+  @Get('balance/export')
+  @SkipTransform()
+  @RequirePermissions('stock-balance:export')
+  @OperationLog('成品库存', '导出成品库存')
+  async balanceExport(@Query() query: QueryBalanceDto, @Res() res: Response) {
+    const buffer = await this.service.exportBalance(query);
+    sendXlsx(res, buffer, '成品库存.xlsx');
+  }
+
+  /** 下载导入模板（预填可录期初的产品行，只留「期初数量」待填） */
+  @Get('balance/import-template')
+  @SkipTransform()
+  @RequirePermissions('stock-balance:import')
+  async balanceImportTemplate(@Res() res: Response) {
+    const buffer = await this.service.buildBalanceImportTemplate();
+    sendXlsx(res, buffer, '成品库存导入模板.xlsx');
+  }
+
+  /**
+   * 批量导入成品库存：汇成一张 FGO 期初单并立即生效，**由单据驱动余额**
+   * （§5.6：确认是唯一驱动余额的入口，任何地方都不得直接改 t_finished_balance）。
+   * 整批全有全无，失败时 errors 逐行回传。
+   */
+  @Post('balance/import')
+  @RequirePermissions('stock-balance:import')
+  @OperationLog('成品库存', '批量导入成品库存')
+  @UseInterceptors(FileInterceptor('file'))
+  async balanceImport(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('docDate') docDate: string,
+    @Body('remark') remark: string,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('请选择要导入的 Excel 文件');
+    return this.service.importBalanceFromExcel(file.buffer, { docDate, remark }, user);
   }
 
   /**
