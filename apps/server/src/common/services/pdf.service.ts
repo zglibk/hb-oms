@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import puppeteer, { type Browser } from 'puppeteer-core';
+import { PDFDocument, PDFName, PDFNull, PDFNumber } from 'pdf-lib';
 
 /**
  * 打印页 → PDF 渲染服务（服务端出 PDF，前端一键下载，无需打印对话框）。
@@ -39,6 +40,34 @@ const EXECUTABLE_CANDIDATES = [
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
 ];
+
+/**
+ * 给 PDF 设「初始视图缩放 100%」。
+ *
+ * puppeteer 的 `page.pdf()` 没有这个选项——缩放属于**文档打开动作**（PDF 规范的
+ * `/OpenAction`），要在生成后写进目录字典：`[页引用 /XYZ null null 1]`，
+ * 其中 `/XYZ left top zoom` 的 zoom=1 即 100%，left/top 给 null 表示不改动位置。
+ *
+ * ⚠️ 各阅读器对 OpenAction 的尊重程度不同：Adobe Reader / 福昕会按 100% 打开；
+ * Chrome 内置 PDF 查看器**会忽略**它、始终用自己的「适合页宽」。这是查看器行为，
+ * 不是这里没写对——用 Adobe 打开或另存后打开即可验证。
+ *
+ * 处理失败不影响导出：直接回原始 PDF（缩放只是观感，丢了不该让整个导出失败）。
+ */
+async function withInitialZoom100(pdf: Buffer): Promise<Buffer> {
+  try {
+    const doc = await PDFDocument.load(pdf);
+    const [first] = doc.getPages();
+    if (!first) return pdf;
+    doc.catalog.set(
+      PDFName.of('OpenAction'),
+      doc.context.obj([first.ref, PDFName.of('XYZ'), PDFNull, PDFNull, PDFNumber.of(1)]),
+    );
+    return Buffer.from(await doc.save());
+  } catch {
+    return pdf;
+  }
+}
 
 @Injectable()
 export class PdfService implements OnModuleDestroy {
@@ -169,7 +198,7 @@ export class PdfService implements OnModuleDestroy {
         // 用打印页 @page 里的纸张与页边距，避免此处再定义一份、两边漂移
         preferCSSPageSize: true,
       });
-      return Buffer.from(buf);
+      return withInitialZoom100(Buffer.from(buf));
     } finally {
       await page.close().catch(() => undefined);
       this.scheduleIdleClose();

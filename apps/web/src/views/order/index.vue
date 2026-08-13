@@ -134,11 +134,11 @@
                 :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED"
                 @click="openEdit(row)"
               >编辑</el-button>
-              <!-- 生产任务单打印页（A4，可另存 PDF）；已作废订单不该再下发生产，禁用 -->
+              <!-- 生产任务单打印页（A4，可导出 PDF）；已作废订单不该再下发生产，禁用 -->
               <el-button
                 size="small" v-permission.disable="'order:export'" link type="primary" :icon="Printer"
                 :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED"
-                @click="router.push({ path: '/order/print', query: { id: row.id } })"
+                @click="openTaskOrder(row.id)"
               >导出单据</el-button>
               <el-button
                 v-if="row.status === ORDER_STATUS_VALUE.ACTIVE"
@@ -264,6 +264,17 @@ function openCreate() {
 }
 function openEdit(row: OrderItem) {
   router.push({ name: 'OrderForm', query: { id: row.id } });
+}
+
+/**
+ * 生产任务单在**新标签页**打开：单据是拿去打印/存档的，开新页签能留住列表的
+ * 筛选与滚动位置，看完直接关掉即可，不必再返回。
+ * 用 router.resolve 拿 href 而不是手拼路径——生产环境 SPA base 是 `/oms/admin/`，
+ * 手拼会漏掉这段前缀。
+ */
+function openTaskOrder(id: number) {
+  const { href } = router.resolve({ path: '/order/print', query: { id } });
+  window.open(href, '_blank');
 }
 
 /* ===== 展示辅助 ===== */

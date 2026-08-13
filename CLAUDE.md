@@ -512,7 +512,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 |---|---|---|
 | `color_field_enabled` | **颜色**（与「表面处理」配套的业务字段，**非主题色**） | 订单表单、外发件回厂记录（登记页/编辑弹窗/列表）、成品库存列表、台账展开行的「表面处理/颜色」、**台账导出 + 总计划导出**的「颜色」列。**不含呆滞品管理**——那页走下面的独立开关 |
 | `dull_stock_color_enabled` | **呆滞品颜色**（2026-08-11 加，**独立开关**） | 只管呆滞品管理页的颜色列与建档弹窗 |
-| `customer_drawing_no_enabled` | **客户图号**（客户来图图号，**不是**部件组的生产图号 `drawing_no`） | 订单表单、订单列表展开行、**总计划导出**的「客户图号」列 |
+| `customer_drawing_no_enabled` | **客户图号**（客户来图图号，**不是**部件组的生产图号 `drawing_no`） | 订单表单、订单列表展开行、**总计划导出**的「客户图号」列、**生产任务单**（打印页与 PDF）的「客户图号」列 |
 | `product_requirement_enabled` | **产品要求描述**（2026-08-13 加；订单产品级 `t_order_product.product_requirement`，客户对该产品的特殊要求文本） | 订单表单（「轨道节数」与「规格」之间）、订单列表展开行、**总计划导出**的「产品要求描述」列 |
 
 - **语义是「录入与展示」开关，不是数据清理开关**（本节最重要的一条）：停用**不删除**库中既有值，重新开启原样恢复。
@@ -523,6 +523,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - 为此把两个导出的**汇总行改成按表头名定位**（`columns.findIndex(c => c.header === …)`），不再数手写空串——列数会随开关变化，位置写死必错位。**再加可选列时沿用这个写法**。
   - 原生 `<table>` 里加可选列时（订单列表展开行），`<th>` 与 `<td>` 必须挂**同一个条件**，否则 rowspan 结构会整体错位。
 - 前端读取链路：`GET /system/config/features`（仅需登录，§2.1）→ `stores/feature.ts`（**localStorage 缓存**，首屏先用上次的值渲染避免列闪现；接口失败保留缓存值；缺省一律启用）→ `composables/useFeatureFlags.ts`。**布局层统一拉一次**（`layout/index.vue` 的 `onMounted`），页面禁止自己请求；管理员保存配置后页面再拉一次，本人即时生效、他人刷新生效。
+  - ⚠️ **唯一例外：不在 Layout 下的顶层路由**（现役只有生产任务单打印页 `/order/print`）必须**自己确保加载**（`featureStore.loaded ? skip : load()`）。新标签页打开、以及服务端 PDF 渲染都是全新页面上下文，没有 Layout 兜底、localStorage 里也没缓存，不自己拉就会退回默认值「启用」——管理员停用了字段，导出的单据上却照印。
 - **新增字段开关照此模式**（改动点固定 6 处）：迁移 `migration-field-switches.sql` 追加一列 + `01-schema.sql` + entity 列 + DTO `@IsIn([0,1])` + `getFeatureFlags()` 加一个布尔 + `FeatureFlags` 接口/`stores/feature.ts` 的 `DEFAULTS`/`useFeatureFlags()` 各加一项 + 配置页「业务字段」Tab 加一行。store 与 composable 已按键名遍历，加项不用改逻辑。
 - **不要**改成 key-value 配置表——单行表加列在这个体量下更直白，且能给每列写 COMMENT。
 

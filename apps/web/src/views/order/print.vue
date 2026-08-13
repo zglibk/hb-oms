@@ -61,11 +61,14 @@
 
         <!-- ==================== 主表格（一产品行一行） ==================== -->
         <table class="task-table">
+          <!-- 客户图号可在「系统配置 → 业务字段」全局停用：col / th / td / 总计行的
+               colspan **四处必须同条件**，漏一处整张表的列宽与合并就会错位。
+               停用时把它的 10% 让给内容最多的「产品要求描述」列，总宽保持 100% -->
           <colgroup>
             <col style="width: 8%" />
             <col style="width: 12%" />
-            <col style="width: 10%" />
-            <col style="width: 21%" />
+            <col v-if="customerDrawingNoEnabled" style="width: 10%" />
+            <col :style="{ width: customerDrawingNoEnabled ? '21%' : '31%' }" />
             <col style="width: 7.5%" />
             <col style="width: 6%" />
             <col style="width: 8.5%" />
@@ -77,7 +80,7 @@
             <tr>
               <th>货号</th>
               <th>部件<br />编码</th>
-              <th>客户图号</th>
+              <th v-if="customerDrawingNoEnabled">客户图号</th>
               <th>产品要求描述</th>
               <th>尺寸<br />(mm)</th>
               <th>颜色</th>
@@ -92,7 +95,7 @@
               <!-- 相邻同货号行的同值列纵向合并（分体拆行的纸质单形态），span=0 表示被上方合并 -->
               <td v-if="spans.itemNo[i]" :rowspan="spans.itemNo[i]" class="c">{{ r.itemNo || '—' }}</td>
               <td class="c">{{ r.partCode || '—' }}</td>
-              <td class="c">{{ r.customerDrawingNo || '—' }}</td>
+              <td v-if="customerDrawingNoEnabled" class="c">{{ r.customerDrawingNo || '—' }}</td>
               <td v-if="spans.requirement[i]" :rowspan="spans.requirement[i]" class="pre">{{ r.requirement || '—' }}</td>
               <td v-if="spans.dimension[i]" :rowspan="spans.dimension[i]" class="c">{{ r.dimension || '—' }}</td>
               <td v-if="spans.color[i]" :rowspan="spans.color[i]" class="c">{{ r.color || '—' }}</td>
@@ -102,7 +105,8 @@
               <td>{{ r.remark }}</td>
             </tr>
             <tr class="total-row">
-              <td colspan="6" class="c"><b>总计</b></td>
+              <!-- 合并「数量」之前的所有列：停用客户图号时少一列，故 6 → 5 -->
+              <td :colspan="customerDrawingNoEnabled ? 6 : 5" class="c"><b>总计</b></td>
               <td class="c num"><b>{{ totalQty }}</b></td>
               <td colspan="3"></td>
             </tr>
@@ -147,6 +151,8 @@ import {
   type OrderProductItem,
 } from '@/api/order';
 import { readBlobError } from '@/utils/download';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { useFeatureStore } from '@/stores/feature';
 import {
   formatProductTypes,
   formatDimension,
@@ -160,10 +166,13 @@ import { loadDict } from '@/composables/useDict';
  *
  * 模式沿已下线的《电镀发外加工单》打印页（git dc3083b^ outsource/print.vue）：
  * no-print 工具栏 + print-sheet + @media print 收窄页面，纸张改 A4 纵向。
- * 「导出PDF」不引入任何生成库——window.print() 后在打印对话框选「另存为 PDF」，
- * 富文本图文/表格 100% 保真；document.title 设为单据名使默认文件名正确。
+ * 数据来自现有 GET /order/:id（otherReq 富文本已随详情带出）。
+ * 「导出PDF」由服务端渲染本页出 PDF（见 api/order.ts downloadOrderTaskPdf）。
  *
- * 数据全部来自现有 GET /order/:id（otherReq 富文本已随详情带出），无后端改动。
+ * ⚠️ 本页是**顶层路由、不在 Layout 下**（原因见 router/index.ts 注释），因此
+ * §5.7 那条「业务字段开关由布局层统一拉取、页面不要自己请求」在这里**不适用**：
+ * 新标签页打开、以及服务端 PDF 渲染时都没有 Layout，不自己拉一次的话开关会退回
+ * 默认值「启用」——管理员明明停用了客户图号，导出的单据上却仍然印着。
  */
 
 /**
@@ -172,6 +181,10 @@ import { loadDict } from '@/composables/useDict';
  * 抬头必须是营业执照全称；公司更名时改此常量（与电镀加工单先例同约定）。
  */
 const COMPANY_FULL_NAME = '中山市海宝精密五金有限公司';
+
+/** 「客户图号」全局开关（系统配置 → 业务字段）；加载见 init() */
+const { customerDrawingNoEnabled } = useFeatureFlags();
+const featureStore = useFeatureStore();
 
 const route = useRoute();
 const router = useRouter();
@@ -296,7 +309,13 @@ async function init() {
   }
   loading.value = true;
   try {
-    const [res, dict] = await Promise.all([getOrderDetail(id), loadDict('surface_type')]);
+    const [res, dict] = await Promise.all([
+      getOrderDetail(id),
+      loadDict('surface_type'),
+      // 顶层路由没有 Layout 兜底，开关必须自己确保加载（见文件头注释）；
+      // 已加载过则直接跳过，不重复请求
+      featureStore.loaded ? Promise.resolve() : featureStore.load(),
+    ]);
     order.value = res;
     surfaceDict.value = (dict as any[]).map((r) => ({ label: r.dictLabel, value: r.dictValue }));
     // 打印/另存 PDF 的默认文件名取自 document.title
@@ -377,16 +396,21 @@ export default { name: 'OrderPrint' };
  * A4 纵向；高度不固定——富文本长度不定，流式排版由浏览器自动分页。
  * flex 列布局 + 签名栏 margin-top:auto：内容不满一页时签名栏被推到页面底部
  * （对照纸质单）；内容跨页时签名栏自然跟在正文之后。
- * 左右内边距收窄到 6mm，配合 @page margin 让表格更舒展。
+ *
+ * ⚠️ **屏幕纸面必须与打印纸面等高，否则预览是骗人的**：这里 297mm(A4) − 上下
+ * 内边距 7mm×2 = 内容区 283mm，与打印时的 `min-height: 283mm`（padding 归 0、
+ * 由 @page margin 接管）完全一致，签名栏在两种媒体下落点相同。
+ * 改任一处都要同步另一处——先前屏幕 292mm/padding 8mm（内容区 276mm）比打印矮
+ * 7mm，预览里的签名栏就比实际打印低了约一行（2026-08-13 用户实测报出）。
  */
 .print-sheet {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   width: 210mm;
-  min-height: 292mm;
+  min-height: 297mm;
   margin: 0 auto 16px;
-  padding: 8mm 6mm;
+  padding: 7mm 5mm;
   background: #fff;
   box-shadow: 0 3px 18px rgb(0 0 0 / 14%);
   color: #111;
@@ -490,8 +514,9 @@ export default { name: 'OrderPrint' };
     background: #fff !important;
   }
 
-  /* 页边距收窄（打印机不可打印区通常 ≥5mm，再小会被截） */
-  @page { size: A4 portrait; margin: 6mm 5mm; }
+  /* 页边距与屏幕纸面的 padding 保持一致（见 .print-sheet 注释），
+     打印机不可打印区通常 ≥5mm，再小会被截 */
+  @page { size: A4 portrait; margin: 7mm 5mm; }
 
   .print-preview-page,
   .sheet-stage {
@@ -507,9 +532,9 @@ export default { name: 'OrderPrint' };
   .print-sheet {
     width: auto;
     /*
-     * 撑满一页让签名栏贴底：A4 297mm − 上下页边距 12mm = 285mm 可用高度，
-     * 这里取 283mm 留 2mm 余量——设成正好 285mm 时，任何一点渲染舍入都会
-     * 溢出成第二页空白（已实测）。
+     * 撑满一页让签名栏贴底：A4 297mm − 上下页边距 7mm×2 = 283mm 可用高度，
+     * 与屏幕纸面的内容区严格相等（见 .print-sheet 注释）。
+     * 别再往上加——设成正好等于可用高度时，任何一点渲染舍入都会溢出成第二页空白（已实测）。
      */
     min-height: 283mm;
     margin: 0;
