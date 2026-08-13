@@ -205,7 +205,8 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="产品类型">
-              <el-select v-model="form.productTypes" multiple collapse-tags placeholder="可多选" style="width: 100%">
+              <!-- 多选不折叠（2026-08-13）：选了什么要一眼看全，折叠成 +N 反而要点开确认 -->
+              <el-select v-model="form.productTypes" multiple placeholder="可多选" style="width: 100%">
                 <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
@@ -254,9 +255,14 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="单位" prop="unit">
-              <el-select v-model="form.unit" :disabled="hasFlow" style="width: 100%">
-                <el-option v-for="o in UNIT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
+              <!-- 复选框形态的单选（2026-08-13）：勾另一个即切换；点已勾中的不放开——
+                   单位必选其一，不允许空。有流水后禁改的规则不变 -->
+              <el-checkbox
+                v-for="o in UNIT_OPTIONS" :key="o.value"
+                :model-value="form.unit === o.value"
+                :disabled="hasFlow"
+                @change="(v: any) => onUnitCheck(o.value, v)"
+              >{{ o.label }}</el-checkbox>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -305,11 +311,15 @@
           <el-date-picker v-model="flowForm.flowDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="数量" prop="quantity">
-          <el-input-number v-model="flowForm.quantity" :min="1" :precision="0" :controls="false" style="width: 100%" />
-          <div class="hint">单位：{{ flowRow ? unitLabel(flowRow.unit) : '' }}</div>
+          <!-- 单位内嵌在输入框右侧（2026-08-13），不再另起一行文案 -->
+          <el-input-number v-model="flowForm.quantity" :min="1" :precision="0" :controls="false" style="width: 100%">
+            <template #suffix>{{ flowRow ? unitLabel(flowRow.unit) : '' }}</template>
+          </el-input-number>
         </el-form-item>
         <el-form-item label="原因" prop="reason">
+          <!-- 选项随「方向」切换只列本向预设（key 强制重建，避免残留对向高亮）；仍可手输 -->
           <el-select
+            :key="flowForm.direction"
             v-model="flowForm.reason" filterable allow-create default-first-option
             placeholder="可选择或直接输入" style="width: 100%"
           >
@@ -404,8 +414,16 @@ const { dullStockColorEnabled: colorEnabled } = useFeatureFlags();
 const today = () => new Date().toISOString().slice(0, 10);
 const unitLabel = (unit: string) => labelOf(UNIT_OPTIONS, unit);
 
-/** 出入库原因预设（仅前端引导，服务端不做枚举校验，可手输） */
-const flowReasonOptions = ['退货入库', '盘盈入库', '清库处理', '降价销售', '内部领用', '盘亏出库'];
+/**
+ * 出入库原因预设，**按方向分列**（2026-08-13）：入库单只该选入向原因，
+ * 混在一张列表里迟早有人给出库单选上「退货入库」。仅前端引导，
+ * 服务端不做枚举校验（「原因」本质是自由文本），仍可手输。
+ * （flowReasonOptions 依赖 flowForm，定义在下方 flowForm 之后。）
+ */
+const FLOW_REASON_PRESETS: Record<number, string[]> = {
+  [STOCK_DIRECTION.IN]: ['退货入库', '盘盈入库'],
+  [STOCK_DIRECTION.OUT]: ['销售出库', '清库处理', '降价销售', '内部领用', '盘亏出库'],
+};
 
 const loading = ref(false);
 const saving = ref(false);
@@ -523,10 +541,19 @@ const form = reactive({
   surfaceType: 'electrophoresis',
   color: '黑色',
   side: '' as string | undefined,
-  unit: 'piece',
+  // 默认「套」（2026-08-13 使用部门要求；车间盘点习惯按套报数）
+  unit: 'set',
   openingQty: 0,
   remark: '',
 });
+
+/**
+ * 单位复选框的单选语义：勾另一个 → 切换；点掉当前已勾中的 → 忽略。
+ * 单位必选其一，允许取消会出现「两个都没勾」的空档。
+ */
+function onUnitCheck(value: string, checked: unknown) {
+  if (checked) form.unit = value;
+}
 
 /**
  * 客户 / 生产单号**至少填一项**。
@@ -677,6 +704,22 @@ const flowForm = reactive({
   remark: '',
 });
 
+/** 当前方向的原因预设（入向/出向各一列，见 FLOW_REASON_PRESETS） */
+const flowReasonOptions = computed(() => FLOW_REASON_PRESETS[flowForm.direction] ?? []);
+
+// 切方向时，已选的若是**对向预设**就清空（选着「退货入库」切到出库，留着必错）；
+// 手输的自由文本不动——那是用户自己的措辞，方向切换不该吞掉
+watch(() => flowForm.direction, () => {
+  const allPresets = Object.values(FLOW_REASON_PRESETS).flat();
+  if (
+    flowForm.reason
+    && allPresets.includes(flowForm.reason)
+    && !flowReasonOptions.value.includes(flowForm.reason)
+  ) {
+    flowForm.reason = '';
+  }
+});
+
 const flowRules: FormRules = {
   direction: [{ required: true, message: '请选择方向', trigger: 'change' }],
   quantity: [{ required: true, message: '请填写数量', trigger: 'blur' }],
@@ -738,7 +781,6 @@ export default { name: 'DullStock' };
 }
 .pager { margin-top: 12px; }
 .mb12 { margin-bottom: 12px; }
-.hint { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.4; }
 .preview {
   margin: 4px 0 0 90px; font-size: 13px; color: var(--el-color-primary);
   &.bad { color: var(--el-color-danger); }
