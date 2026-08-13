@@ -22,6 +22,8 @@ export interface DashboardOwedRow {
   merchandiser: string | null;
   productionNo: string | null;
   productModel: string | null;
+  /** 规格（mm 统一口径）；界面按查看单位现算 mm/寸 */
+  dimensionMm: number | null;
   deliveryDate: string | null;
   /** 逾期列表＝已逾期天数；临近列表＝距交期天数（今天为 0） */
   days: number;
@@ -38,6 +40,8 @@ export interface DashboardOutsourceRow {
   color: string | null;
   productModel: string | null;
   productionNo: string | null;
+  /** 规格（mm，取自订单产品行；本表快照是展示串，换算不了单位） */
+  dimensionMm: number | null;
   /** 订单号快照：生产单号为空时的回落显示值（同外发列表口径） */
   orderNo: string | null;
   returnQty: number;

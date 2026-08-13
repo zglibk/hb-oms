@@ -114,6 +114,16 @@
       </app-stat-card>
     </div>
 
+    <!-- 规格查看单位：一个开关同时管两张卡的「规格」列（同一屏两个开关会让人以为各管各的），
+         只影响展示不改库，口径与台账/订单列表一致（1 英寸 = 25mm，寸取整） -->
+    <div class="dim-unit-bar" v-if="canDashboard">
+      <span class="dim-unit-label">规格单位</span>
+      <el-radio-group v-model="dimViewUnit" size="small">
+        <el-radio-button :value="DIMENSION_UNIT.MM">mm</el-radio-button>
+        <el-radio-button :value="DIMENSION_UNIT.INCH">寸</el-radio-button>
+      </el-radio-group>
+    </div>
+
     <el-row :gutter="16" class="list-row" v-if="canDashboard">
       <!-- 左：逾期未发货 / 临近交期 合并成一张页签卡。
            两者都是「交期视角的待办」，并排两张卡既占地方又要来回扫；
@@ -171,6 +181,9 @@
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
               </el-table-column>
               <el-table-column label="产品型号" prop="productModel" min-width="120" show-overflow-tooltip />
+              <el-table-column :label="dimColLabel" width="90" align="center">
+                <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
+              </el-table-column>
               <el-table-column label="交期" width="95" align="center">
                 <template #default="{ row }">
                   <span :class="{ 'num-overdue': isOverdueTab }">{{ row.deliveryDate || '—' }}</span>
@@ -236,6 +249,9 @@
               </el-table-column>
               <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip />
               <el-table-column label="产品型号" prop="productModel" min-width="130" show-overflow-tooltip />
+              <el-table-column :label="dimColLabel" width="90" align="center">
+                <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
+              </el-table-column>
               <el-table-column label="表面处理" width="90" align="center">
                 <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
               </el-table-column>
@@ -259,6 +275,7 @@ import { useRouter } from 'vue-router';
 import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
+import { DIMENSION_UNIT, formatDimensionView } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useAutoScroll } from '@/composables/useAutoScroll';
 
@@ -269,6 +286,15 @@ import SevenSegNumber from '@/components/SevenSegNumber.vue';
 const router = useRouter();
 const userStore = useUserStore();
 const loading = ref(false);
+
+/** 规格查看单位：仅影响本页两张列表的展示，不改库（与台账页、订单列表同款口径） */
+const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
+const dimColLabel = computed(() =>
+  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
+);
+function dimText(mm: number | null | undefined) {
+  return formatDimensionView(mm, dimViewUnit.value) || '—';
+}
 
 const summary = ref<DashboardSummary>({
   cards: { activeOrders: 0, productionOwed: 0, deliveryOwed: 0, overdueOrders: 0 },
@@ -627,6 +653,12 @@ export default { name: 'HomeDashboard' };
   flex-wrap: wrap;
   margin: 4px 0 16px;
 }
+/* 规格单位切换：贴着两张列表卡的右上角（与台账页同款控件） */
+.dim-unit-bar {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; margin-bottom: 8px;
+}
+.dim-unit-label { color: var(--el-text-color-regular); white-space: nowrap; font-size: 13px; }
 .list-row { margin-bottom: 0; }
 .list-card {
   margin-bottom: 16px;

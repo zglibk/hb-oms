@@ -45,6 +45,8 @@ export interface DashboardOwedRow {
   merchandiser: string | null;
   productionNo: string | null;
   productModel: string | null;
+  /** 规格（mm 统一口径）：前端按查看单位现算 mm/寸，故只回数值不回展示串 */
+  dimensionMm: number | null;
   deliveryDate: string | null;
   /** 逾期天数（逾期列表为正数）/ 距交期天数（临近列表为正数） */
   days: number;
@@ -68,6 +70,12 @@ export interface DashboardOutsourceRow {
   color: string | null;
   productModel: string | null;
   productionNo: string | null;
+  /**
+   * 规格（mm）：**取自订单产品行而非本表的 dimension_text 快照**——
+   * 快照是「350mm」这类展示串，切「寸」视图需要数值才能换算。
+   * 有回厂记录的订单不允许删除（下游引用禁删），故这个 JOIN 不会落空。
+   */
+  dimensionMm: number | null;
   /** 订单号快照：生产单号为空时的回落显示值（同外发列表口径） */
   orderNo: string | null;
   returnQty: number;
@@ -118,6 +126,7 @@ export class DashboardService {
               (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
                  FROM t_order_part_group g
                 WHERE g.order_product_id = p.id) AS groupTypes,
+              p.dimension_mm AS dimensionMm,
               p.delivery_date AS deliveryDate,
               p.qty_pcs AS qtyPcs,
               p.qty_pcs - IFNULL(fin.out_qty, 0) AS deliveryOwed`;
@@ -243,12 +252,16 @@ export class DashboardService {
    */
   private async loadRecentOutsource(): Promise<DashboardOutsourceRow[]> {
     const rows: any[] = await this.dataSource.query(
-      `SELECT id, back_date AS backDate, processor_name AS processorName,
-              surface_type AS surfaceType, color AS color,
-              product_model AS productModel, production_no AS productionNo,
-              order_no AS orderNo, return_qty AS returnQty
-         FROM t_outsource_part
-        ORDER BY back_date DESC, id DESC
+      // 规格取订单产品行的 dimension_mm 而非本表的 dimension_text 快照：
+      // 后者是「350mm」这类展示串，切「寸」视图需要数值才能换算（见接口注释）
+      `SELECT op.id AS id, op.back_date AS backDate, op.processor_name AS processorName,
+              op.surface_type AS surfaceType, op.color AS color,
+              op.product_model AS productModel, op.production_no AS productionNo,
+              op.order_no AS orderNo, op.return_qty AS returnQty,
+              p.dimension_mm AS dimensionMm
+         FROM t_outsource_part op
+         LEFT JOIN t_order_product p ON p.id = op.order_product_id
+        ORDER BY op.back_date DESC, op.id DESC
         LIMIT ?`,
       [TOP_LIMIT],
     );
@@ -260,6 +273,7 @@ export class DashboardService {
       color: r.color ?? null,
       productModel: r.productModel ?? null,
       productionNo: r.productionNo ?? null,
+      dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
       orderNo: r.orderNo ?? null,
       returnQty: Number(r.returnQty) || 0,
     }));
@@ -282,6 +296,7 @@ export class DashboardService {
         String(r.groupTypes ?? '').split(',').filter(Boolean),
         r.railSection ?? null,
       ),
+      dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
       deliveryDate: this.dateText(r.deliveryDate),
       days: Number(r.days) || 0,
       qtyPcs: Number(r.qtyPcs) || 0,
