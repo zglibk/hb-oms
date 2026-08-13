@@ -386,7 +386,14 @@ export default { name: 'OrderPrint' };
   background: #fff;
   box-shadow: 0 3px 18px rgb(0 0 0 / 14%);
   color: #111;
-  font-family: SimSun, 'Songti SC', serif;
+  /*
+   * 字体栈必须**跨平台**：前段是 Windows/macOS 的宋体（用户在浏览器里打印时用），
+   * 后段是 Linux 的中文字体——服务端 PDF 由无头 Chrome 渲染，那台机器上没有 SimSun，
+   * 缺了 Linux 回落项会让**整张单据的中文全变成豆腐块**（2026-08-13 线上实测踩到）。
+   * 服务器需装 fonts-noto-cjk（部署脚本已自动装）。
+   */
+  font-family: SimSun, 'Songti SC', 'Noto Serif CJK SC', 'Noto Sans CJK SC',
+    'WenQuanYi Zen Hei', 'Microsoft YaHei', serif;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -403,13 +410,17 @@ export default { name: 'OrderPrint' };
 .doc-meta__value { min-width: 32mm; }
 
 /* ===== 主表格 ===== */
-/* 等宽字体：数字/字母按 Consolas 等宽排列，中文回落宋体（标题区不受影响） */
+/*
+ * 等宽字体：数字/字母按 Consolas 等宽排列，中文回落宋体（标题区不受影响）。
+ * 同样要带 Linux 中文回落项，否则服务端渲染的 PDF 里表格中文全是豆腐块。
+ */
 .task-table {
   width: 100%;
   margin-top: 2.5mm;
   border-collapse: collapse;
   table-layout: fixed;
-  font-family: Consolas, 'Courier New', SimSun, monospace;
+  font-family: Consolas, 'Courier New', 'Noto Sans Mono CJK SC', SimSun,
+    'Noto Serif CJK SC', 'WenQuanYi Zen Hei', monospace;
 }
 .task-table th,
 .task-table td {

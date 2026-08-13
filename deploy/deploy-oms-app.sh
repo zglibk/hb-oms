@@ -75,6 +75,18 @@ else
   echo "==> 1.5/5 无头浏览器已就绪，跳过"
 fi
 
+# 中文字体：**没有它 PDF 里的中文全是豆腐块**（英文数字正常，所以很容易漏检）。
+# 打印页 CSS 首选 SimSun 是给 Windows 浏览器打印用的，Linux 上必须有 CJK 字体兜底。
+# 2026-08-13 线上就是栽在这一条：Chrome 装好了、PDF 也生成了，但整张单据中文全方块。
+if [ "$(fc-list :lang=zh 2>/dev/null | wc -l)" = "0" ]; then
+  echo "==> 1.6/5 安装中文字体（PDF 渲染必需）"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y fonts-noto-cjk fonts-wqy-zenhei >/dev/null 2>&1 \
+    && { fc-cache -f >/dev/null 2>&1; echo "    已安装，中文字体数 $(fc-list :lang=zh | wc -l)"; } \
+    || echo "    ⚠ 中文字体安装失败，PDF 中的中文将显示为方块"
+else
+  echo "==> 1.6/5 中文字体已就绪（$(fc-list :lang=zh 2>/dev/null | wc -l) 个），跳过"
+fi
+
 echo "==> 2/5 安装依赖并构建（shared + server；前端产物本地构建上传，不在服务器构建）"
 cd "$APP_DIR"
 pnpm install --no-frozen-lockfile --prod=false 2>&1 | tail -2
