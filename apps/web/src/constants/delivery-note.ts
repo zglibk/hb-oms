@@ -35,6 +35,8 @@ export interface DeliveryTemplate {
   code: string;
   /** 下拉里显示的模板名 */
   name: string;
+  /** 模板列表中的简短用途说明，只写能帮助选择模板的关键差异 */
+  description: string;
   /** 联系行（地址/电话/传真）——两个客户的联系电话不同，属版式的一部分 */
   contactLine: string;
   /** 标题区右侧是否印「送货单编号：」（耐斯克版有，精工版没有） */
@@ -67,6 +69,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   {
     code: 'generic',
     name: '通用',
+    description: '未指定客户专用版式时使用',
     contactLine: `${ADDRESS}  TEL：0760-87972626  ${FAX}`,
     showDocNoInTitle: false,
     columns: [
@@ -85,6 +88,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   {
     code: 'nsk',
     name: '耐斯克-湖北',
+    description: '客户专用，含物料编码和手填单价栏',
     // 该客户版印的是业务手机号（对方按这个号找人），不是公司总机
     contactLine: `${ADDRESS}  TEL：13802658930  ${FAX}`,
     showDocNoInTitle: true,
@@ -109,6 +113,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   {
     code: 'jinggong',
     name: '精工',
+    description: '客户专用，按合同编号和产品编码出单',
     contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
     showDocNoInTitle: false,
     columns: [

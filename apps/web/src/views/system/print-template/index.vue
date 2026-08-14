@@ -15,25 +15,20 @@
       <!-- ==================== 左：模板列表 ==================== -->
       <el-card shadow="never" class="tpl-list">
         <div class="tpl-list__title">送货单模板（{{ DELIVERY_TEMPLATES.length }}）</div>
-        <div
-          v-for="t in DELIVERY_TEMPLATES" :key="t.code"
-          class="tpl-item" :class="{ 'tpl-item--active': current === t.code }"
-          @click="current = t.code"
-        >
-          <div class="tpl-item__head">
-            <span class="tpl-item__name">{{ t.name }}</span>
-            <!-- disable-transitions 必须带：el-tag 默认有 zoom 过渡，v-if 翻转时若过渡没走完，
-                 旧节点会留在 DOM 里——换默认模板后会同时出现两个「默认」标记（已实测，
-                 与 CLAUDE.md 记的装配批次弹窗同一个坑） -->
-            <el-tag v-if="t.code === defaultCode" size="small" type="success" disable-transitions>默认</el-tag>
-          </div>
-          <div class="tpl-item__meta">
-            <span>{{ t.columns.length }} 列</span>
-            <span>·</span>
-            <span>签名：{{ t.signatures.join(' / ') }}</span>
-          </div>
-          <div class="tpl-item__cols" :title="t.columns.map((c) => c.label).join(' | ')">
-            {{ t.columns.map((c) => headerText(c.label)).join(' · ') }}
+        <div class="tpl-list__items">
+          <div
+            v-for="t in DELIVERY_TEMPLATES" :key="t.code"
+            class="tpl-item" :class="{ 'tpl-item--active': current === t.code }"
+            @click="current = t.code"
+          >
+            <div class="tpl-item__head">
+              <span class="tpl-item__name">{{ t.name }}</span>
+              <!-- disable-transitions 必须带：el-tag 默认有 zoom 过渡，v-if 翻转时若过渡没走完，
+                   旧节点会留在 DOM 里——换默认模板后会同时出现两个「默认」标记（已实测，
+                   与 CLAUDE.md 记的装配批次弹窗同一个坑） -->
+              <el-tag v-if="t.code === defaultCode" size="small" type="success" disable-transitions>默认</el-tag>
+            </div>
+            <div class="tpl-item__desc" :title="t.description">{{ t.description }}</div>
           </div>
         </div>
 
@@ -121,9 +116,6 @@ const SHEET_H = 297 * (96 / 25.4);
 const current = ref(DEFAULT_DELIVERY_TEMPLATE);
 const defaultCode = computed(() => deliveryTemplateDefault.value || DEFAULT_DELIVERY_TEMPLATE);
 const defaultName = computed(() => deliveryTemplateOf(defaultCode.value).name);
-
-/** 表头里的 {unit} 占位在列表里没意义，按样例的「套」展示 */
-const headerText = (label: string) => label.replace('{unit}', '套');
 
 /* ===== 预览数据源：样例 / 真实单据 ===== */
 const source = ref<'sample' | 'real'>('sample');
@@ -241,14 +233,19 @@ export default { name: 'PrintTemplate' };
 .layout { display: flex; gap: 12px; align-items: flex-start; }
 
 /* ===== 左：模板列表 ===== */
-.tpl-list { width: 300px; flex: none; }
+.tpl-list { width: 280px; flex: none; }
 .tpl-list__title { margin-bottom: 10px; font-weight: 600; }
+.tpl-list__items {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
 
 .tpl-item {
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
   border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   transition: border-color .15s, background-color .15s;
 }
@@ -259,16 +256,13 @@ export default { name: 'PrintTemplate' };
 }
 .tpl-item__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tpl-item__name { font-weight: 600; }
-.tpl-item__meta { margin-top: 4px; color: #909399; font-size: 12px; display: flex; gap: 6px; }
-.tpl-item__cols {
-  margin-top: 6px;
-  color: #606266;
+.tpl-item__desc {
+  margin-top: 2px;
+  color: #909399;
   font-size: 12px;
-  line-height: 1.6;
-  /* 列名较长时截断，完整内容看 title */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   overflow: hidden;
 }
 
