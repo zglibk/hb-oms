@@ -33,6 +33,7 @@ import {
   deliveryNoOf,
   sumByUnit,
 } from './delivery-note.util';
+import { InboundNoteSourceRow, buildInboundRows } from './inbound-note.util';
 import { syncOrderFinishState } from '../order/order-owed.util';
 // 仅取类型：期初入参形状定义在 opening 模块，此处 import type 编译后即擦除，无运行时耦合
 import type { OpeningFinishedDto } from '../opening/dto/opening.dto';
@@ -247,6 +248,74 @@ export class FinishedStockService {
       rows,
       totals,
       /** 全单单位是否一致：一致时表头写「数量（套）」，不一致则退化为「数量」+ 单元格带单位 */
+      unitConsistent: totals.length <= 1,
+      unitLabel: totals.length === 1 ? totals[0].unitLabel : null,
+    };
+  }
+
+  /* ==================== 入库单（打印取数） ==================== */
+
+  /**
+   * 入库单取数（CLAUDE.md §5.6「入库单打印」）：一张**生产入库单**出一张入库单。
+   *
+   * 车间原本手工填一张 A5 的《成品入库单》交仓库收货，与系统里的生产入库单记的是
+   * 同一件事。锚点选既有出入库单而不是新建一张入库单表：入库单据本身就是入库动作，
+   * 产品型号/规格/数量都已快照且受装配闸门守卫（§5.6），账实一致。
+   *
+   * 与送货单一样**不持有版式知识**——候选字段一律给全，哪几列上纸面由前端纸面组件决定。
+   * 出库明细缺的三个字段（订单单位、规格原值与单位）不在快照里，这里 JOIN 订单侧实时取：
+   * 入库单是只读展示，不落库，不构成新的快照口径。
+   */
+  async buildInboundNote(id: number) {
+    const doc = await this.docRepo.findOne({ where: { id } });
+    if (!doc) throw new NotFoundException('单据不存在');
+    if (doc.bizType !== FINISHED_BIZ_TYPE.INBOUND) {
+      throw new BadRequestException(
+        '只有「生产入库」单可以打印入库单（期初 / 销售出库 / 红字冲销单都不是车间的入库动作）',
+      );
+    }
+    if (doc.status === FINISHED_DOC_STATUS.CANCELLED) {
+      throw new BadRequestException('该单据已作废，不能打印入库单');
+    }
+
+    const raw: InboundNoteSourceRow[] = await this.dataSource.query(
+      `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
+              i.order_no, i.production_no, i.item_no, i.product_model, i.product_type,
+              i.dimension_mm, i.dimension_text, i.color, i.remark,
+              p.unit, p.dimension_raw, p.dimension_unit
+         FROM t_finished_item i
+         LEFT JOIN t_order_product p ON p.id = i.order_product_id
+        WHERE i.doc_id = ?
+        ORDER BY i.sort ASC, i.id ASC`,
+      [id],
+    );
+    if (!raw.length) throw new BadRequestException('该单据没有明细，无法打印入库单');
+
+    // 车间是 assembly_workshop 字典值，纸面要印中文；服务端转一次，
+    // 页面与 PDF 走同一个值（前端纸面组件因此不必再引字典）
+    const label = dictLabeler(await loadDictLabels(this.dataSource, ['assembly_workshop']));
+
+    const rows = buildInboundRows(raw);
+    const totals = sumByUnit(rows);
+
+    return {
+      docId: doc.id,
+      /**
+       * 纸面「入库单号 NO:」——**直接印系统单号**（如 FGI260814-0001），
+       * 不像送货单那样派生成日期形态：入库单是内部凭证，印原号才能直接回查到单据。
+       */
+      docNo: doc.docNo,
+      docDate: doc.docDate,
+      bizType: doc.bizType,
+      status: doc.status,
+      /** 纸面单头的「车间：」 */
+      workshopLabel: label('assembly_workshop', doc.workTeam),
+      remark: doc.remark ?? '',
+      /** 签名栏「制单」= 开这张入库单的人；主管、质检系统无对应字段，留空手签 */
+      creatorName: doc.creatorName ?? '',
+      rows,
+      /** 分单位合计：纸面暂不印合计行（模板没有这一行），保留供日后加行时直接取用 */
+      totals,
       unitConsistent: totals.length <= 1,
       unitLabel: totals.length === 1 ? totals[0].unitLabel : null,
     };

@@ -100,8 +100,11 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'finished-stock:confirm', perm_name: '确认出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 3 },
   { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
   { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
-  // 送货单：打印页取数走菜单读权限，出 PDF 走这个操作权限（§5.6 送货单打印）
-  { perm_code: 'finished-stock:print', perm_name: '打印送货单', perm_type: 2, parent_code: 'finished-stock', sort: 6 },
+  // 单据打印（送货单 + 入库单）：打印页取数走菜单读权限，出 PDF 走这个操作权限（§5.6）。
+  // 2026-08-14 入库单落地时由「打印送货单」改名为「打印单据」——一个权限点管两张单，
+  // 改 perm_name 由 PermissionSyncService 启动时 upsert 生效，**无需迁移 SQL**（§二），
+  // 已持有该权限的角色自动获得入库单打印权。
+  { perm_code: 'finished-stock:print', perm_name: '打印单据', perm_type: 2, parent_code: 'finished-stock', sort: 6 },
   { perm_code: 'finished-stock:export', perm_name: '导出出入库记录', perm_type: 2, parent_code: 'finished-stock', sort: 7 },
 
   { perm_code: 'stock-balance', perm_name: '成品库存', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },

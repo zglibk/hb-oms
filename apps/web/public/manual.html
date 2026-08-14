@@ -144,6 +144,7 @@
     <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次 批量导入 导出 模板 期初单 搬账 上线" onclick="jump('ch4-4')">4.4 成品库存</a>
     <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除 批量导入 导出 模板 回滚" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
     <a class="toc-item toc-sub" data-key="送货单 打印 发货 随货 客户模板 耐斯克 精工 通用 版式 PDF 导出 单价 托数 签名 收货人" onclick="jump('ch4-6')">4.6 打印送货单</a>
+    <a class="toc-item toc-sub" data-key="入库单 打印 A5 横向 仓库 收货 签字 主管 质检 制单 类别 产品类型 PDF 导出 车间 十行 空行" onclick="jump('ch4-7')">4.7 打印入库单</a>
 
     <a class="toc-item" data-key="台账 订单跟踪 四个数 核心 产品汇总 统计分析 出入库汇总 进销存" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
@@ -538,6 +539,7 @@
       <div class="alert alert--warning">
         确认时如果提示「超过可入库量」，说明装配那边还没录够。回到装配管理，把已经装完的批次填上「实际完成」日期。
       </div>
+      <p>交仓库收货签字的那张纸质<strong>入库单</strong>，就从这张入库单直接打印，见 <a href="javascript:void(0)" onclick="jump('ch4-7')">4.7</a>。</p>
 
       <h3 class="subsection__title">急单：一批装完可以分多次入库，边入边发</h3>
       <p>
@@ -792,6 +794,48 @@
         <li><strong>「导出PDF」</strong>：不弹对话框，<strong>直接下载一个 PDF 文件</strong>，适合发邮件给客户或存档。</li>
         <li>纸面上「制单」填开这张出库单的人、「业务」填订单业务员；<strong>「发货人」「仓库收货人」留空</strong>，现场手签。</li>
         <li>合计行右边会印<strong>出库单的备注</strong>——装箱信息（如「共19托」）填在出库单备注里就会出现在这里。</li>
+      </ul>
+
+      <h2 class="section__title" id="ch4-7">4.7 打印入库单</h2>
+      <p>
+        装配完工交仓库收货时签的那张 <strong>A5 横向</strong>纸质单，以前手工填 Excel，现在从<strong>生产入库单</strong>直接出。
+        在<strong>「物料管理 → 成品出入库」</strong>列表里找到那张生产入库单，点操作列的<strong>「入库单」</strong>，
+        会在<strong>新标签页</strong>打开（列表的筛选与位置都还在，打完关掉即可）。
+      </p>
+      <div class="alert alert--info">
+        草稿单按钮多、会被收进<strong>「更多」</strong>下拉里，点开就能看到「入库单」。
+      </div>
+      <ul>
+        <li><strong>只有「生产入库」单有这个按钮</strong>：期初录入是上线前的存量补录、红字冲销是更正、销售出库是发货，都不是车间实际的入库动作，所以印不出入库单——哪怕期初和红字的方向也是「入库」。</li>
+        <li><strong>已作废的单不能打</strong>；<strong>草稿单可以打</strong>（纸质单常常先随货走、回头再确认），页面顶部会标一句「单据尚未确认（草稿）」提醒你。</li>
+        <li>纸面右上的<strong>「入库单号 NO:」印的就是系统单号</strong>（如 <code>FGI260814-0035</code>），不另编号——仓库拿着这张纸能直接在系统里查回这张单。</li>
+      </ul>
+
+      <h3>纸面上的九列分别是什么</h3>
+      <table class="field-table">
+        <thead><tr><th>列</th><th>印的内容</th></tr></thead>
+        <tbody>
+          <tr><td>序号</td><td>纸面行号，<strong>固定排到 10 行</strong>，货少时下面是空行（跟原来的纸质单一样）</td></tr>
+          <tr><td>生产单号</td><td>该产品所属订单的生产单号</td></tr>
+          <tr><td>产品名称</td><td><strong>产品型号</strong>，如 <code>45#自锁外中轨</code>、<code>53#普通自锁滑轨</code>（货号 + 类型 + 部件形态）</td></tr>
+          <tr><td>规格型号</td><td>系统里的<strong>规格</strong>：按寸下的印「17寸」，按 mm 下的印「425mm」</td></tr>
+          <tr><td>类别</td><td><strong>产品类型</strong>，如「普通自锁」「缓冲卡口」。和产品名称里的类型是重复的，单独一列是为了清点时好归类</td></tr>
+          <tr><td>颜色</td><td>入库明细上的颜色。管理员在系统配置里停用了「颜色」字段的话，<strong>整列不印</strong></td></tr>
+          <tr><td>单位</td><td>跟着订单单位走：套 / 支</td></tr>
+          <tr><td>数量</td><td>按上面那个单位算的数（订单按「套」下的，系统内部记的支数会自动折半）</td></tr>
+          <tr><td>备注</td><td>该行明细的备注</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><strong>卡口产品左右两行会合并成一行</strong>：系统内部按左/右分开记账，但仓库点的是「这个产品收了多少」，纸面上只有一行。</li>
+        <li>单头的<strong>「车间：」</strong>取入库单上填的车间；一张单明细超过 10 行时会<strong>自动续到第二页</strong>，第二页会重复表头。</li>
+      </ul>
+
+      <h3>打印还是导 PDF</h3>
+      <ul>
+        <li><strong>「打印」</strong>：弹浏览器打印对话框。版式已按 <strong>A5 横向</strong>排好，<strong>纸张记得选 A5、方向选横向</strong>。</li>
+        <li><strong>「导出PDF」</strong>：不弹对话框，直接下载一个 A5 横向的 PDF，适合转发或存档。</li>
+        <li>签名栏「制单」自动填开这张入库单的人；<strong>「主管」「质检」留空</strong>，现场手签。</li>
       </ul>
     </section>
 

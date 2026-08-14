@@ -329,3 +329,64 @@ export const getDeliveryNote = (id: number) =>
  */
 export const downloadDeliveryNotePdf = (id: number, fallbackName: string) =>
   downloadFile(`/api/finished-stock/${id}/delivery-note-pdf`, undefined, fallbackName);
+
+/* ==================== 入库单打印 ==================== */
+
+/** 入库单一行（纸面「产品名称」印产品型号、「类别」印产品类型中文，见 §5.6） */
+export interface InboundNoteRow {
+  seq: number;
+  orderProductId: number;
+  /** 纸面「产品名称」栏：产品型号，如 45#自锁外中轨 */
+  productModel: string;
+  /**
+   * 纸面「类别」栏：产品类型中文组合，如「普通自锁」。
+   * 与 productModel 里的类型部分重复是**使用方要的**——单独一列便于清点时一眼归类。
+   */
+  productTypeText: string;
+  itemNo: string;
+  /** 纸面「规格型号」栏：英寸录入 → 17寸；mm 录入 → 425mm */
+  specText: string;
+  /** 颜色（入库明细快照）；该列受 §5.7 全局颜色开关控制 */
+  color: string;
+  /** 已按订单单位折算后的数量（奇数支折套会出现 0.5） */
+  qty: number;
+  /** set / piece */
+  unit: string;
+  /** 套 / 支 */
+  unitLabel: string;
+  /** 支数原值（内部口径，对账用） */
+  qtyPcs: number;
+  productionNo: string;
+  orderNo: string;
+  remark: string;
+}
+
+export interface InboundNote {
+  docId: number;
+  /** 纸面「入库单号 NO:」——直接印系统单号（FGI260814-0001），不派生 */
+  docNo: string;
+  docDate: string;
+  bizType: string;
+  status: number;
+  /** 纸面单头的「车间：」（服务端已转中文） */
+  workshopLabel: string;
+  remark: string;
+  /** 签名栏「制单」= 开这张入库单的人 */
+  creatorName: string;
+  rows: InboundNoteRow[];
+  /** 分单位合计（纸面暂不印合计行，模板没有这一行） */
+  totals: Array<{ unit: string; unitLabel: string; qty: number }>;
+  unitConsistent: boolean;
+  unitLabel: string | null;
+}
+
+/** 入库单取数（只有生产入库单可打；已作废/无明细会被服务端拒绝） */
+export const getInboundNote = (id: number) =>
+  request.get<any, InboundNote>(`/api/finished-stock/${id}/inbound-note`);
+
+/**
+ * 《入库单》PDF：服务端用无头浏览器渲染 /finished-stock/inbound-note 打印页出 PDF，
+ * 点一下直接下载（不弹打印对话框），同《送货单》做法。纸面是 A5 横向。
+ */
+export const downloadInboundNotePdf = (id: number, fallbackName: string) =>
+  downloadFile(`/api/finished-stock/${id}/inbound-note-pdf`, undefined, fallbackName);

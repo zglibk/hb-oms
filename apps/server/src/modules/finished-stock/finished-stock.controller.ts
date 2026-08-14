@@ -194,7 +194,10 @@ export class FinishedStockController {
     // 先取一次数：单据不存在/不是销售出库/已作废时直接报错，省得白起浏览器
     const note = await this.service.buildDeliveryNote(id);
     const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
-    const buf = await this.pdfService.renderPrintPage(this.printPageUrl(id), token);
+    const buf = await this.pdfService.renderPrintPage(
+      this.printPageUrl('/finished-stock/delivery-note', id),
+      token,
+    );
     const filename = `送货单-${note.deliveryNo || note.docNo}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
@@ -206,12 +209,53 @@ export class FinishedStockController {
   }
 
   /**
+   * 入库单取数（打印页用）。一张**生产入库单**出一张入库单，交仓库收货签字。
+   * 读权限同送货单：即页面菜单码（§2.1）——能看入库单就能看这张单的打印信息。
+   */
+  @Get(':id/inbound-note')
+  @RequirePermissions('finished-stock')
+  async inboundNote(@Param('id', ParseIntPipe) id: number) {
+    return this.service.buildInboundNote(id);
+  }
+
+  /**
+   * 入库单 PDF：同送货单，服务端渲染**前端那张打印页**再回传文件。
+   * 纸面是 A5 横向——`PdfService` 用 `preferCSSPageSize`，纸张由打印页的 @page 决定，
+   * 服务端不必也不该再定义一份。
+   */
+  @Get(':id/inbound-note-pdf')
+  @SkipTransform()
+  @RequirePermissions('finished-stock:print')
+  @OperationLog('成品出入库', '导出入库单PDF')
+  async inboundNotePdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    // 先取一次数：单据不存在/不是生产入库/已作废时直接报错，省得白起浏览器
+    const note = await this.service.buildInboundNote(id);
+    const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const buf = await this.pdfService.renderPrintPage(
+      this.printPageUrl('/finished-stock/inbound-note', id),
+      token,
+    );
+    const filename = `入库单-${note.docNo}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="inbound-note.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
+  }
+
+  /**
    * 打印页在**服务器内网**的地址（同 order.controller 的 printPageUrl）。
    * 生产：Nginx 的 `/oms/admin/`（SPA base）；开发：Vite dev server 5174。
    */
-  private printPageUrl(id: number): string {
+  private printPageUrl(path: string, id: number): string {
     const base = (process.env.PRINT_BASE_URL || 'http://127.0.0.1:5174').replace(/\/+$/, '');
-    return `${base}/finished-stock/delivery-note?id=${id}`;
+    return `${base}${path}?id=${id}`;
   }
 
   /** 红字冲销：生成方向相反的 FGR 单并自动确认，原单不变 */

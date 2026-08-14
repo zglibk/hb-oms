@@ -196,6 +196,14 @@
                 :disabled="row.status === FINISHED_DOC_STATUS_VALUE.CANCELLED"
                 @click="openDeliveryNote(row)"
               >送货单</el-button>
+              <!-- 入库单：交仓库收货签字的内部凭证，只有生产入库单才是车间的入库动作
+                   （期初是上线前存量补录、红字是冲销更正）；与上面的送货单按钮互斥 -->
+              <el-button
+                v-if="row.bizType === FINISHED_BIZ_TYPE.INBOUND"
+                size="small" v-permission.disable="'finished-stock:print'" link type="primary" :icon="Printer"
+                :disabled="row.status === FINISHED_DOC_STATUS_VALUE.CANCELLED"
+                @click="openInboundNote(row)"
+              >入库单</el-button>
             </app-actions>
           </template>
         </el-table-column>
@@ -339,6 +347,12 @@ function openEdit(row: FinishedDocRow) {
  */
 function openDeliveryNote(row: FinishedDocRow) {
   const { href } = router.resolve({ path: '/finished-stock/delivery-note', query: { id: row.id } });
+  window.open(href, '_blank');
+}
+
+/** 入库单同上（交仓库收货签字的内部凭证，只有生产入库单有） */
+function openInboundNote(row: FinishedDocRow) {
+  const { href } = router.resolve({ path: '/finished-stock/inbound-note', query: { id: row.id } });
   window.open(href, '_blank');
 }
 
