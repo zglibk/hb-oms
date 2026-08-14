@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash:*)",
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(tar:*)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(tail:*)",
+      "Bash(head:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}
