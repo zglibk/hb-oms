@@ -10,7 +10,9 @@
               <el-form-item label="客户">
                 <el-select
                   v-model="sQuery.customerName" clearable filterable placeholder="全部"
+                  :filter-method="filterCustomers"
                   style="width: 200px" @change="reloadSummary"
+                  @visible-change="(v: boolean) => v && resetCustomerFilter()"
                 >
                   <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
                   <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
@@ -60,6 +62,7 @@
               </el-form-item>
               <el-form-item>
                 <el-button size="small" type="primary" :icon="Search" @click="reloadSummary">查询</el-button>
+                <el-button size="small" :icon="RefreshLeft" @click="resetSummaryFilters">重置</el-button>
                 <el-button
                   size="small" v-permission="'product-summary:export'" plain :icon="Download"
                   :loading="exporting" @click="onExportSummary"
@@ -215,7 +218,9 @@
             <el-form-item label="客户">
               <el-select
                 v-model="pQuery.customerName" clearable filterable placeholder="全部"
+                :filter-method="filterCustomers"
                 style="width: 200px" @change="reloadPeriod"
+                @visible-change="(v: boolean) => v && resetCustomerFilter()"
               >
                 <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
                   <span>{{ c.customerName }}</span>
@@ -238,6 +243,7 @@
             </el-form-item>
             <el-form-item>
               <el-button size="small" type="primary" :icon="Search" @click="reloadPeriod">查询</el-button>
+              <el-button size="small" :icon="RefreshLeft" @click="resetPeriodFilters">重置</el-button>
               <el-button
                 size="small" v-permission="'product-summary:export'" plain :icon="Download"
                 :loading="exporting" @click="onExportPeriod"
@@ -292,7 +298,8 @@
                       <thead>
                         <tr>
                           <th>单据号</th><th>日期</th><th>类型</th><th>方向</th><th>数量(支)</th>
-                          <th>边别</th><th>客户</th><th>订单编号</th><th>被冲原单</th><th>登记人</th>
+                          <th>边别</th><th>表面处理</th><th v-if="colorEnabled">颜色</th>
+                          <th>客户</th><th>订单编号</th><th>被冲原单</th><th>登记人</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -305,6 +312,8 @@
                           </td>
                           <td class="lg-c">{{ f.quantity }}</td>
                           <td class="lg-c">{{ sideLabel(f.side) || '整套' }}</td>
+                          <td class="lg-c">{{ dictLabel(surfaceDict, f.surfaceType) }}</td>
+                          <td v-if="colorEnabled" class="lg-c">{{ f.color || '—' }}</td>
                           <td class="lg-memo" :title="f.customerName || ''">{{ f.customerName || '—' }}</td>
                           <td>{{ f.productionNo || '—' }}</td>
                           <td>{{ f.originDocNo || '—' }}</td>
@@ -366,6 +375,7 @@ import { onActivated, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   Search,
+  RefreshLeft,
   Download,
   Collection,
   Goods,
@@ -410,8 +420,24 @@ const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimen
 const activeTab = ref<'summary' | 'period'>('summary');
 
 /* ===== 公共下拉 ===== */
+const customers = ref<CustomerItem[]>([]);
 const customerOptions = ref<CustomerItem[]>([]);
-getAllCustomers().then((rows) => { customerOptions.value = rows; });
+/** 与订单新增页一致：客户下拉同时支持按客户名称、客户代码过滤。 */
+function resetCustomerFilter() {
+  customerOptions.value = customers.value;
+}
+function filterCustomers(q: string) {
+  const kw = q.trim().toLowerCase();
+  customerOptions.value = kw
+    ? customers.value.filter(
+        (c) => c.customerName.toLowerCase().includes(kw) || (c.customerCode || '').toLowerCase().includes(kw),
+      )
+    : customers.value;
+}
+getAllCustomers().then((rows) => {
+  customers.value = rows;
+  resetCustomerFilter();
+});
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('surface_type').then((rows: any[]) => {
   surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
@@ -471,6 +497,20 @@ function reloadSummary() {
   sQuery.page = 1;
   loadSummary();
 }
+function resetSummaryFilters() {
+  Object.assign(sQuery, {
+    keyword: '',
+    customerName: undefined,
+    surfaceType: undefined,
+    productType: undefined,
+    orderStatus: undefined,
+    onlyOwed: false,
+    onlyStocked: false,
+  });
+  orderDateRange.value = null;
+  resetCustomerFilter();
+  reloadSummary();
+}
 loadSummary();
 
 /* ==================== Tab2 出入库汇总（期间） ==================== */
@@ -489,11 +529,14 @@ const pQuery = reactive({
 function localDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-const now = new Date();
-const periodRange = ref<[string, string]>([
-  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
-  localDate(now),
-]);
+function defaultPeriodRange(): [string, string] {
+  const today = new Date();
+  return [
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`,
+    localDate(today),
+  ];
+}
+const periodRange = ref<[string, string]>(defaultPeriodRange());
 
 function periodFilters() {
   return {
@@ -527,6 +570,16 @@ async function loadPeriod() {
 function reloadPeriod() {
   pQuery.page = 1;
   loadPeriod();
+}
+function resetPeriodFilters() {
+  Object.assign(pQuery, {
+    keyword: '',
+    customerName: undefined,
+    surfaceType: undefined,
+  });
+  periodRange.value = defaultPeriodRange();
+  resetCustomerFilter();
+  reloadPeriod();
 }
 
 /** Tab2 惰性加载：首次切到该页签才发请求 */

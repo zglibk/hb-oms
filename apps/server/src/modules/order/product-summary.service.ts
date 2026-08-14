@@ -110,6 +110,8 @@ export interface PeriodFlowRow {
   originDocNo: string | null;
   customerName: string | null;
   productionNo: string | null;
+  surfaceType: string | null;
+  color: string | null;
   creatorName: string | null;
 }
 
@@ -404,6 +406,8 @@ export class ProductSummaryService {
       customerName: string | null;
       productionNo: string | null;
       orderNo: string | null;
+      surfaceType: string | null;
+      color: string | null;
     }
     const prodInfoByPid = new Map<number, ProdInfo>();
     const map = new Map<string, PeriodSummaryRow & { pids: number[] }>();
@@ -415,6 +419,8 @@ export class ProductSummaryService {
         customerName: p.customerName ?? null,
         productionNo: p.productionNo ?? null,
         orderNo: p.orderNo ?? null,
+        surfaceType: p.surfaceType ?? null,
+        color: p.color ?? null,
       });
 
       const groups = groupsByPid.get(pid) ?? [];
@@ -524,6 +530,8 @@ export class ProductSummaryService {
           originDocNo: d.originDocNo ?? null,
           customerName: info?.customerName ?? null,
           productionNo: info?.productionNo || info?.orderNo || null,
+          surfaceType: info?.surfaceType ?? null,
+          color: info?.color ?? null,
           creatorName: d.creatorName ?? null,
         });
       });
@@ -756,6 +764,8 @@ export class ProductSummaryService {
       { header: '序号' },
       { header: '产品型号' },
       { header: dimHeader },
+      { header: '表面处理' },
+      ...(colorEnabled ? [{ header: '颜色' }] : []),
       { header: '单据号' },
       { header: '单据日期' },
       { header: '业务类型' },
@@ -776,6 +786,8 @@ export class ProductSummaryService {
           seqB,
           r.productModel,
           dimCell(r),
+          label('surface_type', f.surfaceType),
+          ...(colorEnabled ? [f.color ?? ''] : []),
           f.docNo ?? '',
           f.docDate ?? '',
           labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType),
@@ -791,7 +803,7 @@ export class ProductSummaryService {
     });
     styleSheet(wsB, {
       centerColumns: this.centerCols(colsB, [
-        '序号', dimHeader, '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
+        '序号', dimHeader, '表面处理', '颜色', '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
       ]),
     });
 

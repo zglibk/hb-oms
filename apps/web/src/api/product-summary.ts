@@ -101,6 +101,8 @@ export interface PeriodFlowRow {
   originDocNo: string | null;
   customerName: string | null;
   productionNo: string | null;
+  surfaceType: string | null;
+  color: string | null;
   creatorName: string | null;
 }
 
