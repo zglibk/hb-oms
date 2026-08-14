@@ -488,26 +488,40 @@ export class FinishedStockService {
     ];
 
     const wb = createWorkbook();
-    const ws = wb.addWorksheet('成品出入库记录');
-    ws.columns = columns.map((c) => ({ header: c.header }));
-    rows.forEach((r) => ws.addRow(columns.map((c) => c.pick(r))));
+    const addRecordSheet = (name: string, sheetRows: Row[]) => {
+      const ws = wb.addWorksheet(name);
+      ws.columns = columns.map((c) => ({ header: c.header }));
+      sheetRows.forEach((r) => ws.addRow(columns.map((c) => c.pick(r))));
 
-    // 汇总行**按表头名定位**：颜色列随开关增减，位置写死必错位（§5.7）
-    const totalRow: Array<string | number> = new Array(columns.length).fill('');
-    const put = (header: string, v: string | number) => {
-      const i = columns.findIndex((c) => c.header === header);
-      if (i >= 0) totalRow[i] = v;
+      // 汇总行**按表头名定位**：颜色列随开关增减，位置写死必错位（§5.7）
+      const totalRow: Array<string | number> = new Array(columns.length).fill('');
+      const put = (header: string, v: string | number) => {
+        const i = columns.findIndex((c) => c.header === header);
+        if (i >= 0) totalRow[i] = v;
+      };
+      put('单号', '合计');
+      put('数量(支)', sheetRows.reduce((s, r) => s + (r.item.quantity || 0), 0));
+      put('已冲销(支)', sheetRows.reduce((s, r) => s + (reversed.get(r.item.id) ?? 0), 0));
+      const sumRow = ws.addRow(totalRow);
+
+      // styleSheet 必须在写完所有数据行之后调用——自动列宽要量全部单元格。
+      // 本表列多且数据密，使用比全局默认更清晰的浅蓝灰隔行色。
+      styleSheet(ws, {
+        centerColumns: columns.map((c, i) => (c.center ? i + 1 : 0)).filter(Boolean),
+        stripeColor: 'FFEAF2F8',
+      });
+      sumRow.font = { name: '等线', size: 10, bold: true };
     };
-    put('单号', '合计');
-    // 出入方向不同的行混在一起，合计只做"总量"参考，不做净额——净额看成品库存页
-    put('数量(支)', rows.reduce((s, r) => s + (r.item.quantity || 0), 0));
-    put('已冲销(支)', rows.reduce((s, r) => s + (reversed.get(r.item.id) ?? 0), 0));
-    ws.addRow(totalRow);
 
-    // styleSheet 必须在写完所有数据行之后调用——自动列宽要量全部单元格
-    styleSheet(ws, {
-      centerColumns: columns.map((c, i) => (c.center ? i + 1 : 0)).filter(Boolean),
-    });
+    if (query.exportMode === 'split') {
+      const inboundRows = rows.filter((r) => r.doc.direction === STOCK_DIRECTION.IN);
+      const outboundRows = rows.filter((r) => r.doc.direction !== STOCK_DIRECTION.IN);
+      if (inboundRows.length) addRecordSheet('入库记录', inboundRows);
+      if (outboundRows.length) addRecordSheet('出库记录', outboundRows);
+    } else {
+      // 合并时只做数量总计，不把入库与出库相减；净额请查看成品库存页。
+      addRecordSheet('成品出入库记录', rows);
+    }
 
     const buf = await wb.xlsx.writeBuffer();
     return Buffer.from(buf);

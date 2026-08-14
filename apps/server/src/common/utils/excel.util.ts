@@ -61,6 +61,8 @@ export interface StyleSheetOptions {
   headerRow?: number;
   /** 隔行浅灰填充，默认 true */
   stripe?: boolean;
+  /** 隔行填充色（ARGB），默认使用统一浅灰；需要更明显区分时可按导出表覆盖 */
+  stripeColor?: string;
   /** 自动列宽，默认 true */
   autoWidth?: boolean;
   /** 自动列宽的下限 / 上限（字符数），默认 8 / 50 */
@@ -77,6 +79,7 @@ export interface StyleSheetOptions {
 export function styleSheet(ws: ExcelJS.Worksheet, opts: StyleSheetOptions = {}): void {
   const headerRow = opts.headerRow ?? 1;
   const stripe = opts.stripe ?? true;
+  const stripeColor = opts.stripeColor ?? COLOR_STRIPE;
   const autoWidth = opts.autoWidth ?? true;
   const minWidth = opts.minWidth ?? 8;
   const maxWidth = opts.maxWidth ?? 50;
@@ -111,7 +114,7 @@ export function styleSheet(ws: ExcelJS.Worksheet, opts: StyleSheetOptions = {}):
       if (isHeader) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER } };
       } else if (isStripe) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_STRIPE } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: stripeColor } };
       }
 
       const w = displayWidth(cellText(cell.value));

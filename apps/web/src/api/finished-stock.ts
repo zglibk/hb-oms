@@ -124,6 +124,11 @@ export interface FinishedDocQuery {
   dateTo?: string;
 }
 
+export type FinishedDocExportMode = 'combined' | 'split';
+export interface FinishedDocExportQuery extends FinishedDocQuery {
+  exportMode: FinishedDocExportMode;
+}
+
 export interface FinishedItemPayload {
   orderProductId: number;
   side?: string;
@@ -159,8 +164,12 @@ export const getFinishedDocDetail = (id: number) =>
  * 导出当前筛选的出入库记录：**一行一条明细**（单头字段冗余到每行），
  * 便于按产品/客户筛选透视。服务端按明细行数计上限，超 5000 行或空结果会拒绝。
  */
-export const downloadFinishedDocExport = (params: FinishedDocQuery) =>
-  downloadXlsx('/api/finished-stock/export', params, '成品出入库记录.xlsx');
+export const downloadFinishedDocExport = (params: FinishedDocExportQuery) =>
+  downloadXlsx(
+    '/api/finished-stock/export',
+    params,
+    params.exportMode === 'split' ? '成品出入库记录-按方向分表.xlsx' : '成品出入库记录.xlsx',
+  );
 
 export interface StockBalanceQuery {
   page?: number;

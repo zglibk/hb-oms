@@ -63,7 +63,11 @@ export class FinishedStockController {
   @OperationLog('成品出入库', '导出出入库记录')
   async exportList(@Query() query: QueryFinishedDocDto, @Res() res: Response) {
     const buffer = await this.service.exportExcel(query);
-    sendXlsx(res, buffer, '成品出入库记录.xlsx');
+    sendXlsx(
+      res,
+      buffer,
+      query.exportMode === 'split' ? '成品出入库记录-按方向分表.xlsx' : '成品出入库记录.xlsx',
+    );
   }
 
   /** 成品库存（结存查询）；注册在 :id 之前，避免被参数路由拦截 */

@@ -39,10 +39,22 @@
         <el-button size="small" v-permission="'finished-stock:create'" type="warning" :icon="Upload" @click="openCreate('sale_outbound')">
           销售出库
         </el-button>
-        <el-button
-          size="small" v-permission="'finished-stock:export'" plain :icon="Document"
-          :loading="exporting" @click="onExport"
-        >导出记录</el-button>
+        <el-dropdown
+          v-permission="'finished-stock:export'"
+          trigger="click"
+          :disabled="exporting"
+          @command="onExport"
+        >
+          <el-button size="small" plain :icon="Document" :loading="exporting">
+            导出记录<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="combined">合并到一个工作表</el-dropdown-item>
+              <el-dropdown-item command="split">按方向分为“入库记录 / 出库记录”</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <span class="tip">
           入库受<b>装配闸门</b>约束：可入库量 = 已完成装配 − 已入库；已确认单据只能红字冲销，不能修改。
         </span>
@@ -90,7 +102,12 @@
         </el-table-column>
         <el-table-column label="业务类型" width="110" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="tagTypeOf(FINISHED_BIZ_TYPE_OPTIONS, row.bizType)">
+            <el-tag
+              size="small"
+              :type="row.bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND
+                ? 'danger'
+                : tagTypeOf(FINISHED_BIZ_TYPE_OPTIONS, row.bizType)"
+            >
               {{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, row.bizType) }}
             </el-tag>
           </template>
@@ -173,7 +190,7 @@
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload, Printer, Document } from '@element-plus/icons-vue';
+import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload, Printer, Document, ArrowDown } from '@element-plus/icons-vue';
 import {
   getFinishedDocList,
   downloadFinishedDocExport,
@@ -181,6 +198,7 @@ import {
   cancelFinishedDoc,
   reverseFinishedDoc,
   type FinishedDocRow,
+  type FinishedDocExportMode,
   type FinishSyncResult,
 } from '@/api/finished-stock';
 import {
@@ -265,13 +283,17 @@ const exportFilters = () => ({
   dateFrom: dateRange.value?.[0],
   dateTo: dateRange.value?.[1],
 });
-function onExport() {
+function onExport(command: string | number | object) {
+  const exportMode: FinishedDocExportMode = command === 'split' ? 'split' : 'combined';
+  const modeText = exportMode === 'split'
+    ? '按实际出入方向分为“入库记录 / 出库记录”两个工作表'
+    : '将入库、出库记录合并到一个工作表';
   return exportWithConfirm({
     name: '出入库',
     // 条数**每次实查**：用户改了筛选没点查询时，页面上的 total 还是上一次的数
     getCount: async () => (await getFinishedDocList({ ...exportFilters(), page: 1, pageSize: 1 })).total,
-    scopeText: (n) => `按当前筛选条件导出 <b>${n}</b> 张单据的全部明细（一行一条明细）`,
-    run: () => downloadFinishedDocExport(exportFilters()),
+    scopeText: (n) => `按当前筛选条件导出 <b>${n}</b> 张单据的全部明细（一行一条明细），并${modeText}`,
+    run: () => downloadFinishedDocExport({ ...exportFilters(), exportMode }),
   });
 }
 

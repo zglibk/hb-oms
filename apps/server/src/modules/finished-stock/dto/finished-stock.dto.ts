@@ -133,6 +133,9 @@ export class QueryFinishedDocDto {
   @IsOptional() @IsDateString() dateFrom?: string;
 
   @IsOptional() @IsDateString() dateTo?: string;
+
+  /** Excel 导出布局：combined 合并一张表 / split 按实际出入方向分表 */
+  @IsOptional() @IsIn(['combined', 'split']) exportMode?: 'combined' | 'split';
 }
 
 /** 成品库存查询：按余额行，可按产品行/属性筛选 */
