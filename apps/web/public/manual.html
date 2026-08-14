@@ -246,7 +246,7 @@
         <span class="flow__node">部件行（自动展开）</span>
       </div>
       <ol class="steps">
-        <li><strong>订单信息</strong>：选客户（选中后自动带出默认业务员、跟单员、交货地址），填 PO#、生产单号、订单日期。</li>
+        <li><strong>订单信息</strong>：选客户（选中后自动带出默认业务员、跟单员、交货地址），填 PO#、生产单号、订单日期——<strong>这四项都是必填</strong>（带红色 * 的就是）。</li>
         <li><strong>产品明细</strong>：一张订单可以有多个产品，点「添加产品」增加。每个产品填货号、产品类型、规格、数量、表面处理、交期等。</li>
         <li><strong>部件组</strong>：每个产品下至少一个组。<strong>系统按轨道节数自动铺好</strong>——三节轨给「外轨/中轨/内轨」三个组，二节轨给「外轨/内轨」两个组（见 1.3）。</li>
         <li><strong>部件行</strong>：不用手填，系统按组类型 + 轨道节数 + 是否卡口<strong>自动展开</strong>（如整品组 = 外轨/中轨/内轨各一行，外轨组 = 外轨一行）。只有追溯码和备注可以微调。</li>
@@ -259,8 +259,8 @@
       <table class="field-table">
         <thead><tr><th>字段</th><th>说明</th></tr></thead>
         <tbody>
-          <tr><td>PO#</td><td><strong>客户订单文件上的订单编号</strong>，手工填写，自动转大写</td></tr>
-          <tr><td>生产单号</td><td>我们内部的生产单号（如 <code>GLI46212-A</code>），与 PO# <strong>一对一</strong>。<strong>台账「订单编号」列显示的就是它</strong>。系统自动生成的 ORD 号只作内部定位用</td></tr>
+          <tr><td>PO#<span style="color:#f56c6c">*</span></td><td><strong>客户订单文件上的订单编号</strong>，手工填写，自动转大写。<strong>必填</strong>——送货单上印的「采购单编号 / 合同编号」取的就是它（各客户叫法不同），不填的话客户那张单上这一格是空的</td></tr>
+          <tr><td>生产单号<span style="color:#f56c6c">*</span></td><td>我们内部的生产单号（如 <code>GLI46212-A</code>），与 PO# <strong>一对一</strong>。<strong>必填</strong>——<strong>台账「订单编号」列显示的就是它</strong>，送货单上的「海宝单号」也是它。系统自动生成的 ORD 号只作内部定位用</td></tr>
           <tr><td>订单日期</td><td>下单日期，默认今天</td></tr>
           <tr><td>业务员 / 跟单员</td><td>选客户时自动带出，可改</td></tr>
           <tr><td>订单来源</td><td>官方订单文件 / 口头 / 电话 / 社交软件</td></tr>
@@ -374,7 +374,7 @@
       <p>客户经常下<strong>相同或相近的订单</strong>。这时不用从头录：在订单列表找到那张历史订单，点操作列的「<strong>复制</strong>」，表单会把它的<strong>产品行、部件组、图号料厚、备注（含图文订单备注）</strong>全部预填好，你只改不一样的地方（通常就是规格、数量、交期），保存即成一张<strong>全新的订单</strong>（系统单号重新生成）。</p>
       <ul>
         <li><strong>这些内容不会带过来，要重新填</strong>：PO#（新订单文件必然是新号）、交期（防止沿用旧交期忘了改）、订单附件（旧单的客户文件不该挂到新单上）；订单日期自动重置为今天。</li>
-        <li><strong>生产单号会预填一个「后缀递推」的建议值</strong>：原单是 <code>GLI46212-A</code> 就建议 <code>GLI46212-B</code>，原单没有字母后缀就建议补 <code>-B</code>——这只是照顾「同 PO 追加」的惯例，<strong>可以随意改掉或清空</strong>，以实际生产单号为准。</li>
+        <li><strong>生产单号会预填一个「后缀递推」的建议值</strong>：原单是 <code>GLI46212-A</code> 就建议 <code>GLI46212-B</code>，原单没有字母后缀就建议补 <code>-B</code>——这只是照顾「同 PO 追加」的惯例，<strong>可以改成实际的生产单号，但不能留空</strong>（该字段必填）。</li>
         <li>客户昨天下了单、今天又下一张<strong>只有数量或规格不同</strong>的：复制昨天的单，改掉数量（和规格），填上今天的 PO# 保存——<strong>不要去改昨天那张订单</strong>，两张客户订单文件就该是两张系统订单，台账才对得上客户的对账单。</li>
       </ul>
       <div class="alert alert--info">

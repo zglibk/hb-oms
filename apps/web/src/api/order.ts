@@ -146,8 +146,10 @@ export interface OrderProductPayload {
 }
 
 export interface OrderPayload {
-  poNo?: string;
-  productionNo?: string;
+  /** PO#（客户订单文件上的订单编号）——2026-08-14 起必填，服务端 DTO 同样硬校验 */
+  poNo: string;
+  /** 生产单号（台账「订单编号」口径）——同上，必填 */
+  productionNo: string;
   customerId?: number;
   customerName: string;
   orderDate: string;

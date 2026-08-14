@@ -40,13 +40,13 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
-            <el-form-item label="PO#">
+            <el-form-item label="PO#" prop="poNo">
               <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
           <!-- 生产单号与 PO# 一对一，都是订单级；不再挂在产品行上 -->
           <el-col :xs="24" :sm="12" :md="8">
-            <el-form-item label="生产单号">
+            <el-form-item label="生产单号" prop="productionNo">
               <el-input v-model="form.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
@@ -634,9 +634,18 @@ const isOpeningOrder = computed({
     form.isOpening = v;
   },
 });
+/*
+ * PO# 与生产单号 2026-08-14 起必填：两者都是对账用的业务键——PO# 是客户订单文件上的
+ * 号（送货单上按客户叫法印成「采购单编号」「合同编号」），生产单号是车间与台账认的
+ * 「订单编号」。任一为空，下游单据（送货单、台账、总计划导出）那一栏就是空白。
+ * ⚠️ 编辑存量订单时若这两项为空，会被要求补填后才能保存——这是有意的。
+ * 服务端 CreateOrderDto 另有同样的硬校验（API 直调同样拒绝）。
+ */
 const rules = {
   customerName: [{ required: true, message: '请选择或输入客户', trigger: 'change' }],
   orderDate: [{ required: true, message: '请选择订单日期', trigger: 'change' }],
+  poNo: [{ required: true, message: '请输入 PO#（客户订单文件上的订单编号）', trigger: 'blur' }],
+  productionNo: [{ required: true, message: '请输入生产单号', trigger: 'blur' }],
 };
 const attachments = ref<string[]>([]);
 
@@ -696,9 +705,9 @@ async function init() {
       const row = await getOrderDetail(sourceId);
       if (isCopy) {
         copyHint.value =
-          `已复制 ${row.orderNo} 的内容，PO#/交期已清空` +
-          (row.productionNo ? '，生产单号为递推建议值（可改可清空）' : '') +
-          '，请核对后保存';
+          `已复制 ${row.orderNo} 的内容，PO#/交期已清空，请填写新的 PO#` +
+          (row.productionNo ? '；生产单号已预填递推建议值（可改，但不能留空）' : '') +
+          '，核对后保存';
       } else {
         orderNo.value = row.orderNo;
         auditRow.value = row; // 底部审计条（创建人/更新人/时间）
@@ -1073,8 +1082,9 @@ async function onSave() {
   // URL；不 flush 就提交，落库的 HTML 里全是刷新即失效的 blob 地址。
   await richEditorRef.value?.flushUploads();
   const payload: OrderPayload = {
-    poNo: form.poNo || undefined,
-    productionNo: form.productionNo || undefined,
+    // 两者必填（表单 rules 已拦），故直接传值不再回退 undefined
+    poNo: form.poNo,
+    productionNo: form.productionNo,
     customerId: form.customerId,
     customerName: form.customerName,
     orderDate: form.orderDate,

@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -132,14 +133,31 @@ export class CreateOrderProductDto {
 }
 
 export class CreateOrderDto {
+  /*
+   * PO# 与生产单号 2026-08-14 起**必填**（业务部门要求）：两者都是对账用的业务键——
+   * PO# 是客户订单文件上的号（送货单按各客户叫法印成「采购单编号」「合同编号」），
+   * 生产单号是车间与台账认的「订单编号」。任一为空，下游单据那一栏就是空白。
+   *
+   * 更新走 UpdateOrderDto extends CreateOrderDto，故编辑同样受此约束——
+   * 编辑存量空值订单时会被要求补填，这是有意的（顺带把历史数据补齐）。
+   * 「期初补录」订单不豁免：is_opening 只是区分标记，从不改变校验行为（§5.6）。
+   */
+  /*
+   * ⚠️ `@IsNotEmpty` 必须写在**最靠近属性**的一行：装饰器自下而上注册，
+   * 而错误消息取 constraints 的第一条。放在上面的话，字段缺失（undefined）时
+   * 会报「不能超过 64 个字符」这种驴唇不对马嘴的提示（已实测）。
+   */
   /** PO#：客户订单文件上的订单编号，手工填写 */
-  @IsOptional() @IsString() @MaxLength(64) poNo?: string;
+  @IsString({ message: 'PO# 必须是文本' })
+  @MaxLength(64, { message: 'PO# 不能超过 64 个字符' })
+  @IsNotEmpty({ message: '请填写 PO#（客户订单文件上的订单编号）' })
+  poNo: string;
 
   /** 生产单号：订单级，与 PO# 一对一；台账「订单编号」展示此号 */
-  @IsOptional()
   @IsString({ message: '生产单号必须是文本' })
   @MaxLength(64, { message: '生产单号不能超过 64 个字符' })
-  productionNo?: string;
+  @IsNotEmpty({ message: '请填写生产单号' })
+  productionNo: string;
 
   @IsOptional() @Type(() => Number) @IsInt() customerId?: number;
 
