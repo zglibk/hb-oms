@@ -150,7 +150,10 @@
           <template #default="{ row }">{{ workshopLabel(row.workTeam) }}</template>
         </el-table-column>
         <el-table-column label="制单人" prop="creatorName" width="90" align="center">
-          <template #default="{ row }">{{ row.creatorName || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.creatorName" :seed="row.creatorName">{{ row.creatorName }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
@@ -230,6 +233,7 @@ import {
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';

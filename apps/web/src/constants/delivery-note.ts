@@ -66,8 +66,14 @@ export interface DeliveryTemplate {
 const ADDRESS = '地址：广东省中山市南头穗西月桂东路23号';
 const FAX = 'FAX：0760-87972639';
 const FOOTER_NOTE = '白色联留底  红色联收款凭证  黄色联客户';
-/** 通用版是四联单，与两套客户版的三联不同 */
+/**
+ * 通用版的联次说明：厂里同时在用四联与五联两种单据纸，**差异只有这一行文字**
+ * （版式、列、行数、签名栏完全相同），故两套模板共用下面的 `GENERIC_BASE`。
+ */
 const FOOTER_NOTE_4 = '第一联存根（白）　第二联收款依据（红）　第三联交客户（黄）　第四联入账（蓝）';
+// 用普通字符串拼接而不是模板字面量：联次之间是全角空格，
+// eslint 的 no-irregular-whitespace 只豁免普通字符串、不豁免模板字面量
+const FOOTER_NOTE_5 = FOOTER_NOTE_4 + '　第五联仓库（绿）';
 
 /** 品名列的回落链：主字段为空时不留空格，依次退到产品名称/要求描述、最后是产品型号 */
 const NAME_FALLBACK: Array<keyof DeliveryNoteRow> = ['productName', 'productModel'];
@@ -80,35 +86,51 @@ const REQ_FALLBACK: Array<keyof DeliveryNoteRow> = ['productRequirement', 'produ
  */
 const CODE_FALLBACK: Array<keyof DeliveryNoteRow> = ['customerDrawingNo'];
 
+/**
+ * 通用版的共用底座：四联与五联**只差底部一行联次说明**，其余（列、行数、签名栏、
+ * 客户信息区版式）完全相同。抽成底座而不是复制两份——复制迟早改了一边忘了另一边。
+ */
+const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'footerNote'> = {
+  contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
+  showDocNoInTitle: false,
+  // 通用版的客户信息区是「收货单位 / 送货单位 / 电话传真」三行式
+  metaStyle: 'consignee',
+  contactPhoneLine: '电话：0760-87972626　　传真：0760-87972639',
+  columns: [
+    { key: 'seq', label: '序号', width: '6%', align: 'center' },
+    // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
+    { key: 'poNo', label: '订单编号', width: '13.5%', align: 'center' },
+    { key: 'materialCode', label: '物料编码', width: '17%', align: 'center', fallbackKeys: CODE_FALLBACK },
+    // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
+    // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
+    { key: 'productModel', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
+    { key: 'specText', label: '规格型号', width: '21%', align: 'center' },
+    // 颜色列随全局「颜色」开关整列增减（§5.7）
+    { key: 'color', label: '颜色', width: '8%', align: 'center', flag: 'colorEnabled' },
+    // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
+    { key: 'unitLabel', label: '单位', width: '6%', align: 'center' },
+    { key: 'qty', label: '数量', width: '11%', align: 'center' },
+    { key: 'remark', label: '备注', width: '11%', pre: true },
+  ],
+  signatures: ['制单', '仓库', '提货人', '收货人签名'],
+  minRows: 6,
+};
+
 export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   {
+    ...GENERIC_BASE,
+    // code 保持 'generic' 不变：存量客户资料里绑的就是它，改编码会让绑定失效
     code: 'generic',
-    name: '通用',
-    description: '未指定客户专用版式时使用',
-    contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
-    showDocNoInTitle: false,
-    // 通用版的客户信息区是「收货单位 / 送货单位 / 电话传真」三行式
-    metaStyle: 'consignee',
-    contactPhoneLine: '电话：0760-87972626　　传真：0760-87972639',
-    columns: [
-      { key: 'seq', label: '序号', width: '6%', align: 'center' },
-      // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
-      { key: 'poNo', label: '订单编号', width: '13.5%', align: 'center' },
-      { key: 'materialCode', label: '物料编码', width: '17%', align: 'center', fallbackKeys: CODE_FALLBACK },
-      // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
-      // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
-      { key: 'productModel', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
-      { key: 'specText', label: '规格型号', width: '21%', align: 'center' },
-      // 颜色列随全局「颜色」开关整列增减（§5.7）
-      { key: 'color', label: '颜色', width: '8%', align: 'center', flag: 'colorEnabled' },
-      // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
-      { key: 'unitLabel', label: '单位', width: '6%', align: 'center' },
-      { key: 'qty', label: '数量', width: '11%', align: 'center' },
-      { key: 'remark', label: '备注', width: '11%', pre: true },
-    ],
-    signatures: ['制单', '仓库', '提货人', '收货人签名'],
-    minRows: 6,
+    name: '通用（四联）',
+    description: '未指定客户专用版式时使用；白/红/黄/蓝四联',
     footerNote: FOOTER_NOTE_4,
+  },
+  {
+    ...GENERIC_BASE,
+    code: 'generic5',
+    name: '通用（五联）',
+    description: '与四联版式相同，底部多一联「第五联仓库（绿）」',
+    footerNote: FOOTER_NOTE_5,
   },
   {
     code: 'nsk',
