@@ -54,6 +54,16 @@ export class CreateCustomerDto {
   @MaxLength(255)
   deliveryAddress?: string;
 
+  /**
+   * 送货单模板编码（空 = 取系统配置的全局默认）。
+   * **刻意不加 @IsIn 值域校验**：版式定义在前端注册表，值域再写死一份，
+   * 加一套新客户模板就要前后端改两处、必然漂移（迁移 SQL 头注释同此理由）。
+   */
+  @IsOptional()
+  @IsString({ message: '送货单模板必须为字符串' })
+  @MaxLength(32, { message: '送货单模板编码不能超过32字符' })
+  deliveryTemplate?: string;
+
   @IsOptional()
   @IsIn([0, 1], { message: '状态只能为 0 或 1' })
   status?: number;

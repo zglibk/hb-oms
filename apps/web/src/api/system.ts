@@ -288,6 +288,8 @@ export interface SystemConfig {
   inchToMm: number;
   /** 规格默认查看单位：mm / inch（三张汇总页初始视图 + 两个导出的规格列） */
   dimensionViewUnit: string;
+  /** 送货单全局默认模板编码（客户资料未单独绑定模板时才用它） */
+  deliveryTemplateDefault: string;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;
@@ -318,6 +320,11 @@ export interface FeatureFlags {
   inchToMm: number;
   /** 规格默认查看单位：三张汇总页的初始视图与两个导出的规格列都看它 */
   dimensionViewUnit: 'mm' | 'inch';
+  /**
+   * 送货单默认模板编码（**非布尔项**）：客户资料未单独绑定模板时用它。
+   * 版式定义在 constants/delivery-note.ts；取到未知编码时打印页回落通用模板。
+   */
+  deliveryTemplateDefault: string;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */

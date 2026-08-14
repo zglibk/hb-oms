@@ -44,6 +44,19 @@ export class Customer {
   @Column({ name: 'delivery_address', type: 'varchar', length: 255, nullable: true, comment: '默认交货地址' })
   deliveryAddress: string | null;
 
+  /**
+   * 送货单模板编码（版式定义在前端注册表 web/src/constants/delivery-note.ts）。
+   * 空 = 取系统配置的全局默认模板；取到未知编码时打印页回落通用模板。
+   */
+  @Column({
+    name: 'delivery_template',
+    type: 'varchar',
+    length: 32,
+    nullable: true,
+    comment: '送货单模板编码：nsk耐斯克 jinggong精工 generic通用；空=取系统配置的全局默认模板',
+  })
+  deliveryTemplate: string | null;
+
   /** 状态：1启用 0停用 */
   @Column({ type: 'tinyint', default: 1, comment: '状态：1启用 0停用' })
   status: number;

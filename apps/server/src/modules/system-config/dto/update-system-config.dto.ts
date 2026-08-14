@@ -49,4 +49,13 @@ export class UpdateSystemConfigDto {
   @IsOptional()
   @IsIn(['mm', 'inch'], { message: '默认规格单位只能是 mm 或 inch' })
   dimensionViewUnit?: string;
+
+  /**
+   * 送货单默认模板编码（客户资料未单独配置时用它）。
+   * **刻意不加 @IsIn 值域**：版式定义在前端注册表，值域写死一份就得前后端两处改（同客户 DTO）。
+   */
+  @IsOptional()
+  @IsString({ message: '送货单默认模板必须为字符串' })
+  @MaxLength(32, { message: '送货单默认模板编码不能超过32字符' })
+  deliveryTemplateDefault?: string;
 }

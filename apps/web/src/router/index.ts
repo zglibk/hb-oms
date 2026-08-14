@@ -30,6 +30,12 @@ const constantRoutes: RouteRecordRaw[] = [
     meta: { title: '生产任务单' },
   },
   {
+    path: '/finished-stock/delivery-note',
+    name: 'DeliveryNotePrint',
+    component: () => import('@/views/finished-stock/delivery-note.vue'),
+    meta: { title: '送货单' },
+  },
+  {
     path: '/',
     name: 'Layout',
     component: () => import('@/layout/index.vue'),

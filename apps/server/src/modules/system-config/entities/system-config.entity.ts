@@ -139,6 +139,21 @@ export class SystemConfig {
   })
   dimensionViewUnit: string;
 
+  /**
+   * 送货单默认模板编码：客户资料未单独配置模板时用它（送货单打印，§5.6）。
+   * 版式定义在前端注册表 web/src/constants/delivery-note.ts；库里不做值域约束，
+   * 打印页取到未知编码时回落通用模板。
+   */
+  @Column({
+    name: 'delivery_template_default',
+    type: 'varchar',
+    length: 32,
+    default: 'generic',
+    comment:
+      '送货单默认模板编码：nsk耐斯克 jinggong精工 generic通用；客户资料未单独配置模板时用它',
+  })
+  deliveryTemplateDefault: string;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

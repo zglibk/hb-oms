@@ -78,7 +78,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   // 仓管员：成品出入库操作
   WH_OPR: [
     'material-mgmt', 'finished-stock', 'finished-stock:create', 'finished-stock:update',
-    'finished-stock:confirm', 'finished-stock:cancel',
+    'finished-stock:confirm', 'finished-stock:cancel', 'finished-stock:print',
     'stock-balance', 'part-stock',
   ],
   // 其余内置角色不预置权限：岗位职责差异大，由管理员在「角色管理 → 分配权限」按需授予，

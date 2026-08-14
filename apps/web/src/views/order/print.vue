@@ -155,6 +155,7 @@ import {
 import { readBlobError } from '@/utils/download';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
+import { COMPANY_FULL_NAME } from '@/constants/company';
 import {
   formatProductTypes,
   formatDimension,
@@ -177,12 +178,10 @@ import { loadDict } from '@/composables/useDict';
  * 默认值「启用」——管理员明明停用了客户图号，导出的单据上却仍然印着。
  */
 
-/**
- * 单据抬头：**固定用公司全称，刻意不取系统配置的 companyName**。
- * 该配置是登录页/标题栏的品牌短名（「海宝五金」），而任务单是下发车间的正式单据，
- * 抬头必须是营业执照全称；公司更名时改此常量（与电镀加工单先例同约定）。
+/*
+ * 单据抬头固定用公司全称（不取系统配置的品牌短名），常量与理由见 constants/company.ts。
+ * 2026-08-14 送货单打印页也要用它，故抽到公共常量，两张单据共用一处。
  */
-const COMPANY_FULL_NAME = '中山市海宝精密五金有限公司';
 
 /** 「客户图号」全局开关（系统配置 → 业务字段）；加载见 init() */
 const { customerDrawingNoEnabled } = useFeatureFlags();

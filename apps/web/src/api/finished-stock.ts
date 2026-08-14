@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import { downloadXlsx } from '@/utils/download';
+import { downloadFile, downloadXlsx } from '@/utils/download';
 import type { PageResult } from './customer';
 
 /** 出入库明细行（锚定订单**产品行** + 边别） */
@@ -231,3 +231,78 @@ export const reverseFinishedDoc = (id: number, data: ReversePayload) =>
     `/api/finished-stock/${id}/reverse`,
     data,
   );
+
+/* ==================== 送货单打印 ==================== */
+
+/**
+ * 送货单一行——**模板无关的全字段行**：服务端把候选字段都给出来，
+ * 哪几列上纸面、列叫什么名，由模板注册表 constants/delivery-note.ts 决定。
+ */
+export interface DeliveryNoteRow {
+  seq: number;
+  orderProductId: number;
+  /** 采购单编号 / 合同编号 */
+  poNo: string;
+  /** 物料编码 / 产品编码（客户方编码） */
+  materialCode: string;
+  productName: string;
+  /** 产品要求描述（耐斯克模板的「品名」栏取它） */
+  productRequirement: string;
+  /** 产品型号（上面两个都空时的回落值） */
+  productModel: string;
+  itemNo: string;
+  /** 规格：英寸录入 → 17寸；mm 录入 → 425mm */
+  specText: string;
+  /** 已按订单单位折算后的数量（奇数支折套会出现 0.5） */
+  qty: number;
+  /** set / piece */
+  unit: string;
+  /** 套 / 支 */
+  unitLabel: string;
+  /** 支数原值（内部口径，对账用） */
+  qtyPcs: number;
+  /** 海宝内部单号 = 生产单号 */
+  productionNo: string;
+  orderNo: string;
+  remark: string;
+}
+
+export interface DeliveryNote {
+  docId: number;
+  docNo: string;
+  /** 纸面「NO:」——由出库单号派生（FGO260814-0001 → 20260814-0001），不采番 */
+  deliveryNo: string;
+  docDate: string;
+  bizType: string;
+  status: number;
+  /** 单头备注 → 纸面合计行的备注格（车间写「共19托」这类装箱信息） */
+  remark: string;
+  /** 制单 = 开这张出库单的人 */
+  creatorName: string;
+  customerName: string;
+  customerCode: string;
+  customerPhone: string;
+  customerAddress: string;
+  /** 客户绑定的模板编码；空串 = 取系统配置的全局默认 */
+  templateCode: string;
+  salesman: string;
+  merchandiser: string;
+  rows: DeliveryNoteRow[];
+  /** 分单位合计（混着套与支时并列，不加成一个数） */
+  totals: Array<{ unit: string; unitLabel: string; qty: number }>;
+  /** 全单单位是否一致 */
+  unitConsistent: boolean;
+  /** 一致时的单位中文；不一致为 null（表头退化为「数量」） */
+  unitLabel: string | null;
+}
+
+/** 送货单取数（只有销售出库单可打；已作废/跨客户会被服务端拒绝） */
+export const getDeliveryNote = (id: number) =>
+  request.get<any, DeliveryNote>(`/api/finished-stock/${id}/delivery-note`);
+
+/**
+ * 《送货单》PDF：服务端用无头浏览器渲染 /finished-stock/delivery-note 打印页出 PDF，
+ * 点一下直接下载（不弹打印对话框），同《生产任务单》做法。
+ */
+export const downloadDeliveryNotePdf = (id: number, fallbackName: string) =>
+  downloadFile(`/api/finished-stock/${id}/delivery-note-pdf`, undefined, fallbackName);

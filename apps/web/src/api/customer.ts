@@ -9,6 +9,8 @@ export interface CustomerItem {
   salesman: string | null;
   merchandiser: string | null;
   deliveryAddress: string | null;
+  /** 送货单模板编码（版式见 constants/delivery-note.ts）；空 = 用系统配置的全局默认 */
+  deliveryTemplate: string | null;
   status: number;
   remark: string | null;
   updaterName?: string | null;

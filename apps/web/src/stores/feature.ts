@@ -32,6 +32,8 @@ const DEFAULTS: FeatureFlags = {
   // 换算系数缺省 25（我司口径，非国标 25.4）；默认查看单位缺省 mm（内部存储口径）
   inchToMm: 25,
   dimensionViewUnit: 'mm',
+  // 送货单默认模板：客户资料未单独绑定模板时用它（版式见 constants/delivery-note.ts）
+  deliveryTemplateDefault: 'generic',
 };
 
 type FeatureState = FeatureFlags & {

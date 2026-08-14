@@ -100,6 +100,8 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'finished-stock:confirm', perm_name: '确认出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 3 },
   { perm_code: 'finished-stock:cancel', perm_name: '作废出入库单', perm_type: 2, parent_code: 'finished-stock', sort: 4 },
   { perm_code: 'finished-stock:reverse', perm_name: '红字冲销', perm_type: 2, parent_code: 'finished-stock', sort: 5 },
+  // 送货单：打印页取数走菜单读权限，出 PDF 走这个操作权限（§5.6 送货单打印）
+  { perm_code: 'finished-stock:print', perm_name: '打印送货单', perm_type: 2, parent_code: 'finished-stock', sort: 6 },
 
   { perm_code: 'stock-balance', perm_name: '成品库存', perm_type: 1, parent_code: 'material-mgmt', menu_path: '/stock-balance', component: 'stock-balance/index', icon: 'Files', sort: 2 },
   // 导入 = 批量搬上线前的存量，落地成一张 FGO 期初单（余额只能由单据驱动，§5.6），

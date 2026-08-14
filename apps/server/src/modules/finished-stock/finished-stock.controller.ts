@@ -8,13 +8,15 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { FinishedStockService } from './finished-stock.service';
+import { PdfService } from '../../common/services/pdf.service';
 import {
   CreateFinishedDocDto,
   QueryBalanceDto,
@@ -38,7 +40,12 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
  */
 @Controller('finished-stock')
 export class FinishedStockController {
-  constructor(private readonly service: FinishedStockService) {}
+  constructor(
+    private readonly service: FinishedStockService,
+    // 送货单 PDF 走同一个单例浏览器（@Global 的 CommonModule 已 exports），
+    // 内存纪律见 PdfService 头注释
+    private readonly pdfService: PdfService,
+  ) {}
 
   @Get()
   @RequirePermissions('finished-stock')
@@ -142,6 +149,52 @@ export class FinishedStockController {
   @OperationLog('成品出入库', '作废单据')
   async cancel(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
     return this.service.cancel(id, user);
+  }
+
+  /**
+   * 送货单取数（打印页用）。读权限即页面菜单码（§2.1）——能看出库单就能看这张单的送货信息。
+   * 两段路径不会被上面的 `:id` 拦截（`:id` 只匹配单段），无需调整注册顺序。
+   */
+  @Get(':id/delivery-note')
+  @RequirePermissions('finished-stock')
+  async deliveryNote(@Param('id', ParseIntPipe) id: number) {
+    return this.service.buildDeliveryNote(id);
+  }
+
+  /**
+   * 送货单 PDF：服务端用无头浏览器渲染**前端那张打印页**再回传文件，点一下直接下载。
+   * 不另拼一份 HTML 模板——两套模板必然漂移（同生产任务单先例）。
+   */
+  @Get(':id/delivery-note-pdf')
+  @SkipTransform()
+  @RequirePermissions('finished-stock:print')
+  @OperationLog('成品出入库', '导出送货单PDF')
+  async deliveryNotePdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    // 先取一次数：单据不存在/不是销售出库/已作废时直接报错，省得白起浏览器
+    const note = await this.service.buildDeliveryNote(id);
+    const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const buf = await this.pdfService.renderPrintPage(this.printPageUrl(id), token);
+    const filename = `送货单-${note.deliveryNo || note.docNo}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="delivery-note.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
+  }
+
+  /**
+   * 打印页在**服务器内网**的地址（同 order.controller 的 printPageUrl）。
+   * 生产：Nginx 的 `/oms/admin/`（SPA base）；开发：Vite dev server 5174。
+   */
+  private printPageUrl(id: number): string {
+    const base = (process.env.PRINT_BASE_URL || 'http://127.0.0.1:5174').replace(/\/+$/, '');
+    return `${base}/finished-stock/delivery-note?id=${id}`;
   }
 
   /** 红字冲销：生成方向相反的 FGR 单并自动确认，原单不变 */

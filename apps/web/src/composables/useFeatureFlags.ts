@@ -18,6 +18,7 @@ export function useFeatureFlags(): {
   productRequirementEnabled: ComputedRef<boolean>;
   inchToMm: ComputedRef<number>;
   dimensionViewUnit: ComputedRef<'mm' | 'inch'>;
+  deliveryTemplateDefault: ComputedRef<string>;
 } {
   const store = useFeatureStore();
   return {
@@ -39,5 +40,10 @@ export function useFeatureFlags(): {
     inchToMm: computed(() => store.inchToMm),
     /** 规格默认查看单位：页面上的 mm/寸 切换以它为初值，用户仍可临时切换 */
     dimensionViewUnit: computed(() => store.dimensionViewUnit),
+    /**
+     * 送货单默认模板编码：**客户资料未单独绑定模板时**才用它。
+     * 优先级 客户绑定 → 本默认值 → 通用模板（deliveryTemplateOf 取不到即回落）。
+     */
+    deliveryTemplateDefault: computed(() => store.deliveryTemplateDefault),
   };
 }

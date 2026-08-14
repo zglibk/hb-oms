@@ -23,6 +23,12 @@ import {
   UpdateFinishedDocDto,
 } from './dto/finished-stock.dto';
 import { loadInboundQuota, quotaKey } from '../assembly/assembly-quota.util';
+import {
+  DeliveryNoteSourceRow,
+  buildDeliveryRows,
+  deliveryNoOf,
+  sumByUnit,
+} from './delivery-note.util';
 import { syncOrderFinishState } from '../order/order-owed.util';
 // 仅取类型：期初入参形状定义在 opening 模块，此处 import type 编译后即擦除，无运行时耦合
 import type { OpeningFinishedDto } from '../opening/dto/opening.dto';
@@ -136,6 +142,109 @@ export class FinishedStockService {
       ),
       totalQty: items.reduce((s, it) => s + (it.quantity || 0), 0),
     });
+  }
+
+  /* ==================== 送货单（打印取数） ==================== */
+
+  /**
+   * 送货单取数（CLAUDE.md §5.6「送货单打印」）：一张**销售出库单**出一张送货单。
+   *
+   * 锚点选出库单而不是新建一张送货单表：出库单就是发货动作本身，客户/生产单号/
+   * 型号/规格/数量都已快照，且受结存守卫，账实一致；纸质单专有的托数等信息借用备注格。
+   *
+   * 本方法**不持有任何版式知识**——候选字段一律给全，哪几列上纸面由前端模板注册表决定。
+   * 出库明细缺的四个字段（PO#/物料编码/产品名称/产品要求描述/订单单位）不在快照里，
+   * 这里 JOIN 订单侧实时取：送货单是只读展示，不落库，不构成新的快照口径。
+   */
+  async buildDeliveryNote(id: number) {
+    const doc = await this.docRepo.findOne({ where: { id } });
+    if (!doc) throw new NotFoundException('单据不存在');
+    if (doc.bizType !== FINISHED_BIZ_TYPE.SALE_OUTBOUND) {
+      throw new BadRequestException(
+        '只有「销售出库」单可以打印送货单（生产入库 / 期初 / 红字冲销单都不是对客户的发货动作）',
+      );
+    }
+    if (doc.status === FINISHED_DOC_STATUS.CANCELLED) {
+      throw new BadRequestException('该单据已作废，不能打印送货单');
+    }
+
+    const raw: Array<
+      DeliveryNoteSourceRow & {
+        customer_name: string | null;
+        customer_id: number | null;
+        salesman: string | null;
+        merchandiser: string | null;
+      }
+    > = await this.dataSource.query(
+      `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
+              i.order_no, i.customer_name, i.production_no, i.item_no,
+              i.product_model, i.dimension_mm, i.dimension_text, i.remark,
+              p.material_code, p.product_name, p.product_requirement,
+              p.unit, p.dimension_raw, p.dimension_unit,
+              o.po_no, o.customer_id, o.salesman, o.merchandiser
+         FROM t_finished_item i
+         LEFT JOIN t_order_product p ON p.id = i.order_product_id
+         LEFT JOIN t_order o ON o.id = p.order_id
+        WHERE i.doc_id = ?
+        ORDER BY i.sort ASC, i.id ASC`,
+      [id],
+    );
+    if (!raw.length) throw new BadRequestException('该单据没有明细，无法打印送货单');
+
+    // 一张送货单只能对应一个客户——抬头、地址、模板都是客户级的，混单印出来是错单。
+    // 按客户名称快照去重（手输客户没有 customer_id，用名称才判得准）
+    const customerNames = [...new Set(raw.map((r) => String(r.customer_name ?? '').trim()).filter(Boolean))];
+    if (customerNames.length > 1) {
+      throw new BadRequestException(
+        `本单含 ${customerNames.length} 个客户的货（${customerNames.join('、')}），` +
+          '一张送货单只能对应一个客户，请按客户分单出库后再打印',
+      );
+    }
+
+    // 客户资料：模板绑定、送货地址、电话都取主数据当前值（送货单是当下要送的货，
+    // 不像业务流水那样需要历史快照——地址改了就该按新地址送）
+    const customerIds = [...new Set(raw.map((r) => Number(r.customer_id)).filter((v) => v > 0))];
+    const customers: any[] = customerIds.length
+      ? await this.dataSource.query(
+          `SELECT id, customer_code, customer_name, contact_phone, delivery_address, delivery_template
+             FROM t_customer WHERE id IN (${customerIds.map(() => '?').join(',')})`,
+          customerIds,
+        )
+      : [];
+    // 同名多码时取第一条（客户名相同即同一收货方，抬头一致）
+    const customer = customers[0] ?? null;
+
+    const rows = buildDeliveryRows(raw);
+    const totals = sumByUnit(rows);
+    const joinDistinct = (list: Array<string | null>) =>
+      [...new Set(list.map((v) => String(v ?? '').trim()).filter(Boolean))].join('、');
+
+    return {
+      docId: doc.id,
+      docNo: doc.docNo,
+      /** 纸面「NO:」——由单号派生，不采番（见 deliveryNoOf 注释） */
+      deliveryNo: deliveryNoOf(doc.docNo),
+      docDate: doc.docDate,
+      bizType: doc.bizType,
+      status: doc.status,
+      /** 单头备注：纸面合计行的备注格（车间在那里写「共19托」这类装箱信息） */
+      remark: doc.remark ?? '',
+      /** 制单 = 开这张出库单的人 */
+      creatorName: doc.creatorName ?? '',
+      customerName: customerNames[0] ?? String(customer?.customer_name ?? ''),
+      customerCode: String(customer?.customer_code ?? ''),
+      customerPhone: String(customer?.contact_phone ?? ''),
+      customerAddress: String(customer?.delivery_address ?? ''),
+      /** 客户绑定的模板编码；空串 = 前端取系统配置的全局默认 */
+      templateCode: String(customer?.delivery_template ?? '').trim(),
+      salesman: joinDistinct(raw.map((r) => r.salesman)),
+      merchandiser: joinDistinct(raw.map((r) => r.merchandiser)),
+      rows,
+      totals,
+      /** 全单单位是否一致：一致时表头写「数量（套）」，不一致则退化为「数量」+ 单元格带单位 */
+      unitConsistent: totals.length <= 1,
+      unitLabel: totals.length === 1 ? totals[0].unitLabel : null,
+    };
   }
 
   /** 成品库存（只读结存查询）：余额行 + 订单侧展示信息 */

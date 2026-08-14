@@ -89,6 +89,8 @@ const MIGRATIONS: string[] = [
   'migration-product-requirement.sql',
   // 装配管理「导出装配记录」权限点（仅授权，无表结构变更）
   'migration-assembly-export.sql',
+  // 送货单打印：客户绑定模板 + 全局默认模板两列
+  'migration-delivery-note.sql',
 ];
 
 /**
@@ -233,6 +235,9 @@ const expectedColumns = [
   // 单位换算（非布尔配置：换算系数 + 默认查看单位）
   't_system_config.inch_to_mm',
   't_system_config.dimension_view_unit',
+  // 送货单打印：客户绑定模板 + 全局默认模板
+  't_customer.delivery_template',
+  't_system_config.delivery_template_default',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）

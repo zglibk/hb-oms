@@ -51,6 +51,9 @@
         <el-table-column label="默认业务员" prop="salesman" width="110" />
         <el-table-column label="默认跟单员" prop="merchandiser" width="110" />
         <el-table-column label="默认交货地址" prop="deliveryAddress" min-width="160" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="送货单模板" width="110">
+          <template #default="{ row }">{{ deliveryTemplateName(row.deliveryTemplate) }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="tagTypeOf(ENABLE_STATUS, row.status)" size="small">
@@ -94,6 +97,15 @@
         </el-form-item>
         <el-form-item label="默认交货地址">
           <el-input v-model="form.deliveryAddress" />
+        </el-form-item>
+        <!-- 送货单模板：决定给这个客户打印送货单时用哪套版式（列集合/联系电话/签名项都不同）。
+             留空 = 用「系统配置 → 业务字段」里的全局默认模板 -->
+        <el-form-item label="送货单模板">
+          <el-select v-model="form.deliveryTemplate" clearable placeholder="留空 = 用系统默认模板">
+            <el-option
+              v-for="t in DELIVERY_TEMPLATE_OPTIONS" :key="t.value" :label="t.label" :value="t.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -159,6 +171,7 @@ import {
   type CustomerItem,
 } from '@/api/customer';
 import { ENABLE_STATUS, labelOf, tagTypeOf } from '@/constants/dict';
+import { DELIVERY_TEMPLATE_OPTIONS } from '@/constants/delivery-note';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -180,6 +193,15 @@ async function load() {
 }
 load();
 
+/**
+ * 送货单模板名。未绑定时显示「系统默认」而不是留空——
+ * 空格会让人以为"这个客户不能打送货单"，实际是跟着全局默认模板走。
+ */
+function deliveryTemplateName(code: string | null): string {
+  if (!code) return '系统默认';
+  return labelOf(DELIVERY_TEMPLATE_OPTIONS, code) || code;
+}
+
 /* ===== 新增/编辑 ===== */
 const formVisible = ref(false);
 const saving = ref(false);
@@ -193,6 +215,8 @@ const emptyForm = () => ({
   salesman: '',
   merchandiser: '',
   deliveryAddress: '',
+  /** 送货单模板编码；空串 = 用系统配置的全局默认模板 */
+  deliveryTemplate: '',
   status: 1,
   remark: '',
 });
@@ -217,6 +241,7 @@ function openEdit(row: CustomerItem) {
     salesman: row.salesman ?? '',
     merchandiser: row.merchandiser ?? '',
     deliveryAddress: row.deliveryAddress ?? '',
+    deliveryTemplate: row.deliveryTemplate ?? '',
     status: row.status,
     remark: row.remark ?? '',
   });

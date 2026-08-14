@@ -144,6 +144,14 @@
                 size="small" v-permission.disable="'finished-stock:reverse'" link type="warning" :icon="RefreshLeft"
                 :loading="actingId === row.id" @click="onReverse(row)"
               >红字冲销</el-button>
+              <!-- 送货单：只有销售出库单才是对客户的发货动作（入库/期初/红字都不是），
+                   已作废单不给打；服务端另有同样的守卫 -->
+              <el-button
+                v-if="row.bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND"
+                size="small" v-permission.disable="'finished-stock:print'" link type="primary" :icon="Printer"
+                :disabled="row.status === FINISHED_DOC_STATUS_VALUE.CANCELLED"
+                @click="openDeliveryNote(row)"
+              >送货单</el-button>
             </app-actions>
           </template>
         </el-table-column>
@@ -157,7 +165,7 @@
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload } from '@element-plus/icons-vue';
+import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload, Printer } from '@element-plus/icons-vue';
 import {
   getFinishedDocList,
   confirmFinishedDoc,
@@ -231,6 +239,16 @@ function openCreate(bizType: string) {
 }
 function openEdit(row: FinishedDocRow) {
   router.push({ name: 'FinishedStockForm', query: { id: row.id } });
+}
+
+/**
+ * 送货单在**新标签页**打开（同生产任务单）：单据是拿去打印随货发出的，
+ * 开新页签能留住列表的筛选与滚动位置，打完直接关掉。
+ * 用 router.resolve 拿 href 而不是手拼路径——生产 SPA base 是 `/oms/admin/`。
+ */
+function openDeliveryNote(row: FinishedDocRow) {
+  const { href } = router.resolve({ path: '/finished-stock/delivery-note', query: { id: row.id } });
+  window.open(href, '_blank');
 }
 
 /** 已确认且非红字单才可冲销（红字单不可再冲销，§7.1） */

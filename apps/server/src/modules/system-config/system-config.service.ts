@@ -69,6 +69,7 @@ export class SystemConfigService {
     productRequirementEnabled: boolean;
     inchToMm: number;
     dimensionViewUnit: 'mm' | 'inch';
+    deliveryTemplateDefault: string;
   }> {
     const row = await this.get();
     // 系数落库前已被 DTO 校验，但旧行/脏数据可能是 0 或 NULL，这里兜一次缺省值：
@@ -82,6 +83,8 @@ export class SystemConfigService {
       productRequirementEnabled: Number(row.productRequirementEnabled) === 1,
       inchToMm: Number.isFinite(inchToMm) && inchToMm > 0 ? inchToMm : INCH_TO_MM,
       dimensionViewUnit: row.dimensionViewUnit === DIMENSION_UNIT.INCH ? 'inch' : 'mm',
+      // 送货单默认模板：空/NULL 回落通用模板（版式在前端注册表，此处不校验值域）
+      deliveryTemplateDefault: String(row.deliveryTemplateDefault ?? '').trim() || 'generic',
     };
   }
 
