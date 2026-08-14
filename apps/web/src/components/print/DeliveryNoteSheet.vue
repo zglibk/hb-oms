@@ -18,7 +18,7 @@
           <span class="doc-meta__label">客户</span>
           <span class="doc-meta__value">{{ note.customerName || '' }}</span>
         </div>
-        <div class="doc-meta__item">
+        <div class="doc-meta__item doc-meta__item--wide">
           <span class="doc-meta__label">电话：</span>
           <span class="doc-meta__value doc-meta__value--sm">{{ note.customerPhone }}</span>
         </div>
@@ -218,18 +218,38 @@ function signValue(label: string): string {
 
 /* ===== 客户信息 ===== */
 .doc-meta { margin-top: 3mm; }
-.doc-meta__row { display: flex; align-items: flex-end; gap: 6mm; margin-bottom: 1.5mm; }
-.doc-meta__item { display: flex; align-items: flex-end; gap: 2mm; }
-.doc-meta__item--grow { flex: 1; }
-.doc-meta__label { flex: none; font-weight: 700; }
+.doc-meta__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36mm 34mm;
+  align-items: end;
+  column-gap: 5mm;
+  margin-bottom: 1.5mm;
+}
+.doc-meta__item {
+  display: grid;
+  grid-template-columns: 10mm minmax(0, 1fr);
+  align-items: end;
+  column-gap: 2mm;
+  min-width: 0;
+}
+.doc-meta__item--grow {
+  grid-column: 1;
+  grid-template-columns: 8mm minmax(0, 1fr);
+}
+/* 电话占满右侧两列；下一行再由日期与 NO 各占一列，左侧值区因此上下等宽。 */
+.doc-meta__item--wide { grid-column: 2 / -1; }
+.doc-meta__label {
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: right;
+}
 /* 值区带下划线，形态与纸质单的填空格一致 */
 .doc-meta__value {
-  flex: 1;
-  min-width: 30mm;
+  display: block;
+  min-width: 0;
   border-bottom: 1px solid #333;
   padding: 0 1mm 0.5mm;
 }
-.doc-meta__value--sm { min-width: 24mm; }
 
 /* ===== 明细表 ===== */
 .note-table {
