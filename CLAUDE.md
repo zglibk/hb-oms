@@ -109,7 +109,11 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
   - 系统管理(90)：用户/角色/菜单权限/数据字典/**打印模板**/操作日志/更新日志/系统配置（`system:print-template` 2026-08-14 新增，排在数据字典与操作日志之间；纯前端页，看模板效果 + 设全局默认，无自己的后端接口。**菜单排序改清单 `sort` 即生效**——同步服务会 upsert `sort`，无需迁移 SQL）
 - **调整菜单归属只改清单里的 `parent_code` + `sort`，无需迁移 SQL**：`PermissionSyncService` 第二遍对清单中**每一条**（含存量行）无条件 `update({ parentId })`，重启即生效。同理改名/改图标也只改清单。
 - 一级菜单**可以是叶子**（带 component 无 children）：`dynamic.ts` 按 `component && path` 注册路由、`SidebarItem` 用 `v-else-if="menu.path"` 渲染成普通菜单项，订单跟踪台账即用此形态置顶。
-- 权限变更后，相关用户需**重新登录**刷新 JWT 权限。
+- **权限变更后不需要重新登录**（2026-08-14 核实并订正——旧表述「需重新登录刷新 JWT 权限」是早期实现的遗留）：
+  - **服务端是实时的**：JWT 只承载身份，每个请求经 `UserAuthCacheService` 取实时鉴权上下文（60s TTL 内存缓存，角色/权限变更时由业务服务主动 `invalidate*`）。所以接口层面授权即刻生效，停用账号、调数据范围同理。
+  - **前端是快照**：按钮与菜单取自登录/刷新页面时的 `GET /auth/profile`。故新按钮要**刷新页面**才可见（`v-permission` 是指令，只在挂载/重渲染时判断）；菜单是响应式渲染的，`store.menus` 一变就更新。
+  - **已做静默同步**（[usePermissionSync.ts](apps/web/src/composables/usePermissionSync.ts)，布局层调用）：窗口重新获得焦点时节流（5 分钟）重拉 profile，菜单立即生效并补注册动态路由；有变化才提示，权限被**收回**时给不自动关闭的警告（那种情况用户屏幕上还留着不该点的按钮）。撞 403 时由 `request.ts` 调 `syncOnForbidden` 绕过节流立即同步。
+  - **不要用强制下线**（`tokenInvalidBefore` 的 `revokeSessions`）来"让权限生效"——服务端本就实时，下线只会打断正在录单的人。那个能力留给停用账号/离职这类安全场景。
 - **内置角色 17 个**（公司岗位编制，数据范围一律「全部」、`is_builtin=1` 不可删除）：`GEN_MGR` 总经理 / `VICE_MGR` 副总经理 / `BUS_MGR` 业务经理 / `BUS_OPR` 业务员 / `DOC_OPR` 跟单员 / `PLN_MGR` 计划经理 / `PLN_OPR` 计划员 / `PROD_MGR` 生产经理 / `PROD_OPR` 生产文员 / `WH_OPR` 仓管员 / `TECH_MGR` 技术经理 / `TECH_ENG` 技术工程师 / `QA_MGR` 品质经理 / `PQE_ENG` PQE 工程师 / `FIN_MGR` 财务经理 / `PAY_OPR` 薪资核算员 / `admin` 系统管理员。
   - **角色不像权限点那样自动同步**：`PermissionSyncService` 只管 `t_permission`，角色是种子数据（只在 `db:init` 跑），**存量库必须写迁移 SQL**。三处需同时改：`seed-data.ts` 的 `ROLES` / `ROLE_PERMISSIONS` / `USERS`、迁移 SQL、前端 `dict.ts` 的 `ROLE_MAP`。
   - **`admin` 编码不可更名**：`PermissionSyncService.grantAllToAdmin()` 按 `role_code='admin'` 定位，改名会导致 admin 不再自动获得全部权限。
@@ -474,7 +478,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - ⚠️ **`onlyOwed`/`onlyOverdue` 绝不透传 findLedger**：那边是订单行级过滤，会把同产品已交清的订单行剔掉、聚合累计失真；本页「只看有欠数/有库存」一律在**聚合行**上过滤（E2E 有回归用例）。
 - **Tab2 期间口径**：按**单据日期**切区间，`期末 = 期初 + 期间入 − 期间出`（同一份流水推算，天然勾稽）；期初 = from 之前全部已确认单据的 `direction×quantity` 净额（**不分族**），期间入/出按 `order-owed.util` 单据族拆分（唯一事实源，禁止另写）。**跨期红字计入红字发生期**（期间数可为负，界面标红）——财务标准处理，别"修"成归属原单期间。全量区间下期末合计 = `t_finished_balance` 合计（E2E 断言）。
 - 两个导出均双 Sheet（汇总+明细，装配导出模式）：颜色列随开关条件展开、合计行按表头名定位、规格列跟随默认查看单位；空结果/超 5000 行拒绝。
-- 权限：菜单 `product-summary` 即页面读权限、导出 `product-summary:export`，挂 `analysis` 容器（sort 8，物料与设备之间）；**无迁移、不预置角色**（admin 启动自动补授，其余管理员界面授权后重新登录）。
+- 权限：菜单 `product-summary` 即页面读权限、导出 `product-summary:export`，挂 `analysis` 容器（sort 8，物料与设备之间）；**无迁移、不预置角色**（admin 启动自动补授，其余由管理员在界面授权——授完刷新页面即可，见 §二 权限变更生效方式）。
 
 **送货单打印（2026-08-14，随货发给客户的纸质单）**
 

@@ -59,6 +59,34 @@ export const useUserStore = defineStore('user', {
       return res;
     },
 
+    /**
+     * 同步权限（管理员改了授权后让界面跟上）。
+     *
+     * **服务端的权限校验本来就是实时的**（UserAuthCacheService 每请求查库、60s TTL、
+     * 变更时主动失效），所以这里要解决的只是"界面显不显示"，**不需要强制用户重新登录**。
+     *
+     * 三类东西的生效方式不同，返回值据此让调用方决定要不要提示：
+     *   - **菜单**：`menus` 是响应式渲染的，赋值即刷新，**真静默生效**；
+     *   - **动态路由**：新菜单要 addRoute 才点得进去（调用方负责，见 usePermissionSync）；
+     *   - **按钮**：`v-permission` 是指令，只在挂载/重渲染时判断，**必须刷新页面**才变。
+     *
+     * @returns 与上次相比的差异；`changed` 为 false 时调用方应完全静默
+     */
+    async syncPermissions(): Promise<{
+      changed: boolean;
+      added: string[];
+      removed: string[];
+      menuChanged: boolean;
+    }> {
+      const beforePerms = [...this.permissions];
+      const beforeMenu = JSON.stringify(this.menus.map((m) => m.path));
+      await this.loadProfile();
+      const added = this.permissions.filter((p) => !beforePerms.includes(p));
+      const removed = beforePerms.filter((p) => !this.permissions.includes(p));
+      const menuChanged = JSON.stringify(this.menus.map((m) => m.path)) !== beforeMenu;
+      return { changed: !!added.length || !!removed.length || menuChanged, added, removed, menuChanged };
+    },
+
     /** 个人中心自助更新（姓名/手机/备注/头像） */
     async updateMyProfile(params: UpdateProfileParams) {
       const res = await updateProfile(params);

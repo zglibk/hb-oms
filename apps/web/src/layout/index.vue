@@ -266,6 +266,7 @@ import { useThemeStore } from '@/stores/theme';
 import { useFeatureStore } from '@/stores/feature';
 import { useResponsive } from '@/composables/useResponsive';
 import { useTour } from '@/composables/useTour';
+import { usePermissionSync } from '@/composables/usePermissionSync';
 import type { MenuNode } from '@/api/auth';
 import SidebarItem from './SidebarItem.vue';
 import ThemePicker from '@/components/ThemePicker.vue';
@@ -389,6 +390,13 @@ onMounted(() => {
 });
 
 /* ===== 新手引导（el-tour）===== */
+/*
+ * 权限静默同步：管理员改了授权后，在线用户切出去再回来即自动跟上（菜单立即生效、
+ * 按钮提示刷新）。**不强制下线**——服务端权限本就是实时的，下线只会打断录单。
+ * 详见 composables/usePermissionSync.ts 的说明。
+ */
+usePermissionSync();
+
 const { tourOpen, startTour, finishTour, shouldAutoStart } = useTour();
 
 /**

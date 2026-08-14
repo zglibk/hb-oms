@@ -123,6 +123,17 @@ service.interceptors.response.use(
       window.location.href = `${import.meta.env.BASE_URL}login`;
       return Promise.reject(error);
     }
+    /*
+     * 403 = 服务端认为你没这个权限。服务端的权限判定是实时的（UserAuthCacheService），
+     * 而前端的按钮/菜单是登录或刷新时取的快照——所以撞 403 多半意味着"权限刚被收回、
+     * 界面还停在旧状态"。此刻同步一次最精确，并提示用户刷新。
+     * 动态 import 避免与 store/api 形成循环依赖；失败不影响原错误照常抛出。
+     */
+    if (response?.status === 403) {
+      void import('@/composables/usePermissionSync')
+        .then((m) => m.syncOnForbidden())
+        .catch(() => undefined);
+    }
     // blob 请求出错时，错误响应体也是 Blob，需解析为文本再读 message
     if (
       response?.data instanceof Blob &&
