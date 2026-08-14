@@ -95,7 +95,9 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
       // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
       { key: 'poNo', label: '订单编号', width: '13.5%', align: 'center' },
       { key: 'materialCode', label: '物料编码', width: '17%', align: 'center', fallbackKeys: CODE_FALLBACK },
-      { key: 'productName', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: REQ_FALLBACK },
+      // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
+      // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
+      { key: 'productModel', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
       { key: 'specText', label: '规格型号', width: '21%', align: 'center' },
       // 颜色列随全局「颜色」开关整列增减（§5.7）
       { key: 'color', label: '颜色', width: '8%', align: 'center', flag: 'colorEnabled' },
