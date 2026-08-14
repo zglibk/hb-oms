@@ -56,6 +56,13 @@ const FOOTER_NOTE = '白色联留底  红色联收款凭证  黄色联客户';
 const NAME_FALLBACK: Array<keyof DeliveryNoteRow> = ['productName', 'productModel'];
 const REQ_FALLBACK: Array<keyof DeliveryNoteRow> = ['productRequirement', 'productModel'];
 
+/**
+ * 编码列的回落链：耐斯克叫「物料编码」、精工叫「产品编码」，取的都是订单产品行的
+ * **客户方编码**（`materialCode`）。没录时回退**客户图号**——两个号客户都能对上货，
+ * 印一个总比留空强（业务部门 2026-08-14 指定）。
+ */
+const CODE_FALLBACK: Array<keyof DeliveryNoteRow> = ['customerDrawingNo'];
+
 export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   {
     code: 'generic',
@@ -84,7 +91,8 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
     columns: [
       { key: 'seq', label: '序号', width: '4.5%', align: 'center' },
       { key: 'poNo', label: '采购单编号', width: '13.5%', align: 'center' },
-      { key: 'materialCode', label: '物料编码', width: '13.5%', align: 'center' },
+      // 与精工版的「产品编码」是同一个字段，只是客户叫法不同；没录客户方编码时回退客户图号
+      { key: 'materialCode', label: '物料编码', width: '13.5%', align: 'center', fallbackKeys: CODE_FALLBACK },
       // 「品名」栏是客户那套长描述（型号+尺寸+配件说明），对应订单的「产品要求描述」
       { key: 'productRequirement', label: '品名', width: '18.5%', pre: true, fallbackKeys: NAME_FALLBACK },
       // 系统内无价格字段，留白供手填（纸质单上这一格本就常空着）
@@ -108,7 +116,8 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
       { key: 'poNo', label: '合同编号', width: '16%', align: 'center' },
       // 该客户版的「产品名称」是单行成品名，对应订单的「产品名称」
       { key: 'productName', label: '产品名称', width: '25%', pre: true, fallbackKeys: REQ_FALLBACK },
-      { key: 'materialCode', label: '产品编码', width: '13%', align: 'center' },
+      // 与耐斯克版的「物料编码」是同一个字段，只是客户叫法不同；没录客户方编码时回退客户图号
+      { key: 'materialCode', label: '产品编码', width: '13%', align: 'center', fallbackKeys: CODE_FALLBACK },
       { key: 'qty', label: '数量/{unit}', width: '11.5%', align: 'center' },
       { key: 'productionNo', label: '海宝单号', width: '13%', align: 'center' },
       { key: 'remark', label: '备注', width: '17%', pre: true },
@@ -149,6 +158,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       orderProductId: 0,
       poNo: '2PO26070092',
       materialCode: '903.001-0107',
+      customerDrawingNo: 'HB-53A-001',
       productName: '异型同步隐藏三节轨',
       productRequirement: '异型同步隐藏三节轨\nCS-81CN-17寸\n配全新2D全灰把手',
       productModel: '53#普通卡口滑轨',
@@ -167,6 +177,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       orderProductId: 0,
       poNo: '20260626002',
       materialCode: '040100000059',
+      customerDrawingNo: '',
       productName: '自闭装配式导轨~海宝~400X45~带卡包',
       productRequirement: '',
       productModel: '45#自锁滑轨',
@@ -184,7 +195,9 @@ export const SAMPLE_DELIVERY_NOTE = {
       seq: 3,
       orderProductId: 0,
       poNo: '20260703004',
-      materialCode: '040100000035',
+      // 这一行故意不给客户方编码：预览时能直接看到编码列**回退到客户图号**的效果
+      materialCode: '',
+      customerDrawingNo: 'HB-45C-007',
       productName: '装配式导轨~星徽（海宝）~535X45',
       productRequirement: '',
       productModel: '45#缓冲滑轨',

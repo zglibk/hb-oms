@@ -219,33 +219,34 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'menu:delete', perm_name: '删除菜单', perm_type: 2, parent_code: 'system:menu', sort: 3 },
 
   { perm_code: 'system:dict', perm_name: '数据字典', perm_type: 1, parent_code: 'system', menu_path: '/system/dict', component: 'system/dict/index', icon: 'Collection', sort: 4 },
-  { perm_code: 'dict:create', perm_name: '新增字典', perm_type: 2, parent_code: 'system:dict', sort: 1 },
-  { perm_code: 'dict:update', perm_name: '修改字典', perm_type: 2, parent_code: 'system:dict', sort: 2 },
-  { perm_code: 'dict:delete', perm_name: '删除字典', perm_type: 2, parent_code: 'system:dict', sort: 3 },
-  { perm_code: 'dict:import', perm_name: '批量导入字典', perm_type: 2, parent_code: 'system:dict', sort: 4 },
-  { perm_code: 'dict:export', perm_name: '导出字典', perm_type: 2, parent_code: 'system:dict', sort: 5 },
-
-  { perm_code: 'system:log', perm_name: '操作日志', perm_type: 1, parent_code: 'system', menu_path: '/system/log', component: 'system/log/index', icon: 'Document', sort: 5 },
-  // 注：log:delete 仅授予 admin 角色（db-init 中 admin 绑定全部权限；其他角色不应拥有）
-  { perm_code: 'log:delete', perm_name: '删除日志', perm_type: 2, parent_code: 'system:log', sort: 1 },
-
-  // 更新日志（移植自 hb-mes）
-  { perm_code: 'system:changelog', perm_name: '更新日志', perm_type: 1, parent_code: 'system', menu_path: '/system/changelog', component: 'system/changelog/index', icon: 'Memo', sort: 6 },
-  { perm_code: 'changelog:create', perm_name: '新增版本', perm_type: 2, parent_code: 'system:changelog', sort: 1 },
-  { perm_code: 'changelog:update', perm_name: '修改版本', perm_type: 2, parent_code: 'system:changelog', sort: 2 },
-  { perm_code: 'changelog:delete', perm_name: '删除版本', perm_type: 2, parent_code: 'system:changelog', sort: 3 },
-
-  // 系统配置（移植自 hb-mes，不含审批管理——OMS 无审核流）
-  { perm_code: 'system:config', perm_name: '系统配置', perm_type: 1, parent_code: 'system', menu_path: '/system/config', component: 'system/config/index', icon: 'Tools', sort: 7 },
-  { perm_code: 'config:update', perm_name: '修改配置', perm_type: 2, parent_code: 'system:config', sort: 1 },
-  // 注：system:danger（清理业务测试数据）仅授予 admin
-  { perm_code: 'system:danger', perm_name: '危险操作', perm_type: 2, parent_code: 'system:config', sort: 2 },
 
   /*
    * 打印模板（2026-08-14）：看每套送货单模板的实际效果、指定全局默认模板。
    * 纯前端页面，**没有自己的后端接口**——模板是代码定义的（前端注册表），
    * 「设为默认」复用系统配置的 PUT /system/config（故按钮挂 config:update）。
    * 因此这里只有菜单权限点，不需要配套的操作权限点。
+   * 位置：数据字典与操作日志之间（业务部门指定）；改 sort 即可，同步服务会 upsert。
    */
-  { perm_code: 'system:print-template', perm_name: '打印模板', perm_type: 1, parent_code: 'system', menu_path: '/system/print-template', component: 'system/print-template/index', icon: 'Printer', sort: 8 },
+  { perm_code: 'system:print-template', perm_name: '打印模板', perm_type: 1, parent_code: 'system', menu_path: '/system/print-template', component: 'system/print-template/index', icon: 'Printer', sort: 5 },
+  { perm_code: 'dict:create', perm_name: '新增字典', perm_type: 2, parent_code: 'system:dict', sort: 1 },
+  { perm_code: 'dict:update', perm_name: '修改字典', perm_type: 2, parent_code: 'system:dict', sort: 2 },
+  { perm_code: 'dict:delete', perm_name: '删除字典', perm_type: 2, parent_code: 'system:dict', sort: 3 },
+  { perm_code: 'dict:import', perm_name: '批量导入字典', perm_type: 2, parent_code: 'system:dict', sort: 4 },
+  { perm_code: 'dict:export', perm_name: '导出字典', perm_type: 2, parent_code: 'system:dict', sort: 5 },
+
+  { perm_code: 'system:log', perm_name: '操作日志', perm_type: 1, parent_code: 'system', menu_path: '/system/log', component: 'system/log/index', icon: 'Document', sort: 6 },
+  // 注：log:delete 仅授予 admin 角色（db-init 中 admin 绑定全部权限；其他角色不应拥有）
+  { perm_code: 'log:delete', perm_name: '删除日志', perm_type: 2, parent_code: 'system:log', sort: 1 },
+
+  // 更新日志（移植自 hb-mes）
+  { perm_code: 'system:changelog', perm_name: '更新日志', perm_type: 1, parent_code: 'system', menu_path: '/system/changelog', component: 'system/changelog/index', icon: 'Memo', sort: 7 },
+  { perm_code: 'changelog:create', perm_name: '新增版本', perm_type: 2, parent_code: 'system:changelog', sort: 1 },
+  { perm_code: 'changelog:update', perm_name: '修改版本', perm_type: 2, parent_code: 'system:changelog', sort: 2 },
+  { perm_code: 'changelog:delete', perm_name: '删除版本', perm_type: 2, parent_code: 'system:changelog', sort: 3 },
+
+  // 系统配置（移植自 hb-mes，不含审批管理——OMS 无审核流）
+  { perm_code: 'system:config', perm_name: '系统配置', perm_type: 1, parent_code: 'system', menu_path: '/system/config', component: 'system/config/index', icon: 'Tools', sort: 8 },
+  { perm_code: 'config:update', perm_name: '修改配置', perm_type: 2, parent_code: 'system:config', sort: 1 },
+  // 注：system:danger（清理业务测试数据）仅授予 admin
+  { perm_code: 'system:danger', perm_name: '危险操作', perm_type: 2, parent_code: 'system:config', sort: 2 },
 ];

@@ -30,6 +30,7 @@ export interface DeliveryNoteSourceRow {
   remark: string | null;
   /** 以下来自 JOIN 的订单侧（产品行被删时为 null，各字段自行回落明细快照） */
   material_code: string | null;
+  customer_drawing_no: string | null;
   product_name: string | null;
   product_requirement: string | null;
   unit: string | null;
@@ -45,8 +46,16 @@ export interface DeliveryNoteRow {
   orderProductId: number;
   /** 采购单编号 / 合同编号（客户订单文件上的号） */
   poNo: string;
-  /** 物料编码 / 产品编码（客户方编码） */
+  /** 物料编码 / 产品编码（客户方编码）——两套模板叫法不同，取的是同一个字段 */
   materialCode: string;
+  /**
+   * 客户图号（客户来图上的图号，非部件组的生产图号）。
+   * 送货单上没有独立的一列，只作**编码列的回退值**：客户方编码没录时，
+   * 印客户图号总比留空强——客户拿这两个号都能对上货。
+   * **刻意不受「客户图号」业务字段开关影响**：这里是取值兜底，与「要不要展示客户图号
+   * 这个字段」是两回事；且该开关停用的厂本就不录这个号，回退自然取不到值。
+   */
+  customerDrawingNo: string;
   productName: string;
   /** 产品要求描述（耐斯克模板的「品名」栏取它，多行文本） */
   productRequirement: string;
@@ -126,6 +135,7 @@ export function buildDeliveryRows(src: DeliveryNoteSourceRow[]): DeliveryNoteRow
       orderProductId: Number(r.order_product_id) || 0,
       poNo: s(r.po_no),
       materialCode: s(r.material_code),
+      customerDrawingNo: s(r.customer_drawing_no),
       productName: s(r.product_name),
       productRequirement: s(r.product_requirement),
       productModel: s(r.product_model),

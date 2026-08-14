@@ -243,8 +243,13 @@ export interface DeliveryNoteRow {
   orderProductId: number;
   /** 采购单编号 / 合同编号 */
   poNo: string;
-  /** 物料编码 / 产品编码（客户方编码） */
+  /** 物料编码 / 产品编码（客户方编码）——两套模板叫法不同，取的是同一个字段 */
   materialCode: string;
+  /**
+   * 客户图号：送货单上没有独立列，只作**编码列的回退值**
+   * （客户方编码没录时印它，客户拿这两个号都能对上货）。
+   */
+  customerDrawingNo: string;
   productName: string;
   /** 产品要求描述（耐斯克模板的「品名」栏取它） */
   productRequirement: string;
