@@ -5,62 +5,73 @@
       <el-tab-pane label="产品汇总" name="summary">
         <el-card shadow="never" class="filter-card">
           <el-form :inline="true" class="filter-bar" @submit.prevent="reloadSummary">
-            <el-form-item label="客户">
-              <el-select
-                v-model="sQuery.customerName" clearable filterable placeholder="全部"
-                style="width: 180px" @change="reloadSummary"
-              >
-                <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="关键字">
-              <el-input
-                v-model="sQuery.keyword" clearable style="width: 220px"
-                placeholder="货号/型号/订单号/客户"
-                @clear="reloadSummary" @keyup.enter="reloadSummary"
-              />
-            </el-form-item>
-            <el-form-item label="表面处理">
-              <el-select v-model="sQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadSummary">
-                <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="产品类型">
-              <el-select v-model="sQuery.productType" clearable placeholder="全部" style="width: 110px" @change="reloadSummary">
-                <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="下单日期">
-              <el-date-picker
-                v-model="orderDateRange" type="daterange" value-format="YYYY-MM-DD"
-                start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="reloadSummary"
-              />
-            </el-form-item>
-            <el-form-item label="订单状态">
-              <el-select v-model="sQuery.orderStatus" clearable placeholder="全部" style="width: 100px" @change="reloadSummary">
-                <el-option label="进行中" :value="ORDER_STATUS_VALUE.ACTIVE" />
-                <el-option label="已完结" :value="ORDER_STATUS_VALUE.FINISHED" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="sQuery.onlyOwed" @change="reloadSummary">只看有欠数</el-checkbox>
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="sQuery.onlyStocked" @change="reloadSummary">只看有库存</el-checkbox>
-            </el-form-item>
-            <el-form-item>
-              <el-button size="small" type="primary" :icon="Search" @click="reloadSummary">查询</el-button>
-              <el-button
-                size="small" v-permission="'product-summary:export'" plain :icon="Download"
-                :loading="exporting" @click="onExportSummary"
-              >导出</el-button>
-            </el-form-item>
+            <!-- 首行：筛选维度（客户/表面处理/产品类型/下单日期/订单状态） -->
+            <div class="filter-line">
+              <el-form-item label="客户">
+                <el-select
+                  v-model="sQuery.customerName" clearable filterable placeholder="全部"
+                  style="width: 200px" @change="reloadSummary"
+                >
+                  <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
+                  <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
+                    <span>{{ c.customerName }}</span>
+                    <!-- 内联样式：下拉面板 teleport 到 body，scoped 类选择器够不到 -->
+                    <span style="float: right; margin-left: 16px; font-size: 12px; color: var(--el-text-color-secondary)">{{ c.customerCode }}</span>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="表面处理">
+                <el-select v-model="sQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadSummary">
+                  <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="产品类型">
+                <el-select v-model="sQuery.productType" clearable placeholder="全部" style="width: 110px" @change="reloadSummary">
+                  <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="下单日期">
+                <el-date-picker
+                  v-model="orderDateRange" type="daterange" value-format="YYYY-MM-DD"
+                  start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="reloadSummary"
+                />
+              </el-form-item>
+              <el-form-item label="订单状态">
+                <el-select v-model="sQuery.orderStatus" clearable placeholder="全部" style="width: 100px" @change="reloadSummary">
+                  <el-option label="进行中" :value="ORDER_STATUS_VALUE.ACTIVE" />
+                  <el-option label="已完结" :value="ORDER_STATUS_VALUE.FINISHED" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <!-- 次行：开关 + 关键字 + 操作按钮 -->
+            <div class="filter-line">
+              <el-form-item>
+                <el-checkbox v-model="sQuery.onlyOwed" @change="reloadSummary">只看有欠数</el-checkbox>
+              </el-form-item>
+              <el-form-item>
+                <el-checkbox v-model="sQuery.onlyStocked" @change="reloadSummary">只看有库存</el-checkbox>
+              </el-form-item>
+              <el-form-item label="关键字">
+                <el-input
+                  v-model="sQuery.keyword" clearable style="width: 220px"
+                  placeholder="货号/型号/订单号/客户"
+                  @clear="reloadSummary" @keyup.enter="reloadSummary"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button size="small" type="primary" :icon="Search" @click="reloadSummary">查询</el-button>
+                <el-button
+                  size="small" v-permission="'product-summary:export'" plain :icon="Download"
+                  :loading="exporting" @click="onExportSummary"
+                >导出 Excel</el-button>
+              </el-form-item>
+            </div>
           </el-form>
         </el-card>
 
         <!-- 汇总卡：当前筛选的整体口径（不受分页影响） -->
         <div class="sum-bar">
-          <app-stat-card color="slate" :value="sSummary.kinds" label="产品种数">
+          <app-stat-card color="slate" :value="sSummary.kinds" label="产品款数">
             <template #icon><el-icon><Collection /></el-icon></template>
           </app-stat-card>
           <app-stat-card color="blue" :value="sSummary.totalQty" label="订单总数(支)">
@@ -184,7 +195,7 @@
             </el-table-column>
           </app-table>
           <app-pagination
-            class="pager" :total="sTotal" :page-sizes="[20, 50, 100]"
+            class="pager" :total="sTotal"
             v-model:page="sQuery.page" v-model:size="sQuery.pageSize" @change="loadSummary"
           />
         </el-card>
@@ -204,9 +215,18 @@
             <el-form-item label="客户">
               <el-select
                 v-model="pQuery.customerName" clearable filterable placeholder="全部"
-                style="width: 180px" @change="reloadPeriod"
+                style="width: 200px" @change="reloadPeriod"
               >
-                <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName" />
+                <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
+                  <span>{{ c.customerName }}</span>
+                  <!-- 内联样式：下拉面板 teleport 到 body，scoped 类选择器够不到 -->
+                  <span style="float: right; margin-left: 16px; font-size: 12px; color: var(--el-text-color-secondary)">{{ c.customerCode }}</span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="表面处理">
+              <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadPeriod">
+                <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="关键字">
@@ -216,17 +236,12 @@
                 @clear="reloadPeriod" @keyup.enter="reloadPeriod"
               />
             </el-form-item>
-            <el-form-item label="表面处理">
-              <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadPeriod">
-                <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
             <el-form-item>
               <el-button size="small" type="primary" :icon="Search" @click="reloadPeriod">查询</el-button>
               <el-button
                 size="small" v-permission="'product-summary:export'" plain :icon="Download"
                 :loading="exporting" @click="onExportPeriod"
-              >导出</el-button>
+              >导出 Excel</el-button>
             </el-form-item>
           </el-form>
         </el-card>
@@ -337,7 +352,7 @@
             </el-table-column>
           </app-table>
           <app-pagination
-            class="pager" :total="pTotal" :page-sizes="[20, 50, 100]"
+            class="pager" :total="pTotal"
             v-model:page="pQuery.page" v-model:size="pQuery.pageSize" @change="loadPeriod"
           />
         </el-card>
@@ -412,7 +427,7 @@ const sSummary = ref<ProductSummarySummary>({
 });
 const sQuery = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 10,
   keyword: '',
   customerName: undefined as string | undefined,
   surfaceType: undefined as string | undefined,
@@ -465,7 +480,7 @@ const pTotal = ref(0);
 const pSummary = ref({ kinds: 0, totalOpening: 0, totalIn: 0, totalOut: 0, totalEnd: 0 });
 const pQuery = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 10,
   keyword: '',
   customerName: undefined as string | undefined,
   surfaceType: undefined as string | undefined,
@@ -585,6 +600,11 @@ export default { name: 'ProductSummary' };
   flex-wrap: wrap;
   margin: 4px 0;
 }
+/* 筛选区按行分组（首行筛选维度、次行开关+关键字+按钮）；行内仍是 inline form-item */
+.filter-line {
+  &:not(:last-child) { margin-bottom: 2px; }
+}
+/* 客户下拉右侧的客户编码用内联样式（下拉面板 teleport 到 body，scoped 够不到） */
 .pager { margin-top: 12px; }
 /* 页签本体不带卡片底，内容区沿用各自的 el-card（与系统配置页的 Tab 用法一致） */
 .ps-tabs :deep(.el-tabs__header) { margin-bottom: 10px; }

@@ -560,6 +560,8 @@ export class ProductSummaryService {
     /* ---------- Sheet1：产品汇总（一行 = 一种相同产品） ---------- */
     const ws = wb.addWorksheet('产品汇总');
     const columns: Array<{ header: string }> = [
+      // 首列序号：车间手工表的习惯格式，打印出来逐行核对要念行号
+      { header: '序号' },
       { header: '产品型号' },
       { header: dimHeader },
       { header: '节数' },
@@ -576,8 +578,9 @@ export class ProductSummaryService {
       { header: '库存数' },
     ];
     ws.columns = columns.map((c) => ({ header: c.header }));
-    list.forEach((r) => {
+    list.forEach((r, i) => {
       ws.addRow([
+        i + 1,
         r.productModel,
         dimCell(r),
         railSectionLabel(r.railSection),
@@ -601,7 +604,7 @@ export class ProductSummaryService {
       if (i >= 0) cells[i] = v;
     };
     cells[0] = '合计';
-    put('客户', `${summary.kinds} 种产品`);
+    put('客户', `${summary.kinds} 款产品`);
     put('订单总数(支)', summary.totalQty);
     put('累计入库', summary.totalIn);
     put('成品欠数', summary.totalProductionOwed);
@@ -611,7 +614,7 @@ export class ProductSummaryService {
     ws.addRow(cells).font = { bold: true };
     styleSheet(ws, {
       centerColumns: this.centerCols(columns, [
-        dimHeader, '节数', '料厚', '表面处理', '颜色', '订单数',
+        '序号', dimHeader, '节数', '料厚', '表面处理', '颜色', '订单数',
         '订单总数(支)', '累计入库', '成品欠数', '累计出库', '发货欠数', '库存数',
       ]),
     });
@@ -619,6 +622,7 @@ export class ProductSummaryService {
     /* ---------- Sheet2：订单明细（聚合键列前置，便于筛选对应） ---------- */
     const wsB = wb.addWorksheet('订单明细');
     const colsB: Array<{ header: string }> = [
+      { header: '序号' },
       { header: '产品型号' },
       { header: dimHeader },
       { header: '料厚' },
@@ -637,9 +641,12 @@ export class ProductSummaryService {
       { header: '状态' },
     ];
     wsB.columns = colsB.map((c) => ({ header: c.header }));
+    let seqB = 0;
     list.forEach((r) => {
       r.orders.forEach((o) => {
+        seqB += 1;
         wsB.addRow([
+          seqB,
           r.productModel,
           dimCell(r),
           r.thickness,
@@ -661,7 +668,7 @@ export class ProductSummaryService {
     });
     styleSheet(wsB, {
       centerColumns: this.centerCols(colsB, [
-        dimHeader, '料厚', '表面处理', '颜色', '下单日期', '订单数(支)',
+        '序号', dimHeader, '料厚', '表面处理', '颜色', '下单日期', '订单数(支)',
         '累计入库', '累计出库', '库存数', '成品欠数', '发货欠数', '交期', '状态',
       ]),
     });
@@ -681,7 +688,7 @@ export class ProductSummaryService {
     }
     if (total > EXPORT_ROW_LIMIT) {
       throw new BadRequestException(
-        `当前期间命中 ${total} 种产品，超过单次导出上限 ${EXPORT_ROW_LIMIT}；` +
+        `当前期间命中 ${total} 款产品，超过单次导出上限 ${EXPORT_ROW_LIMIT}；` +
           '请按客户 / 关键字等条件缩小范围后再导出',
       );
     }
@@ -694,6 +701,7 @@ export class ProductSummaryService {
     /* ---------- Sheet1：出入库汇总（期初 → 期间入 → 期间出 → 期末） ---------- */
     const ws = wb.addWorksheet('出入库汇总');
     const columns: Array<{ header: string }> = [
+      { header: '序号' },
       { header: '产品型号' },
       { header: dimHeader },
       { header: '节数' },
@@ -707,8 +715,9 @@ export class ProductSummaryService {
       { header: '期末结存' },
     ];
     ws.columns = columns.map((c) => ({ header: c.header }));
-    list.forEach((r) => {
+    list.forEach((r, i) => {
       ws.addRow([
+        i + 1,
         r.productModel,
         dimCell(r),
         railSectionLabel(r.railSection),
@@ -728,7 +737,7 @@ export class ProductSummaryService {
       if (i >= 0) cells[i] = v;
     };
     cells[0] = '合计';
-    put('客户', `${summary.kinds} 种产品`);
+    put('客户', `${summary.kinds} 款产品`);
     put('期初结存', summary.totalOpening);
     put('期间入库', summary.totalIn);
     put('期间出库', summary.totalOut);
@@ -736,7 +745,7 @@ export class ProductSummaryService {
     ws.addRow(cells).font = { bold: true };
     styleSheet(ws, {
       centerColumns: this.centerCols(columns, [
-        dimHeader, '节数', '料厚', '表面处理', '颜色',
+        '序号', dimHeader, '节数', '料厚', '表面处理', '颜色',
         '期初结存', '期间入库', '期间出库', '期末结存',
       ]),
     });
@@ -744,6 +753,7 @@ export class ProductSummaryService {
     /* ---------- Sheet2：出入库明细（期间内逐笔已确认单据） ---------- */
     const wsB = wb.addWorksheet('出入库明细');
     const colsB: Array<{ header: string }> = [
+      { header: '序号' },
       { header: '产品型号' },
       { header: dimHeader },
       { header: '单据号' },
@@ -758,9 +768,12 @@ export class ProductSummaryService {
       { header: '登记人' },
     ];
     wsB.columns = colsB.map((c) => ({ header: c.header }));
+    let seqB = 0;
     list.forEach((r) => {
       r.flows.forEach((f) => {
+        seqB += 1;
         wsB.addRow([
+          seqB,
           r.productModel,
           dimCell(r),
           f.docNo ?? '',
@@ -778,7 +791,7 @@ export class ProductSummaryService {
     });
     styleSheet(wsB, {
       centerColumns: this.centerCols(colsB, [
-        dimHeader, '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
+        '序号', dimHeader, '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
       ]),
     });
 
