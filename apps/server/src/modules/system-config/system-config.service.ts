@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { DIMENSION_UNIT, INCH_TO_MM } from '@hb-oms/shared';
 import { SystemConfig } from './entities/system-config.entity';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
 import { normalizeUploadUrl } from '../../common/utils/upload-url.util';
@@ -66,14 +67,21 @@ export class SystemConfigService {
     customerDrawingNoEnabled: boolean;
     dullStockColorEnabled: boolean;
     productRequirementEnabled: boolean;
+    inchToMm: number;
+    dimensionViewUnit: 'mm' | 'inch';
   }> {
     const row = await this.get();
+    // 系数落库前已被 DTO 校验，但旧行/脏数据可能是 0 或 NULL，这里兜一次缺省值：
+    // 除零会让整页规格显示成 Infinity，比"用了默认值"严重得多
+    const inchToMm = Number(row.inchToMm);
     return {
       colorFieldEnabled: Number(row.colorFieldEnabled) === 1,
       customerDrawingNoEnabled: Number(row.customerDrawingNoEnabled) === 1,
       // 呆滞品颜色独立开关，不与 colorFieldEnabled 相与——两者各管各的（见实体注释）
       dullStockColorEnabled: Number(row.dullStockColorEnabled) === 1,
       productRequirementEnabled: Number(row.productRequirementEnabled) === 1,
+      inchToMm: Number.isFinite(inchToMm) && inchToMm > 0 ? inchToMm : INCH_TO_MM,
+      dimensionViewUnit: row.dimensionViewUnit === DIMENSION_UNIT.INCH ? 'inch' : 'mm',
     };
   }
 

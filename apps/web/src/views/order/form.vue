@@ -469,7 +469,8 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { preloadCountryFlags, preloadCountryFlagsWhenIdle } from '@/utils/flag-preload';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
-const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
+const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled, inchToMm } =
+  useFeatureFlags();
 
 /** 出口国家下拉（el-select-v2）的字段映射：落库值与展示值都用中文国名 */
 const COUNTRY_FIELD_PROPS = { label: 'name', value: 'name' };
@@ -1001,7 +1002,11 @@ function productTitle(p: ProductRow): string {
   return formatProductModel(p.itemNo, p._types, 'whole');
 }
 function syncDimension(p: ProductRow) {
-  p.dimensionMm = p.dimensionRaw ? toMm(Number(p.dimensionRaw), p.dimensionUnit) : null;
+  // 英寸→mm 的系数取系统配置（管理员可改，缺省 25）；落库的 mm 是权威值，
+  // 日后改系数不会回头重算这一行
+  p.dimensionMm = p.dimensionRaw
+    ? toMm(Number(p.dimensionRaw), p.dimensionUnit, inchToMm.value)
+    : null;
 }
 /** 料厚格式随组含几个部件而变：单部件组填单值，外中轨两段，整品三段 */
 function thicknessPlaceholder(groupType: string): string {

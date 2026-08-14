@@ -275,9 +275,10 @@ import { useRouter } from 'vue-router';
 import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
-import { DIMENSION_UNIT, formatDimensionView } from '@/constants/dict';
+import { DIMENSION_UNIT } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useAutoScroll } from '@/composables/useAutoScroll';
+import { useDimensionView } from '@/composables/useDimensionView';
 
 import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
@@ -287,14 +288,11 @@ const router = useRouter();
 const userStore = useUserStore();
 const loading = ref(false);
 
-/** 规格查看单位：仅影响本页两张列表的展示，不改库（与台账页、订单列表同款口径） */
-const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
-const dimColLabel = computed(() =>
-  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
-);
-function dimText(mm: number | null | undefined) {
-  return formatDimensionView(mm, dimViewUnit.value) || '—';
-}
+/**
+ * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
+ * 逻辑与台账页、订单列表共用同一个 composable。
+ */
+const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimensionView();
 
 const summary = ref<DashboardSummary>({
   cards: { activeOrders: 0, productionOwed: 0, deliveryOwed: 0, overdueOrders: 0 },

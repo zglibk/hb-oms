@@ -230,6 +230,9 @@ const expectedColumns = [
   // 呆滞品颜色（独立于全局颜色开关）
   't_system_config.dull_stock_color_enabled',
   't_system_config.product_requirement_enabled',
+  // 单位换算（非布尔配置：换算系数 + 默认查看单位）
+  't_system_config.inch_to_mm',
+  't_system_config.dimension_view_unit',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）

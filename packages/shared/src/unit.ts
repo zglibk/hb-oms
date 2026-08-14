@@ -42,8 +42,21 @@ export function piecesToUnitQty(pieces: number | null | undefined, unit?: string
 
 /* ===================== 英寸 ↔ mm ===================== */
 
-/** 规格换算系数：1 英寸 = 25mm（我司统一口径，非国标 25.4） */
+/**
+ * 规格换算系数缺省值：1 英寸 = 25mm（我司统一口径，非国标 25.4）。
+ *
+ * 2026-08-14 起该约定可由管理员在「系统配置 → 业务字段 → 单位换算」改写，
+ * 下面几个函数因此都接受可选的 `factor`；**不传即用本常量**（旧调用行为不变）。
+ * 口径：改系数只影响「之后的录入折算」与「所有寸视图的显示」，
+ * **已落库的 dimension_mm 永不重算**——存储值始终是权威。
+ */
 export const INCH_TO_MM = 25;
+
+/** 归一化换算系数：非正数/非数字一律回落缺省值，避免除零与 NaN 扩散到界面 */
+function safeFactor(factor?: number | null): number {
+  const n = Number(factor);
+  return Number.isFinite(n) && n > 0 ? n : INCH_TO_MM;
+}
 
 /** 规格单位取值（t_order_product.dimension_unit） */
 export const DIMENSION_UNIT = {
@@ -57,9 +70,15 @@ export const DIMENSION_UNIT_OPTIONS: Array<{ label: string; value: string }> = [
 ];
 
 /** 原始录入值 → mm 统一口径（t_order_product.dimension_mm 服务端据此计算） */
-export function toMm(value: number | null | undefined, unit?: string | null): number {
+export function toMm(
+  value: number | null | undefined,
+  unit?: string | null,
+  factor?: number | null,
+): number {
   const v = Number(value) || 0;
-  return String(unit).trim() === DIMENSION_UNIT.INCH ? Math.round(v * INCH_TO_MM) : Math.round(v);
+  return String(unit).trim() === DIMENSION_UNIT.INCH
+    ? Math.round(v * safeFactor(factor))
+    : Math.round(v);
 }
 
 /**
@@ -72,14 +91,14 @@ export function toMm(value: number | null | undefined, unit?: string | null): nu
  * - 纯数字 "250" → "250mm"；
  * - 已带 mm 或其它写法原样保留（trim 后）。
  */
-export function normalizeDimensionText(s?: string | null): string {
+export function normalizeDimensionText(s?: string | null, factor?: number | null): string {
   if (s === undefined || s === null) return '';
   const t = String(s).trim();
   if (!t) return '';
   const cun = t.match(/^([\d.]+)\s*[寸"]$/);
   if (cun) {
     const n = Number(cun[1]);
-    if (!Number.isNaN(n)) return `${Math.round(n * INCH_TO_MM * 100) / 100}mm`;
+    if (!Number.isNaN(n)) return `${Math.round(n * safeFactor(factor) * 100) / 100}mm`;
   }
   if (/^[\d.]+$/.test(t)) return `${t}mm`;
   return t;
@@ -103,11 +122,12 @@ export function formatDimension(
 export function formatDimensionView(
   mm: number | null | undefined,
   viewUnit: typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH,
+  factor?: number | null,
 ): string {
   if (mm == null || Number.isNaN(Number(mm))) return '';
   const n = Number(mm);
   if (viewUnit === DIMENSION_UNIT.INCH) {
-    return `${Math.round(n / INCH_TO_MM)}寸`;
+    return `${Math.round(n / safeFactor(factor))}寸`;
   }
   return `${n}mm`;
 }

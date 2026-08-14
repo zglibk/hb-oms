@@ -212,6 +212,10 @@ import {
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { uploadFile } from '@/api/file';
 import { normalizeDimensionText } from '@/constants/dict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+
+/** 规格「10寸→250mm」的换算系数（系统配置 → 业务字段 → 单位换算） */
+const { inchToMm } = useFeatureFlags();
 
 const route = useRoute();
 const router = useRouter();
@@ -235,9 +239,10 @@ function onVersionBlur(field: VersionField) {
   else form[field] = v || '';
 }
 
-/* 规格（产品级）：失焦自动换算——寸→mm（1寸=25mm），纯数字补 mm */
+/* 规格（产品级）：失焦自动换算——寸→mm（系数取系统配置，缺省 1寸=25mm），纯数字补 mm。
+   服务端保存时会再归一化一次（同一个系数），这里只是让用户当场看到结果 */
 function onDimensionBlur() {
-  form.dimension = normalizeDimensionText(form.dimension);
+  form.dimension = normalizeDimensionText(form.dimension, inchToMm.value);
 }
 
 const pageLoading = ref(false);

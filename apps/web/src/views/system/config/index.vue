@@ -230,6 +230,42 @@
               </div>
             </el-form-item>
 
+            <!-- 单位换算：与上面几个「启用/停用」开关不是一类，用分隔标题隔开 -->
+            <el-divider content-position="left">单位换算</el-divider>
+
+            <el-form-item label="换算系数">
+              <div class="unit-line">
+                <span>1 英寸 =</span>
+                <el-input-number
+                  v-model="form.inchToMm"
+                  :min="0.001"
+                  :max="999"
+                  :precision="3"
+                  :step="1"
+                  :controls="false"
+                  style="width: 110px"
+                />
+                <span>mm</span>
+              </div>
+              <div class="switch-hint switch-hint--block">
+                我司口径为 <strong>25</strong>（非国标 25.4），此前写死在程序里，现可在此调整。
+                影响范围：订单表单「英寸」录入折算、开单信息「10寸」自动换算，以及全系统的「寸」视图显示。
+                <strong>改动只对之后的录入与显示生效，不会重算已经存进系统的 mm 数值</strong>——
+                历史订单的规格不会因为改这个数而变动。
+              </div>
+            </el-form-item>
+
+            <el-form-item label="默认规格单位">
+              <el-radio-group v-model="form.dimensionViewUnit">
+                <el-radio-button value="mm">mm</el-radio-button>
+                <el-radio-button value="inch">寸</el-radio-button>
+              </el-radio-group>
+              <div class="switch-hint switch-hint--block">
+                <strong>首页、订单跟踪台账、订单管理</strong>三个页面打开时「规格」列默认按哪个单位显示
+                （页面上仍可随时切换，只是不再每次手动改）；<strong>台账导出与总计划导出</strong>的规格列也跟随此设置。
+              </div>
+            </el-form-item>
+
             <el-form-item>
               <el-button size="small"
                 v-permission="'config:update'"
@@ -410,6 +446,9 @@ const form = reactive<SystemConfig>({
   customerDrawingNoEnabled: 1,
   dullStockColorEnabled: 1,
   productRequirementEnabled: 1,
+  // 单位换算：缺省同共享包的我司口径（1 英寸 = 25mm）与内部存储口径（mm）
+  inchToMm: 25,
+  dimensionViewUnit: 'mm',
 });
 
 /* 裁剪组件 ref */
@@ -633,6 +672,14 @@ onActivated(() => {
   margin-left: 12px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+/* 「1 英寸 = [__] mm」一行排开，数字框与前后文字对齐 */
+.unit-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-text-color-regular);
 }
 
 /* 影响范围这类长说明另起一行，跟在开关后面会把表单行撑得很宽 */

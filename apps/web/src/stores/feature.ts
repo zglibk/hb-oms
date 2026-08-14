@@ -16,13 +16,22 @@ import { getFeatureFlags, type FeatureFlags } from '@/api/system';
 /** 本地缓存键：首屏先用上次的值渲染，避免"列闪一下再消失" */
 const STORAGE_KEY = 'hb-oms-feature-flags';
 
-/** 缺省一律**启用**——新库/首次访问/接口没答上来时，不该凭空少字段 */
+/**
+ * 缺省一律**启用**——新库/首次访问/接口没答上来时，不该凭空少字段。
+ *
+ * ⚠️ 本对象已不全是布尔（2026-08-14 起有换算系数与默认单位）：
+ * 下面的类型校验按**本对象里同键的类型**判断，加非布尔项不用改逻辑，
+ * 但**新增项必须在这里给出正确类型的缺省值**，否则会被当成脏值丢弃。
+ */
 const DEFAULTS: FeatureFlags = {
   colorFieldEnabled: true,
   customerDrawingNoEnabled: true,
   // 呆滞品颜色**独立开关**，与 colorFieldEnabled 互不影响
   dullStockColorEnabled: true,
   productRequirementEnabled: true,
+  // 换算系数缺省 25（我司口径，非国标 25.4）；默认查看单位缺省 mm（内部存储口径）
+  inchToMm: 25,
+  dimensionViewUnit: 'mm',
 };
 
 type FeatureState = FeatureFlags & {
@@ -40,7 +49,9 @@ function readCache(): FeatureFlags {
     if (raw) {
       const cached = JSON.parse(raw) as Partial<FeatureFlags>;
       for (const k of FLAG_KEYS) {
-        if (typeof cached?.[k] === 'boolean') out[k] = cached[k] as boolean;
+        // 按 DEFAULTS 里同键的类型校验，**不要写死 'boolean'**：
+        // 换算系数是数字、默认单位是字符串，写死布尔会把它们静默丢掉
+        if (typeof cached?.[k] === typeof DEFAULTS[k]) (out as any)[k] = cached[k];
       }
     }
   } catch {
@@ -58,13 +69,15 @@ export const useFeatureStore = defineStore('feature', {
       try {
         const flags = await getFeatureFlags();
         for (const k of FLAG_KEYS) {
-          // 后端漏回某个键时保留当前值，不要静默变成 undefined
-          if (typeof flags?.[k] === 'boolean') this[k] = flags[k];
+          // 后端漏回某个键时保留当前值，不要静默变成 undefined；
+          // 类型按 DEFAULTS 同键判断（本对象已含数字与字符串项）
+          if (typeof flags?.[k] === typeof DEFAULTS[k]) (this as any)[k] = flags[k];
         }
         this.loaded = true;
         try {
           const snapshot: Partial<FeatureFlags> = {};
-          for (const k of FLAG_KEYS) snapshot[k] = this[k];
+          // 键的类型不再统一（布尔 + 数字 + 字符串），逐键赋值时 TS 收窄不了，故断言
+          for (const k of FLAG_KEYS) (snapshot as any)[k] = this[k];
           localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
         } catch {
           // 忽略写入失败（无痕模式等），下次进页面重新拉即可

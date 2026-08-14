@@ -160,7 +160,7 @@
 
     <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 职级 职级管理 序列 等级 编制 批量导入 导出 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
-    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色" onclick="jump('ch9')">第9章 管理员篇</a>
+    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色 单位换算 换算系数 默认规格单位 寸 mm" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
 
@@ -223,7 +223,7 @@
       <h2 class="section__title" id="ch0-4">0.4 通用操作约定</h2>
       <ul>
         <li><strong>数量单位</strong>：系统内所有数量以「支」为准。订单单位可选「套」或「支」，<strong>1 套 = 2 支</strong>（滑轨两支一组），系统自动折算。</li>
-        <li><strong>规格</strong>：可按 mm 或英寸录入，换算固定 <strong>1 英寸 = 25mm</strong>（我司口径，不是国标 25.4）。</li>
+        <li><strong>规格</strong>：可按 mm 或英寸录入，换算默认 <strong>1 英寸 = 25mm</strong>（我司口径，不是国标 25.4）；系统里统一存 mm。这个系数可由管理员在「系统配置 → 业务字段 → 单位换算」调整，见第9章。</li>
         <li><strong>卡口产品分左右</strong>：产品类型组合里只要含「卡口」，部件、装配、库存、出入库全部按左/右分开算，左右不串量。</li>
         <li><strong>带 <span style="color:#f56c6c">*</span> 的是必填</strong>，没填完保存会红框提示。</li>
         <li><strong>已确认的单据不能改</strong>：成品出入库单一旦确认，只能开红字冲销单更正，不能直接编辑或删除（见 4.3）。</li>
@@ -1167,10 +1167,30 @@
         改完点<strong>保存</strong>：你自己立刻生效；其他已经登录的人<strong>刷新一下页面</strong>才会看到变化。
       </div>
 
+      <h3 class="subsection__title">单位换算</h3>
+      <p>同样在 系统管理 → 系统配置 → <strong>业务字段</strong>，页面下半部分「单位换算」两项。这两项不是开关，是<strong>设定值</strong>。</p>
+      <table class="field-table">
+        <thead><tr><th>设置</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>换算系数</strong><br />（1 英寸 = ? mm）</td>
+            <td>我司口径是 <strong>25</strong>（不是国标 25.4），以前写死在程序里，现在可以改。影响：订单表单选「英寸」录规格时的折算、开单信息里输入「10寸」自动变 mm，以及全系统「寸」视图显示的数值</td>
+          </tr>
+          <tr>
+            <td><strong>默认规格单位</strong><br />（mm / 寸）</td>
+            <td><strong>首页、订单跟踪台账、订单管理</strong>这三页打开时「规格」列按哪个单位显示。习惯用寸的厂设成「寸」，就不用每次进页面手动切。<strong>台账导出与总计划导出</strong>的规格列也跟着走（表头会写成「规格(寸)」）</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="alert alert--warning">
+        <strong>改换算系数不会动已经存进系统的数据。</strong>系统里存的一律是 mm，改系数只影响<strong>以后录入的折算</strong>和<strong>寸视图显示出来的数值</strong>，历史订单的规格不会因此变动。<br />
+        另外：三个页面上的 mm/寸 切换按钮<strong>照旧保留</strong>，配置只是决定「进页面时默认哪个」；你在页面上手动切过之后，管理员那边再改配置也不会把你当前的选择顶掉。
+      </div>
+
       <h3 class="subsection__title">日志与配置</h3>
       <ul>
         <li><strong>操作日志</strong>：谁在什么时候做了什么（新增/修改/删除/确认/冲销/导入都有记录），可按模块、人员、时间筛。出了争议先查这里。</li>
-        <li><strong>系统配置</strong>：系统名称、Logo、登录页背景、业务字段开关等。</li>
+        <li><strong>系统配置</strong>：系统名称、Logo、登录页背景、业务字段开关、单位换算等。</li>
         <li><strong>更新日志</strong>：每次版本更新的内容，用户在这里看系统改了什么。</li>
       </ul>
     </section>

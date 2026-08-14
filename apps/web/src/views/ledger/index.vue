@@ -335,7 +335,6 @@ import {
   PRODUCT_TYPE_OPTIONS,
   UNIT_OPTIONS,
   DIMENSION_UNIT,
-  formatDimensionView,
   FINISHED_BIZ_TYPE_OPTIONS,
   sideLabel,
   partGroupLabel,
@@ -343,6 +342,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
@@ -350,14 +350,11 @@ import AppStatCard from '@/components/AppStatCard.vue';
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
 
-/** 规格查看单位：仅影响本页列表展示，不改库；默认 mm（内部存储口径） */
-const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
-const dimColLabel = computed(() =>
-  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
-);
-function dimText(mm: number | null | undefined) {
-  return formatDimensionView(mm, dimViewUnit.value) || '—';
-}
+/**
+ * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
+ * 逻辑与首页、订单列表共用同一个 composable。
+ */
+const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimensionView();
 
 const router = useRouter();
 const loading = ref(false);

@@ -215,6 +215,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **导出顺序是「先预检、再确认」，不能反过来**：`useExcelExport` 会先按当前筛选实查一次条数，**为 0 或超限就直接提示、根本不弹确认框**——先弹确认框、用户点完才被服务端拒绝，等于让人确认一件注定失败的事。条数**每次实查**而不是取页面上的 summary/total：用户改了筛选却没点「查询」时，页面汇总还是上一次的数，拿它提示会和实际导出的内容对不上。前端预检**不替代服务端守卫**（API 可直调），两道都要留。
 - **凡是导出按钮，前端必须「预检 + 确认」、服务端必须「空结果拒绝」**（2026-08-12 全项目巡检后统一）。现役 10 个导出端点：呆滞品 / 部件台账 / **成品库存** / 岗位 / 数据字典 / 部件清单 / 开单信息 / 订单跟踪台账 / 订单总计划 / **装配记录**。巡检发现的缺口已补齐——台账与开单信息**缺确认框**、岗位与数据字典**两样都没有**、岗位与字典与部件清单**服务端也不拦空**（会导出一张只有表头的空表，拿去对账最危险）。新增导出一律走 `useExcelExport`，别再各写一份 `ElMessageBox.confirm`。E2E `e2e-export-guards.mjs` 覆盖前 8 个端点的空结果守卫，成品库存另见 `e2e-stock-balance.mjs`，装配记录另见 `e2e-assembly-export.mjs`。
 - **装配记录导出**（`GET /assembly/export`，权限 `assembly:export`）是**唯一的多表导出**：Sheet1「装配汇总」一行一个产品（对齐列表页 17 列），Sheet2「装配批次明细」是这些产品的逐批完成记录（含登记人/登记时间）。四数**直接复用 `findList`**、不另写聚合 SQL（同台账导出口径）；行数上限按汇总行算，明细表跟着走。
+- **导出的「规格」列跟随系统配置的默认查看单位**（台账导出与总计划导出，2026-08-14）：表头写「规格(mm)」/「规格(寸)」、取值走 `formatDimensionView(mm, 单位, 系数)`，口径与页面一致，车间拿表对手工账不用再自己换算。详见 §5.7 单位换算。
 - **导出里的字典值必须转中文**，统一走 [dict-label.util.ts](apps/server/src/common/utils/dict-label.util.ts) 的 `loadDictLabels` + `dictLabeler`（台账导出与成品库存导出共用）：`dict_value` 是 `electrophoresis` 这类英文码，车间拿导出表贴工位、对手工账，看到英文等于没导。取不到标签时**回原值**而不是空串——字典项被停用后至少还认得出原始码。
 - ⚠️ **导入失败的逐行明细在前端要双取 `err.response.data.errors ?? err.errors`**：HTTP 400 时 `request.ts` 的拦截器 reject 的是**原始 axios 错误**，只读 `err.errors` 永远是 undefined（岗位导入曾因此在浏览器里只显示一句概要，2026-08-12 修）。`err.message` 同理是英文的 axios 文案，要取 `response.data.message`。
 - ⚠️ `AllExceptionsFilter` **只透传白名单字段**（`errors` / `failedCount` / `totalCount`）：批量接口新增回传字段必须在那里一并放行，否则前端拿到 undefined（本会话已踩）。
@@ -527,6 +528,18 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | `customer_drawing_no_enabled` | **客户图号**（客户来图图号，**不是**部件组的生产图号 `drawing_no`） | 订单表单、订单列表展开行、**总计划导出**的「客户图号」列、**生产任务单**（打印页与 PDF）的「客户图号」列 |
 | `product_requirement_enabled` | **产品要求描述**（2026-08-13 加；订单产品级 `t_order_product.product_requirement`，客户对该产品的特殊要求文本） | 订单表单（「轨道节数」与「规格」之间）、订单列表展开行、**总计划导出**的「产品要求描述」列 |
 
+**单位换算（2026-08-14 加，本节唯一的两项非布尔配置）**，同表同接口，但语义不是「启停」：
+
+| 配置列 | 含义 | 影响面 |
+|---|---|---|
+| `inch_to_mm` | **英寸换算系数**（1 英寸 = N mm），缺省 25（我司口径，非国标 25.4），抽自共享包写死的 `INCH_TO_MM` | 订单表单英寸录入折算、开单信息「10寸」文本归一（前端失焦 + 服务端保存/导入各一次）、全系统「寸」视图显示 |
+| `dimension_view_unit` | **规格默认查看单位**（mm / inch） | 首页 / 订单跟踪台账 / 订单管理三页的 mm/寸 切换初值，以及**台账导出与总计划导出**的规格列（表头随之变「规格(mm)」/「规格(寸)」） |
+
+- ⚠️ **改系数不重算已落库的 `dimension_mm`**（核心不变式，E2E 有断言）：存储值永远是权威，只影响「之后的录入折算」与「所有寸视图的显示」。配置页提示里必须写明这句，否则管理员会以为历史数据跟着变。
+- 共享包三个换算函数（`toMm` / `formatDimensionView` / `normalizeDimensionText`）都接**可选** `factor`，不传即用 `INCH_TO_MM`；调用方一律从配置传值，**不要再直接引常量**。系数为 0/负数/NaN 时 `safeFactor` 回落缺省值（除零会让整页规格变 Infinity）。
+- 三页的 mm/寸 切换统一走 [useDimensionView.ts](apps/web/src/composables/useDimensionView.ts)（第三处重复时按 §4.4 抽的）：初值取配置、异步到达要 watch；**用户本次会话手动切过后 `touched` 置位，配置的后续变化不再顶掉他的选择**。
+- ⚠️ [stores/feature.ts](apps/web/src/stores/feature.ts) 的缓存与拉取校验**必须按 `DEFAULTS` 同键的类型判断**（`typeof cached[k] === typeof DEFAULTS[k]`），不能写死 `'boolean'`——否则新增的数字/字符串配置会被静默丢弃、永远停在默认值。
+
 - **语义是「录入与展示」开关，不是数据清理开关**（本节最重要的一条）：停用**不删除**库中既有值，重新开启原样恢复。
   - 服务端**刻意不在写入侧剥离字段值**——订单更新是整体重建，停用期间编辑一张老订单会把历史值永久洗掉；
   - 前端只隐藏输入框，`p.color` / `p.customerDrawingNo` / `editForm.color` 仍随表单原样回传。改这两处任一都会破坏该不变式。
@@ -536,7 +549,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - 原生 `<table>` 里加可选列时（订单列表展开行），`<th>` 与 `<td>` 必须挂**同一个条件**，否则 rowspan 结构会整体错位。
 - 前端读取链路：`GET /system/config/features`（仅需登录，§2.1）→ `stores/feature.ts`（**localStorage 缓存**，首屏先用上次的值渲染避免列闪现；接口失败保留缓存值；缺省一律启用）→ `composables/useFeatureFlags.ts`。**布局层统一拉一次**（`layout/index.vue` 的 `onMounted`），页面禁止自己请求；管理员保存配置后页面再拉一次，本人即时生效、他人刷新生效。
   - ⚠️ **唯一例外：不在 Layout 下的顶层路由**（现役只有生产任务单打印页 `/order/print`）必须**自己确保加载**（`featureStore.loaded ? skip : load()`）。新标签页打开、以及服务端 PDF 渲染都是全新页面上下文，没有 Layout 兜底、localStorage 里也没缓存，不自己拉就会退回默认值「启用」——管理员停用了字段，导出的单据上却照印。
-- **新增字段开关照此模式**（改动点固定 6 处）：迁移 `migration-field-switches.sql` 追加一列 + `01-schema.sql` + entity 列 + DTO `@IsIn([0,1])` + `getFeatureFlags()` 加一个布尔 + `FeatureFlags` 接口/`stores/feature.ts` 的 `DEFAULTS`/`useFeatureFlags()` 各加一项 + 配置页「业务字段」Tab 加一行。store 与 composable 已按键名遍历，加项不用改逻辑。
+- **新增字段开关照此模式**（改动点固定 6 处）：迁移 `migration-field-switches.sql` 追加一列 + `01-schema.sql` + entity 列 + DTO `@IsIn([0,1])` + `getFeatureFlags()` 加一个布尔 + `FeatureFlags` 接口/`stores/feature.ts` 的 `DEFAULTS`/`useFeatureFlags()` 各加一项 + 配置页「业务字段」Tab 加一行。store 与 composable 已按键名遍历，加项不用改逻辑（非布尔配置同此模式，只是 DTO 校验与 `DEFAULTS` 的类型换成对应类型）。
 - **不要**改成 key-value 配置表——单行表加列在这个体量下更直白，且能给每列写 COMMENT。
 
 ---

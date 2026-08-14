@@ -375,6 +375,8 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   customer_drawing_no_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
   dull_stock_color_enabled TINYINT     NOT NULL DEFAULT 1 COMMENT '呆滞品颜色字段启用开关：1启用 0停用；**独立于 color_field_enabled**，只管呆滞品管理页的颜色列与建档弹窗',
   product_requirement_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '产品要求描述字段启用开关：1启用 0停用（停用后隐藏订单产品级「产品要求描述」的录入与展示，不删除既有数据）',
+  inch_to_mm              DECIMAL(6,3) NOT NULL DEFAULT 25.000 COMMENT '英寸换算系数：1 英寸 = N mm（我司口径 25，非国标 25.4）；仅影响之后的录入折算与寸视图显示，不重算已落库 mm',
+  dimension_view_unit     VARCHAR(8)   NOT NULL DEFAULT 'mm' COMMENT '规格默认查看单位：mm毫米 inch寸；控制首页/订单跟踪台账/订单管理三页的初始视图与台账、总计划两个导出的规格列',
   -- 元数据
   updated_by              INT          NULL COMMENT '最后更新人ID',
   updater_name            VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',

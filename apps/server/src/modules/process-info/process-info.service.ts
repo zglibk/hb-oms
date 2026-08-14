@@ -20,6 +20,7 @@ import {
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { normalizeDimensionText, normalizeVersion } from '@hb-oms/shared';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 /**
  * 导入/导出表格采用**手工工艺表格式**：一个图号一组、外/中/内轨各一行，
@@ -264,6 +265,8 @@ export class ProcessInfoService {
     private readonly historyRepo: Repository<ProcessInfoHistory>,
     private readonly dataSource: DataSource,
     private readonly config: ConfigService,
+    // 规格「10寸→250mm」的换算系数由系统配置提供（与订单表单同一个数，见 normalizeDto）
+    private readonly systemConfig: SystemConfigService,
   ) {}
 
   /**
@@ -297,12 +300,20 @@ export class ProcessInfoService {
     };
   }
 
-  /** 三个部件级版本 + 产品级规格 归一化（新增/编辑共用） */
-  private normalizeDto(dto: Partial<CreateProcessInfoDto>) {
+  /**
+   * 三个部件级版本 + 产品级规格 归一化（新增/编辑共用）。
+   *
+   * 规格里的「10寸」要折成 250mm，系数取自系统配置（管理员可改，缺省 25）——
+   * 与订单表单的英寸录入用同一个数，否则同一批货在两处会折出不同的 mm。
+   */
+  private async normalizeDto(dto: Partial<CreateProcessInfoDto>) {
     if (dto.drawingVersionOuter !== undefined) dto.drawingVersionOuter = normalizeVersion(dto.drawingVersionOuter);
     if (dto.drawingVersionMiddle !== undefined) dto.drawingVersionMiddle = normalizeVersion(dto.drawingVersionMiddle);
     if (dto.drawingVersionInner !== undefined) dto.drawingVersionInner = normalizeVersion(dto.drawingVersionInner);
-    if (dto.dimension !== undefined) dto.dimension = normalizeDimensionText(dto.dimension);
+    if (dto.dimension !== undefined) {
+      const { inchToMm } = await this.systemConfig.getFeatureFlags();
+      dto.dimension = normalizeDimensionText(dto.dimension, inchToMm);
+    }
   }
 
   /** 修改履历（含新增/修改/导入更新；按时间倒序） */
@@ -354,7 +365,7 @@ export class ProcessInfoService {
     const exists = await this.repo.findOne({ where: { drawingNo: dto.drawingNo } });
     if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在开单信息记录`);
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
-    this.normalizeDto(dto);
+    await this.normalizeDto(dto);
     const saved = await this.repo.save(this.repo.create({ ...dto, ...auditOnCreate(user) }));
     const hist = this.buildHistoryRow(saved, 'create', buildDiff(null, saved), user);
     if (hist) await this.historyRepo.save(this.historyRepo.create(hist));
@@ -369,7 +380,7 @@ export class ProcessInfoService {
       if (exists) throw new ConflictException(`生产图号「${dto.drawingNo}」已存在开单信息记录`);
     }
     if (dto.reviewDate) dto.reviewDate = normalizeDate(dto.reviewDate);
-    this.normalizeDto(dto);
+    await this.normalizeDto(dto);
     const changes = buildDiff(item, { ...item, ...dto });
     await this.repo.update(id, { ...dto, ...auditOnUpdate(user) });
     const hist = this.buildHistoryRow(
@@ -671,6 +682,8 @@ export class ProcessInfoService {
    * - 生产机台多值分隔符（/ 、 ; 空格）归一化为逗号存储；工艺附图不支持 Excel 导入。
    */
   async importFromExcel(buffer: Buffer, overwrite: boolean, user: CurrentUserPayload) {
+    // 规格里的「10寸」按系统配置的系数折成 mm（整批取一次，逐行读配置没必要）
+    const { inchToMm: importInchToMm } = await this.systemConfig.getFeatureFlags();
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ExcelJS.Buffer);
     const ws = wb.worksheets[0];
@@ -761,7 +774,7 @@ export class ProcessInfoService {
       const { thin, thick } = parseMachinesCell(r.machines as string | undefined);
       r.machines = thin;
       (r as any).machinesThick = thick;
-      if (r.dimension !== undefined) r.dimension = normalizeDimensionText(r.dimension);
+      if (r.dimension !== undefined) r.dimension = normalizeDimensionText(r.dimension, importInchToMm);
       delete (r as any)._parts;
     }
     if (!rows.length && !errors.length) throw new BadRequestException('Excel 中没有可导入的数据行');

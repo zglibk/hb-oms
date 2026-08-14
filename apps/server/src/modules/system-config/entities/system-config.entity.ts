@@ -104,6 +104,41 @@ export class SystemConfig {
   })
   productRequirementEnabled: number;
 
+  /**
+   * 英寸换算系数（1 英寸 = N mm）。**非布尔配置**，与上面几个开关不是一类。
+   *
+   * 抽自共享包写死的 `INCH_TO_MM`（我司口径 25，非国标 25.4）。改动只影响
+   * 「之后的录入折算」与「所有寸视图的显示」，**已落库的 dimension_mm 永不重算**——
+   * 存储值始终是权威，否则历史订单的规格会随一次配置改动集体漂移。
+   *
+   * transformer 必需：MySQL 的 DECIMAL 经驱动回来是字符串，不转会让前端拿到 "25.000"。
+   */
+  @Column({
+    name: 'inch_to_mm',
+    type: 'decimal',
+    precision: 6,
+    scale: 3,
+    default: 25,
+    transformer: {
+      to: (v: number) => v,
+      from: (v: string | number | null) => (v == null ? 25 : Number(v)),
+    },
+    comment:
+      '英寸换算系数：1 英寸 = N mm（我司口径 25，非国标 25.4）；仅影响之后的录入折算与寸视图显示，不重算已落库 mm',
+  })
+  inchToMm: number;
+
+  /** 规格默认查看单位（mm / inch）：三张汇总页的初始视图与两个导出的规格列都看它 */
+  @Column({
+    name: 'dimension_view_unit',
+    type: 'varchar',
+    length: 8,
+    default: 'mm',
+    comment:
+      '规格默认查看单位：mm毫米 inch寸；控制首页/订单跟踪台账/订单管理三页的初始视图与台账、总计划两个导出的规格列',
+  })
+  dimensionViewUnit: string;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

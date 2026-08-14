@@ -16,6 +16,8 @@ export function useFeatureFlags(): {
   customerDrawingNoEnabled: ComputedRef<boolean>;
   dullStockColorEnabled: ComputedRef<boolean>;
   productRequirementEnabled: ComputedRef<boolean>;
+  inchToMm: ComputedRef<number>;
+  dimensionViewUnit: ComputedRef<'mm' | 'inch'>;
 } {
   const store = useFeatureStore();
   return {
@@ -30,5 +32,12 @@ export function useFeatureFlags(): {
     dullStockColorEnabled: computed(() => store.dullStockColorEnabled),
     /** 「产品要求描述」是否启用（订单产品级的特殊要求文本） */
     productRequirementEnabled: computed(() => store.productRequirementEnabled),
+    /**
+     * 英寸换算系数（1 英寸 = N mm，缺省 25）。
+     * 展示换算与录入折算都传它，**不要再直接用共享包的 INCH_TO_MM 常量**。
+     */
+    inchToMm: computed(() => store.inchToMm),
+    /** 规格默认查看单位：页面上的 mm/寸 切换以它为初值，用户仍可临时切换 */
+    dimensionViewUnit: computed(() => store.dimensionViewUnit),
   };
 }

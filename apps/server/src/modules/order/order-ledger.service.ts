@@ -2,10 +2,12 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import {
+  DIMENSION_UNIT,
   EXPORT_ROW_LIMIT,
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
   formatDimension,
+  formatDimensionView,
   formatProductModel,
   hasSocket,
   needsOutsource,
@@ -610,7 +612,15 @@ export class OrderLedgerService {
     const unitLabel = (v: string | null) =>
       UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
     // 「颜色」字段停用时整列不输出——台账页也不显示，导出留一列空值只是噪音
-    const { colorFieldEnabled: colorEnabled } = await this.systemConfig.getFeatureFlags();
+    const {
+      colorFieldEnabled: colorEnabled,
+      inchToMm,
+      dimensionViewUnit,
+    } = await this.systemConfig.getFeatureFlags();
+    // 规格列跟随「默认查看单位」（系统配置）：车间拿导出表对手工账，不该再自己换算一遍
+    const dimHeader = dimensionViewUnit === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)';
+    const dimCell = (r: { dimensionMm: number | null; dimensionText: string | null }) =>
+      formatDimensionView(r.dimensionMm, dimensionViewUnit, inchToMm) || r.dimensionText || '';
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('订单跟踪台账');
@@ -623,7 +633,7 @@ export class OrderLedgerService {
       { header: '订单编号', width: 16 },
       { header: '产品编码', width: 14 },
       { header: '产品型号', width: 22 },
-      { header: '规格', width: 12 },
+      { header: dimHeader, width: 12 },
       { header: '订单数量', width: 10 },
       { header: '单位', width: 7 },
       { header: '表面处理', width: 11 },
@@ -666,7 +676,7 @@ export class OrderLedgerService {
         r.productionNo || r.orderNo || '',
         r.materialCode ?? '',
         r.productModel ?? '',
-        r.dimensionText ?? '',
+        dimCell(r),
         r.orderQty,
         unitLabel(r.unit),
         label('surface_type', r.surfaceType),
@@ -797,7 +807,11 @@ export class OrderLedgerService {
       colorFieldEnabled: colorEnabled,
       customerDrawingNoEnabled: cdnEnabled,
       productRequirementEnabled: reqEnabled,
+      inchToMm,
+      dimensionViewUnit,
     } = await this.systemConfig.getFeatureFlags();
+    // 规格列跟随「默认查看单位」（同台账导出口径）
+    const dimHeader = dimensionViewUnit === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)';
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('总计划');
@@ -817,7 +831,7 @@ export class OrderLedgerService {
       // 位置贴表单语义：节数（产品类别）之后、规格之前
       ...(reqEnabled ? [{ header: '产品要求描述', width: 20 }] : []),
       { header: '部件组', width: 12 },
-      { header: '规格', width: 12 },
+      { header: dimHeader, width: 12 },
       { header: '订单数量', width: 10 },
       { header: '单位', width: 7 },
       { header: '订单数(支)', width: 11 },
@@ -878,7 +892,7 @@ export class OrderLedgerService {
         label('rail_section', f.railSection),
         ...(reqEnabled ? [ex.productRequirement ?? ''] : []),
         labels('part_group_type', r.partGroups.map((g) => g.groupType ?? '').filter(Boolean)),
-        f.dimensionText ?? '',
+        formatDimensionView(f.dimensionMm, dimensionViewUnit, inchToMm) || f.dimensionText || '',
         f.orderQty,
         unitLabel(f.unit),
         r.qtyPcs,

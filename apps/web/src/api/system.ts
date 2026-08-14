@@ -284,6 +284,10 @@ export interface SystemConfig {
   dullStockColorEnabled: number;
   /** 「产品要求描述」字段启用开关：1启用 0停用（订单产品级的特殊要求文本） */
   productRequirementEnabled: number;
+  /** 英寸换算系数：1 英寸 = N mm（缺省 25，我司口径）；不重算已落库的 mm */
+  inchToMm: number;
+  /** 规格默认查看单位：mm / inch（三张汇总页初始视图 + 两个导出的规格列） */
+  dimensionViewUnit: string;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;
@@ -306,6 +310,14 @@ export interface FeatureFlags {
   dullStockColorEnabled: boolean;
   /** 「产品要求描述」字段是否启用（订单产品级的特殊要求文本） */
   productRequirementEnabled: boolean;
+  /**
+   * 英寸换算系数（1 英寸 = N mm）。**非布尔项**——管理员在系统配置里设定，
+   * 缺省 25（我司口径，非国标 25.4）。只影响之后的录入折算与寸视图显示，
+   * 已落库的 mm 不重算。
+   */
+  inchToMm: number;
+  /** 规格默认查看单位：三张汇总页的初始视图与两个导出的规格列都看它 */
+  dimensionViewUnit: 'mm' | 'inch';
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */

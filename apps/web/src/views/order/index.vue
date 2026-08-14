@@ -204,12 +204,12 @@ import {
   DIMENSION_UNIT,
   formatProductModel,
   formatDimension,
-  formatDimensionView,
   labelOf,
   tagTypeOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -327,14 +327,16 @@ function joinProducts(row: OrderItem, pick: (p: OrderProductItem) => string): st
   const vals = [...new Set(row.products.map(pick).filter((v) => v && v !== '—'))];
   return vals.length ? vals.join(' / ') : '—';
 }
-/** 规格查看单位：仅影响主行「规格」列展示，不改库；默认 mm（与台账页同款口径，1 英寸=25mm） */
-const dimViewUnit = ref<typeof DIMENSION_UNIT.MM | typeof DIMENSION_UNIT.INCH>(DIMENSION_UNIT.MM);
-const dimColLabel = computed(() =>
-  dimViewUnit.value === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)',
-);
+/**
+ * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
+ * 逻辑与首页、台账页共用同一个 composable。
+ */
+const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimTextOf } = useDimensionView();
 /** 多规格订单先逐产品换算再由 joinProducts 去重并列（400mm/450mm → 16寸/18寸） */
 function dimViewText(p: OrderProductItem): string {
-  return formatDimensionView(p.dimensionMm, dimViewUnit.value);
+  const t = dimTextOf(p.dimensionMm);
+  // joinProducts 会把「—」过滤掉（多产品行并列时空值不该占位）
+  return t === '—' ? '' : t;
 }
 
 /* ===== 状态操作 ===== */
