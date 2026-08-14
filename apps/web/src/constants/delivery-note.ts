@@ -29,6 +29,11 @@ export interface DeliveryColumn {
   pre?: boolean;
   /** 主字段为空时依次回落的字段（品名列用：要求描述 ↔ 产品名称 ↔ 产品型号） */
   fallbackKeys?: Array<keyof DeliveryNoteRow>;
+  /**
+   * 该列受哪个业务字段开关控制——开关停用时**整列不印**（§5.7 口径：
+   * 停用的字段在录入框/表格列/导出列一并消失，打印列同理）。不填 = 始终显示。
+   */
+  flag?: 'colorEnabled';
 }
 
 export interface DeliveryTemplate {
@@ -41,6 +46,14 @@ export interface DeliveryTemplate {
   contactLine: string;
   /** 标题区右侧是否印「送货单编号：」（耐斯克版有，精工版没有） */
   showDocNoInTitle: boolean;
+  /**
+   * 客户信息区版式（联系行与明细表之间那几行）：
+   * - `classic`：客户 + 电话 / 地址 + 日期 + NO（耐斯克、精工两版）
+   * - `consignee`：收货单位 / 送货单位（我方，固定） / 我方电话传真，右侧 送货单号NO + 日期（通用版）
+   */
+  metaStyle: 'classic' | 'consignee';
+  /** consignee 版式第三行的固定文案（我方电话与传真，客户要求单据上再印一次） */
+  contactPhoneLine?: string;
   columns: DeliveryColumn[];
   /** 签名栏项目（耐斯克是「业务」，精工是「发货人」） */
   signatures: string[];
@@ -53,6 +66,8 @@ export interface DeliveryTemplate {
 const ADDRESS = '地址：广东省中山市南头穗西月桂东路23号';
 const FAX = 'FAX：0760-87972639';
 const FOOTER_NOTE = '白色联留底  红色联收款凭证  黄色联客户';
+/** 通用版是四联单，与两套客户版的三联不同 */
+const FOOTER_NOTE_4 = '第一联存根（白）　第二联收款依据（红）　第三联交客户（黄）　第四联入账（蓝）';
 
 /** 品名列的回落链：主字段为空时不留空格，依次退到产品名称/要求描述、最后是产品型号 */
 const NAME_FALLBACK: Array<keyof DeliveryNoteRow> = ['productName', 'productModel'];
@@ -70,20 +85,28 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
     code: 'generic',
     name: '通用',
     description: '未指定客户专用版式时使用',
-    contactLine: `${ADDRESS}  TEL：0760-87972626  ${FAX}`,
+    contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
     showDocNoInTitle: false,
+    // 通用版的客户信息区是「收货单位 / 送货单位 / 电话传真」三行式
+    metaStyle: 'consignee',
+    contactPhoneLine: '电话：0760-87972626　　传真：0760-87972639',
     columns: [
-      { key: 'seq', label: '序号', width: '5%', align: 'center' },
-      { key: 'poNo', label: '客户订单号', width: '15%', align: 'center' },
-      { key: 'productModel', label: '产品名称', width: '24%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
-      { key: 'specText', label: '规格', width: '10%', align: 'center' },
-      { key: 'qty', label: '数量（{unit}）', width: '12%', align: 'center' },
-      { key: 'productionNo', label: '海宝单号', width: '16%', align: 'center' },
-      { key: 'remark', label: '备注', width: '18%', pre: true },
+      { key: 'seq', label: '序号', width: '6%', align: 'center' },
+      // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
+      { key: 'poNo', label: '订单编号', width: '13.5%', align: 'center' },
+      { key: 'materialCode', label: '物料编码', width: '17%', align: 'center', fallbackKeys: CODE_FALLBACK },
+      { key: 'productName', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: REQ_FALLBACK },
+      { key: 'specText', label: '规格型号', width: '21%', align: 'center' },
+      // 颜色列随全局「颜色」开关整列增减（§5.7）
+      { key: 'color', label: '颜色', width: '8%', align: 'center', flag: 'colorEnabled' },
+      // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
+      { key: 'unitLabel', label: '单位', width: '6%', align: 'center' },
+      { key: 'qty', label: '数量', width: '11%', align: 'center' },
+      { key: 'remark', label: '备注', width: '11%', pre: true },
     ],
-    signatures: ['制单', '业务', '仓库收货人'],
-    minRows: 8,
-    footerNote: FOOTER_NOTE,
+    signatures: ['制单', '仓库', '提货人', '收货人签名'],
+    minRows: 6,
+    footerNote: FOOTER_NOTE_4,
   },
   {
     code: 'nsk',
@@ -92,6 +115,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
     // 该客户版印的是业务手机号（对方按这个号找人），不是公司总机
     contactLine: `${ADDRESS}  TEL：13802658930  ${FAX}`,
     showDocNoInTitle: true,
+    metaStyle: 'classic',
     columns: [
       { key: 'seq', label: '序号', width: '4.5%', align: 'center' },
       { key: 'poNo', label: '采购单编号', width: '13.5%', align: 'center' },
@@ -116,6 +140,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
     description: '客户专用，按合同编号和产品编码出单',
     contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
     showDocNoInTitle: false,
+    metaStyle: 'classic',
     columns: [
       { key: 'seq', label: '序号', width: '4.5%', align: 'center' },
       { key: 'poNo', label: '合同编号', width: '16%', align: 'center' },
@@ -169,6 +194,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '53#普通卡口滑轨',
       itemNo: '53#',
       specText: '17寸',
+      color: '黑色',
       qty: 500,
       unit: 'set',
       unitLabel: '套',
@@ -188,6 +214,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '45#自锁滑轨',
       itemNo: '45#',
       specText: '400mm',
+      color: '白色',
       qty: 260,
       unit: 'set',
       unitLabel: '套',
@@ -208,6 +235,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '45#缓冲滑轨',
       itemNo: '45#',
       specText: '535mm',
+      color: '',
       qty: 128,
       unit: 'set',
       unitLabel: '套',

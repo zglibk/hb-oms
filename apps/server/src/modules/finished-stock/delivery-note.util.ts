@@ -27,6 +27,7 @@ export interface DeliveryNoteSourceRow {
   product_model: string | null;
   dimension_mm: number | null;
   dimension_text: string | null;
+  color: string | null;
   remark: string | null;
   /** 以下来自 JOIN 的订单侧（产品行被删时为 null，各字段自行回落明细快照） */
   material_code: string | null;
@@ -64,6 +65,11 @@ export interface DeliveryNoteRow {
   itemNo: string;
   /** 规格：英寸录入 → `17寸`；mm 录入 → `425mm`（纸质单口径，不带括号 mm） */
   specText: string;
+  /**
+   * 颜色（出库明细的快照值）。通用模板有独立的「颜色」列；
+   * 该列受 §5.7 全局「颜色」开关控制——停用时整列不印（与其它页面口径一致）。
+   */
+  color: string;
   /** 数量（已按 unit 折算；奇数支折套会出现 0.5） */
   qty: number;
   /** 订单单位：set / piece */
@@ -141,6 +147,7 @@ export function buildDeliveryRows(src: DeliveryNoteSourceRow[]): DeliveryNoteRow
       productModel: s(r.product_model),
       itemNo: s(r.item_no),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
+      color: s(r.color),
       qty: piecesToUnitQty(r._pcs, unit),
       unit,
       unitLabel: unitLabelOf(unit),

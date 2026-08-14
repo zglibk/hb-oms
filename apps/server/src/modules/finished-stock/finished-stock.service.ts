@@ -178,7 +178,7 @@ export class FinishedStockService {
     > = await this.dataSource.query(
       `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
               i.order_no, i.customer_name, i.production_no, i.item_no,
-              i.product_model, i.dimension_mm, i.dimension_text, i.remark,
+              i.product_model, i.dimension_mm, i.dimension_text, i.color, i.remark,
               p.material_code, p.customer_drawing_no, p.product_name, p.product_requirement,
               p.unit, p.dimension_raw, p.dimension_unit,
               o.po_no, o.customer_id, o.salesman, o.merchandiser

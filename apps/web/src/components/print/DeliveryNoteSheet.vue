@@ -11,8 +11,37 @@
       <p class="doc-contact">{{ tpl.contactLine }}</p>
     </header>
 
-    <!-- ==================== 客户信息 ==================== -->
-    <div class="doc-meta">
+    <!-- ==================== 客户信息（两种版式，见模板注册表 metaStyle） ==================== -->
+    <div v-if="tpl.metaStyle === 'consignee'" class="doc-meta doc-meta--consignee">
+      <!-- 通用版：收货单位 / 送货单位（我方，固定）/ 我方电话传真；右侧 送货单号NO + 日期 -->
+      <div class="doc-meta__row">
+        <div class="doc-meta__item doc-meta__item--grow">
+          <span class="doc-meta__label">收货单位：</span>
+          <span class="doc-meta__value">{{ note.customerName || '' }}</span>
+        </div>
+        <div class="doc-meta__item">
+          <span class="doc-meta__label">送货单号：NO:</span>
+          <span class="doc-meta__value doc-meta__value--sm">{{ note.deliveryNo }}</span>
+        </div>
+      </div>
+      <div class="doc-meta__row">
+        <div class="doc-meta__item doc-meta__item--grow">
+          <span class="doc-meta__label">送货单位：</span>
+          <span class="doc-meta__plain">{{ COMPANY_FULL_NAME }}</span>
+        </div>
+      </div>
+      <div class="doc-meta__row">
+        <div class="doc-meta__item doc-meta__item--grow">
+          <span class="doc-meta__plain">{{ tpl.contactPhoneLine }}</span>
+        </div>
+        <div class="doc-meta__item">
+          <span class="doc-meta__label">日期：</span>
+          <span class="doc-meta__value doc-meta__value--sm">{{ dateText }}</span>
+        </div>
+      </div>
+    </div>
+    <div v-else class="doc-meta doc-meta--classic">
+      <!-- 客户专用版（耐斯克 / 精工）：客户 + 电话 / 地址 + 日期 + NO -->
       <div class="doc-meta__row">
         <div class="doc-meta__item doc-meta__item--grow">
           <span class="doc-meta__label">客户</span>
@@ -42,20 +71,20 @@
     <!-- ==================== 明细表（列集合由模板决定） ==================== -->
     <table class="note-table">
       <colgroup>
-        <col v-for="(c, i) in tpl.columns" :key="`col${i}`" :style="{ width: c.width }" />
+        <col v-for="(c, i) in cols" :key="`col${i}`" :style="{ width: c.width }" />
       </colgroup>
       <thead>
         <tr>
-          <th v-for="(c, i) in tpl.columns" :key="`th${i}`">{{ headerOf(c) }}</th>
+          <th v-for="(c, i) in cols" :key="`th${i}`">{{ headerOf(c) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in note.rows" :key="r.seq">
-          <td v-for="(c, i) in tpl.columns" :key="`td${i}`" :class="cellClass(c)">{{ cellOf(r, c) }}</td>
+          <td v-for="(c, i) in cols" :key="`td${i}`" :class="cellClass(c)">{{ cellOf(r, c) }}</td>
         </tr>
         <!-- 补空行到模板要求的最少行数：纸质单版式固定，货少时也不该缩成半张表 -->
         <tr v-for="n in blankRowCount" :key="`blank${n}`">
-          <td v-for="(c, i) in tpl.columns" :key="`bt${i}`" :class="cellClass(c)">
+          <td v-for="(c, i) in cols" :key="`bt${i}`" :class="cellClass(c)">
             {{ c.key === 'seq' ? note.rows.length + n : '' }}
           </td>
         </tr>
@@ -83,6 +112,7 @@ import { computed } from 'vue';
 import type { DeliveryNote, DeliveryNoteRow } from '@/api/finished-stock';
 import { COMPANY_FULL_NAME } from '@/constants/company';
 import { deliveryTemplateOf, type DeliveryColumn } from '@/constants/delivery-note';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 
 /**
  * 《送货单》A4 纸面（CLAUDE.md §5.6「送货单打印」）。
@@ -104,6 +134,23 @@ const props = defineProps<{
 }>();
 
 const tpl = computed(() => deliveryTemplateOf(props.templateCode));
+
+/**
+ * 实际要印的列：剔除被业务字段开关停用的（§5.7——停用的字段在录入框/表格列/导出列
+ * 一并消失，打印列同理）。
+ * ⚠️ 打印页是顶层路由、没有 Layout 兜底，开关由它自己 `featureStore.load()`；
+ * 服务端渲染 PDF 时走的也是那条路径，所以这里读到的值与页面一致。
+ */
+const { colorEnabled } = useFeatureFlags();
+const cols = computed(() =>
+  tpl.value.columns.filter((c) => !c.flag || (c.flag === 'colorEnabled' && colorEnabled.value)),
+);
+
+/**
+ * 模板是否有独立的「单位」列（通用版有）。有的话数量列只写数字、表头也只写「数量」，
+ * 不再往单元格里塞单位后缀——那是**没有**单位列时才需要的补偿。
+ */
+const hasUnitCol = computed(() => cols.value.some((c) => c.key === 'unitLabel'));
 
 /** 日期：纸质单写成 2026/8/13（不补前导零） */
 const dateText = computed(() => {
@@ -130,6 +177,8 @@ function cellOf(row: DeliveryNoteRow, col: DeliveryColumn): string {
   // 单价等系统内无对应字段的列：留白供手填
   if (col.key === 'blank') return '';
   if (col.key === 'qty') {
+    // 有独立单位列时只写数字；没有才在混合单位的情况下补单位后缀
+    if (hasUnitCol.value) return String(row.qty);
     return props.note.unitConsistent ? String(row.qty) : `${row.qty}${row.unitLabel}`;
   }
   const pick = (k: keyof DeliveryNoteRow) => String(row[k] ?? '').trim();
@@ -146,14 +195,14 @@ function cellOf(row: DeliveryNoteRow, col: DeliveryColumn): string {
 
 const blankRowCount = computed(() => Math.max(0, tpl.value.minRows - props.note.rows.length));
 
-/** 数量列位置：合计行按它拆成「合计 | 合计数 | 备注」三格 */
+/** 数量列位置：合计行按它拆成「合计 | 合计数 | 备注」三格（按过滤后的列算，否则会错位） */
 const qtyIndex = computed(() => {
-  const i = tpl.value.columns.findIndex((c) => c.key === 'qty');
+  const i = cols.value.findIndex((c) => c.key === 'qty');
   // 模板没定义数量列时退到最后一列，至少不会让 colspan 算成负数
-  return i >= 0 ? i : tpl.value.columns.length - 1;
+  return i >= 0 ? i : cols.value.length - 1;
 });
 const totalLabelSpan = computed(() => Math.max(1, qtyIndex.value));
-const totalRestSpan = computed(() => tpl.value.columns.length - qtyIndex.value - 1);
+const totalRestSpan = computed(() => cols.value.length - qtyIndex.value - 1);
 
 /**
  * 合计文本：全单单位一致时只有一个数；混着套与支时**分别合计并列**
@@ -163,6 +212,7 @@ const totalText = computed(() => {
   const totals = props.note.totals ?? [];
   if (!totals.length) return '';
   if (props.note.unitConsistent) return String(totals[0].qty);
+  // 混合单位时仍要标单位——即便有单位列，合计只有一格，不写单位就分不清哪个数是什么
   return totals.map((t) => `${t.qty}${t.unitLabel}`).join(' / ');
 });
 
@@ -225,6 +275,21 @@ function signValue(label: string): string {
   column-gap: 5mm;
   margin-bottom: 1.5mm;
 }
+/*
+ * 客户专用版：左侧客户/地址固定收窄到 100mm，让电话、日期、NO 连同值区整组左移；
+ * 最后一列吃掉剩余宽度，给 YYYYMMDD-0001 留足空间。
+ */
+.doc-meta--classic .doc-meta__row {
+  grid-template-columns: 100mm 34mm minmax(44mm, 1fr);
+}
+/*
+ * 通用版只有两栏（左：单位/电话，右：单号/日期），且标签更长（「送货单号：NO:」），
+ * 故标签列改为 auto 自适应，不能沿用客户专用版那 10mm 的固定标签列。
+ */
+.doc-meta--consignee .doc-meta__row { grid-template-columns: minmax(0, 1fr) 62mm; }
+.doc-meta--consignee .doc-meta__item { grid-template-columns: auto minmax(0, 1fr); }
+/* 固定文案（送货单位、我方电话传真）：不是填空格，故不带下划线 */
+.doc-meta__plain { padding: 0 1mm 0.5mm; white-space: nowrap; }
 .doc-meta__item {
   display: grid;
   grid-template-columns: 10mm minmax(0, 1fr);
@@ -250,6 +315,7 @@ function signValue(label: string): string {
   border-bottom: 1px solid #333;
   padding: 0 1mm 0.5mm;
 }
+.doc-meta__value--sm { white-space: nowrap; }
 
 /* ===== 明细表 ===== */
 .note-table {

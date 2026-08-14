@@ -258,6 +258,8 @@ export interface DeliveryNoteRow {
   itemNo: string;
   /** 规格：英寸录入 → 17寸；mm 录入 → 425mm */
   specText: string;
+  /** 颜色（出库明细快照）；通用模板有独立列，受 §5.7 全局颜色开关控制 */
+  color: string;
   /** 已按订单单位折算后的数量（奇数支折套会出现 0.5） */
   qty: number;
   /** set / piece */
