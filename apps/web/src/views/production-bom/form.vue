@@ -616,11 +616,25 @@ export default { name: 'ProductionBomForm' };
   }
 }
 
-// 与订单新增/编辑页的客户字段保持一致：名称自适应，代码固定在面板右侧。
+/*
+ * 与订单新增/编辑页的客户字段保持一致：名称自适应，代码固定在面板右侧。
+ *
+ * ⚠️ **要加宽就加宽面板本身，别去撑选项行**：下拉面板的宽度由 Element Plus 按
+ * 触发框宽度算（内联 min-width 写在 .el-select-dropdown 上），而这个字段在
+ * `:lg="8"` 栅格里只有约 1/3 表单宽。早先给 `.el-select-dropdown__item` 钉
+ * `min-width: 320px` 想让代码列放得下，结果是**选项行比面板还宽、客户代码整列
+ * 溢出到面板外面**（实测复现）。正确做法是给面板设 width，选项行则一律
+ * `min-width: 0` 跟随面板、由名称省略号兜底——这样面板再窄也不会溢出。
+ */
 .bom-customer-popper {
+  // 面板加宽到能容下「较长客户名 + 代码列」；仍以触发框宽度为下限，窄屏不至于顶出视口
+  width: 320px;
+  max-width: calc(100vw - 32px);
+
   .el-select-dropdown__item {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
-    min-width: 320px;
+    // 跟随面板宽度，绝不反过来撑宽面板（见上方注释）
+    box-sizing: border-box; width: 100%; min-width: 0;
     height: auto;
     padding: 8px 16px;
     border-bottom: 1px solid var(--el-border-color-lighter);
