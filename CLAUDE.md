@@ -480,6 +480,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 
 - **锚点 = 成品出库单**（`biz_type='sale_outbound'`），一张出库单出一张送货单，**不新建业务表**：出库单就是发货动作本身，客户/生产单号/型号/规格/数量都已快照且受结存守卫，账实一致。取数 `GET /finished-stock/:id/delivery-note`（读权限即菜单码 `finished-stock`），PDF `GET /finished-stock/:id/delivery-note-pdf`（`finished-stock:print`，复用 `PdfService` 渲染前端打印页，同《生产任务单》做法）。
 - **纸面渲染只有一份**：[DeliveryNoteSheet.vue](apps/web/src/components/print/DeliveryNoteSheet.vue)，打印页与「系统管理 → 打印模板」预览页共用。**禁止为预览另写一套**——各写一份迟早出现「预览好好的、打出来不是那样」。三条尺寸纪律（跨平台字体栈含 Linux 回落、屏幕与打印纸面等高 283mm、`.print-sheet` 类名是 PdfService 的等待选择器）都收在该组件里。
+- **纸面缩放预览统一走 [DeliveryNoteSheetPreview.vue](apps/web/src/components/print/DeliveryNoteSheetPreview.vue)**（纸面固定 210mm 宽，塞不进任何页面容器，凡"看效果"的地方都要缩放）：现有两处调用——「系统管理 → 打印模板」页、客户资料编辑弹窗里的「预览」按钮。两边各写一份 ResizeObserver + transform 会让缩放口径漂移，故第二处出现时即抽出（§4.4）。
+- **客户资料编辑弹窗的模板预览**：字段旁一个「预览」按钮 → 弹出层显示样例数据渲染的纸面。**刻意不把客户表单改成子页面**——客户资料只有 9 个字段，弹窗够用；人事档案改子页面是因为它有四大段字段（§5.6）。未绑定模板时预览的是全局默认那套，与实际打印的取模板顺序一致。
 - **「系统管理 → 打印模板」页**（`system:print-template`，纯前端、无后端接口）：左侧列模板（列数/签名项/默认标记），右侧按 A4 等比缩放预览，数据源可切「样例数据」（`SAMPLE_DELIVERY_NOTE`，假客户假单号，配置页不该摆真实客户信息）或「真实单据」（选一张销售出库单，走 `finished-stock` 读权限）。**全局默认模板在这里设**（按钮挂 `config:update`，复用 `PUT /system/config`），系统配置页不再有该编辑框。
 - **耐斯克的「物料编码」与精工的「产品编码」是同一个字段**（产品行 `material_code`，客户方编码），只是客户叫法不同；**取不到时回退「客户图号」**（`CODE_FALLBACK`）——两个号客户都能对上货，印一个总比留空强。该回退**刻意不受 §5.7「客户图号」开关影响**：取值兜底与「要不要展示客户图号这个字段」是两回事，且停用该开关的厂本就不录这个号、回退自然取不到值。
 - **通用版与两套客户版的版式差异由三个模板字段承载**（2026-08-14 按新版纸质单改）：`metaStyle`（`consignee` = 收货单位/送货单位/我方电话传真三行式，`classic` = 客户+电话/地址+日期+NO）、`contactPhoneLine`（consignee 版第三行的我方固定电话传真）、列上的 `flag`（受业务字段开关控制的列，停用即整列不印）。通用版另有两点与客户版不同：**有独立「单位」列**（故数量列只写数字、表头不带 `{unit}`，`hasUnitCol` 判定）、**四联单**说明。

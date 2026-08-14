@@ -61,18 +61,11 @@
             <el-option v-for="d in docOptions" :key="d.id" :label="d.label" :value="d.id" />
           </el-select>
 
-          <span class="preview__tip">
-            纸面按 A4 纵向等比缩放显示（{{ Math.round(scale * 100) }}%），与实际打印一致
-          </span>
+          <span class="preview__tip">纸面按 A4 纵向等比缩放显示，与实际打印一致</span>
         </div>
 
-        <div ref="stageRef" class="preview__stage" v-loading="noteLoading">
-          <div
-            v-if="note" class="preview__scaler"
-            :style="{ transform: `scale(${scale})`, height: `${SHEET_H * scale}px` }"
-          >
-            <delivery-note-sheet :note="note" :template-code="current" class="preview__sheet" />
-          </div>
+        <div v-loading="noteLoading">
+          <delivery-note-sheet-preview v-if="note" :note="note" :template-code="current" />
           <el-empty v-else :description="emptyText" />
         </div>
       </el-card>
@@ -81,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   DELIVERY_TEMPLATES,
@@ -89,7 +82,7 @@ import {
   DEFAULT_DELIVERY_TEMPLATE,
   deliveryTemplateOf,
 } from '@/constants/delivery-note';
-import DeliveryNoteSheet from '@/components/print/DeliveryNoteSheet.vue';
+import DeliveryNoteSheetPreview from '@/components/print/DeliveryNoteSheetPreview.vue';
 import { getDeliveryNote, getFinishedDocList, type DeliveryNote } from '@/api/finished-stock';
 import { updateSystemConfig } from '@/api/system';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -108,10 +101,6 @@ import { FINISHED_BIZ_TYPE } from '@/constants/dict';
 
 const { deliveryTemplateDefault } = useFeatureFlags();
 const featureStore = useFeatureStore();
-
-/** A4 纸面在 96dpi 下的像素尺寸（210×297mm），用于算缩放比与占位高度 */
-const SHEET_W = 210 * (96 / 25.4);
-const SHEET_H = 297 * (96 / 25.4);
 
 const current = ref(DEFAULT_DELIVERY_TEMPLATE);
 const defaultCode = computed(() => deliveryTemplateDefault.value || DEFAULT_DELIVERY_TEMPLATE);
@@ -195,27 +184,10 @@ async function onSetDefault() {
   }
 }
 
-/* ===== 纸面等比缩放：按预览区实际宽度算，窗口变化跟随 ===== */
-const stageRef = ref<HTMLElement>();
-const scale = ref(1);
-let ro: ResizeObserver | undefined;
-
-function fit() {
-  const w = stageRef.value?.clientWidth ?? 0;
-  // 左右各留 24px 呼吸位；不放大超过 100%（放大会糊，也没意义）
-  scale.value = w ? Math.min(1, (w - 48) / SHEET_W) : 1;
-}
-
 onMounted(() => {
   // 进页面时把默认模板选中，让「当前默认长什么样」是第一眼看到的
   current.value = defaultCode.value;
-  fit();
-  if (typeof ResizeObserver !== 'undefined' && stageRef.value) {
-    ro = new ResizeObserver(fit);
-    ro.observe(stageRef.value);
-  }
 });
-onBeforeUnmount(() => ro?.disconnect());
 </script>
 
 <script lang="ts">
@@ -280,13 +252,4 @@ export default { name: 'PrintTemplate' };
 }
 .preview__tip { color: #909399; font-size: 12px; }
 
-.preview__stage {
-  background: #eef0f3;
-  padding: 24px;
-  border-radius: 4px;
-  overflow: auto;
-}
-/* 缩放以左上角为原点，外层用 height 抵掉 transform 不占位造成的空白 */
-.preview__scaler { transform-origin: top left; }
-.preview__sheet { box-shadow: 0 3px 18px rgb(0 0 0 / 14%); }
 </style>

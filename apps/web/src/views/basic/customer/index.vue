@@ -100,11 +100,14 @@
         <!-- 送货单模板：决定给这个客户打印送货单时用哪套版式（列集合/联系电话/签名项都不同）。
              留空 = 用「系统配置 → 业务字段」里的全局默认模板 -->
         <el-form-item label="送货单模板">
-          <el-select v-model="form.deliveryTemplate" clearable placeholder="留空 = 用系统默认模板">
-            <el-option
-              v-for="t in DELIVERY_TEMPLATE_OPTIONS" :key="t.value" :label="t.label" :value="t.value"
-            />
-          </el-select>
+          <div class="tpl-field">
+            <el-select v-model="form.deliveryTemplate" clearable placeholder="留空 = 用系统默认模板">
+              <el-option
+                v-for="t in DELIVERY_TEMPLATE_OPTIONS" :key="t.value" :label="t.label" :value="t.value"
+              />
+            </el-select>
+            <el-button link type="primary" :icon="View" @click="previewVisible = true">预览</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -119,6 +122,17 @@
         <el-button size="small" @click="formVisible = false">取消</el-button>
         <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 送货单模板预览：用样例数据演示版式，纸面与实际打印同一套渲染。
+         append-to-body 让它盖在编辑弹窗之上（两层弹窗，关掉后回到编辑态） -->
+    <el-dialog v-model="previewVisible" title="送货单模板预览" width="900px" append-to-body>
+      <div class="tpl-preview-hint">
+        当前预览：<strong>{{ previewTemplateName }}</strong>
+        <span v-if="!form.deliveryTemplate">（该客户未单独绑定，跟随系统默认模板）</span>
+        ——用样例数据演示版式，实际打印时内容取自出库单。
+      </div>
+      <delivery-note-sheet-preview :note="SAMPLE_NOTE" :template-code="previewCode" />
     </el-dialog>
 
     <!-- 批量导入 -->
@@ -156,9 +170,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox, type FormInstance, type UploadFile } from 'element-plus';
-import { Plus, Edit, Delete, Search, Upload, Download, UploadFilled } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, Upload, Download, UploadFilled, View } from '@element-plus/icons-vue';
 import {
   getCustomerList,
   createCustomer,
@@ -170,7 +184,15 @@ import {
   type CustomerItem,
 } from '@/api/customer';
 import { ENABLE_STATUS, labelOf, tagTypeOf } from '@/constants/dict';
-import { DELIVERY_TEMPLATE_OPTIONS } from '@/constants/delivery-note';
+import {
+  DELIVERY_TEMPLATE_OPTIONS,
+  DEFAULT_DELIVERY_TEMPLATE,
+  SAMPLE_DELIVERY_NOTE,
+  deliveryTemplateOf,
+} from '@/constants/delivery-note';
+import DeliveryNoteSheetPreview from '@/components/print/DeliveryNoteSheetPreview.vue';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import type { DeliveryNote } from '@/api/finished-stock';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
@@ -206,6 +228,17 @@ function deliveryTemplateName(code: string | null): string {
   if (!code) return '系统默认';
   return labelOf(DELIVERY_TEMPLATE_OPTIONS, code) || code;
 }
+
+/* ===== 送货单模板预览（编辑弹窗里的「预览」按钮） ===== */
+const { deliveryTemplateDefault } = useFeatureFlags();
+const previewVisible = ref(false);
+/** 样例数据的类型断言只在这一处：它是纯展示用的假单据，不值得为它建一份完整的 DTO */
+const SAMPLE_NOTE = SAMPLE_DELIVERY_NOTE as unknown as DeliveryNote;
+/** 未绑定模板时预览的是全局默认那套——与实际打印时的取模板顺序一致 */
+const previewCode = computed(
+  () => form.deliveryTemplate || deliveryTemplateDefault.value || DEFAULT_DELIVERY_TEMPLATE,
+);
+const previewTemplateName = computed(() => deliveryTemplateOf(previewCode.value).name);
 
 /* ===== 新增/编辑 ===== */
 const formVisible = ref(false);
@@ -380,5 +413,13 @@ async function onImport() {
 .import-errors {
   margin-top: 10px; max-height: 180px; overflow-y: auto;
   p { margin: 2px 0; }
+}
+/* 送货单模板：下拉 + 「预览」按钮同一行，下拉吃掉剩余宽度 */
+.tpl-field {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  .el-select { flex: 1; min-width: 0; }
+}
+.tpl-preview-hint {
+  margin-bottom: 10px; font-size: 13px; color: var(--el-text-color-secondary);
 }
 </style>
