@@ -515,7 +515,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 - **A5 横向**（`@page { size: A5 landscape; margin: 10mm 5mm }`，对齐纸质模板的 `paperSize=11`）。`PdfService` 无需改动：它用 `preferCSSPageSize`，纸张与页边距一律以打印页的 `@page` 为准（已实测导出 PDF 为 209.9×148.2mm）。
 - ⚠️ **A5 只有 128mm 可用高度，字号与行高不得再调大**：要塞下 标题 + 单头 + 表头 + **10 行明细** + 签名栏。实测 13px/1.5 时**全空行就已顶到 128mm 边界**，任何一格文字折行都会溢出成第二页空白纸；现为 12px/1.4 + 行高 8mm，全空行约 116mm，留 12mm 给折行的行。同理列宽有两列**刻意偏离模板**（产品名称 15.9%→20%、规格型号 17%→12.9%）——模板宽度是给人手写定的，系统印的是完整型号（12 个字），照搬会频繁折行。明细超 10 行时自然跨页，`<thead>` 由浏览器在次页自动重复（已实测 16 行→2 页、32 行→3 页，内容不被裁）。
 - **含卡口产品的 left/right 合并成一行**、**数量跟随订单单位**：与送货单同口径，共用件在 [print-note.util.ts](apps/server/src/modules/finished-stock/print-note.util.ts)（`mergeByProduct` / `specTextOf` / `unitLabelOf` / `sumByUnit`，2026-08-14 按 §4.4 从 delivery-note.util.ts 抽出，两张单都从这里取）。
-- 车间由服务端经 `dictLabeler` 转中文后下发（页面与 PDF 同一个值，纸面组件不必再引字典）；制单 = 建单人，主管/质检留空手签；**纸面不印合计行**（模板没有这一行，但 `totals` 照常返回备用）。
+- **纸面「车间」= 单头值优先，为空时回溯装配批次**（2026-08-14 使用部门反馈补）：入库单的 `work_team` 是**选填**的，不填就会印出一张车间空白的单子。装配车间的事实源在**批次级** `t_assembly_batch.workshop`（§5.6：订单环节不安排车间），故按本单涉及的订单产品行聚合，一单来自多个车间时去重并列（`GROUP_CONCAT(DISTINCT …)`，与装配列表、订单跟踪台账的「装配车间」列同一口径）。**回溯不到（未排产/批次没填车间）就留白**给仓管手写，不硬造。车间值由服务端经 `dictLabeler` 转中文后下发（页面与 PDF 同一个值，纸面组件不必再引字典）。
+- 制单 = 建单人，主管/质检留空手签；**纸面不印合计行**（模板没有这一行，但 `totals` 照常返回备用）。
 - 打印页同为**顶层路由**（`/finished-stock/inbound-note`），§5.7 的「必须自己 `featureStore.load()`」同样适用。
 
 **部件台账（M5，`t_part_balance` + `t_part_adjust`）**

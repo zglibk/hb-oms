@@ -295,6 +295,31 @@ export class FinishedStockService {
     // 页面与 PDF 走同一个值（前端纸面组件因此不必再引字典）
     const label = dictLabeler(await loadDictLabels(this.dataSource, ['assembly_workshop']));
 
+    /*
+     * 纸面「车间：」——**单头填了用单头，没填则回溯装配批次**（2026-08-14 使用部门反馈：
+     * 入库单的 workTeam 是选填的，不填就印出一张车间空白的单子）。
+     *
+     * 装配车间的事实源在**批次级** `t_assembly_batch.workshop`（§5.6：订单环节不安排车间），
+     * 所以这里按本单涉及的订单产品行去聚合；一单可能来自多个车间，去重后并列
+     * （与装配列表、订单跟踪台账的「装配车间」列同一个 GROUP_CONCAT 口径）。
+     * 未排产/批次没填车间时聚合为空，纸面留白由仓管手写——回溯不到就不硬造。
+     */
+    const productIds = [...new Set(raw.map((r) => Number(r.order_product_id)).filter((v) => v > 0))];
+    let workshopLabel = label('assembly_workshop', doc.workTeam);
+    if (!workshopLabel && productIds.length) {
+      const asm: Array<{ workshops: string | null }> = await this.dataSource.query(
+        `SELECT GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
+           FROM t_assembly_batch
+          WHERE order_product_id IN (${productIds.map(() => '?').join(',')})`,
+        productIds,
+      );
+      workshopLabel = String(asm[0]?.workshops ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map((v) => label('assembly_workshop', v))
+        .join('、');
+    }
+
     const rows = buildInboundRows(raw);
     const totals = sumByUnit(rows);
 
@@ -308,8 +333,8 @@ export class FinishedStockService {
       docDate: doc.docDate,
       bizType: doc.bizType,
       status: doc.status,
-      /** 纸面单头的「车间：」 */
-      workshopLabel: label('assembly_workshop', doc.workTeam),
+      /** 纸面单头的「车间：」——单头值优先，为空时回溯自装配批次（见上方注释） */
+      workshopLabel,
       remark: doc.remark ?? '',
       /** 签名栏「制单」= 开这张入库单的人；主管、质检系统无对应字段，留空手签 */
       creatorName: doc.creatorName ?? '',
