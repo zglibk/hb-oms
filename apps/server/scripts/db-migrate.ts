@@ -93,6 +93,8 @@ const MIGRATIONS: string[] = [
   'migration-delivery-note.sql',
   // 成品出入库「导出出入库记录」权限点（仅授权，无表结构变更）
   'migration-finished-stock-export.sql',
+  // 生产BOM：同图号多版本表头 + 物料明细
+  'migration-production-bom.sql',
 ];
 
 /**
@@ -152,6 +154,14 @@ const expectedColumns = [
   't_material.unit_weight',
   't_process_info.dimension',
   't_process_info.drawing_version_outer',
+  // 生产BOM（同图号多版本表头 + 物料明细）
+  't_production_bom.drawing_no',
+  't_production_bom.version',
+  't_production_bom.prepared_by',
+  't_production_bom_item.bom_id',
+  't_production_bom_item.item_name',
+  't_production_bom_item.quantity_per_set',
+  't_production_bom_item.unit_consumption',
   // M3 外发——2026-08-10 收敛为「外发件回厂记录」单表（发坯单三表已删）
   't_outsource_part.order_part_group_id',
   't_outsource_part.processor_name',

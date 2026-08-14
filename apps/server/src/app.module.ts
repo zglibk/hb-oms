@@ -24,6 +24,7 @@ import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
 import { EmployeeModule } from './modules/employee/employee.module';
+import { ProductionBomModule } from './modules/production-bom/production-bom.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { EmployeeModule } from './modules/employee/employee.module';
     ChangelogModule,
     SystemConfigModule,
     EmployeeModule,
+    ProductionBomModule,
   ],
 })
 export class AppModule {}

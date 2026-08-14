@@ -91,6 +91,13 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'process-info:import', perm_name: '批量导入开单信息', perm_type: 2, parent_code: 'basic:process-info', sort: 4 },
   { perm_code: 'process-info:export', perm_name: '导出开单信息', perm_type: 2, parent_code: 'basic:process-info', sort: 5 },
 
+  { perm_code: 'production-bom', perm_name: '生产BOM', perm_type: 1, parent_code: 'process', menu_path: '/process/bom', component: 'production-bom/index', icon: 'List', sort: 2 },
+  { perm_code: 'production-bom:create', perm_name: '新增生产BOM', perm_type: 2, parent_code: 'production-bom', sort: 1 },
+  { perm_code: 'production-bom:update', perm_name: '编辑生产BOM', perm_type: 2, parent_code: 'production-bom', sort: 2 },
+  { perm_code: 'production-bom:delete', perm_name: '删除生产BOM', perm_type: 2, parent_code: 'production-bom', sort: 3 },
+  { perm_code: 'production-bom:import', perm_name: '批量导入生产BOM', perm_type: 2, parent_code: 'production-bom', sort: 4 },
+  { perm_code: 'production-bom:export', perm_name: '批量导出生产BOM', perm_type: 2, parent_code: 'production-bom', sort: 5 },
+
   // ===== 物料管理（成品库存口径：出入库单据 + 结存查询） =====
   { perm_code: 'material-mgmt', perm_name: '物料管理', perm_type: 1, menu_path: '/material', icon: 'Box', sort: 7 },
 

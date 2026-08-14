@@ -80,6 +80,12 @@ const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '工艺修改履历', activeMenu: '/basic/process-info' },
       },
       {
+        path: 'process/bom/form',
+        name: 'ProductionBomForm',
+        component: () => import('@/views/production-bom/form.vue'),
+        meta: { title: '生产BOM录入', activeMenu: '/process/bom', permissions: ['production-bom'] },
+      },
+      {
         path: 'order/form',
         name: 'OrderForm',
         component: () => import('@/views/order/form.vue'),

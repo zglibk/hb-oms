@@ -840,6 +840,53 @@ CREATE TABLE IF NOT EXISTS t_process_info_history (
   KEY idx_drawing (drawing_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工艺信息修改履历（新增/修改，产品级+部件级粒度）';
 
+-- 生产 BOM（表头 + 明细；同生产图号允许多版本）
+CREATE TABLE IF NOT EXISTS t_production_bom (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  process_info_id INT          NULL COMMENT '关联开单信息ID（可空）',
+  drawing_no      VARCHAR(128) NOT NULL COMMENT '生产图号',
+  customer_id     INT          NULL COMMENT '关联客户ID（可空）',
+  customer_name   VARCHAR(128) NULL COMMENT '客户名称快照',
+  product_name    VARCHAR(128) NOT NULL COMMENT '产品/BOM名称',
+  version         VARCHAR(32)  NOT NULL COMMENT 'BOM版本号（文本，如1.0）',
+  prepared_by     VARCHAR(64)  NOT NULL COMMENT '制表人',
+  prepared_date   DATE         NOT NULL COMMENT '制表日期',
+  creator_id      INT          NULL COMMENT '创建人ID',
+  creator_name    VARCHAR(64)  NULL COMMENT '创建人姓名快照',
+  updated_by      INT          NULL COMMENT '最后更新人ID',
+  updater_name    VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',
+  created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_production_bom_drawing_version (drawing_no, version),
+  KEY idx_production_bom_process (process_info_id),
+  KEY idx_production_bom_customer (customer_id),
+  KEY idx_production_bom_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生产BOM表头（同生产图号多版本）';
+
+CREATE TABLE IF NOT EXISTS t_production_bom_item (
+  id                    INT AUTO_INCREMENT PRIMARY KEY,
+  bom_id                INT            NOT NULL COMMENT '生产BOM表头ID',
+  material_id           INT            NULL COMMENT '关联部件ID（可空）',
+  item_name             VARCHAR(128)   NOT NULL COMMENT '零件名称',
+  item_code             VARCHAR(128)   NULL COMMENT '图号（编号）',
+  spec                  VARCHAR(128)   NULL COMMENT '规格',
+  quantity_per_set      DECIMAL(14,4)  NULL COMMENT '数量/套（整套总用量）',
+  quantity_unit         VARCHAR(16)    NOT NULL DEFAULT 'PCS' COMMENT '数量单位',
+  split_left_right      TINYINT        NOT NULL DEFAULT 0 COMMENT '是否分左右：0否1是',
+  material_thickness    VARCHAR(32)    NULL COMMENT '材料厚度',
+  unit_consumption      DECIMAL(14,6)  NULL COMMENT '单耗kg/支',
+  surface_treatment     VARCHAR(64)    NULL COMMENT '表面处理（文本快照）',
+  sheet_material        VARCHAR(64)    NULL COMMENT '材质',
+  supplier_id           INT            NULL COMMENT '关联供应商ID（可空）',
+  supplier_name         VARCHAR(128)   NULL COMMENT '供应商名称快照',
+  remark                VARCHAR(255)   NULL COMMENT '备注',
+  sort                  INT            NOT NULL DEFAULT 0 COMMENT '行序',
+  KEY idx_production_bom_item_bom (bom_id),
+  KEY idx_production_bom_item_material (material_id),
+  KEY idx_production_bom_item_code (item_code),
+  KEY idx_production_bom_item_supplier (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生产BOM物料明细';
+
 -- =============================================================
 -- 四、设备管理
 -- =============================================================
