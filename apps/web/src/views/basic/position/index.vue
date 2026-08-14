@@ -1,12 +1,12 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="reload">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 200px"
             placeholder="岗位编码 / 名称"
-            @clear="reload" @keyup.enter="reload"
+            @input="scheduleKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="所属部门">
@@ -19,25 +19,25 @@
             clearable
             placeholder="全部"
             style="width: 180px"
-            @change="reload"
+            @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="岗位性质">
-          <el-select v-model="query.positionNature" clearable placeholder="全部" style="width: 120px" @change="reload">
+          <el-select v-model="query.positionNature" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
             <el-option v-for="o in POSITION_NATURE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="全部" style="width: 100px" @change="reload">
+          <el-select v-model="query.status" clearable placeholder="全部" style="width: 100px" @change="runKeywordSearch">
             <el-option label="启用" :value="1" />
             <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyCommon" @change="reload">只看通用岗位</el-checkbox>
+          <el-checkbox v-model="query.onlyCommon" @change="runKeywordSearch">只看通用岗位</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="reload">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -290,6 +290,7 @@ import {
   filterJobLevels,
 } from '@/constants/dict';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -349,6 +350,7 @@ function reload() {
   query.page = 1;
   load();
 }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 

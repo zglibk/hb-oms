@@ -1,19 +1,19 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="生产图号/客户/产品名称"
             style="width: 240px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -145,6 +145,7 @@ import {
   type ProcessInfoItem,
 } from '@/api/process-info';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -165,6 +166,11 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 // 从表单子页面返回时（keep-alive 缓存场景）刷新列表
 onActivated(load);

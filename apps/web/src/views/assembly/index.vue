@@ -1,19 +1,19 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="订单号/客户/生产单号/产品型号/货号"
             style="width: 260px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="装配车间">
-          <el-select v-model="query.workshop" clearable placeholder="全部" style="width: 120px" @change="load">
+          <el-select v-model="query.workshop" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
             <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
@@ -25,17 +25,17 @@
             start-placeholder="开始"
             end-placeholder="结束"
             style="width: 240px"
-            @change="load"
+            @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyUnfinished" @change="load">只看未装完</el-checkbox>
+          <el-checkbox v-model="query.onlyUnfinished" @change="runKeywordSearch">只看未装完</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyOverdue" @change="load">只看逾期</el-checkbox>
+          <el-checkbox v-model="query.onlyOverdue" @change="runKeywordSearch">只看逾期</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -122,6 +122,7 @@ import { useRouter } from 'vue-router';
 import { Search, Tools, InfoFilled, Download } from '@element-plus/icons-vue';
 import { getAssemblyList, downloadAssemblyExport, type AssemblyGroupRow } from '@/api/assembly';
 import { loadDict } from '@/composables/useDict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
@@ -159,6 +160,11 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 

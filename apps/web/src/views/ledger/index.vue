@@ -1,49 +1,49 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="reload">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 240px"
             placeholder="订单号/客户/生产单号/型号/货号"
-            @clear="reload" @keyup.enter="reload"
+            @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="业务员">
-          <el-input v-model="query.salesman" clearable style="width: 100px" @clear="reload" @keyup.enter="reload" />
+          <el-input v-model="query.salesman" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
         </el-form-item>
         <el-form-item label="跟单员">
-          <el-input v-model="query.merchandiser" clearable style="width: 100px" @clear="reload" @keyup.enter="reload" />
+          <el-input v-model="query.merchandiser" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
         </el-form-item>
         <el-form-item label="表面处理">
-          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reload">
+          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
             <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="装配车间">
-          <el-select v-model="query.assemblyWorkshop" clearable placeholder="全部" style="width: 110px" @change="reload">
+          <el-select v-model="query.assemblyWorkshop" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
             <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="产品类型">
-          <el-select v-model="query.productType" clearable placeholder="全部" style="width: 110px" @change="reload">
+          <el-select v-model="query.productType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
             <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="交期">
           <el-date-picker
             v-model="deliveryRange" type="daterange" value-format="YYYY-MM-DD"
-            start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="reload"
+            start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyOwed" @change="reload">只看有欠数</el-checkbox>
+          <el-checkbox v-model="query.onlyOwed" @change="runKeywordSearch">只看有欠数</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyOverdue" @change="reload">只看逾期</el-checkbox>
+          <el-checkbox v-model="query.onlyOverdue" @change="runKeywordSearch">只看逾期</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="reload">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
           <el-button
             size="small" v-permission="'ledger:export'" plain :icon="Download"
             :loading="exporting" @click="onExport"
@@ -331,6 +331,7 @@ import {
   type LedgerSummary,
 } from '@/api/ledger';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
   PRODUCT_TYPE_OPTIONS,
   UNIT_OPTIONS,
@@ -410,6 +411,7 @@ function reload() {
   query.page = 1;
   load();
 }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 
 /* ===== 行内展开：按需加载该产品行的三条流水 =====

@@ -1,29 +1,29 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="reload">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 240px"
             placeholder="货号 / 型号 / 客户 / 生产单号"
-            @clear="reload" @keyup.enter="reload"
+            @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="表面处理">
-          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 130px" @change="reload">
+          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 130px" @change="runKeywordSearch">
             <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="边别">
-          <el-select v-model="query.side" clearable placeholder="全部" style="width: 100px" @change="reload">
+          <el-select v-model="query.side" clearable placeholder="全部" style="width: 100px" @change="runKeywordSearch">
             <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="query.onlyInStock" @change="reload">只看有结存</el-checkbox>
+          <el-checkbox v-model="query.onlyInStock" @change="runKeywordSearch">只看有结存</el-checkbox>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="reload">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -380,6 +380,7 @@ import {
 } from '@/api/dull-stock';
 import ImportDialog from '@/components/ImportDialog.vue';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import {
   SIDE_OPTIONS,
@@ -471,6 +472,7 @@ function reload() {
   query.page = 1;
   load();
 }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 

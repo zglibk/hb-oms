@@ -1,24 +1,24 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="机台号/产品型号/图号/机修员"
             style="width: 240px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="部件">
-          <el-select v-model="query.partType" clearable placeholder="全部" style="width: 110px" @change="load">
+          <el-select v-model="query.partType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
             <el-option v-for="o in PART_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -135,6 +135,7 @@ import {
   type EquipmentInfoItem,
 } from '@/api/equipment';
 import { PART_TYPE_OPTIONS, partTypeLabel } from '@/constants/dict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -154,6 +155,11 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 
 /* ===== 新增/编辑 ===== */

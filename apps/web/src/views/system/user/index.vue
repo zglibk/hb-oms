@@ -1,11 +1,11 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :model="query" class="filter-bar" label-position="left" label-width="auto" size="small" @submit.prevent>
+      <el-form :model="query" class="filter-bar" label-position="left" label-width="auto" size="small" @submit.prevent="runKeywordSearch">
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="状态">
-              <el-select v-model="query.status" clearable placeholder="全部" @change="reload">
+              <el-select v-model="query.status" clearable placeholder="全部" @change="runKeywordSearch">
                 <el-option label="启用" :value="1" />
                 <el-option label="停用" :value="0" />
               </el-select>
@@ -22,7 +22,7 @@
                 default-expand-all
                 clearable
                 placeholder="全部"
-                @change="reload"
+                @change="runKeywordSearch"
               />
             </el-form-item>
           </el-col>
@@ -32,15 +32,14 @@
                 v-model="query.keyword"
                 placeholder="账号 / 姓名"
                 clearable
-                @keyup.enter="reload"
-                @clear="reload"
-                @blur="onKeywordBlur"
+                @input="scheduleKeywordSearch"
+                @keyup.enter="runKeywordSearch"
               />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item>
-              <el-button size="small" type="primary" @click="reload">查询</el-button>
+              <el-button size="small" type="primary" @click="runKeywordSearch">查询</el-button>
               <el-button size="small" @click="resetQuery">重置</el-button>
             </el-form-item>
           </el-col>
@@ -204,6 +203,7 @@ import { ref, reactive, onMounted, onActivated } from 'vue';
 import { Plus, Delete, Edit, Avatar, Key, CircleClose, Open } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import ColorTag from '@/components/ColorTag.vue';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
   getUserList, getUserDetail, createUser, updateUser,
   assignUserRoles, resetUserPassword, toggleUserStatus, deleteUsers,
@@ -246,11 +246,8 @@ async function load() {
   }
 }
 function reload() { query.page = 1; load(); }
-/** 关键字失去焦点时，内容不为空才触发查询 */
-function onKeywordBlur() {
-  if (query.keyword && query.keyword.trim()) reload();
-}
-function resetQuery() { query.keyword = undefined; query.status = undefined; query.deptId = undefined; reload(); }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+function resetQuery() { query.keyword = undefined; query.status = undefined; query.deptId = undefined; runKeywordSearch(); }
 
 async function loadMeta() {
   roles.value = await getRoleList();

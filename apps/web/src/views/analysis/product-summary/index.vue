@@ -4,14 +4,14 @@
       <!-- ==================== Tab1 产品汇总（累计口径） ==================== -->
       <el-tab-pane label="产品汇总" name="summary">
         <el-card shadow="never" class="filter-card">
-          <el-form :inline="true" class="filter-bar" @submit.prevent="reloadSummary">
+          <el-form :inline="true" class="filter-bar" @submit.prevent="runSummarySearch">
             <!-- 首行：筛选维度（客户/表面处理/产品类型/下单日期/订单状态） -->
             <div class="filter-line">
               <el-form-item label="客户">
                 <el-select
                   v-model="sQuery.customerName" clearable filterable placeholder="全部"
                   :filter-method="filterCustomers"
-                  style="width: 200px" @change="reloadSummary"
+                  style="width: 200px" @change="runSummarySearch"
                   @visible-change="(v: boolean) => v && resetCustomerFilter()"
                 >
                   <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
@@ -23,23 +23,23 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="表面处理">
-                <el-select v-model="sQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadSummary">
+                <el-select v-model="sQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runSummarySearch">
                   <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
               <el-form-item label="产品类型">
-                <el-select v-model="sQuery.productType" clearable placeholder="全部" style="width: 110px" @change="reloadSummary">
+                <el-select v-model="sQuery.productType" clearable placeholder="全部" style="width: 110px" @change="runSummarySearch">
                   <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
               <el-form-item label="下单日期">
                 <el-date-picker
                   v-model="orderDateRange" type="daterange" value-format="YYYY-MM-DD"
-                  start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="reloadSummary"
+                  start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="runSummarySearch"
                 />
               </el-form-item>
               <el-form-item label="订单状态">
-                <el-select v-model="sQuery.orderStatus" clearable placeholder="全部" style="width: 100px" @change="reloadSummary">
+                <el-select v-model="sQuery.orderStatus" clearable placeholder="全部" style="width: 100px" @change="runSummarySearch">
                   <el-option label="进行中" :value="ORDER_STATUS_VALUE.ACTIVE" />
                   <el-option label="已完结" :value="ORDER_STATUS_VALUE.FINISHED" />
                 </el-select>
@@ -48,20 +48,20 @@
             <!-- 次行：开关 + 关键字 + 操作按钮 -->
             <div class="filter-line">
               <el-form-item>
-                <el-checkbox v-model="sQuery.onlyOwed" @change="reloadSummary">只看有欠数</el-checkbox>
+                <el-checkbox v-model="sQuery.onlyOwed" @change="runSummarySearch">只看有欠数</el-checkbox>
               </el-form-item>
               <el-form-item>
-                <el-checkbox v-model="sQuery.onlyStocked" @change="reloadSummary">只看有库存</el-checkbox>
+                <el-checkbox v-model="sQuery.onlyStocked" @change="runSummarySearch">只看有库存</el-checkbox>
               </el-form-item>
               <el-form-item label="关键字">
                 <el-input
                   v-model="sQuery.keyword" clearable style="width: 220px"
                   placeholder="货号/型号/订单号/客户"
-                  @clear="reloadSummary" @keyup.enter="reloadSummary"
+                  @input="scheduleSummaryKeywordSearch" @keyup.enter="runSummarySearch"
                 />
               </el-form-item>
               <el-form-item>
-                <el-button size="small" type="primary" :icon="Search" @click="reloadSummary">查询</el-button>
+                <el-button size="small" type="primary" :icon="Search" @click="runSummarySearch">查询</el-button>
                 <el-button size="small" :icon="RefreshLeft" @click="resetSummaryFilters">重置</el-button>
                 <el-button
                   size="small" v-permission="'product-summary:export'" plain :icon="Download"
@@ -207,19 +207,19 @@
       <!-- ==================== Tab2 出入库汇总（期间进销存） ==================== -->
       <el-tab-pane label="出入库汇总" name="period">
         <el-card shadow="never" class="filter-card">
-          <el-form :inline="true" class="filter-bar" @submit.prevent="reloadPeriod">
+          <el-form :inline="true" class="filter-bar" @submit.prevent="runPeriodSearch">
             <el-form-item label="单据日期" required>
               <el-date-picker
                 v-model="periodRange" type="daterange" value-format="YYYY-MM-DD"
                 :clearable="false" start-placeholder="开始" end-placeholder="结束"
-                style="width: 240px" @change="reloadPeriod"
+                style="width: 240px" @change="runPeriodSearch"
               />
             </el-form-item>
             <el-form-item label="客户">
               <el-select
                 v-model="pQuery.customerName" clearable filterable placeholder="全部"
                 :filter-method="filterCustomers"
-                style="width: 200px" @change="reloadPeriod"
+                style="width: 200px" @change="runPeriodSearch"
                 @visible-change="(v: boolean) => v && resetCustomerFilter()"
               >
                 <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
@@ -230,7 +230,7 @@
               </el-select>
             </el-form-item>
             <el-form-item label="表面处理">
-              <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="reloadPeriod">
+              <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runPeriodSearch">
                 <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
@@ -238,11 +238,11 @@
               <el-input
                 v-model="pQuery.keyword" clearable style="width: 200px"
                 placeholder="货号/型号/订单号/客户"
-                @clear="reloadPeriod" @keyup.enter="reloadPeriod"
+                @input="schedulePeriodKeywordSearch" @keyup.enter="runPeriodSearch"
               />
             </el-form-item>
             <el-form-item>
-              <el-button size="small" type="primary" :icon="Search" @click="reloadPeriod">查询</el-button>
+              <el-button size="small" type="primary" :icon="Search" @click="runPeriodSearch">查询</el-button>
               <el-button size="small" :icon="RefreshLeft" @click="resetPeriodFilters">重置</el-button>
               <el-button
                 size="small" v-permission="'product-summary:export'" plain :icon="Download"
@@ -396,6 +396,7 @@ import {
 } from '@/api/product-summary';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
   PRODUCT_TYPE_OPTIONS,
   FINISHED_BIZ_TYPE_OPTIONS,
@@ -497,6 +498,7 @@ function reloadSummary() {
   sQuery.page = 1;
   loadSummary();
 }
+const { schedule: scheduleSummaryKeywordSearch, flush: runSummarySearch } = useDebouncedSearch(reloadSummary);
 function resetSummaryFilters() {
   Object.assign(sQuery, {
     keyword: '',
@@ -509,7 +511,7 @@ function resetSummaryFilters() {
   });
   orderDateRange.value = null;
   resetCustomerFilter();
-  reloadSummary();
+  runSummarySearch();
 }
 loadSummary();
 
@@ -571,6 +573,7 @@ function reloadPeriod() {
   pQuery.page = 1;
   loadPeriod();
 }
+const { schedule: schedulePeriodKeywordSearch, flush: runPeriodSearch } = useDebouncedSearch(reloadPeriod);
 function resetPeriodFilters() {
   Object.assign(pQuery, {
     keyword: '',
@@ -579,7 +582,7 @@ function resetPeriodFilters() {
   });
   periodRange.value = defaultPeriodRange();
   resetCustomerFilter();
-  reloadPeriod();
+  runPeriodSearch();
 }
 
 /** Tab2 惰性加载：首次切到该页签才发请求 */

@@ -1,24 +1,23 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="客户代码/名称/联系人"
             style="width: 220px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px" @change="load">
+          <el-select v-model="query.status" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
             <el-option v-for="s in ENABLE_STATUS" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -172,6 +171,7 @@ import {
 } from '@/api/customer';
 import { ENABLE_STATUS, labelOf, tagTypeOf } from '@/constants/dict';
 import { DELIVERY_TEMPLATE_OPTIONS } from '@/constants/delivery-note';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -191,6 +191,11 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 
 /**

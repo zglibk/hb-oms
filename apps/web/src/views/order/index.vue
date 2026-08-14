@@ -1,19 +1,19 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="订单号/PO#/客户/生产单号/货号"
             style="width: 240px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px" @change="load">
+          <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
             <el-option v-for="o in ORDER_STATUS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
@@ -25,11 +25,11 @@
             start-placeholder="开始"
             end-placeholder="结束"
             style="width: 240px"
-            @change="load"
+            @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -208,6 +208,7 @@ import {
   tagTypeOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
@@ -244,6 +245,11 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 

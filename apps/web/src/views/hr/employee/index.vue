@@ -1,15 +1,15 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="reload">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="工号/姓名/手机/身份证"
             style="width: 200px"
-            @clear="reload"
-            @keyup.enter="reload"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="所属组织">
@@ -22,31 +22,31 @@
             clearable
             placeholder="全部"
             style="width: 180px"
-            @change="reload"
+            @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="厂区">
-          <el-select v-model="query.plantCode" clearable placeholder="全部" style="width: 140px" @change="reload">
+          <el-select v-model="query.plantCode" clearable placeholder="全部" style="width: 140px" @change="runKeywordSearch">
             <el-option v-for="o in EMP_PLANT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="用工属性">
-          <el-select v-model="query.empType" clearable placeholder="全部" style="width: 120px" @change="reload">
+          <el-select v-model="query.empType" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
             <el-option v-for="o in empTypeOpts" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="岗位">
-          <el-select v-model="query.positionId" clearable filterable placeholder="全部" style="width: 140px" @change="reload">
+          <el-select v-model="query.positionId" clearable filterable placeholder="全部" style="width: 140px" @change="runKeywordSearch">
             <el-option v-for="o in positionOpts" :key="o.id" :label="o.positionName" :value="o.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="在职状态">
-          <el-select v-model="query.jobStatus" clearable placeholder="全部" style="width: 110px" @change="reload">
+          <el-select v-model="query.jobStatus" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
             <el-option v-for="o in JOB_STATUS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="reload">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -141,6 +141,7 @@ import {
   empPlantLabel,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -193,6 +194,7 @@ function reload() {
   query.page = 1;
   load();
 }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 

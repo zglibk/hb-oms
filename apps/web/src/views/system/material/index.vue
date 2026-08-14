@@ -5,14 +5,14 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="货号">
-              <el-select v-model="query.itemNo" clearable placeholder="全部" @change="load">
+              <el-select v-model="query.itemNo" clearable placeholder="全部" @change="runKeywordSearch">
                 <el-option v-for="itemNo in itemNumbers" :key="itemNo" :label="itemNo" :value="itemNo" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="状态">
-              <el-select v-model="query.status" clearable placeholder="全部" @change="load">
+              <el-select v-model="query.status" clearable placeholder="全部" @change="runKeywordSearch">
                 <el-option label="启用" :value="1" />
                 <el-option label="停用" :value="0" />
               </el-select>
@@ -20,12 +20,12 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="关键字">
-              <el-input v-model="query.keyword" placeholder="部件代码/产品名称/货号" clearable name="keyword" autocomplete="off" @keyup.enter="load" @clear="load" @blur="onKeywordBlur" />
+              <el-input v-model="query.keyword" placeholder="部件代码/产品名称/货号" clearable name="keyword" autocomplete="off" @input="scheduleKeywordSearch" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item>
-              <el-button size="small" type="primary" @click="load">查询</el-button>
+              <el-button size="small" type="primary" @click="runKeywordSearch">查询</el-button>
               <el-button size="small" @click="resetQuery">重置</el-button>
             </el-form-item>
           </el-col>
@@ -283,6 +283,7 @@ import {
   type MaterialImportResult,
 } from '@/api/system';
 import { loadDict } from '@/composables/useDict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 
 const loading = ref(false);
 const list = ref<any[]>([]);
@@ -339,17 +340,17 @@ async function load() {
     loading.value = false;
   }
 }
-/** 关键字失去焦点时，内容不为空才触发查询 */
-function onKeywordBlur() {
-  if (query.keyword && query.keyword.trim()) load();
+function reload() {
+  page.value = 1;
+  load();
 }
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 /** 重置筛选条件并重新查询 */
 function resetQuery() {
   query.keyword = '';
   query.itemNo = undefined;
   query.status = undefined;
-  page.value = 1;
-  load();
+  runKeywordSearch();
 }
 
 async function loadCategories() {

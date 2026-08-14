@@ -1,19 +1,19 @@
 <template>
   <div class="page">
     <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" class="filter-bar" @submit.prevent="load">
+      <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword"
             clearable
             placeholder="加工商/订单号/生产单号/产品型号/图号"
             style="width: 260px"
-            @clear="load"
-            @keyup.enter="load"
+            @input="scheduleKeywordSearch"
+            @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item label="表面处理">
-          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 130px" @change="load">
+          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 130px" @change="runKeywordSearch">
             <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
@@ -25,11 +25,11 @@
             start-placeholder="开始"
             end-placeholder="结束"
             style="width: 240px"
-            @change="load"
+            @change="runKeywordSearch"
           />
         </el-form-item>
         <el-form-item>
-          <el-button size="small" type="primary" :icon="Search" @click="load">查询</el-button>
+          <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
           <el-button size="small" @click="resetQuery">重置</el-button>
         </el-form-item>
       </el-form>
@@ -204,6 +204,7 @@ import {
   type OutsourceEntryMode,
 } from '@/composables/useOutsourceEntry';
 import { loadDict } from '@/composables/useDict';
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
@@ -258,15 +259,19 @@ async function load() {
     loading.value = false;
   }
 }
+function reload() {
+  query.page = 1;
+  load();
+}
+const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
 load();
 onActivated(load);
 
 function resetQuery() {
   query.keyword = '';
   query.surfaceType = undefined;
-  query.page = 1;
   dateRange.value = null;
-  load();
+  runKeywordSearch();
 }
 
 function openCreate() {
