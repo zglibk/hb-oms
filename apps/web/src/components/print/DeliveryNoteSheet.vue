@@ -288,13 +288,7 @@ function signValue(label: string): string {
  */
 .doc-meta--consignee .doc-meta__row { grid-template-columns: minmax(0, 1fr) 62mm; }
 .doc-meta--consignee .doc-meta__item { grid-template-columns: auto minmax(0, 1fr); }
-/*
- * 通用版抬头信息栏**不画下划线**：这几项（收货单位、送货单号、日期）都是系统直接
- * 印出来的值，不是留给人手写的填空格，划线反而显得没填完。客户专用版仍保留下划线
- * ——那两张纸质单上本来就是横线格。
- */
-.doc-meta--consignee .doc-meta__value { border-bottom: none; }
-/* 固定文案（送货单位、我方电话传真）：不是填空格，故不带下划线 */
+/* 固定文案（送货单位、我方电话传真） */
 .doc-meta__plain { padding: 0 1mm 0.5mm; white-space: nowrap; }
 .doc-meta__item {
   display: grid;
@@ -315,10 +309,14 @@ function signValue(label: string): string {
   text-align: right;
 }
 /* 值区带下划线，形态与纸质单的填空格一致 */
+/*
+ * 抬头信息栏的值区**一律不画下划线**（2026-08-14 使用方要求，三套模板一致）：
+ * 客户、地址、单号、日期这些都是系统直接印出来的值，不是留给人手写的填空格，
+ * 划一条横线反而像没填完。别再按纸质单的样子把 border-bottom 加回来。
+ */
 .doc-meta__value {
   display: block;
   min-width: 0;
-  border-bottom: 1px solid #333;
   padding: 0 1mm 0.5mm;
 }
 .doc-meta__value--sm { white-space: nowrap; }
