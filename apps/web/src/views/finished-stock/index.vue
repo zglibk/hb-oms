@@ -39,6 +39,10 @@
         <el-button size="small" v-permission="'finished-stock:create'" type="warning" :icon="Upload" @click="openCreate('sale_outbound')">
           销售出库
         </el-button>
+        <el-button
+          size="small" v-permission="'finished-stock:export'" plain :icon="Document"
+          :loading="exporting" @click="onExport"
+        >导出记录</el-button>
         <span class="tip">
           入库受<b>装配闸门</b>约束：可入库量 = 已完成装配 − 已入库；已确认单据只能红字冲销，不能修改。
         </span>
@@ -50,8 +54,10 @@
             <div class="expand-wrap">
               <table class="expand-grid">
                 <thead>
+                  <!-- 原生 table 里加可选列时，<th> 与 <td> 必须挂同一个条件，否则整表错位 -->
                   <tr>
                     <th>订单号</th><th>生产单号</th><th>产品型号</th><th>规格</th>
+                    <th>表面处理</th><th v-if="colorEnabled">颜色</th>
                     <th>边别</th><th>数量(支)</th><th>已冲销</th><th>备注</th>
                   </tr>
                 </thead>
@@ -61,6 +67,8 @@
                     <td>{{ it.productionNo || '—' }}</td>
                     <td>{{ it.productModel || '—' }}</td>
                     <td class="c">{{ it.dimensionText || '—' }}</td>
+                    <td class="c">{{ surfaceLabel(it.surfaceType) }}</td>
+                    <td v-if="colorEnabled" class="c">{{ it.color || '—' }}</td>
                     <td class="c">{{ sideLabel(it.side) || '—' }}</td>
                     <td class="c">{{ it.quantity }}</td>
                     <td class="c">{{ it.reversedQty ?? '—' }}</td>
@@ -165,9 +173,10 @@
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload, Printer } from '@element-plus/icons-vue';
+import { Search, Edit, Delete, CircleCheck, RefreshLeft, Download, Upload, Printer, Document } from '@element-plus/icons-vue';
 import {
   getFinishedDocList,
+  downloadFinishedDocExport,
   confirmFinishedDoc,
   cancelFinishedDoc,
   reverseFinishedDoc,
@@ -189,6 +198,8 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { useExcelExport } from '@/composables/useExcelExport';
 
 /** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
@@ -199,6 +210,22 @@ function workshopLabel(v: string | null): string {
   if (!v) return '—';
   return workshopDict.value.find((o) => o.value === v)?.label ?? v;
 }
+
+/**
+ * 表面处理字典（surface_type）：展开行要出中文，`electrophoresis` 这类英文码等于没显示。
+ * 取不到标签时回原值——字典项被停用后至少还认得出原始码（同导出侧口径）。
+ */
+const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
+loadDict('surface_type').then((rows: any[]) => {
+  surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+});
+function surfaceLabel(v: string | null): string {
+  if (!v) return '—';
+  return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
+}
+
+/** 「颜色」是可停用的业务字段（§5.7），停用时整列不显示 */
+const { colorEnabled } = useFeatureFlags();
 
 const router = useRouter();
 const loading = ref(false);
@@ -228,6 +255,26 @@ async function load() {
     loading.value = false;
   }
 }
+/* ===== 导出（预检 → 确认 → 下载，走公共封装，别再自己写确认框） ===== */
+const { exporting, exportWithConfirm } = useExcelExport();
+/** 导出筛选条件与列表完全一致；分页字段不参与（导出的是全部筛选结果） */
+const exportFilters = () => ({
+  keyword: query.keyword,
+  bizType: query.bizType,
+  status: query.status,
+  dateFrom: dateRange.value?.[0],
+  dateTo: dateRange.value?.[1],
+});
+function onExport() {
+  return exportWithConfirm({
+    name: '出入库',
+    // 条数**每次实查**：用户改了筛选没点查询时，页面上的 total 还是上一次的数
+    getCount: async () => (await getFinishedDocList({ ...exportFilters(), page: 1, pageSize: 1 })).total,
+    scopeText: (n) => `按当前筛选条件导出 <b>${n}</b> 张单据的全部明细（一行一条明细）`,
+    run: () => downloadFinishedDocExport(exportFilters()),
+  });
+}
+
 function reload() {
   query.page = 1;
   load();

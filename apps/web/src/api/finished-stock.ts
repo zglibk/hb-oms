@@ -155,6 +155,13 @@ export const getFinishedDocList = (params: FinishedDocQuery) =>
 export const getFinishedDocDetail = (id: number) =>
   request.get<any, FinishedDocRow & { totalQty: number }>(`/api/finished-stock/${id}`);
 
+/**
+ * 导出当前筛选的出入库记录：**一行一条明细**（单头字段冗余到每行），
+ * 便于按产品/客户筛选透视。服务端按明细行数计上限，超 5000 行或空结果会拒绝。
+ */
+export const downloadFinishedDocExport = (params: FinishedDocQuery) =>
+  downloadXlsx('/api/finished-stock/export', params, '成品出入库记录.xlsx');
+
 export interface StockBalanceQuery {
   page?: number;
   pageSize?: number;

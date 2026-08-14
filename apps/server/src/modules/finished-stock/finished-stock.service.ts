@@ -2,11 +2,15 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import {
+  DIMENSION_UNIT,
   FINISHED_BIZ_TYPE,
+  FINISHED_BIZ_TYPE_OPTIONS,
   FINISHED_DOC_STATUS,
+  FINISHED_DOC_STATUS_OPTIONS,
   ORDER_STATUS,
   SIDE_OPTIONS,
   STOCK_DIRECTION,
+  formatDimensionView,
   hasSocket,
   isValidSide,
   sideLabel,
@@ -46,6 +50,7 @@ import {
   addTipsSheet,
   cellString,
   createWorkbook,
+  dateTimeText,
   importRejected,
   loadFirstSheet,
   styleSheet,
@@ -416,6 +421,98 @@ export class FinishedStockService {
    * **直接复用 `findBalance`，不为导出另写聚合 SQL**——两份 SQL 迟早分叉，
    * 届时「页面 100、导出 98」最难查（同台账导出口径，§9-2e）。
    */
+  /**
+   * 导出成品出入库记录：**一行一条明细**，单头字段（单号/类型/日期/状态…）冗余到每行。
+   *
+   * 为什么摊平而不是像装配那样分两个 Sheet：出入库单本身就是"单头几个字段 + 一堆明细"，
+   * 拿去对账时要按产品/客户筛选透视，一行一条明细才好用；单头字段重复几行不碍事。
+   *
+   * 口径**直接复用 findList**，不为导出另写一套查询——两份 SQL 迟早分叉，届时
+   * 「页面 100、导出 98」最难查（同台账导出的约定）。
+   */
+  async exportExcel(query: QueryFinishedDocDto): Promise<Buffer> {
+    const all = await this.findList({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
+    // 摊平成明细行；上限按**明细行数**算（单据数没超但明细上万行同样撑不住）
+    const rows = all.list.flatMap((doc) => (doc.items ?? []).map((item) => ({ doc, item })));
+    // 空结果一律拒绝，不给一张只有表头的空表——拿去对账最危险（§4.3）
+    if (!rows.length) {
+      throw new BadRequestException('当前筛选条件下没有出入库记录可导出，请调整筛选条件后重试');
+    }
+    if (rows.length > EXPORT_ROW_LIMIT) {
+      throw new BadRequestException(
+        `当前筛选结果共 ${rows.length} 行明细，超过单次导出上限 ${EXPORT_ROW_LIMIT} 行，请缩小筛选范围后重试`,
+      );
+    }
+
+    const { colorFieldEnabled, dimensionViewUnit, inchToMm } =
+      await this.systemConfig.getFeatureFlags();
+    // 车间与表面处理都是字典值（workshop2 / electrophoresis），导出必须落中文（§4.4）
+    const label = dictLabeler(
+      await loadDictLabels(this.dataSource, ['surface_type', 'assembly_workshop']),
+    );
+    // 「已冲销」对账时很关键（这一行是不是被红字冲掉了），findList 不带，这里补一次
+    const reversed = await this.loadReversedQty(rows.map((r) => r.item.id));
+
+    /** 选项表取中文：状态是数值、业务类型是字符串，故这里不用只收字符串的 excel.util#labelOf */
+    const optionLabel = (opts: Array<{ label: string; value: any }>, v: any): string =>
+      opts.find((o) => o.value === v)?.label ?? String(v ?? '');
+
+    type Row = (typeof rows)[number];
+    const dimHeader = dimensionViewUnit === DIMENSION_UNIT.INCH ? '规格(寸)' : '规格(mm)';
+    const columns: Array<{ header: string; pick: (r: Row) => string | number; center?: boolean }> = [
+      { header: '单号', pick: (r) => r.doc.docNo, center: true },
+      { header: '业务类型', pick: (r) => optionLabel(FINISHED_BIZ_TYPE_OPTIONS, r.doc.bizType), center: true },
+      { header: '方向', pick: (r) => (r.doc.direction === STOCK_DIRECTION.IN ? '入库' : '出库'), center: true },
+      { header: '单据日期', pick: (r) => String(r.doc.docDate ?? '').slice(0, 10), center: true },
+      { header: '状态', pick: (r) => optionLabel(FINISHED_DOC_STATUS_OPTIONS, r.doc.status), center: true },
+      { header: '车间', pick: (r) => label('assembly_workshop', r.doc.workTeam), center: true },
+      { header: '订单号', pick: (r) => r.item.orderNo || '' },
+      { header: '客户', pick: (r) => r.item.customerName || '' },
+      { header: '生产单号', pick: (r) => r.item.productionNo || '' },
+      { header: '货号', pick: (r) => r.item.itemNo || '', center: true },
+      { header: '产品型号', pick: (r) => r.item.productModel || '' },
+      // 规格跟随「系统配置 → 单位换算」的默认查看单位，与台账/总计划导出同口径
+      { header: dimHeader, pick: (r) => formatDimensionView(r.item.dimensionMm, dimensionViewUnit, inchToMm), center: true },
+      { header: '表面处理', pick: (r) => label('surface_type', r.item.surfaceType), center: true },
+      // 「颜色」停用时整列不输出——页面也不显示，导出留一列空值只是噪音（§5.7）
+      ...(colorFieldEnabled
+        ? [{ header: '颜色', pick: (r: Row) => r.item.color || '', center: true }]
+        : []),
+      { header: '边别', pick: (r) => sideLabel(r.item.side), center: true },
+      { header: '数量(支)', pick: (r) => r.item.quantity, center: true },
+      { header: '已冲销(支)', pick: (r) => reversed.get(r.item.id) ?? 0, center: true },
+      { header: '明细备注', pick: (r) => r.item.remark || '' },
+      { header: '单据备注', pick: (r) => r.doc.remark || '' },
+      { header: '制单人', pick: (r) => r.doc.creatorName || '', center: true },
+      { header: '制单时间', pick: (r) => dateTimeText(r.doc.createdAt), center: true },
+    ];
+
+    const wb = createWorkbook();
+    const ws = wb.addWorksheet('成品出入库记录');
+    ws.columns = columns.map((c) => ({ header: c.header }));
+    rows.forEach((r) => ws.addRow(columns.map((c) => c.pick(r))));
+
+    // 汇总行**按表头名定位**：颜色列随开关增减，位置写死必错位（§5.7）
+    const totalRow: Array<string | number> = new Array(columns.length).fill('');
+    const put = (header: string, v: string | number) => {
+      const i = columns.findIndex((c) => c.header === header);
+      if (i >= 0) totalRow[i] = v;
+    };
+    put('单号', '合计');
+    // 出入方向不同的行混在一起，合计只做"总量"参考，不做净额——净额看成品库存页
+    put('数量(支)', rows.reduce((s, r) => s + (r.item.quantity || 0), 0));
+    put('已冲销(支)', rows.reduce((s, r) => s + (reversed.get(r.item.id) ?? 0), 0));
+    ws.addRow(totalRow);
+
+    // styleSheet 必须在写完所有数据行之后调用——自动列宽要量全部单元格
+    styleSheet(ws, {
+      centerColumns: columns.map((c, i) => (c.center ? i + 1 : 0)).filter(Boolean),
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
   async exportBalance(query: QueryBalanceDto): Promise<Buffer> {
     const all = await this.findBalance({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
     // 空结果一律拒绝，不给一张只有表头的空表——拿去对账最危险（§4.3）

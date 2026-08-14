@@ -91,6 +91,8 @@ const MIGRATIONS: string[] = [
   'migration-assembly-export.sql',
   // 送货单打印：客户绑定模板 + 全局默认模板两列
   'migration-delivery-note.sql',
+  // 成品出入库「导出出入库记录」权限点（仅授权，无表结构变更）
+  'migration-finished-stock-export.sql',
 ];
 
 /**

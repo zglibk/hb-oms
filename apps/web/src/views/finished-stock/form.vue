@@ -53,6 +53,13 @@
           <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
           <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
           <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
+          <el-table-column label="表面处理" width="95" align="center">
+            <template #default="{ row }">{{ surfaceLabel(row.surfaceType) }}</template>
+          </el-table-column>
+          <!-- 「颜色」是可停用的业务字段（§5.7），停用时整列不显示 -->
+          <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+            <template #default="{ row }">{{ row.color || '—' }}</template>
+          </el-table-column>
           <el-table-column label="边别" width="70" align="center">
             <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
           </el-table-column>
@@ -105,6 +112,13 @@
         <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
+        <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
+        <el-table-column label="表面处理" width="95" align="center">
+          <template #default="{ row }">{{ surfaceLabel(row.surfaceType) }}</template>
+        </el-table-column>
+        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+          <template #default="{ row }">{{ row.color || '—' }}</template>
+        </el-table-column>
         <el-table-column label="边别" width="70" align="center">
           <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
         </el-table-column>
@@ -143,6 +157,7 @@ import {
   sideLabel,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 
 const route = useRoute();
 const router = useRouter();
@@ -160,6 +175,9 @@ interface ItemRow {
   productionNo: string | null;
   productModel: string | null;
   dimensionText: string | null;
+  /** 表面处理（字典 surface_type）与颜色：同货号不同表面处理是两批货，选货与核对都要看 */
+  surfaceType: string | null;
+  color: string | null;
   /** 入库=可入库量，出库=当前结存 */
   limit: number;
   quantity: number;
@@ -179,6 +197,19 @@ const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
   workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
+
+/** 表面处理字典：明细与选货表都要出中文（英文码等于没显示）；取不到回原值 */
+const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
+loadDict('surface_type').then((rows: any[]) => {
+  surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+});
+function surfaceLabel(v: string | null | undefined): string {
+  if (!v) return '—';
+  return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
+}
+
+/** 「颜色」是可停用的业务字段（§5.7） */
+const { colorEnabled } = useFeatureFlags();
 
 const rules: FormRules = {
   docDate: [{ required: true, message: '请选择单据日期', trigger: 'change' }],
@@ -210,6 +241,8 @@ async function init() {
       productionNo: it.productionNo,
       productModel: it.productModel,
       dimensionText: it.dimensionText,
+      surfaceType: it.surfaceType,
+      color: it.color,
       limit: 0,
       quantity: it.quantity,
       remark: it.remark ?? '',
@@ -266,6 +299,8 @@ async function loadOptions() {
         productionNo: o.productionNo,
         productModel: o.productModel,
         dimensionText: o.dimensionText,
+        surfaceType: o.surfaceType,
+        color: o.color,
         qtyPcs: o.qtyPcs,
         limit: isInbound.value ? s.quota : s.stockQty,
         quantity: 0,
@@ -296,6 +331,8 @@ function confirmPick() {
       productionNo: o.productionNo,
       productModel: o.productModel,
       dimensionText: o.dimensionText,
+      surfaceType: o.surfaceType,
+      color: o.color,
       limit: o.limit,
       // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）
       quantity: o.limit > 0 ? o.limit : 1,

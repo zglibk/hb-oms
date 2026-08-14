@@ -157,6 +157,20 @@ export function addTipsSheet(
   return ws;
 }
 
+/**
+ * 时间列文本：`YYYY-MM-DD HH:mm`（导出表里到分钟就够，秒只会挤宽列）。
+ *
+ * **刻意不用 toISOString()**：那会按 UTC 输出，导出表里的时间会比车间实际时间早 8 小时。
+ * 注：assembly.service 里还有一份同名的私有实现（早于本函数），下次动那边时一并收敛过来。
+ */
+export function dateTimeText(v: Date | string | null | undefined): string {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 /* ==================== 导入侧公共件 ==================== */
 
 /** 按 value 取中文 label；取不到就回原值（历史脏数据也要显示得出来，不能变空白） */

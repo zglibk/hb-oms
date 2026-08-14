@@ -53,6 +53,19 @@ export class FinishedStockController {
     return this.service.findList(query);
   }
 
+  /**
+   * 导出当前筛选的出入库记录（一行一条明细）；@SkipTransform 返回文件流。
+   * **必须注册在 `:id` 之前**——否则 `export` 会被参数路由吃掉，ParseIntPipe 直接报错。
+   */
+  @Get('export')
+  @SkipTransform()
+  @RequirePermissions('finished-stock:export')
+  @OperationLog('成品出入库', '导出出入库记录')
+  async exportList(@Query() query: QueryFinishedDocDto, @Res() res: Response) {
+    const buffer = await this.service.exportExcel(query);
+    sendXlsx(res, buffer, '成品出入库记录.xlsx');
+  }
+
   /** 成品库存（结存查询）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('balance')
   @RequirePermissions('stock-balance')
