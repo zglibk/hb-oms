@@ -166,14 +166,13 @@
             class="config-form"
             v-loading="loading"
           >
-            <el-alert
-              type="info"
-              :closable="false"
-              show-icon
-              title="全局字段开关"
-              description="关闭后该字段在全系统的录入框、表格列与 Excel 导出列一并隐藏。这是「录入与展示」开关，不会删除已录入的数据——重新开启即原样恢复。"
-              style="margin-bottom: 16px"
-            />
+            <!-- 版块一：全局字段开关（清一色的启用/停用） -->
+            <el-card shadow="never" class="cfg-section">
+            <div class="section-title">全局字段开关</div>
+            <p class="section-desc">
+              关闭后该字段在全系统的录入框、表格列与 Excel 导出列一并隐藏。这是「录入与展示」开关，
+              不会删除已录入的数据——重新开启即原样恢复。
+            </p>
 
             <el-form-item label="颜色字段">
               <el-switch
@@ -229,9 +228,15 @@
                 以及总计划导出的「产品要求描述」列。
               </div>
             </el-form-item>
+            </el-card>
 
-            <!-- 单位换算：与上面几个「启用/停用」开关不是一类，用分隔标题隔开 -->
-            <el-divider content-position="left">单位换算</el-divider>
+            <!-- 版块二：单位换算。与上面的启用/停用开关不是一类（这里是设定值），
+                 故各自成卡；只用一条分隔线区分不够，视觉上仍像同一组配置 -->
+            <el-card shadow="never" class="cfg-section">
+            <div class="section-title">单位换算</div>
+            <p class="section-desc">
+              这两项不是开关，是<strong>设定值</strong>：一个定英寸与 mm 的换算约定，一个定规格默认按哪个单位显示。
+            </p>
 
             <el-form-item label="换算系数">
               <div class="unit-line">
@@ -265,6 +270,7 @@
                 （页面上仍可随时切换，只是不再每次手动改）；<strong>台账导出与总计划导出</strong>的规格列也跟随此设置。
               </div>
             </el-form-item>
+            </el-card>
 
             <el-form-item>
               <el-button size="small"
@@ -671,6 +677,39 @@ onActivated(() => {
 .switch-hint {
   margin-left: 12px;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 业务字段 Tab 的版块卡：「全局字段开关」与「单位换算」各自成卡。
+   两者性质不同（前者是启用/停用开关、后者是设定值），只用一条分隔线区分
+   会让人以为是同一组配置的延续。 */
+.cfg-section {
+  margin-bottom: 16px;
+  border-color: var(--el-border-color-lighter);
+  :deep(.el-card__body) { padding: 16px 20px 4px; }
+  /* 卡内最后一个表单项的下边距由卡片 padding 兜住，避免底部空一大截 */
+  :deep(.el-form-item:last-child) { margin-bottom: 12px; }
+}
+
+/* 版块标题：主色左竖线 + 统一字号字重（与订单表单的 .section-title 同一套视觉） */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  border-left: 4px solid var(--el-color-primary);
+  padding-left: 10px;
+  line-height: 1.3;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* 版块说明：跟在标题下、与标题左对齐（含竖线宽度），不用 el-alert 的灰底块 */
+.section-desc {
+  margin: 0 0 16px;
+  padding-left: 14px;
+  font-size: 12px;
+  line-height: 1.7;
   color: var(--el-text-color-secondary);
 }
 
