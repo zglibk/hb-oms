@@ -57,8 +57,8 @@
                 @visible-change="(visible: boolean) => visible && resetCustomerFilter()"
               >
                 <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.id">
-                  <span class="option-main">{{ c.customerName }}</span>
-                  <span class="option-sub">{{ c.customerCode || '无代码' }}</span>
+                  <span class="opt-name">{{ c.customerName }}</span>
+                  <span class="opt-code">{{ c.customerCode || '无代码' }}</span>
                 </el-option>
               </el-select>
             </el-form-item>
@@ -159,12 +159,14 @@
             <el-table-column label="备注" width="180">
               <template #default="{ row }"><el-input v-model="row.remark" clearable maxlength="255" /></template>
             </el-table-column>
-            <el-table-column v-if="!readonly" label="操作" width="190" fixed="right">
+            <!-- 明细行多、列又宽，操作列固定在右侧随时可点；按钮只留图标（配 title/aria-label
+                 说明用途），与本模块列表页的操作列写法一致 -->
+            <el-table-column v-if="!readonly" label="操作" width="112" fixed="right" align="center">
               <template #default="{ row, $index }">
-                <el-button link type="primary" :icon="CopyDocument" @click="copyItem(row, $index)">复制</el-button>
-                <el-button link type="primary" :icon="Top" :disabled="$index === 0" @click="moveItem($index, -1)">上移</el-button>
-                <el-button link type="primary" :icon="Bottom" :disabled="$index === form.items.length - 1" @click="moveItem($index, 1)">下移</el-button>
-                <el-button link type="danger" :icon="Delete" @click="removeItem($index)">删除</el-button>
+                <el-button link type="primary" :icon="CopyDocument" title="复制本行" aria-label="复制本行" @click="copyItem(row, $index)" />
+                <el-button link type="primary" :icon="Top" title="上移" aria-label="上移" :disabled="$index === 0" @click="moveItem($index, -1)" />
+                <el-button link type="primary" :icon="Bottom" title="下移" aria-label="下移" :disabled="$index === form.items.length - 1" @click="moveItem($index, 1)" />
+                <el-button link type="danger" :icon="Delete" title="删除本行" aria-label="删除本行" @click="removeItem($index)" />
               </template>
             </el-table-column>
           </el-table>
@@ -580,19 +582,80 @@ export default { name: 'ProductionBomForm' };
 .detail-heading { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 10px; }
 .detail-count, .picker-tip { color: var(--el-text-color-secondary); font-size: 12px; }
 .detail-tools, .picker-toolbar { display: flex; align-items: center; gap: 8px; }
-.detail-table-wrap { width: 100%; overflow-x: auto; }
-.detail-table { min-width: 1760px; }
+/*
+ * ⚠️ 横向滚动必须由 **el-table 自己** 承担，别在外层再包一个 overflow-x:auto，
+ * 也别给表格设 min-width：那样滚动发生在外层容器、el-table 自身的滚动区永远不溢出，
+ * `fixed="left"/"right"` 的列就没有可吸附的滚动上下文，写了也不生效（本页实测踩过：
+ * 序号列与操作列都固定不住）。列宽已逐列写死，el-table 会自行算出滚动条。
+ */
+.detail-table-wrap { width: 100%; }
 .form-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; }
 .audit-block { margin-top: 18px; }
 .picker-toolbar { margin-bottom: 12px; }
-.option-main { float: left; }
-.option-sub { float: right; margin-left: 24px; color: var(--el-text-color-secondary); font-size: 12px; }
+.option-main {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.option-sub {
+  flex: 0 0 auto; margin-left: 16px;
+  color: var(--el-text-color-secondary); font-size: 12px;
+}
 </style>
 
 <style lang="scss">
-.bom-process-popper, .bom-customer-popper {
-  .el-select-dropdown__item { min-width: 340px; }
-  .option-main { float: left; }
-  .option-sub { float: right; margin-left: 24px; color: var(--el-text-color-secondary); font-size: 12px; }
+.bom-process-popper {
+  .el-select-dropdown__item {
+    display: flex; align-items: center; justify-content: space-between;
+    box-sizing: border-box; width: 100%; min-width: 0;
+  }
+  .option-main {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .option-sub {
+    flex: 0 0 auto; margin-left: 16px;
+    color: var(--el-text-color-secondary); font-size: 12px;
+  }
+}
+
+// 与订单新增/编辑页的客户字段保持一致：名称自适应，代码固定在面板右侧。
+.bom-customer-popper {
+  .el-select-dropdown__item {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    min-width: 320px;
+    height: auto;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+    transition: background-color 0.15s, color 0.15s;
+    &:last-child { border-bottom: none; }
+
+    .opt-name {
+      min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 13px;
+    }
+    .opt-code {
+      flex: none; min-width: 76px; text-align: right;
+      color: var(--el-text-color-secondary);
+      font-size: 12px; font-family: Consolas, monospace;
+    }
+
+    &.hover, &:hover {
+      background-color: var(--el-color-primary-light-9);
+      .opt-name { color: var(--el-color-primary); }
+      .opt-code { color: var(--el-color-primary); opacity: 0.85; }
+    }
+
+    &.selected {
+      background-color: var(--el-color-primary-light-9);
+      font-weight: 600;
+      position: relative;
+      &::before {
+        content: '';
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 3px; background: var(--el-color-primary);
+      }
+      .opt-name { color: var(--el-color-primary); font-weight: 600; }
+      .opt-code { color: var(--el-color-primary); }
+    }
+  }
 }
 </style>
