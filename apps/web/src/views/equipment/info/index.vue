@@ -37,10 +37,16 @@
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
         <el-table-column label="部件" width="80">
-          <template #default="{ row }">{{ row.partType ? partTypeLabel(row.partType) : '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.partType" :seed="row.partType">{{ partTypeLabel(row.partType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="机修员" prop="mechanic" width="90">
-          <template #default="{ row }">{{ row.mechanic || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.mechanic" :seed="row.mechanic">{{ row.mechanic }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="用料规格" prop="materialSpec" min-width="130" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.materialSpec || '—' }}</template>
@@ -54,7 +60,12 @@
         <el-table-column label="备注" prop="remark" min-width="120" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="更新人" prop="updaterName" width="90" />
+        <el-table-column label="更新人" prop="updaterName" width="90">
+          <template #default="{ row }">
+            <color-tag v-if="row.updaterName" :seed="row.updaterName">{{ row.updaterName }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <app-actions>
@@ -139,6 +150,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<EquipmentInfoItem[]>([]);

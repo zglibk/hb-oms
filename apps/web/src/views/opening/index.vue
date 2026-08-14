@@ -40,7 +40,10 @@
             <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
             <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
             <el-table-column label="边别" width="70" align="center">
-              <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+              <template #default="{ row }">
+                <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+                <span v-else>—</span>
+              </template>
             </el-table-column>
             <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
             <el-table-column label="期初数量(支)" width="130" align="center">
@@ -151,7 +154,10 @@
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <el-table-column label="边别" width="70" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
       </el-table>
@@ -178,6 +184,7 @@ import {
   sideLabel,
   normalizeProductTypes,
 } from '@/constants/dict';
+import ColorTag from '@/components/ColorTag.vue';
 
 const tab = ref('group');
 const saving = ref(false);

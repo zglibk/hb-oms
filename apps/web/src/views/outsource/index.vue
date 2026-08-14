@@ -51,7 +51,12 @@
             {{ dateText(row.backDate) }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <el-table-column label="加工商" prop="processorName" min-width="120" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="加工商" prop="processorName" min-width="120" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">
+            <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="生产单号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
@@ -63,10 +68,16 @@
           <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
-          <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
-          <template #default="{ row }">{{ row.color || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="生产图号" width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.drawingNo || '—' }}</template>
@@ -209,6 +220,7 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();

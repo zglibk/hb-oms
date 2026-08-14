@@ -47,10 +47,16 @@
       <el-table :data="data?.list ?? []" border stripe size="small" empty-text="暂无装配批次，请在下方录入">
         <el-table-column type="index" label="#" width="46" align="center" />
         <el-table-column v-if="socket" label="边别" width="70" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="装配车间" width="100" align="center">
-          <template #default="{ row }">{{ dictLabel(workshopDict, row.workshop) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.workshop" :seed="row.workshop">{{ dictLabel(workshopDict, row.workshop) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="计划开始" width="115" align="center">
           <template #default="{ row }">{{ dateText(row.planStartDate) }}</template>
@@ -105,10 +111,16 @@
             <template #default="{ row }">{{ dateText(row.actualDate) }}</template>
           </el-table-column>
           <el-table-column v-if="socket" label="边别" width="70" align="center">
-            <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <el-table-column label="装配车间" width="100" align="center">
-            <template #default="{ row }">{{ dictLabel(workshopDict, row.workshop) }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="row.workshop" :seed="row.workshop">{{ dictLabel(workshopDict, row.workshop) }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <el-table-column label="数量(支)" width="90" align="center">
             <template #default="{ row }">
@@ -116,7 +128,10 @@
             </template>
           </el-table-column>
           <el-table-column label="登记人" width="100" align="center">
-            <template #default="{ row }">{{ registrant(row) }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="registrant(row) !== '—'" :seed="registrant(row)">{{ registrant(row) }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <el-table-column label="登记时间" width="150" align="center">
             <template #default="{ row }">{{ minuteText(row.updatedAt ?? row.createdAt) }}</template>
@@ -210,6 +225,7 @@ import {
 import { ASSEMBLY_STATUS, SIDE_OPTIONS, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const route = useRoute();
 const router = useRouter();

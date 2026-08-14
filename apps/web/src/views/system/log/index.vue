@@ -96,8 +96,18 @@
             {{ row.createdAt ? formatDateTime(row.createdAt) : '' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作人" prop="userName" width="110" />
-        <el-table-column label="模块" prop="module" width="110" />
+        <el-table-column label="操作人" prop="userName" width="110">
+          <template #default="{ row }">
+            <color-tag v-if="row.userName" :seed="row.userName">{{ row.userName }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="模块" prop="module" width="110">
+          <template #default="{ row }">
+            <color-tag v-if="row.module" :seed="row.module">{{ row.module }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" prop="action" width="130" show-overflow-tooltip />
         <el-table-column label="业务对象" width="120">
           <template #default="{ row }">
@@ -178,6 +188,7 @@ import {
   deleteLogs,
 } from '@/api/system';
 import { formatDateTime } from '@/utils/date';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<any[]>([]);

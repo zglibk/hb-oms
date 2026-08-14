@@ -161,10 +161,16 @@
               <template #default="{ row }">{{ row.thickness || '—' }}</template>
             </el-table-column>
             <el-table-column label="表面处理" width="90" align="center">
-              <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+              <template #default="{ row }">
+                <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+                <span v-else>—</span>
+              </template>
             </el-table-column>
             <el-table-column v-if="colorEnabled" label="颜色" width="85" align="center">
-              <template #default="{ row }">{{ row.color || '—' }}</template>
+              <template #default="{ row }">
+                <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+                <span v-else>—</span>
+              </template>
             </el-table-column>
             <el-table-column label="客户" min-width="170" show-overflow-tooltip>
               <template #default="{ row }">
@@ -306,18 +312,29 @@
                         <tr v-for="(f, i) in row.flows" :key="i">
                           <td>{{ f.docNo || '—' }}</td>
                           <td class="lg-c">{{ f.docDate || '—' }}</td>
-                          <td class="lg-c">{{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType) }}</td>
+                          <td class="lg-c"><color-tag :seed="f.bizType">{{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType) }}</color-tag></td>
                           <td class="lg-c">
-                            <span :class="f.direction > 0 ? 'num-ok' : 'num-owed'">{{ f.direction > 0 ? '入' : '出' }}</span>
+                            <el-tag size="small" :type="f.direction > 0 ? 'success' : 'danger'" disable-transitions>
+                              {{ f.direction > 0 ? '入库' : '出库' }}
+                            </el-tag>
                           </td>
                           <td class="lg-c">{{ f.quantity }}</td>
-                          <td class="lg-c">{{ sideLabel(f.side) || '整套' }}</td>
-                          <td class="lg-c">{{ dictLabel(surfaceDict, f.surfaceType) }}</td>
-                          <td v-if="colorEnabled" class="lg-c">{{ f.color || '—' }}</td>
+                          <td class="lg-c"><color-tag :seed="f.side || 'whole'">{{ sideLabel(f.side) || '整套' }}</color-tag></td>
+                          <td class="lg-c">
+                            <color-tag v-if="f.surfaceType" :seed="f.surfaceType">{{ dictLabel(surfaceDict, f.surfaceType) }}</color-tag>
+                            <span v-else>—</span>
+                          </td>
+                          <td v-if="colorEnabled" class="lg-c">
+                            <color-tag v-if="f.color" :seed="f.color">{{ f.color }}</color-tag>
+                            <span v-else>—</span>
+                          </td>
                           <td class="lg-memo" :title="f.customerName || ''">{{ f.customerName || '—' }}</td>
                           <td>{{ f.productionNo || '—' }}</td>
                           <td>{{ f.originDocNo || '—' }}</td>
-                          <td class="lg-c">{{ f.creatorName || '—' }}</td>
+                          <td class="lg-c">
+                            <color-tag v-if="f.creatorName" :seed="f.creatorName">{{ f.creatorName }}</color-tag>
+                            <span v-else>—</span>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -337,10 +354,16 @@
               <template #default="{ row }">{{ row.thickness || '—' }}</template>
             </el-table-column>
             <el-table-column label="表面处理" width="90" align="center">
-              <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+              <template #default="{ row }">
+                <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+                <span v-else>—</span>
+              </template>
             </el-table-column>
             <el-table-column v-if="colorEnabled" label="颜色" width="85" align="center">
-              <template #default="{ row }">{{ row.color || '—' }}</template>
+              <template #default="{ row }">
+                <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+                <span v-else>—</span>
+              </template>
             </el-table-column>
             <el-table-column label="客户" min-width="170" show-overflow-tooltip>
               <template #default="{ row }">
@@ -412,6 +435,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（展示开关；聚合键恒含颜色，与开关无关） */
 const { colorEnabled } = useFeatureFlags();

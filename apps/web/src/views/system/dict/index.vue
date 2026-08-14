@@ -18,7 +18,12 @@
       </div>
       <app-table :data="paged" v-loading="loading" border stripe :page="page" :page-size="size" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="45" align="center" />
-        <el-table-column label="字典类型" prop="dictType" width="180" />
+        <el-table-column label="字典类型" prop="dictType" width="180">
+          <template #default="{ row }">
+            <color-tag v-if="row.dictType" :seed="row.dictType">{{ row.dictType }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="标签" width="160">
           <template #default="{ row }">
             {{ row.dictLabel }}<audit-info mode="inline" :row="row" />
@@ -164,6 +169,7 @@ import {
 import { useClientPager } from '@/composables/useClientPager';
 import { refreshDict } from '@/composables/useDict';
 import { useExcelExport } from '@/composables/useExcelExport';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<any[]>([]);

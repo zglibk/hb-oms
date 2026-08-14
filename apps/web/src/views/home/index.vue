@@ -247,13 +247,21 @@
               <el-table-column label="生产单号" width="118" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
               </el-table-column>
-              <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip />
+              <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
               <el-table-column label="产品型号" prop="productModel" min-width="130" show-overflow-tooltip />
               <el-table-column :label="dimColLabel" width="90" align="center">
                 <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
               </el-table-column>
               <el-table-column label="表面处理" width="90" align="center">
-                <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+                <template #default="{ row }">
+                  <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+                  <span v-else>—</span>
+                </template>
               </el-table-column>
               <el-table-column label="数量(支)" width="86" align="center">
                 <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
@@ -283,6 +291,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import { getCalendarBrief } from '@/utils/calendar-info';
 import AppStatCard from '@/components/AppStatCard.vue';
 import SevenSegNumber from '@/components/SevenSegNumber.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const router = useRouter();
 const userStore = useUserStore();

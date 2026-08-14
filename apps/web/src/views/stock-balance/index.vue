@@ -53,13 +53,22 @@
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
-          <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
-          <template #default="{ row }">{{ row.color || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="边别" width="70" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="订单号" width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ row.orderNo || '—' }}</template>
@@ -122,6 +131,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import ImportDialog from '@/components/ImportDialog.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();

@@ -187,7 +187,10 @@
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
         <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
         <el-table-column label="表面处理" width="100" align="center">
-          <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="组需求(支)" prop="qtyPcs" width="100" align="center" />
         <el-table-column label="已回厂(支)" prop="returnedQty" width="100" align="center" />
@@ -217,6 +220,7 @@ import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import ColorTag from '@/components/ColorTag.vue';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,

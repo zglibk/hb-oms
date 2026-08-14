@@ -86,7 +86,10 @@
                     </td>
                     <td class="c">{{ f.quantityAfter }}</td>
                     <td>{{ f.reason }}</td>
-                    <td class="c">{{ f.creatorName || '—' }}</td>
+                    <td class="c">
+                      <color-tag v-if="f.creatorName" :seed="f.creatorName">{{ f.creatorName }}</color-tag>
+                      <span v-else>—</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -100,13 +103,21 @@
           </template>
         </el-table-column>
         <el-table-column label="部件" width="90" align="center">
-          <template #default="{ row }">{{ partTypeLabel(row.partType) }}</template>
+          <template #default="{ row }">
+            <color-tag :seed="row.partType">{{ partTypeLabel(row.partType) }}</color-tag>
+          </template>
         </el-table-column>
         <el-table-column label="边别" width="70" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="产品类型" min-width="130" align="center">
-          <template #default="{ row }">{{ formatProductTypes(row.productType) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.productType" :seed="row.productType">{{ formatProductTypes(row.productType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="节数" width="100" align="center">
           <template #default="{ row }">{{ railSectionLabel(row.railSection) || '—' }}</template>
@@ -288,6 +299,7 @@ import {
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<PartBalanceRow[]>([]);

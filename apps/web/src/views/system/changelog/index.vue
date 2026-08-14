@@ -17,7 +17,7 @@
         </el-table-column>
         <el-table-column label="分类" prop="category" width="110">
           <template #default="{ row }">
-            <el-tag v-if="row.category" size="small" effect="light">{{ row.category }}</el-tag>
+            <color-tag v-if="row.category" :seed="row.category">{{ row.category }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
@@ -124,6 +124,7 @@ import {
 } from '@/api/changelog';
 import { useClientPager } from '@/composables/useClientPager';
 import { formatDate } from '@/utils/date';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<ChangelogItem[]>([]);

@@ -54,14 +54,23 @@
           <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
           <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
           <el-table-column label="表面处理" width="95" align="center">
-            <template #default="{ row }">{{ surfaceLabel(row.surfaceType) }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ surfaceLabel(row.surfaceType) }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <!-- 「颜色」是可停用的业务字段（§5.7），停用时整列不显示 -->
           <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
-            <template #default="{ row }">{{ row.color || '—' }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <el-table-column label="边别" width="70" align="center">
-            <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+            <template #default="{ row }">
+              <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+              <span v-else>—</span>
+            </template>
           </el-table-column>
           <el-table-column :label="limitLabel" width="110" align="center">
             <template #default="{ row }">
@@ -114,13 +123,22 @@
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
         <el-table-column label="表面处理" width="95" align="center">
-          <template #default="{ row }">{{ surfaceLabel(row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ surfaceLabel(row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
-          <template #default="{ row }">{{ row.color || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="边别" width="70" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
         <el-table-column :label="limitLabel" width="110" align="center">
@@ -158,6 +176,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import ColorTag from '@/components/ColorTag.vue';
 
 const route = useRoute();
 const router = useRouter();

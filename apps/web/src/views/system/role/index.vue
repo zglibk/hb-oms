@@ -14,7 +14,9 @@
         </el-table-column>
         <el-table-column label="编码" prop="roleCode" width="160" />
         <el-table-column label="数据范围" width="130">
-          <template #default="{ row }">{{ scopeLabel(row.dataScope) }}</template>
+          <template #default="{ row }">
+            <color-tag :seed="String(row.dataScope)">{{ scopeLabel(row.dataScope) }}</color-tag>
+          </template>
         </el-table-column>
         <el-table-column label="内置" width="80">
           <template #default="{ row }">
@@ -147,6 +149,7 @@ import {
   getRoleList, createRole, updateRole, deleteRole,
   getRolePermissions, assignRolePermissions, getMenuTree,
 } from '@/api/system';
+import ColorTag from '@/components/ColorTag.vue';
 
 const SCOPES = [
   { label: '全部数据', value: 1 },

@@ -47,11 +47,25 @@
         <el-table-column label="客户名称" prop="customerName" min-width="90" class-name="col-left" />
         <el-table-column label="联系人" prop="contactPerson" width="100" />
         <el-table-column label="联系电话" prop="contactPhone" width="130" />
-        <el-table-column label="默认业务员" prop="salesman" width="110" />
-        <el-table-column label="默认跟单员" prop="merchandiser" width="110" />
+        <el-table-column label="默认业务员" prop="salesman" width="110">
+          <template #default="{ row }">
+            <color-tag v-if="row.salesman" :seed="row.salesman">{{ row.salesman }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="默认跟单员" prop="merchandiser" width="110">
+          <template #default="{ row }">
+            <color-tag v-if="row.merchandiser" :seed="row.merchandiser">{{ row.merchandiser }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="默认交货地址" prop="deliveryAddress" min-width="160" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="送货单模板" width="110">
-          <template #default="{ row }">{{ deliveryTemplateName(row.deliveryTemplate) }}</template>
+          <template #default="{ row }">
+            <color-tag :seed="row.deliveryTemplate || 'system-default'">
+              {{ deliveryTemplateName(row.deliveryTemplate) }}
+            </color-tag>
+          </template>
         </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
@@ -197,6 +211,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<CustomerItem[]>([]);

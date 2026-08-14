@@ -82,7 +82,10 @@
                     <td class="c">{{ f.balanceAfter }}</td>
                     <td>{{ f.reason }}</td>
                     <td>{{ f.remark || '—' }}</td>
-                    <td class="c">{{ f.creatorName || '—' }}</td>
+                    <td class="c">
+                      <color-tag v-if="f.creatorName" :seed="f.creatorName">{{ f.creatorName }}</color-tag>
+                      <span v-else>—</span>
+                    </td>
                     <td class="c">
                       <el-button
                         size="small" v-permission.disable="'dull-stock:stock'" link type="danger"
@@ -117,13 +120,22 @@
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
-          <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column v-if="colorEnabled" label="颜色" width="60" align="center">
-          <template #default="{ row }">{{ row.color || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="边别" width="52" align="center">
-          <template #default="{ row }">{{ sideLabel(row.side) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="单位" width="64" align="center">
           <template #default="{ row }">{{ labelOf(UNIT_OPTIONS, row.unit) }}</template>
@@ -402,6 +414,7 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /**
  * 呆滞品**自己的**颜色开关（系统配置 → 业务字段 → 呆滞品颜色）。

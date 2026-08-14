@@ -140,15 +140,20 @@
                     <tbody>
                       <tr v-for="(f, i) in detailCache[row.orderProductId].finished" :key="i">
                         <td>{{ f.docNo || '—' }}</td>
-                        <td>{{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType) }}</td>
+                        <td><color-tag :seed="f.bizType || 'unknown'">{{ labelOf(FINISHED_BIZ_TYPE_OPTIONS, f.bizType) }}</color-tag></td>
                         <td class="lg-c">{{ f.docDate || '—' }}</td>
-                        <td class="lg-c">{{ sideLabel(f.side) || '整套' }}</td>
+                        <td class="lg-c"><color-tag :seed="f.side || 'whole'">{{ sideLabel(f.side) || '整套' }}</color-tag></td>
                         <td class="lg-c">
-                          <span :class="f.direction > 0 ? 'num-ok' : 'num-owed'">{{ f.direction > 0 ? '入' : '出' }}</span>
+                          <el-tag size="small" :type="f.direction > 0 ? 'success' : 'danger'" disable-transitions>
+                            {{ f.direction > 0 ? '入库' : '出库' }}
+                          </el-tag>
                         </td>
                         <td class="lg-c">{{ f.quantity }}</td>
                         <td>{{ f.originDocNo || '—' }}</td>
-                        <td class="lg-c">{{ f.creatorName || '—' }}</td>
+                        <td class="lg-c">
+                          <color-tag v-if="f.creatorName" :seed="f.creatorName">{{ f.creatorName }}</color-tag>
+                          <span v-else>—</span>
+                        </td>
                         <td class="lg-memo" :title="f.remark || ''">{{ f.remark || '—' }}</td>
                       </tr>
                     </tbody>
@@ -166,12 +171,18 @@
                       <tr v-for="(o, i) in detailCache[row.orderProductId].outsource" :key="i">
                         <td class="lg-c">{{ partGroupLabel(o.groupType) || '—' }}</td>
                         <td class="lg-c">{{ o.backDate || '—' }}</td>
-                        <td class="lg-memo" :title="o.processorName || ''">{{ o.processorName || '—' }}</td>
+                        <td class="lg-memo" :title="o.processorName || ''">
+                          <color-tag v-if="o.processorName" :seed="o.processorName">{{ o.processorName }}</color-tag>
+                          <span v-else>—</span>
+                        </td>
                         <td class="lg-c">{{ [dictLabel(surfaceDict, o.surfaceType), colorEnabled ? o.color : ''].filter((v) => v && v !== '—').join(' / ') || '—' }}</td>
                         <td class="lg-c">{{ o.returnWeight }}</td>
                         <td class="lg-c">{{ o.unitWeight }}</td>
                         <td class="lg-c">{{ o.returnQty }}</td>
-                        <td class="lg-c">{{ o.creatorName || '—' }}</td>
+                        <td class="lg-c">
+                          <color-tag v-if="o.creatorName" :seed="o.creatorName">{{ o.creatorName }}</color-tag>
+                          <span v-else>—</span>
+                        </td>
                         <td class="lg-memo" :title="o.remark || ''">{{ o.remark || '—' }}</td>
                       </tr>
                     </tbody>
@@ -188,8 +199,11 @@
                     <tbody>
                       <tr v-for="(a, i) in detailCache[row.orderProductId].assembly" :key="a.id">
                         <td class="lg-c">{{ i + 1 }}</td>
-                        <td class="lg-c">{{ sideLabel(a.side) || '整套' }}</td>
-                        <td class="lg-c">{{ dictLabel(workshopDict, a.workshop) }}</td>
+                        <td class="lg-c"><color-tag :seed="a.side || 'whole'">{{ sideLabel(a.side) || '整套' }}</color-tag></td>
+                        <td class="lg-c">
+                          <color-tag v-if="a.workshop" :seed="a.workshop">{{ dictLabel(workshopDict, a.workshop) }}</color-tag>
+                          <span v-else>—</span>
+                        </td>
                         <td class="lg-c">{{ a.planStartDate || '—' }}</td>
                         <td class="lg-c">{{ a.planDate || '—' }}</td>
                         <td class="lg-c">{{ a.actualDate || '—' }}</td>
@@ -213,7 +227,13 @@
           <template #default="{ row }">{{ dateText(row.orderDate) }}</template>
         </el-table-column>
         <el-table-column label="业务/跟单" width="110" align="center">
-          <template #default="{ row }">{{ [row.salesman, row.merchandiser].filter(Boolean).join('/') || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.salesman" :seed="row.salesman">{{ row.salesman }}</color-tag>
+            <color-tag v-if="row.merchandiser" :seed="row.merchandiser" style="margin-left: 4px">
+              {{ row.merchandiser }}
+            </color-tag>
+            <span v-if="!row.salesman && !row.merchandiser">—</span>
+          </template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="订单编号" width="120" show-overflow-tooltip>
@@ -230,14 +250,22 @@
           <template #default="{ row }">{{ row.orderQty }}{{ unitLabel(row.unit) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="95" align="center">
-          <template #default="{ row }">{{ dictLabel(surfaceDict, row.surfaceType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <!-- 生产图号/版本/料厚是**组级**字段，一个产品可能有多组，故移入展开行 -->
         <el-table-column label="部件组" width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ groupTypesText(row) }}</template>
         </el-table-column>
         <el-table-column label="装配车间" width="90" align="center">
-          <template #default="{ row }">{{ dictLabels(workshopDict, row.assemblyWorkshops) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.assemblyWorkshops?.length" :seed="row.assemblyWorkshops.join(',')">
+              {{ dictLabels(workshopDict, row.assemblyWorkshops) }}
+            </color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <!-- 交期紧挨数量区：判断急不急要「交期 + 发货欠数」一起看 -->
         <el-table-column label="订单交期" width="100" align="center">
@@ -347,6 +375,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();

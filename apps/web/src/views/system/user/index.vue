@@ -84,7 +84,12 @@
           </template>
         </el-table-column>
         <el-table-column label="姓名" prop="realName" width="120" />
-        <el-table-column label="部门" prop="deptName" width="110" />
+        <el-table-column label="部门" prop="deptName" width="110">
+          <template #default="{ row }">
+            <color-tag v-if="row.deptName" :seed="row.deptName">{{ row.deptName }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="角色" min-width="160" class-name="col-left">
           <template #default="{ row }">
             <color-tag

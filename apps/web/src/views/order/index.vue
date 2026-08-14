@@ -127,10 +127,16 @@
           <template #default="{ row }">{{ totalPcs(row) }}</template>
         </el-table-column>
         <el-table-column label="业务员" prop="salesman" width="85">
-          <template #default="{ row }">{{ row.salesman || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.salesman" :seed="row.salesman">{{ row.salesman }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="跟单员" prop="merchandiser" width="85">
-          <template #default="{ row }">{{ row.merchandiser || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.merchandiser" :seed="row.merchandiser">{{ row.merchandiser }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="状态" width="85">
           <template #default="{ row }">
@@ -214,6 +220,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();

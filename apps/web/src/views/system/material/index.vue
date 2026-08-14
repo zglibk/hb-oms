@@ -52,17 +52,26 @@
         <el-table-column label="规格" prop="spec" width="90" />
         <el-table-column label="产品类型" width="100">
           <template #default="{ row }">
-            {{ labelFromDict(productTypes, row.productType) }}
+            <color-tag v-if="row.productType" :seed="row.productType">
+              {{ labelFromDict(productTypes, row.productType) }}
+            </color-tag>
+            <span v-else>—</span>
           </template>
         </el-table-column>
         <el-table-column label="默认产品类别" width="100">
           <template #default="{ row }">
-            {{ labelFromDict(railSections, row.railSection) }}
+            <color-tag v-if="row.railSection" :seed="row.railSection">
+              {{ labelFromDict(railSections, row.railSection) }}
+            </color-tag>
+            <span v-else>—</span>
           </template>
         </el-table-column>
         <el-table-column label="部件" width="100">
           <template #default="{ row }">
-            {{ labelFromDict(partTypes, row.partType) }}
+            <color-tag v-if="row.partType" :seed="row.partType">
+              {{ labelFromDict(partTypes, row.partType) }}
+            </color-tag>
+            <span v-else>—</span>
           </template>
         </el-table-column>
         <el-table-column label="图号" prop="drawingNo" width="180" />
@@ -284,6 +293,7 @@ import {
 } from '@/api/system';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<any[]>([]);

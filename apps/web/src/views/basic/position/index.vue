@@ -80,7 +80,7 @@
         <el-table-column label="岗位名称" prop="positionName" min-width="120" fixed="left" />
         <el-table-column label="所属部门" min-width="130">
           <template #default="{ row }">
-            <span v-if="row.deptName">{{ row.deptName }}</span>
+            <color-tag v-if="row.deptName" :seed="row.deptName">{{ row.deptName }}</color-tag>
             <el-tag v-else size="small" type="info" disable-transitions>通用岗位</el-tag>
           </template>
         </el-table-column>
@@ -294,6 +294,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const saving = ref(false);

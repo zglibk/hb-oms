@@ -80,7 +80,12 @@
         <el-table-column label="长度要求(外/中/内)" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ triple(row.lengthReqOuter, row.lengthReqMiddle, row.lengthReqInner) }}</template>
         </el-table-column>
-        <el-table-column label="更新人" prop="updaterName" width="90" />
+        <el-table-column label="更新人" prop="updaterName" width="90">
+          <template #default="{ row }">
+            <color-tag v-if="row.updaterName" :seed="row.updaterName">{{ row.updaterName }}</color-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <app-actions>
@@ -149,6 +154,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const router = useRouter();
 const loading = ref(false);

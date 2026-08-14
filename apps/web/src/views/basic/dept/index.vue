@@ -48,7 +48,10 @@
         </el-table-column>
         <el-table-column label="排序" prop="sort" width="70" />
         <el-table-column label="负责人" min-width="110">
-          <template #default="{ row }">{{ row.leader || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.leader" :seed="row.leader">{{ row.leader }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="联系电话" min-width="140">
           <template #default="{ row }">{{ row.phone || '—' }}</template>
@@ -151,6 +154,7 @@ import {
 import { getDeptTree, createDept, updateDept, deleteDept, type DeptNode } from '@/api/system';
 import { ENABLE_STATUS, labelOf, tagTypeOf } from '@/constants/dict';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const tree = ref<DeptNode[]>([]);

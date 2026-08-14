@@ -67,7 +67,10 @@
         </el-table-column>
         <el-table-column label="姓名" prop="empName" width="90" fixed="left" />
         <el-table-column label="厂区" width="110" align="center">
-          <template #default="{ row }">{{ empPlantLabel(row.plantCode) || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.plantCode" :seed="row.plantCode">{{ empPlantLabel(row.plantCode) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="性别" width="60" align="center">
           <template #default="{ row }">{{ labelOf(GENDER, row.gender) }}</template>
@@ -85,13 +88,19 @@
           <template #default="{ row }">{{ row.deptName || '—' }}</template>
         </el-table-column>
         <el-table-column label="班组" width="90" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.teamGroup || '—' }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.teamGroup" :seed="row.teamGroup">{{ row.teamGroup }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="岗位" width="100" align="center">
           <template #default="{ row }">{{ row.positionName || '—' }}</template>
         </el-table-column>
         <el-table-column label="用工属性" width="90" align="center">
-          <template #default="{ row }">{{ dictLabel(empTypeOpts, row.empType) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.empType" :seed="row.empType">{{ dictLabel(empTypeOpts, row.empType) }}</color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="入职日期" width="110" align="center">
           <template #default="{ row }">{{ row.hireDate || '—' }}</template>
@@ -145,6 +154,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const router = useRouter();
 const loading = ref(false);

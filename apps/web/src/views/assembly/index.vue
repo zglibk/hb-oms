@@ -70,7 +70,12 @@
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
         <el-table-column label="装配车间" width="100" align="center">
-          <template #default="{ row }">{{ dictLabels(workshopDict, row.assemblyWorkshops) }}</template>
+          <template #default="{ row }">
+            <color-tag v-if="row.assemblyWorkshops?.length" :seed="row.assemblyWorkshops.join(',')">
+              {{ dictLabels(workshopDict, row.assemblyWorkshops) }}
+            </color-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="订单数(支)" prop="qtyPcs" width="100" align="center" />
         <el-table-column label="已完成(支)" width="100" align="center">
@@ -127,6 +132,7 @@ import { useExcelExport } from '@/composables/useExcelExport';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
+import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<AssemblyGroupRow[]>([]);
