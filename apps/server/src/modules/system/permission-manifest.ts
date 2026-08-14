@@ -127,8 +127,16 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'opening:finished', perm_name: '成品期初录入', perm_type: 2, parent_code: 'opening', sort: 1 },
   { perm_code: 'opening:part', perm_name: '部件期初录入', perm_type: 2, parent_code: 'opening', sort: 2 },
 
-  // ===== 设备管理 =====
-  { perm_code: 'equipment', perm_name: '设备管理', perm_type: 1, menu_path: '/equipment', icon: 'Cpu', sort: 8 },
+  // ===== 统计分析（财务需求 2026-08-14：跨订单的产品维度汇总查询）=====
+  // 刻意不预置给任何内置角色（种子只给 BUS_OPR/DOC_OPR/WH_OPR 预置权限的既有口径），
+  // 上线后由管理员在「角色管理 → 分配权限」勾给财务相关角色；admin 由启动同步自动补授。
+  { perm_code: 'analysis', perm_name: '统计分析', perm_type: 1, menu_path: '/analysis', icon: 'TrendCharts', sort: 8 },
+
+  { perm_code: 'product-summary', perm_name: '产品汇总', perm_type: 1, parent_code: 'analysis', menu_path: '/analysis/product-summary', component: 'analysis/product-summary/index', icon: 'PieChart', sort: 1 },
+  { perm_code: 'product-summary:export', perm_name: '导出产品汇总', perm_type: 2, parent_code: 'product-summary', sort: 1 },
+
+  // ===== 设备管理（2026-08-14 sort 8→9：给「统计分析」腾出物料与设备之间的位置）=====
+  { perm_code: 'equipment', perm_name: '设备管理', perm_type: 1, menu_path: '/equipment', icon: 'Cpu', sort: 9 },
 
   { perm_code: 'equipment:info', perm_name: '设备信息', perm_type: 1, parent_code: 'equipment', menu_path: '/equipment/info', component: 'equipment/info/index', icon: 'Monitor', sort: 1 },
   { perm_code: 'equipment-info:create', perm_name: '新增设备信息', perm_type: 2, parent_code: 'equipment:info', sort: 1 },

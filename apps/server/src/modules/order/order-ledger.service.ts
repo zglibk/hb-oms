@@ -59,8 +59,14 @@ const EXPORT_MAX_ROWS = EXPORT_ROW_LIMIT;
  * 导出是平表没法嵌套，故并列展示（与总计划导出同一处理方式）。
  * 按组序（sort/id 正序，见 attachPartGroups 的 ORDER BY）而非台账排序，
  * 保证得到「外轨/中轨/内轨」这种与订单表单一致的顺序。
+ *
+ * 导出供产品汇总（product-summary.service）拼「料厚签名」复用，禁止复制第二份；
+ * 泛型化是因为那边 Tab2 的组数组只有 groupType/materialThickness 两个字段。
  */
-function joinGroupField(row: LedgerRow, pick: (g: LedgerPartGroup) => string | null): string {
+export function joinGroupField<G>(
+  row: { partGroups: G[] },
+  pick: (g: G) => string | null,
+): string {
   const seen: string[] = [];
   row.partGroups.forEach((g) => {
     const v = (pick(g) ?? '').trim();

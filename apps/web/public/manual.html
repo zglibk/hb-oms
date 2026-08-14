@@ -144,7 +144,7 @@
     <a class="toc-item toc-sub" data-key="成品库存 库存查询 结存 批次 批量导入 导出 模板 期初单 搬账 上线" onclick="jump('ch4-4')">4.4 成品库存</a>
     <a class="toc-item toc-sub" data-key="呆滞品 呆滞 剩余 尾数 期初数 入库数 出库数 结存数 套 支 电泳 黑色 喷涂 白色 流水 删除 批量导入 导出 模板 回滚" onclick="jump('ch4-5')">4.5 呆滞品管理</a>
 
-    <a class="toc-item" data-key="台账 订单跟踪 四个数 核心" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
+    <a class="toc-item" data-key="台账 订单跟踪 四个数 核心 产品汇总 统计分析 出入库汇总 进销存" onclick="jump('ch5')">第5章 订单跟踪台账（核心）</a>
     <a class="toc-item toc-sub" data-key="四个数 怎么读 订单数 完成数 库存数" onclick="jump('ch5-1')">5.1 四个数怎么读</a>
     <a class="toc-item toc-sub" data-key="双欠数 成品欠数 发货欠数 区别" onclick="jump('ch5-2')">5.2 两个欠数的区别</a>
     <a class="toc-item toc-sub" data-key="筛选 展开 流水 部件组明细 导出" onclick="jump('ch5-3')">5.3 筛选与展开行</a>
@@ -806,6 +806,27 @@
       <div class="alert alert--tip">
         完结只是「不再跟踪」的台账口径，<strong>不锁单据</strong>。客户临时追加提货，已完结订单照样可以出库。
       </div>
+
+      <h2 class="section__title" id="ch5-5">5.5 产品汇总（统计分析）</h2>
+      <p>菜单位置：<strong>统计分析 → 产品汇总</strong>（给财务对账用；没看到这个菜单说明角色没授权，找管理员开）</p>
+      <p>台账是「订单视角」——一行是一张订单里的一个产品；这一页是「<strong>产品视角</strong>」——把不同订单里的<strong>相同产品</strong>归并成一行看总数。页面分两个页签：</p>
+      <h3 class="subsection__title">页签一：产品汇总（累计口径）</h3>
+      <ul>
+        <li><strong>相同产品的判定</strong>：型号、节数、规格、料厚、表面处理、颜色<strong>六项完全一致</strong>才并成一行。同一个货号如果颜色或料厚写得不一样，会分成两行——这不是 bug，是提醒你回订单把写法改统一（比如「2.0」和「2」会被当成两种料厚）。</li>
+        <li><strong>一行能看到</strong>：这种产品一共下了几张订单、订单总数（支）、累计入库、累计出库、当前库存、成品欠数、发货欠数，以及<strong>哪些客户下过单</strong>（超过两个客户折叠成「+N」，鼠标悬上去看全部）。</li>
+        <li><strong>只知道客户，想看他下过什么</strong>：客户下拉里选中它，表里剩下的就是该客户的所有产品。</li>
+        <li><strong>只知道产品，想看谁下过单</strong>：关键字搜货号或型号，「客户」列直接给答案；点行首箭头展开，还能看到逐张订单的明细（下单日期、订单编号、各自的数量与欠数）。</li>
+        <li>数量一律按<strong>支</strong>计；累计入库<strong>含期初</strong>（上线前的存量也是完成的货）；呆滞品是独立台账，<strong>不计入本页</strong>。</li>
+      </ul>
+      <h3 class="subsection__title">页签二：出入库汇总（按期间对账）</h3>
+      <ul>
+        <li>选一个<strong>单据日期</strong>区间（默认本月），每种产品给四个数：<strong>期初结存 → 期间入库 → 期间出库 → 期末结存</strong>，永远满足「期末 = 期初 + 入 − 出」。这就是月度对账的标准形态。</li>
+        <li><strong>红字冲销记在它发生的那个月</strong>：8 月冲掉 7 月的一张入库单，8 月的「期间入库」会出现负数——这是财务的标准做法，负数会标红提醒。</li>
+        <li>展开一行能看到期间内的<strong>逐笔单据</strong>（单号、日期、类型、数量、被冲原单），跟成品出入库页能对上号。</li>
+      </ul>
+      <ul>
+        <li><strong>导出 Excel</strong>：两个页签各自可导，都是<strong>双表</strong>——第一张是汇总（对齐页面主行 + 末尾合计），第二张是明细（页签一给逐订单明细、页签二给逐笔单据）。单次上限 5000 行，空结果不会给空表。</li>
+      </ul>
     </section>
 
     <!-- ============ 第6章 ============ -->
