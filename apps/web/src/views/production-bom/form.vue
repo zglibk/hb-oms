@@ -619,17 +619,32 @@ export default { name: 'ProductionBomForm' };
 /*
  * 与订单新增/编辑页的客户字段保持一致：名称自适应，代码固定在面板右侧。
  *
- * ⚠️ **要加宽就加宽面板本身，别去撑选项行**：下拉面板的宽度由 Element Plus 按
- * 触发框宽度算（内联 min-width 写在 .el-select-dropdown 上），而这个字段在
- * `:lg="8"` 栅格里只有约 1/3 表单宽。早先给 `.el-select-dropdown__item` 钉
- * `min-width: 320px` 想让代码列放得下，结果是**选项行比面板还宽、客户代码整列
- * 溢出到面板外面**（实测复现）。正确做法是给面板设 width，选项行则一律
- * `min-width: 0` 跟随面板、由名称省略号兜底——这样面板再窄也不会溢出。
+ * ⚠️ **`max-width: none` 这行是整段的关键，删了就会复现「客户代码印在面板外面」**。
+ *
+ * 成因（CDP 查证）：Element Plus 有一条
+ *     `.el-popper.el-tooltip { max-width: min(22.5rem, 80vw); }`
+ * 这是给 tooltip 定的宽度上限（≈360px），而 el-select 的下拉面板也带 `el-tooltip`
+ * 类，于是被一并卡住；EP 同时又按**触发框宽度**往 `.el-select-dropdown` 上写
+ * **内联 `min-width`**（如 436px）。触发框一旦宽过 ~360px，选项行就被内联 min-width
+ * 撑开、而外层面板被 EP 的 max-width 卡死，代码列直接溢出到面板外（1920 视口实测：
+ * 触发框 436、选项行 434、面板 363）。
+ *
+ * 选择器必须写成 `.el-popper.bom-customer-popper`：EP 那条是两个类的特异度 (0,2,0)，
+ * 只写 `.bom-customer-popper` (0,1,0) 压不过它。另外 `bom-customer-popper` 会被 EP
+ * **同时**打在 popper 根与 `.el-select-dropdown` 上，加 `.el-popper` 也能精确命中根。
+ *
+ * 走过的弯路，别再回去：给 `.el-select-dropdown__item` 钉 `min-width: 320px`、
+ * 或给面板钉 `width: 320px` / `max-width: calc(100vw - 32px)`，都只是把溢出从一种
+ * 屏宽挪到另一种（窄屏好了宽屏坏、反之亦然）。
  */
+.el-popper.bom-customer-popper {
+  // 解除 EP 的 tooltip 宽度上限，让面板跟随触发框
+  max-width: none;
+}
+
 .bom-customer-popper {
-  // 面板加宽到能容下「较长客户名 + 代码列」；仍以触发框宽度为下限，窄屏不至于顶出视口
-  width: 320px;
-  max-width: calc(100vw - 32px);
+  // 下限：触发框很窄时也放得下「客户名 + 代码列」；更宽时完全跟随触发框
+  min-width: 320px;
 
   .el-select-dropdown__item {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
