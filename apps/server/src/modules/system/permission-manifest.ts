@@ -240,4 +240,12 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'config:update', perm_name: '修改配置', perm_type: 2, parent_code: 'system:config', sort: 1 },
   // 注：system:danger（清理业务测试数据）仅授予 admin
   { perm_code: 'system:danger', perm_name: '危险操作', perm_type: 2, parent_code: 'system:config', sort: 2 },
+
+  /*
+   * 打印模板（2026-08-14）：看每套送货单模板的实际效果、指定全局默认模板。
+   * 纯前端页面，**没有自己的后端接口**——模板是代码定义的（前端注册表），
+   * 「设为默认」复用系统配置的 PUT /system/config（故按钮挂 config:update）。
+   * 因此这里只有菜单权限点，不需要配套的操作权限点。
+   */
+  { perm_code: 'system:print-template', perm_name: '打印模板', perm_type: 1, parent_code: 'system', menu_path: '/system/print-template', component: 'system/print-template/index', icon: 'Printer', sort: 8 },
 ];

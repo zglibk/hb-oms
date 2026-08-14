@@ -161,7 +161,7 @@
 
     <a class="toc-item" data-key="基础数据 客户 供应商 加工商 开单信息 部件信息 部门 岗位 岗位管理 职级 职级管理 序列 等级 编制 批量导入 导出 设备" onclick="jump('ch8')">第8章 基础数据</a>
     <a class="toc-item" data-key="HR 人事档案 员工 工号 员工编号 编码规则 厂区 年份 部门编码 流水号 实习生 临时工 学徒 派遣工 前缀 转正 换号 用工 车间 班组 岗位 籍贯 学历 政治面貌 婚姻" onclick="jump('ch8hr')">HR · 人事档案</a>
-    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色 单位换算 换算系数 默认规格单位 寸 mm" onclick="jump('ch9')">第9章 管理员篇</a>
+    <a class="toc-item" data-key="管理员 用户 角色 权限 字典 日志 配置 业务字段 开关 颜色 单位换算 换算系数 默认规格单位 寸 mm 打印模板 送货单模板 默认模板 预览 版式" onclick="jump('ch9')">第9章 管理员篇</a>
     <a class="toc-item" data-key="FAQ 常见问题 报错 为什么 不能" onclick="jump('ch10')">第10章 常见问题 FAQ</a>
   </nav>
 
@@ -740,7 +740,7 @@
       <p>不同客户要的送货单长得不一样（列不一样、电话不一样、签名栏不一样）。系统按下面的顺序决定用哪一套：</p>
       <ol class="steps">
         <li><strong>客户资料里绑定的模板</strong>——到「基础数据 → 客户资料」编辑该客户，选「送货单模板」。这是最常用的做法，配一次以后每张单都对。</li>
-        <li>客户没绑定，就用<strong>系统默认模板</strong>——「系统管理 → 系统配置 → 业务字段 → 送货单」里设。</li>
+        <li>客户没绑定，就用<strong>系统默认模板</strong>——在「系统管理 → 打印模板」里设，那一页还能<strong>直接看到每套模板打出来是什么样</strong>（见 <a href="javascript:void(0)" onclick="jump('ch9-print-template')">第9章「打印模板」</a>）。</li>
         <li>都没设就用<strong>通用模板</strong>。</li>
       </ol>
       <p>
@@ -1252,6 +1252,24 @@
         <strong>改换算系数不会动已经存进系统的数据。</strong>系统里存的一律是 mm，改系数只影响<strong>以后录入的折算</strong>和<strong>寸视图显示出来的数值</strong>，历史订单的规格不会因此变动。<br />
         另外：三个页面上的 mm/寸 切换按钮<strong>照旧保留</strong>，配置只是决定「进页面时默认哪个」；你在页面上手动切过之后，管理员那边再改配置也不会把你当前的选择顶掉。
       </div>
+
+      <h3 class="subsection__title" id="ch9-print-template">打印模板</h3>
+      <p>菜单位置：<strong>系统管理 → 打印模板</strong>。管送货单用哪套版式，也是唯一能<strong>看到模板长什么样</strong>的地方。</p>
+      <ul>
+        <li>
+          左边列出全部模板（列数、签名栏项目一目了然），点一下右边就按<strong>实际 A4 纸面</strong>显示效果——
+          与真正打印出来的是同一套排版，不是示意图。
+        </li>
+        <li>
+          右上角可切换预览数据：<strong>样例数据</strong>（一份固定的假单据，随时能看）或
+          <strong>真实单据</strong>（挑一张已有的销售出库单，看真实内容排出来的样子）。
+        </li>
+        <li>
+          选中某套模板后点<strong>「设为默认模板」</strong>，它就成为全局默认——
+          <strong>只对没有单独绑定模板的客户生效</strong>。给某个客户单独指定，仍到「基础数据 → 客户资料」改该客户的「送货单模板」。
+        </li>
+        <li>模板本身（有哪些列、列叫什么、印哪个电话）是<strong>做在程序里的</strong>，需要新增或调整客户版式请找 IT 部。</li>
+      </ul>
 
       <h3 class="subsection__title">日志与配置</h3>
       <ul>

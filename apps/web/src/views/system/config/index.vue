@@ -272,28 +272,6 @@
             </el-form-item>
             </el-card>
 
-            <!-- 版块三：送货单。同样是设定值而非开关，故另起一卡 -->
-            <el-card shadow="never" class="cfg-section">
-            <div class="section-title">送货单</div>
-            <p class="section-desc">
-              不同客户的送货单版式不同（列、联系电话、签名项都不一样）。这里设的是<strong>全局默认模板</strong>，
-              只在客户资料没单独绑定模板时才用。
-            </p>
-
-            <el-form-item label="默认模板">
-              <el-select v-model="form.deliveryTemplateDefault" style="width: 180px">
-                <el-option
-                  v-for="t in DELIVERY_TEMPLATE_OPTIONS" :key="t.value" :label="t.label" :value="t.value"
-                />
-              </el-select>
-              <div class="switch-hint switch-hint--block">
-                取模板的顺序是：<strong>客户资料里绑定的模板 → 这里的默认模板 → 通用模板</strong>。
-                给某个客户单独指定版式，请到「基础数据 → 客户资料」里改该客户的「送货单模板」；
-                打印页上也能临时切换模板，但那只影响当次打印，不会改客户资料。
-              </div>
-            </el-form-item>
-            </el-card>
-
             <el-form-item>
               <el-button size="small"
                 v-permission="'config:update'"
@@ -396,7 +374,6 @@ import {
   type CleanupResult,
 } from '@/api/system';
 import { formatDateTime } from '@/utils/date';
-import { DELIVERY_TEMPLATE_OPTIONS } from '@/constants/delivery-note';
 import { useThemeStore } from '@/stores/theme';
 import { useFeatureStore } from '@/stores/feature';
 import { normalizeUploadUrl } from '@/utils/upload-url';
@@ -478,7 +455,11 @@ const form = reactive<SystemConfig>({
   // 单位换算：缺省同共享包的我司口径（1 英寸 = 25mm）与内部存储口径（mm）
   inchToMm: 25,
   dimensionViewUnit: 'mm',
-  // 送货单全局默认模板（客户资料未单独绑定时才用它）
+  /*
+   * 送货单默认模板**不在本页维护**，编辑入口在「系统管理 → 打印模板」——那里能同时看到
+   * 每套模板的实际效果。这里保留字段只为让 form 与 SystemConfig 类型一致：load() 会把
+   * 服务器当前值读进来、保存时原样回传，因此不会把打印模板页设的值重置掉。
+   */
   deliveryTemplateDefault: 'generic',
 });
 

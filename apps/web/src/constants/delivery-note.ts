@@ -120,6 +120,90 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
   },
 ];
 
+/**
+ * 预览用样例单据（「系统管理 → 打印模板」页）。
+ *
+ * **刻意用假客户与假单号**：这是一张配置页，不该把真实客户的地址电话摆在上面；
+ * 想看真实效果可以在预览页切成「真实单据」。三行明细覆盖了模板的典型情形——
+ * 多行品名描述、寸与 mm 两种规格写法、含卡口合并后的整行、带备注的行。
+ */
+export const SAMPLE_DELIVERY_NOTE = {
+  docId: 0,
+  docNo: 'FGO260814-0001',
+  deliveryNo: '20260814-0001',
+  docDate: '2026-08-14',
+  bizType: 'sale_outbound',
+  status: 2,
+  remark: '共19托',
+  creatorName: '（制单人）',
+  customerName: '示例客户有限公司（预览用）',
+  customerCode: 'SAMPLE',
+  customerPhone: '0760-00000000',
+  customerAddress: '示例省示例市示例工业园 1 号',
+  templateCode: '',
+  salesman: '（业务员）',
+  merchandiser: '（跟单员）',
+  rows: [
+    {
+      seq: 1,
+      orderProductId: 0,
+      poNo: '2PO26070092',
+      materialCode: '903.001-0107',
+      productName: '异型同步隐藏三节轨',
+      productRequirement: '异型同步隐藏三节轨\nCS-81CN-17寸\n配全新2D全灰把手',
+      productModel: '53#普通卡口滑轨',
+      itemNo: '53#',
+      specText: '17寸',
+      qty: 500,
+      unit: 'set',
+      unitLabel: '套',
+      qtyPcs: 1000,
+      productionNo: 'NSK2615',
+      orderNo: 'ORD260814-0001',
+      remark: '滑轨：13托X400套\n把手：每2件码在一托滑轨上',
+    },
+    {
+      seq: 2,
+      orderProductId: 0,
+      poNo: '20260626002',
+      materialCode: '040100000059',
+      productName: '自闭装配式导轨~海宝~400X45~带卡包',
+      productRequirement: '',
+      productModel: '45#自锁滑轨',
+      itemNo: '45#',
+      specText: '400mm',
+      qty: 260,
+      unit: 'set',
+      unitLabel: '套',
+      qtyPcs: 520,
+      productionNo: 'JJG2646-B',
+      orderNo: 'ORD260814-0002',
+      remark: '45#400mm卡扣自锁',
+    },
+    {
+      seq: 3,
+      orderProductId: 0,
+      poNo: '20260703004',
+      materialCode: '040100000035',
+      productName: '装配式导轨~星徽（海宝）~535X45',
+      productRequirement: '',
+      productModel: '45#缓冲滑轨',
+      itemNo: '45#',
+      specText: '535mm',
+      qty: 128,
+      unit: 'set',
+      unitLabel: '套',
+      qtyPcs: 256,
+      productionNo: 'JJG2648',
+      orderNo: 'ORD260814-0003',
+      remark: '',
+    },
+  ],
+  totals: [{ unit: 'set', unitLabel: '套', qty: 888 }],
+  unitConsistent: true,
+  unitLabel: '套',
+};
+
 /** 客户资料 / 系统配置的模板下拉选项 */
 export const DELIVERY_TEMPLATE_OPTIONS = DELIVERY_TEMPLATES.map((t) => ({
   label: t.name,
