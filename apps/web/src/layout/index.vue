@@ -641,6 +641,16 @@ function openManual() {
     --el-menu-active-color: var(--el-color-white);
   }
   /*
+   * 滚动区高度必须显式扣掉 logo 区：el-scrollbar 默认 height:100% 按 .sidebar
+   * **全高**计算，底部有 3.5rem 悬在 overflow:hidden 之外——菜单少时看不出来，
+   * 2026-08-14 加「统计分析」一级菜单后总高变长，展开「系统管理」时最后的
+   * 二级菜单正好落进被裁区域、且滚动条以为自己已经到底（它的高度是够的），
+   * 怎么滚都点不到。
+   */
+  :deep(.el-scrollbar) {
+    height: calc(100% - 3.5rem); /* 3.5rem 与上方 .logo 的 height 保持一致 */
+  }
+  /*
    * 中部子菜单展开时会连续改变后续菜单项的位置。关闭浏览器滚动锚定，
    * 避免重排时自动修正 scrollTop 造成视觉跳动。
    * 注意：不要加 contain: paint——末级一级菜单（如系统管理）展开时，
