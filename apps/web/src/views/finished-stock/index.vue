@@ -42,6 +42,7 @@
         <el-dropdown
           v-permission="'finished-stock:export'"
           trigger="click"
+          popper-class="finished-export-popper"
           :disabled="exporting"
           @command="onExport"
         >
@@ -50,8 +51,20 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="combined">合并到一个工作表</el-dropdown-item>
-              <el-dropdown-item command="split">按方向分为“入库记录 / 出库记录”</el-dropdown-item>
+              <el-dropdown-item command="combined">
+                <span class="export-option__badge">单表</span>
+                <span class="export-option__text">
+                  <strong>合并到一个工作表</strong>
+                  <small>入库、出库记录连续排列，便于统一筛选</small>
+                </span>
+              </el-dropdown-item>
+              <el-dropdown-item command="split">
+                <span class="export-option__badge export-option__badge--split">分表</span>
+                <span class="export-option__text">
+                  <strong>按出入方向分开</strong>
+                  <small>生成“入库记录”和“出库记录”工作表</small>
+                </span>
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -114,9 +127,12 @@
         </el-table-column>
         <el-table-column label="方向" width="70" align="center">
           <template #default="{ row }">
-            <span :class="row.direction === STOCK_DIRECTION_VALUE.IN ? 'dir-in' : 'dir-out'">
+            <el-tag
+              size="small"
+              :type="row.direction === STOCK_DIRECTION_VALUE.IN ? 'success' : 'danger'"
+            >
               {{ row.direction === STOCK_DIRECTION_VALUE.IN ? '入库' : '出库' }}
-            </span>
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="单据日期" width="105" align="center">
@@ -423,8 +439,45 @@ export default { name: 'FinishedStockList' };
   .tip b { color: var(--el-text-color-primary); }
 }
 .pager { margin-top: 12px; }
-.dir-in { color: var(--el-color-success); font-weight: 600; }
-.dir-out { color: var(--el-color-warning); font-weight: 600; }
+.export-option__badge {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--el-color-primary-light-8);
+  color: var(--el-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.export-option__badge--split {
+  background: var(--el-color-success-light-8);
+  color: var(--el-color-success);
+}
+.export-option__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  strong { color: var(--el-text-color-primary); font-size: 13px; font-weight: 600; }
+  small { color: var(--el-text-color-secondary); font-size: 12px; }
+}
+:global(.finished-export-popper.el-popper) {
+  border-color: var(--el-border-color);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+:global(.finished-export-popper .el-dropdown-menu) {
+  min-width: 310px;
+  padding: 6px;
+}
+:global(.finished-export-popper .el-dropdown-menu__item) {
+  height: auto;
+  padding: 9px 10px;
+  border-radius: 5px;
+  line-height: 1.2;
+  gap: 10px;
+}
+:global(.finished-export-popper .el-dropdown-menu__item + .el-dropdown-menu__item) {
+  margin-top: 4px;
+}
 .expand-wrap { padding: 8px 16px 8px 56px; }
 .expand-grid {
   width: 100%; max-width: 1300px; border-collapse: collapse; font-size: 13px;
