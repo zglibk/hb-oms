@@ -63,6 +63,10 @@ export interface AssemblyGroupRow {
   doneQty: number;
   /** 未装配量 = 产品支数 − 已完成装配量，可为负（超装配） */
   pendingQty: number;
+  /** 生产入库数（支）：已确认生产入库 − 其红字冲销，不含期初（与入库闸门「已入库量」同口径） */
+  inboundQty: number;
+  /** 销售出库数（支）：已确认销售出库 − 其红字冲销（与台账「成品出货」同口径） */
+  outboundQty: number;
   nextPlanDate: string | null;
   lastActualDate: string | null;
   overdue: boolean;

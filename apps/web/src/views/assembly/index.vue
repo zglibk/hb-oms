@@ -6,7 +6,7 @@
           <el-input
             v-model="query.keyword"
             clearable
-            placeholder="订单号/客户/生产单号/产品型号/货号"
+            placeholder="订单号/客户/生产单号/产品型号/产品代码"
             style="width: 260px"
             @input="scheduleKeywordSearch"
             @keyup.enter="runKeywordSearch"
@@ -36,22 +36,15 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button
+            size="small" v-permission="'assembly:export'" plain :icon="Download"
+            :loading="exporting" @click="onExport"
+          >导出</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card shadow="never">
-      <div class="toolbar">
-        <el-button
-          size="small"
-          v-permission="'assembly:export'"
-          type="primary"
-          plain
-          :icon="Download"
-          :loading="exporting"
-          @click="onExport"
-        >导出到Excel</el-button>
-      </div>
       <div class="tip-bar">
         <el-icon><InfoFilled /></el-icon>
         装配按<b>产品</b>跟踪（装出来的是整套滑轨），一个产品可分多批录入；填了「实际完成时间」即视为该批完成，其数量计入成品入库的可入库量。
@@ -88,6 +81,9 @@
             <span :class="pendingClass(row)">{{ row.pendingQty }}</span>
           </template>
         </el-table-column>
+        <!-- 生产入库不含期初（与入库闸门同口径），故可能小于台账「完成数」；销售出库与台账「成品出货」同口径 -->
+        <el-table-column label="生产入库(支)" prop="inboundQty" width="105" align="center" />
+        <el-table-column label="销售出库(支)" prop="outboundQty" width="105" align="center" />
         <el-table-column label="批次" width="70" align="center">
           <template #default="{ row }">{{ row.batchCount }}</template>
         </el-table-column>
@@ -229,7 +225,6 @@ export default { name: 'AssemblyList' };
 </script>
 
 <style scoped lang="scss">
-.toolbar { margin-bottom: 12px; }
 .tip-bar {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px;

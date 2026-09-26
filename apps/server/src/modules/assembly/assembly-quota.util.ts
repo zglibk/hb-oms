@@ -143,7 +143,7 @@ export async function loadOneInboundQuota(
  * Σ已入库量（已确认 inbound 单 + 冲销 inbound 的红字单，按 direction 抵扣）。
  * 成品三表在 M4 建立；表未建时返回空 Map（等价于已入库量为 0）。
  */
-async function loadConfirmedInboundQty(
+export async function loadConfirmedInboundQty(
   mgr: EntityManager,
   productIds: number[],
 ): Promise<Map<string, number>> {

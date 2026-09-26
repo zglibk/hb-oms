@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
+  FINISHED_DOC_STATUS,
   ORDER_STATUS,
   assemblySides,
   deriveAssemblyStatus,
@@ -10,6 +11,7 @@ import {
   isValidSide,
   productLevelModel,
   sideLabel,
+  sanitizeItemCode,
 } from '@hb-oms/shared';
 import { AssemblyBatch } from './entities/assembly-batch.entity';
 import {
@@ -19,7 +21,14 @@ import {
   QueryInboundQuotaDto,
   UpdateAssemblyBatchDto,
 } from './dto/assembly.dto';
-import { InboundQuotaRow, loadInboundQuota, loadOneInboundQuota, quotaKey } from './assembly-quota.util';
+import {
+  InboundQuotaRow,
+  loadConfirmedInboundQty,
+  loadInboundQuota,
+  loadOneInboundQuota,
+  quotaKey,
+} from './assembly-quota.util';
+import { OUTBOUND_FAMILY_PARAMS, OUTBOUND_FAMILY_SQL } from '../order/order-owed.util';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { ProductSnapshotService } from '../../common/services/product-snapshot.service';
@@ -66,6 +75,13 @@ export interface AssemblyGroupRow {
   doneQty: number;
   /** 未装配量 = 产品支数 − 已完成装配量，可为负（超装配） */
   pendingQty: number;
+  /**
+   * 生产入库数（支）：已确认的生产入库单 − 冲销它的红字单，**不含期初**。
+   * 与入库闸门「已入库量」同一实现（loadConfirmedInboundQty），故与台账「完成数」（含期初）口径不同——有意为之。
+   */
+  inboundQty: number;
+  /** 销售出库数（支）：已确认的销售出库单 − 冲销它的红字单，与台账「成品出货」同口径（OUTBOUND_FAMILY_SQL） */
+  outboundQty: number;
   /** 最早未完成批次的计划完成时间（逾期提示用） */
   nextPlanDate: string | null;
   /** 最近一次实际完成时间 */
@@ -184,6 +200,7 @@ export class AssemblyService {
     );
 
     const today = this.todayText();
+    const { inbound, outbound } = await this.loadStockFlowQty(rows.map((r) => Number(r.product_id)));
     const list: AssemblyGroupRow[] = rows.map((r) => {
       const qtyPcs = Number(r.qty_pcs) || 0;
       const doneQty = Number(r.done_qty) || 0;
@@ -220,6 +237,8 @@ export class AssemblyService {
         plannedQty: Number(r.planned_qty) || 0,
         doneQty,
         pendingQty: qtyPcs - doneQty,
+        inboundQty: inbound.get(Number(r.product_id)) ?? 0,
+        outboundQty: outbound.get(Number(r.product_id)) ?? 0,
         nextPlanDate,
         lastActualDate: this.dateText(r.last_actual_date),
         overdue: !!nextPlanDate && nextPlanDate < today,
@@ -227,6 +246,40 @@ export class AssemblyService {
     });
 
     return { list, total, page, pageSize };
+  }
+
+  /**
+   * 当前页产品行的「生产入库数 / 销售出库数」（按产品行汇总，含卡口的左右两边相加）。
+   * 两个口径都复用既有唯一实现、不另写判定：入库走闸门的 loadConfirmedInboundQty，
+   * 出库走台账的 OUTBOUND_FAMILY_SQL（§5.6「欠数口径唯一事实源」）。
+   */
+  private async loadStockFlowQty(productIds: number[]) {
+    const inbound = new Map<number, number>();
+    const outbound = new Map<number, number>();
+    const ids = [...new Set(productIds.filter((v) => Number.isInteger(v) && v > 0))];
+    if (!ids.length) return { inbound, outbound };
+
+    const mgr = this.dataSource.manager;
+    const bySide = await loadConfirmedInboundQty(mgr, ids);
+    bySide.forEach((qty, key) => {
+      const pid = Number(key.split('#')[0]); // quotaKey 格式为「产品行ID#边别」
+      inbound.set(pid, (inbound.get(pid) ?? 0) + qty);
+    });
+
+    const rows: Array<{ pid: number; qty: string | number }> = await mgr.query(
+      `SELECT fi.order_product_id AS pid,
+              SUM(-fd.direction * fi.quantity) AS qty
+         FROM t_finished_item fi
+         JOIN t_finished_doc  fd ON fd.id = fi.doc_id
+         LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
+        WHERE fi.order_product_id IN (${ids.map(() => '?').join(',')})
+          AND fd.status = ?
+          AND ${OUTBOUND_FAMILY_SQL}
+        GROUP BY fi.order_product_id`,
+      [...ids, FINISHED_DOC_STATUS.CONFIRMED, ...OUTBOUND_FAMILY_PARAMS],
+    );
+    rows.forEach((r) => outbound.set(Number(r.pid), Number(r.qty) || 0));
+    return { inbound, outbound };
   }
 
   /**
@@ -489,7 +542,7 @@ export class AssemblyService {
     ws.columns = [
       { header: '订单编号' },
       { header: '客户' },
-      { header: '货号' },
+      { header: '产品代码' },
       { header: '产品型号' },
       { header: '产品名称' },
       { header: '规格' },
@@ -498,6 +551,8 @@ export class AssemblyService {
       { header: '已排产(支)' },
       { header: '已完成(支)' },
       { header: '未装配(支)' },
+      { header: '生产入库(支)' },
+      { header: '销售出库(支)' },
       { header: '批次数' },
       { header: '装配进度' },
       { header: '待完成计划日' },
@@ -509,7 +564,7 @@ export class AssemblyService {
       ws.addRow([
         r.productionNo || r.orderNo || '',
         r.customerName || '',
-        r.itemNo || '',
+        sanitizeItemCode(r.itemNo),
         r.productModel || '',
         r.productName || '',
         r.dimensionText || '',
@@ -518,6 +573,8 @@ export class AssemblyService {
         r.plannedQty,
         r.doneQty,
         r.pendingQty,
+        r.inboundQty,
+        r.outboundQty,
         r.batchCount,
         this.progressText(r),
         r.nextPlanDate || '',
@@ -526,7 +583,7 @@ export class AssemblyService {
         r.overdue ? '是' : '',
       ]);
     }
-    styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] });
+    styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] });
 
     /* ---------- Sheet2：装配批次明细（汇总表那些产品的逐批记录） ---------- */
     const productIds = all.list.map((r) => r.orderProductId);
