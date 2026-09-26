@@ -49,11 +49,9 @@ export interface DeliveryTemplate {
   /**
    * 客户信息区版式（联系行与明细表之间那几行）：
    * - `classic`：客户 + 电话 / 地址 + 日期 + NO（耐斯克、精工两版）
-   * - `consignee`：收货单位 / 送货单位（我方，固定） / 我方电话传真，右侧 送货单号NO + 日期（通用版）
+   * - `consignee`：收货单位 + 送货单号NO / 送货地址 + 日期（通用版，2026-09-26 起两行式）
    */
   metaStyle: 'classic' | 'consignee';
-  /** consignee 版式第三行的固定文案（我方电话与传真，客户要求单据上再印一次） */
-  contactPhoneLine?: string;
   columns: DeliveryColumn[];
   /** 签名栏项目（耐斯克是「业务」，精工是「发货人」） */
   signatures: string[];
@@ -93,24 +91,37 @@ const CODE_FALLBACK: Array<keyof DeliveryNoteRow> = ['customerDrawingNo'];
 const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'footerNote'> = {
   contactLine: `${ADDRESS}  TEL：0760-87972626 ${FAX}`,
   showDocNoInTitle: false,
-  // 通用版的客户信息区是「收货单位 / 送货单位 / 电话传真」三行式
+  // 通用版的客户信息区是「收货单位 + 单号 / 送货地址 + 日期」两行式（2026-09-26 使用方要求：
+  // 原「送货单位（我方公司名）」改为送货地址，原第三行我方电话传真取消——抬头联系行里已有）
   metaStyle: 'consignee',
-  contactPhoneLine: '电话：0760-87972626　　传真：0760-87972639',
+  // 列宽合计 100%（含颜色列）；颜色开关关闭时 table-layout:fixed 会把空出的 7% 按比例摊给其余列。
+  // 2026-09-26 加「料厚」后**在单元格内**用纸面字体实测重分（含内边距）：订单编号 15.5% 容 16 位 PO#
+  // （PO1070C260800236 需 15.2%）、生产单号/物料编码 10.5% 容 10 位单号（需 10.1%）、单位 5.5%（4.5% 时表头折成「单/位」）；
+  // 备注多为空、本就允许折行，故只留 6.5%。改宽度前先实测，凭字数估算会偏窄
   columns: [
-    { key: 'seq', label: '序号', width: '6%', align: 'center' },
+    { key: 'seq', label: '序号', width: '5%', align: 'center' },
     // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
-    { key: 'poNo', label: '订单编号', width: '13.5%', align: 'center' },
-    { key: 'materialCode', label: '物料编码', width: '17%', align: 'center', fallbackKeys: CODE_FALLBACK },
+    { key: 'poNo', label: '订单编号', width: '15.5%', align: 'center' },
+    // 生产单号（2026-09-25 补）：客户来电报货时常报的是我方单号，仓库/业务凭它直接回查订单。
+    // 331 家客户全部走通用模板，缺这一列等于所有送货单都没印生产单号
+    { key: 'productionNo', label: '生产单号', width: '10.5%', align: 'center' },
+    // 通用版「物料编码」印我方**产品代码**（item_no，如 45#、客户料号）——2026-09-26 使用方指定，
+    // 原取客户方编码 materialCode、空时回落客户图号，现役订单客户方编码全空，印出来的其实都是客户图号。
+    // 耐斯克/精工两套客户版的「物料编码/产品编码」仍取客户方编码，不受影响
+    { key: 'itemNo', label: '物料编码', width: '10.5%', align: 'center' },
     // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
     // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
-    { key: 'productModel', label: '物料名称', width: '16.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
-    { key: 'specText', label: '规格型号', width: '21%', align: 'center' },
-    // 颜色列随全局「颜色」开关整列增减（§5.7）
-    { key: 'color', label: '颜色', width: '8%', align: 'center', flag: 'colorEnabled' },
+    { key: 'productModel', label: '物料名称', width: '17.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
+    // 料厚（2026-09-26 加，物料名称与规格之间）：外/中/内轨料厚不同时「/」并列，如 1.2/1.0
+    { key: 'materialThickness', label: '料厚', width: '8%', align: 'center' },
+    // 规格是「17寸」「425mm」这种短文本（2026-09-26 表头由「规格型号」改「规格」）
+    { key: 'specText', label: '规格', width: '7%', align: 'center' },
+    // 颜色列随全局「颜色」开关整列增减（§5.7）；印的是**表面处理**中文名，表面处理为空/「无」才回落颜色字段（服务端 colorTextOf）
+    { key: 'color', label: '颜色', width: '7%', align: 'center', flag: 'colorEnabled' },
     // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
-    { key: 'unitLabel', label: '单位', width: '6%', align: 'center' },
-    { key: 'qty', label: '数量', width: '11%', align: 'center' },
-    { key: 'remark', label: '备注', width: '11%', pre: true },
+    { key: 'unitLabel', label: '单位', width: '5.5%', align: 'center' },
+    { key: 'qty', label: '数量', width: '7%', align: 'center' },
+    { key: 'remark', label: '备注', width: '6.5%', pre: true },
   ],
   signatures: ['制单', '仓库', '提货人', '收货人签名'],
   minRows: 6,
@@ -218,6 +229,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '53#普通卡口滑轨',
       itemNo: '53#',
       specText: '17寸',
+      materialThickness: '1.2/1.0',
       color: '黑色',
       qty: 500,
       unit: 'set',
@@ -238,6 +250,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '45#自锁滑轨',
       itemNo: '45#',
       specText: '400mm',
+      materialThickness: '1.0',
       color: '白色',
       qty: 260,
       unit: 'set',
@@ -259,6 +272,7 @@ export const SAMPLE_DELIVERY_NOTE = {
       productModel: '45#缓冲滑轨',
       itemNo: '45#',
       specText: '535mm',
+      materialThickness: '1.2',
       color: '',
       qty: 128,
       unit: 'set',

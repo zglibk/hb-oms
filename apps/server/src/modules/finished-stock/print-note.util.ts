@@ -1,4 +1,4 @@
-import { DIMENSION_UNIT, UNIT_OPTIONS } from '@hb-oms/shared';
+import { DIMENSION_UNIT, SURFACE_NONE, UNIT_OPTIONS } from '@hb-oms/shared';
 
 /**
  * 纸质单据取数的**共用纯逻辑**（送货单 / 入库单，CLAUDE.md §5.6）。
@@ -38,6 +38,26 @@ export function specTextOf(
   if (s(unit) === DIMENSION_UNIT.INCH && s(raw)) return `${s(raw)}寸`;
   if (mm != null && Number(mm) > 0) return `${Number(mm)}mm`;
   return s(fallback);
+}
+
+/**
+ * 纸面「颜色」格的取值（2026-09-25 使用方要求）：**印表面处理的中文名**（封漆 / 电泳 / 光漆…）。
+ *
+ * 车间认货看的是表面处理；明细里的「颜色」字段绝大多数没填（本地数据约 3/4 为空），
+ * 填了的也常常就是「封漆」这类表面处理——照印颜色字段，纸面这一格基本是空白。
+ * 列标题仍叫「颜色」：那是客户 / 仓库纸质单上既有的格子名，不改。
+ *
+ * 表面处理为空或为「无」（SURFACE_NONE）时印「无」没有意义，回落到颜色字段原值。
+ * surfaceLabel 由调用方传入（服务端 dictLabeler 转中文，页面与 PDF 拿到同一个值）。
+ */
+export function colorTextOf(
+  surfaceType: string | null | undefined,
+  color: string | null | undefined,
+  surfaceLabel: (value: string) => string,
+): string {
+  const st = s(surfaceType);
+  if (st && st !== SURFACE_NONE) return s(surfaceLabel(st)) || st;
+  return s(color);
 }
 
 /** `mergeByProduct` 需要的最小字段集（各单据的源行都是它的超集） */

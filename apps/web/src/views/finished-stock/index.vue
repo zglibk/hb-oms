@@ -113,7 +113,7 @@
         <el-table-column label="生产单号" width="130" show-overflow-tooltip>
           <template #default="{ row }">{{ productionNos(row) }}</template>
         </el-table-column>
-        <el-table-column label="业务类型" width="110" align="center">
+        <el-table-column label="业务类型" width="90" align="center">
           <template #default="{ row }">
             <el-tag
               size="small"
@@ -146,16 +146,16 @@
         </el-table-column>
         <!-- 展示名 2026-08-13 由「班组/机台」改为「车间」（机台号停用录入）；
              workTeam 现存字典值，历史自由文本班组名回落原样显示 -->
-        <el-table-column label="车间" width="90" align="center">
+        <el-table-column label="车间" width="70" align="center">
           <template #default="{ row }">{{ workshopLabel(row.workTeam) }}</template>
         </el-table-column>
-        <el-table-column label="制单人" prop="creatorName" width="90" align="center">
+        <el-table-column label="制单人" prop="creatorName" width="75" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.creatorName" :seed="row.creatorName">{{ row.creatorName }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column label="状态" width="75" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="tagTypeOf(FINISHED_DOC_STATUS, row.status)">
               {{ labelOf(FINISHED_DOC_STATUS, row.status) }}
@@ -165,7 +165,7 @@
         <el-table-column label="备注" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button

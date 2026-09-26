@@ -1,5 +1,5 @@
-import { piecesToUnitQty } from '@hb-oms/shared';
-import { mergeByProduct, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
+import { bracketSplitWord, piecesToUnitQty, railNameSuffixOf, withRailSuffix, sanitizeItemCode } from '@hb-oms/shared';
+import { colorTextOf, mergeByProduct, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
 
 /**
  * 送货单取数的纯逻辑（CLAUDE.md §5.6「送货单打印」）。
@@ -36,11 +36,17 @@ export interface DeliveryNoteSourceRow {
   dimension_mm: number | null;
   dimension_text: string | null;
   color: string | null;
+  /** 表面处理字典值：纸面「颜色」格印它的中文名（见 colorTextOf） */
+  surface_type: string | null;
   remark: string | null;
   /** 以下来自 JOIN 的订单侧（产品行被删时为 null，各字段自行回落明细快照） */
   material_code: string | null;
   customer_drawing_no: string | null;
   product_name: string | null;
+  /** 分体出货（2026-09-25 起用于产品名称带出货形态）：是否分体 / 节数 / 该行部件组（逗号拼接、按组序） */
+  is_split: number | null;
+  rail_section: string | null;
+  group_types: string | null;
   product_requirement: string | null;
   unit: string | null;
   dimension_raw: string | number | null;
@@ -73,8 +79,11 @@ export interface DeliveryNoteRow {
   itemNo: string;
   /** 规格：英寸录入 → `17寸`；mm 录入 → `425mm`（纸质单口径，不带括号 mm） */
   specText: string;
+  /** 料厚：各部件组料厚按组序去重后「/」并列（如 1.2/1.0），与入库单同口径 */
+  materialThickness: string;
   /**
-   * 颜色（出库明细的快照值）。通用模板有独立的「颜色」列；
+   * 纸面「颜色」格：**表面处理中文名优先**，表面处理为空或「无」时才回落明细的颜色字段（colorTextOf）。
+   * 通用模板有独立的「颜色」列；
    * 该列受 §5.7 全局「颜色」开关控制——停用时整列不印（与其它页面口径一致）。
    */
   color: string;
@@ -98,7 +107,12 @@ const s = (v: unknown): string => (v == null ? '' : String(v).trim());
  * 出库明细 → 送货单行：按订单产品行合并左右两行、数量折成订单单位、重排序号。
  * 合并与折算见 print-note.util.ts，这里只做送货单的字段映射。
  */
-export function buildDeliveryRows(src: DeliveryNoteSourceRow[]): DeliveryNoteRow[] {
+export function buildDeliveryRows(
+  src: DeliveryNoteSourceRow[],
+  surfaceLabel: (value: string) => string,
+  /** 订单产品行 → 料厚文本（见 FinishedStockService.loadThicknessByProduct） */
+  thicknessOf: (orderProductId: number) => string = () => '',
+): DeliveryNoteRow[] {
   return mergeByProduct(src).map((r, i) => {
     const unit = s(r.unit);
     return {
@@ -107,12 +121,17 @@ export function buildDeliveryRows(src: DeliveryNoteSourceRow[]): DeliveryNoteRow
       poNo: s(r.po_no),
       materialCode: s(r.material_code),
       customerDrawingNo: s(r.customer_drawing_no),
-      productName: s(r.product_name),
+      // 分体行把出货形态（外中轨/内轨）带进产品名称，否则分体两行印成同一个名字（2026-09-25）；
+      // 整品行保持订单原文——送货单不补「滑轨」（使用方只要求入库单补）
+      productName: r.is_split
+        ? withRailSuffix(s(r.product_name), railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section))
+        : bracketSplitWord(s(r.product_name)), // 整品行只给「分体」加括号，不补「滑轨」
       productRequirement: s(r.product_requirement),
       productModel: s(r.product_model),
-      itemNo: s(r.item_no),
+      itemNo: sanitizeItemCode(r.item_no),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
-      color: s(r.color),
+      materialThickness: thicknessOf(Number(r.order_product_id) || 0),
+      color: colorTextOf(r.surface_type, r.color, surfaceLabel),
       qty: piecesToUnitQty(r._pcs, unit),
       unit,
       unitLabel: unitLabelOf(unit),

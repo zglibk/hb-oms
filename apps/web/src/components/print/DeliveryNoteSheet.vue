@@ -13,26 +13,23 @@
 
     <!-- ==================== 客户信息（两种版式，见模板注册表 metaStyle） ==================== -->
     <div v-if="tpl.metaStyle === 'consignee'" class="doc-meta doc-meta--consignee">
-      <!-- 通用版：收货单位 / 送货单位（我方，固定）/ 我方电话传真；右侧 送货单号NO + 日期 -->
+      <!-- 通用版（2026-09-26 起两行）：收货单位 + 送货单号NO / 收货地址 + 日期。
+           原第二行「送货单位（我方公司名）」改印客户收货地址，原第三行我方电话传真取消（抬头联系行已有） -->
       <div class="doc-meta__row">
         <div class="doc-meta__item doc-meta__item--grow">
           <span class="doc-meta__label">收货单位：</span>
           <span class="doc-meta__value">{{ note.customerName || '' }}</span>
         </div>
         <div class="doc-meta__item">
-          <span class="doc-meta__label">送货单号：NO:</span>
+          <span class="doc-meta__label">送货单号：</span>
           <span class="doc-meta__value doc-meta__value--sm">{{ note.deliveryNo }}</span>
         </div>
       </div>
       <div class="doc-meta__row">
         <div class="doc-meta__item doc-meta__item--grow">
-          <span class="doc-meta__label">送货单位：</span>
-          <span class="doc-meta__plain">{{ COMPANY_FULL_NAME }}</span>
-        </div>
-      </div>
-      <div class="doc-meta__row">
-        <div class="doc-meta__item doc-meta__item--grow">
-          <span class="doc-meta__plain">{{ tpl.contactPhoneLine }}</span>
+          <!-- 取数口径：订单交货地址优先，订单没填回落客户资料送货地址（服务端 customerAddress） -->
+          <span class="doc-meta__label">收货地址：</span>
+          <span class="doc-meta__value">{{ note.customerAddress }}</span>
         </div>
         <div class="doc-meta__item">
           <span class="doc-meta__label">日期：</span>
@@ -283,13 +280,11 @@ function signValue(label: string): string {
   grid-template-columns: 100mm 34mm minmax(44mm, 1fr);
 }
 /*
- * 通用版只有两栏（左：单位/电话，右：单号/日期），且标签更长（「送货单号：NO:」），
+ * 通用版只有两栏（左：单位/电话，右：单号/日期），且标签更长（「送货单号：」，2026-09-26 起不再带「NO:」），
  * 故标签列改为 auto 自适应，不能沿用客户专用版那 10mm 的固定标签列。
  */
 .doc-meta--consignee .doc-meta__row { grid-template-columns: minmax(0, 1fr) 62mm; }
 .doc-meta--consignee .doc-meta__item { grid-template-columns: auto minmax(0, 1fr); }
-/* 固定文案（送货单位、我方电话传真） */
-.doc-meta__plain { padding: 0 1mm 0.5mm; white-space: nowrap; }
 .doc-meta__item {
   display: grid;
   grid-template-columns: 10mm minmax(0, 1fr);

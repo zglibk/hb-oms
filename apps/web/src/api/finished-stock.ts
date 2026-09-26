@@ -274,7 +274,9 @@ export interface DeliveryNoteRow {
   itemNo: string;
   /** 规格：英寸录入 → 17寸；mm 录入 → 425mm */
   specText: string;
-  /** 颜色（出库明细快照）；通用模板有独立列，受 §5.7 全局颜色开关控制 */
+  /** 料厚：各部件组料厚按组序去重「/」并列（2026-09-26 起送货单通用版印） */
+  materialThickness: string;
+  /** 纸面「颜色」格：表面处理中文名优先，表面处理为空/「无」时回落颜色字段；通用模板有独立列，受 §5.7 全局颜色开关控制 */
   color: string;
   /** 已按订单单位折算后的数量（奇数支折套会出现 0.5） */
   qty: number;
@@ -338,13 +340,20 @@ export interface InboundNoteRow {
   orderProductId: number;
   /** 纸面「产品名称」栏：产品型号，如 45#自锁外中轨 */
   productModel: string;
-  /**
-   * 纸面「类别」栏：产品类型中文组合，如「普通自锁」。
-   * 与 productModel 里的类型部分重复是**使用方要的**——单独一列便于清点时一眼归类。
-   */
+  /** 产品类型中文组合（如「普通自锁」），不带宽度；纸面「类别」栏用 categoryText */
   productTypeText: string;
+  /** 纸面「产品代码」栏（2026-09-25 起）：货号 */
   itemNo: string;
-  /** 纸面「规格型号」栏：英寸录入 → 17寸；mm 录入 → 425mm */
+  /** 纸面「产品名称」栏（产品代码与规格之间）：订单产品行的产品名称原文 */
+  productName: string;
+  /**
+   * 纸面「类别」栏：滑轨宽度 + 产品类型中文（如「45#普通」「45#自锁」「35#缓冲卡口」）。
+   * 宽度从货号 / 产品名称开头的「数字#」提取，规则见服务端 inbound-note.util.ts 的 categoryTextOf。
+   */
+  categoryText: string;
+  /** 纸面「料厚」栏（2026-09-25 新增）：各部件组料厚按组序去重、「/」并列，如「1.2/1.0」 */
+  materialThickness: string;
+  /** 纸面「规格」栏：英寸录入 → 17寸；mm 录入 → 425mm */
   specText: string;
   /** 颜色（入库明细快照）；该列受 §5.7 全局颜色开关控制 */
   color: string;

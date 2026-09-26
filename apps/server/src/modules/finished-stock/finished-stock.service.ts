@@ -14,6 +14,7 @@ import {
   hasSocket,
   isValidSide,
   sideLabel,
+  sanitizeItemCode,
 } from '@hb-oms/shared';
 import { FinishedDoc } from './entities/finished-doc.entity';
 import { FinishedItem } from './entities/finished-item.entity';
@@ -180,13 +181,17 @@ export class FinishedStockService {
         customer_id: number | null;
         salesman: string | null;
         merchandiser: string | null;
+        delivery_address: string | null;
       }
     > = await this.dataSource.query(
       `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
               i.order_no, i.customer_name, i.production_no, i.item_no,
-              i.product_model, i.dimension_mm, i.dimension_text, i.color, i.remark,
+              i.product_model, i.dimension_mm, i.dimension_text, i.color, i.surface_type, i.remark,
               p.material_code, p.customer_drawing_no, p.product_name, p.product_requirement,
-              p.unit, p.dimension_raw, p.dimension_unit,
+              p.unit, p.dimension_raw, p.dimension_unit, p.delivery_address,
+              p.is_split, p.rail_section,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id) FROM t_order_part_group g
+                WHERE g.order_product_id = p.id) AS group_types,
               o.po_no, o.customer_id, o.salesman, o.merchandiser
          FROM t_finished_item i
          LEFT JOIN t_order_product p ON p.id = i.order_product_id
@@ -220,7 +225,17 @@ export class FinishedStockService {
     // 同名多码时取第一条（客户名相同即同一收货方，抬头一致）
     const customer = customers[0] ?? null;
 
-    const rows = buildDeliveryRows(raw);
+    // 纸面「颜色」格印表面处理中文名（colorTextOf），字典在服务端转，页面与 PDF 同值
+    const surfaceLabeler = dictLabeler(await loadDictLabels(this.dataSource, ['surface_type']));
+    // 「料厚」列（2026-09-26）：与入库单同一取法（各部件组料厚按组序去重「/」并列）
+    const thickness = await this.loadThicknessByProduct([
+      ...new Set(raw.map((r) => Number(r.order_product_id)).filter((id) => id > 0)),
+    ]);
+    const rows = buildDeliveryRows(
+      raw,
+      (v) => surfaceLabeler('surface_type', v),
+      (pid) => thickness.get(pid) ?? '',
+    );
     const totals = sumByUnit(rows);
     const joinDistinct = (list: Array<string | null>) =>
       [...new Set(list.map((v) => String(v ?? '').trim()).filter(Boolean))].join('、');
@@ -240,7 +255,14 @@ export class FinishedStockService {
       customerName: customerNames[0] ?? String(customer?.customer_name ?? ''),
       customerCode: String(customer?.customer_code ?? ''),
       customerPhone: String(customer?.contact_phone ?? ''),
-      customerAddress: String(customer?.delivery_address ?? ''),
+      /**
+       * 纸面「收货地址」（2026-09-25 调整，2026-09-26 标签由「送货地址」改名）：**优先取订单产品行的「交货地址」**——同一客户不同订单
+       * 可能送不同地点，订单上的才是这一次的实际去处；订单没填才回落客户资料的送货地址。
+       * 一张出库单跨多个产品行且地址不同时去重后用「；」并列，不悄悄只取其一。
+       */
+      customerAddress:
+        [...new Set(raw.map((r) => String(r.delivery_address ?? '').trim()).filter(Boolean))].join('；') ||
+        String(customer?.delivery_address ?? ''),
       /** 客户绑定的模板编码；空串 = 前端取系统配置的全局默认 */
       templateCode: String(customer?.delivery_template ?? '').trim(),
       salesman: joinDistinct(raw.map((r) => r.salesman)),
@@ -281,8 +303,11 @@ export class FinishedStockService {
     const raw: InboundNoteSourceRow[] = await this.dataSource.query(
       `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
               i.order_no, i.production_no, i.item_no, i.product_model, i.product_type,
-              i.dimension_mm, i.dimension_text, i.color, i.remark,
-              p.unit, p.dimension_raw, p.dimension_unit
+              i.dimension_mm, i.dimension_text, i.color, i.surface_type, i.remark,
+              p.product_name, p.unit, p.dimension_raw, p.dimension_unit,
+              p.is_split, p.rail_section,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id) FROM t_order_part_group g
+                WHERE g.order_product_id = p.id) AS group_types
          FROM t_finished_item i
          LEFT JOIN t_order_product p ON p.id = i.order_product_id
         WHERE i.doc_id = ?
@@ -293,7 +318,8 @@ export class FinishedStockService {
 
     // 车间是 assembly_workshop 字典值，纸面要印中文；服务端转一次，
     // 页面与 PDF 走同一个值（前端纸面组件因此不必再引字典）
-    const label = dictLabeler(await loadDictLabels(this.dataSource, ['assembly_workshop']));
+    // 车间与表面处理（纸面「颜色」格，见 colorTextOf）一次取齐
+    const label = dictLabeler(await loadDictLabels(this.dataSource, ['assembly_workshop', 'surface_type']));
 
     /*
      * 纸面「车间：」——**单头填了用单头，没填则回溯装配批次**（2026-08-14 使用部门反馈：
@@ -320,7 +346,8 @@ export class FinishedStockService {
         .join('、');
     }
 
-    const rows = buildInboundRows(raw);
+    const thickness = await this.loadThicknessByProduct(productIds);
+    const rows = buildInboundRows(raw, (v) => label('surface_type', v), (pid) => thickness.get(pid) ?? '');
     const totals = sumByUnit(rows);
 
     return {
@@ -344,6 +371,33 @@ export class FinishedStockService {
       unitConsistent: totals.length <= 1,
       unitLabel: totals.length === 1 ? totals[0].unitLabel : null,
     };
+  }
+
+  /**
+   * 入库单「料厚」栏：各订单产品行下部件组的料厚，**按组序（sort, id）去重后用「/」并列**。
+   * 外/中/内轨料厚常不同，只取一个会漏；与台账 joinGroupField 同一写法（按组序、去重、「/」）。
+   * 在 JS 里去重而不是 GROUP_CONCAT(DISTINCT … ORDER BY sort)：后者无法按非去重列排序。
+   */
+  private async loadThicknessByProduct(productIds: number[]): Promise<Map<number, string>> {
+    const map = new Map<number, string>();
+    if (!productIds.length) return map;
+    const rows: Array<{ pid: number; t: string | null }> = await this.dataSource.query(
+      `SELECT order_product_id AS pid, TRIM(material_thickness) AS t
+         FROM t_order_part_group
+        WHERE order_product_id IN (${productIds.map(() => '?').join(',')})
+        ORDER BY order_product_id, sort, id`,
+      productIds,
+    );
+    const seen = new Map<number, string[]>();
+    for (const r of rows) {
+      const t = String(r.t ?? '').trim();
+      if (!t) continue;
+      const list = seen.get(Number(r.pid)) ?? [];
+      if (!list.includes(t)) list.push(t);
+      seen.set(Number(r.pid), list);
+    }
+    seen.forEach((list, pid) => map.set(pid, list.join('/')));
+    return map;
   }
 
   /** 成品库存（只读结存查询）：余额行 + 订单侧展示信息 */
@@ -563,7 +617,7 @@ export class FinishedStockService {
       { header: '订单号', pick: (r) => r.item.orderNo || '' },
       { header: '客户', pick: (r) => r.item.customerName || '' },
       { header: '生产单号', pick: (r) => r.item.productionNo || '' },
-      { header: '货号', pick: (r) => r.item.itemNo || '', center: true },
+      { header: '产品代码', pick: (r) => sanitizeItemCode(r.item.itemNo), center: true },
       { header: '产品型号', pick: (r) => r.item.productModel || '' },
       // 规格跟随「系统配置 → 单位换算」的默认查看单位，与台账/总计划导出同口径
       { header: dimHeader, pick: (r) => formatDimensionView(r.item.dimensionMm, dimensionViewUnit, inchToMm), center: true },
@@ -639,7 +693,7 @@ export class FinishedStockService {
     type Row = (typeof all.list)[number];
     // 列序对齐页面，便于与屏幕上的表并排核对
     const columns: Array<{ header: string; pick: (r: Row) => string | number; center?: boolean }> = [
-      { header: '货号', pick: (r) => r.itemNo || '', center: true },
+      { header: '产品代码', pick: (r) => sanitizeItemCode(r.itemNo), center: true },
       { header: '产品型号', pick: (r) => r.productModel || '' },
       { header: '规格', pick: (r) => r.dimensionText || '', center: true },
       { header: '表面处理', pick: (r) => label('surface_type', r.surfaceType), center: true },
@@ -666,7 +720,7 @@ export class FinishedStockService {
       const i = columns.findIndex((c) => c.header === header);
       if (i >= 0) totalRow[i] = v;
     };
-    put('货号', '合计');
+    put('产品代码', '合计');
     put('结存(支)', all.list.reduce((s, r) => s + (r.quantity || 0), 0));
     ws.addRow(totalRow);
 

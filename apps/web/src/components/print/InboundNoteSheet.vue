@@ -9,11 +9,16 @@
     </header>
     <div class="doc-divider"></div>
 
-    <!-- ==================== 单头：车间 / 入库单号 ==================== -->
+    <!-- ==================== 单头：车间 / 入库日期 / 入库单号 ==================== -->
     <div class="doc-meta">
       <div class="doc-meta__item">
         <span class="doc-meta__label">车间：</span>
         <span class="doc-meta__value">{{ note.workshopLabel }}</span>
+      </div>
+      <!-- 入库日期 = 单据日期（2026-09-25 使用方要求，放在车间与单号之间） -->
+      <div class="doc-meta__item">
+        <span class="doc-meta__label">入库日期：</span>
+        <span class="doc-meta__value">{{ note.docDate }}</span>
       </div>
       <div class="doc-meta__item">
         <!-- 内部凭证，直接印系统单号（FGI260814-0001），不像送货单那样派生日期形态 -->
@@ -92,29 +97,54 @@ interface InboundColumn {
 }
 
 /**
- * 9 列对齐纸质模板；「产品名称」印产品型号、「类别」印产品类型中文（口径见 §5.6）。
+ * 10 列（2026-09-25 按使用方新版纸质单改）：
+ * - 「产品代码」印**货号**（原「产品名称」列印产品型号）；
+ * - 「规格型号」改名「规格」；
+ * - 「类别」印**滑轨宽度 + 产品类型中文**（如 45#普通、45#自锁；服务端 categoryTextOf 提取宽度）。
+ *   不印订单产品名称——那是手填自由文本（如「45#普通1.0料」），口径不一；
+ * - 「类别」与「颜色」之间新增「料厚」（各部件组料厚按组序去重、「/」并列）；
+ * - 「备注」改名「存放位置」（取值仍是明细备注——仓管在那里写库位）。
+ * 「颜色」格印表面处理中文名（服务端 colorTextOf），仍受 §5.7 颜色开关控制。
  *
- * 列宽由模板的 Excel 字符宽（总计 99.875）归一化而来，只有两列**刻意偏离模板**：
- * 「产品名称」15.9% → 20%、「规格型号」17% → 12.9%。模板那套宽度是给人**手写**
- * 定的，而系统印的是完整型号（如 `45#普通自锁缓冲外中轨` 12 个字），照搬会让这一列
- * 频繁折成两行、把 10 行明细撑出 A5 纸面；规格那格最长也就 `1200mm`，17% 是浪费。
+ * 列宽合计 100%（含颜色列），按真实数据量过：货号常见 14 个字符（如 DS3832A-22Z-DM，
+ * 订单里约 37% 的货号超过 9 个字符），「产品代码」给 14.5% 保证一行放下；类别（宽度+类型，
+ * 如「45#普通自锁缓冲」）给 17%；规格最长「1100mm」、数量最多 6 位，都收窄到 8.5%。
+ * A5 只有 128mm 可用高度，任一格频繁折行都会把 10 行明细挤出纸面——改宽度前先量。
+ */
+/*
+ * 11 列（2026-09-25 在产品代码与规格之间加「产品名称」）。A5 横向表格宽 200mm。
+ * 列宽是在浏览器里**用纸面实际字体逐列实测**「真实最长内容单行显示所需宽度」后分配的
+ * （凭字号估算会偏窄：首版估算让「平滑漆」每行折成两行，整张单溢出成两页）：
+ *   单行所需 序号4.7 生产单号9.8(GLI46246-A) 产品代码13.2(DS3832A-22Z-DM) 产品名称15(45#普通无锁力分体)
+ *   规格6.4(1100mm) 类别10.2(45#普通缓冲) 料厚7.3(1.0/1.2) 颜色6.1(平滑漆) 单位4.7 数量6.4(110880)
+ *   存放位置8.6，合计 92.4%。产品名称 2026-09-25 起补「滑轨」后缀（withRailSuffix），常见最长
+ *   「45#普通无锁力分体滑轨」11 个字需约 18.2%，余量几乎全给了它；其余列只比单行所需多 0.2~0.3%，
+ *   **再加列或放宽任一列都必须先实测**。
+ * 2026-09-25 使用方嫌产品代码列过宽，重新实测后调整：产品代码 13.5% → 10.3%（11 个半角字符如
+ * SM4500CM37E 需 10.1%，覆盖「45#」与最常见的 10 位客户料号；12 位以上的长料号折两行，单元格本就 break-all）、
+ * 存放位置 10.2% → 8.9%（现场手写栏，表头需 7.7%），省下的全给产品名称 → 23%（「45#普通外中轨无锁力（分体）」需 22.8%）。
+ * ⚠️ A5 只有 128mm 可用高度，任一列变窄导致逐行折行都会把 10 行明细挤出一页——改宽度前先实测。
  */
 const COLUMNS: InboundColumn[] = [
-  { key: 'seq', label: '序号', width: '5.5%', align: 'center' },
-  { key: 'productionNo', label: '生产单号', width: '12.8%', align: 'center' },
-  { key: 'productModel', label: '产品名称', width: '20%' },
-  { key: 'specText', label: '规格型号', width: '12.9%', align: 'center' },
-  // 与「产品名称」里的类型部分重复是使用方要的：单独一列便于清点时一眼归类
-  { key: 'productTypeText', label: '类别', width: '15.4%', align: 'center' },
-  { key: 'color', label: '颜色', width: '7.3%', align: 'center', flag: 'colorEnabled' },
+  { key: 'seq', label: '序号', width: '4.9%', align: 'center' },
+  { key: 'productionNo', label: '生产单号', width: '10.1%', align: 'center' },
+  { key: 'itemNo', label: '产品代码', width: '10.3%', align: 'center' },
+  { key: 'productName', label: '产品名称', width: '23%', align: 'center' },
+  { key: 'specText', label: '规格', width: '6.7%', align: 'center' },
+  { key: 'categoryText', label: '类别', width: '10.5%', align: 'center' },
+  { key: 'materialThickness', label: '料厚', width: '7.6%', align: 'center' },
+  { key: 'color', label: '颜色', width: '6.4%', align: 'center', flag: 'colorEnabled' },
   // 有独立「单位」列，故数量列表头只写「数量」、单元格也不带单位后缀
-  { key: 'unitLabel', label: '单位', width: '5.4%', align: 'center' },
-  { key: 'qty', label: '数量', width: '10.3%', align: 'center' },
-  { key: 'remark', label: '备注', width: '10.4%' },
+  { key: 'unitLabel', label: '单位', width: '4.9%', align: 'center' },
+  { key: 'qty', label: '数量', width: '6.7%', align: 'center' },
+  { key: 'remark', label: '存放位置', width: '8.9%' },
 ];
 
-/** 签名栏：制单由系统填，主管与质检现场手签（系统里没有对应字段） */
-const SIGNATURES = ['主管', '质检', '制单'];
+/**
+ * 签名栏（2026-09-25 调整）：制单在最左、审核在最右（原「主管」改名「审核」并挪到原制单位置），
+ * 质检居中。制单由系统填，质检与审核现场手签（系统里没有对应字段）。
+ */
+const SIGNATURES = ['制单', '质检', '审核'];
 
 /** 明细区最少行数：对齐纸质模板的 10 行 */
 const MIN_ROWS = 10;
@@ -196,10 +226,10 @@ function signValue(label: string): string {
   border-bottom: 1px solid #333;
 }
 
-/* ===== 单头：车间 / 入库单号（右侧起点对齐模板的第 6 列 ~66.6%） ===== */
+/* ===== 单头：车间 / 入库日期 / 入库单号（单号起点仍对齐模板的第 6 列 ~66.6%，日期居中段） ===== */
 .doc-meta {
   display: grid;
-  grid-template-columns: 66.6% minmax(0, 1fr);
+  grid-template-columns: 36% 30.6% minmax(0, 1fr);
   align-items: end;
   margin-top: 2.5mm;
 }

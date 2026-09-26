@@ -105,7 +105,7 @@
       <div class="picker-bar">
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
-          placeholder="订单号/客户/生产单号/型号/货号"
+          placeholder="订单号/客户/生产单号/型号/产品代码"
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
