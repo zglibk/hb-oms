@@ -97,6 +97,8 @@ const MIGRATIONS: string[] = [
   'migration-production-bom.sql',
   // 版本号「01.0 / 02.0」还原为「01 / 02」（旧 normalizeVersion 误补 .0 的历史数据，仅数据修复）
   'migration-version-leading-zero.sql',
+  // 更新日志 v1.1.0「用户反馈问题优化」（仅数据，同版本同标题已存在即跳过）
+  'migration-changelog-v1.1.0.sql',
 ];
 
 /**
