@@ -526,7 +526,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 |---|---|---|
 | customer | CRUD + `POST /customer/import`、`GET /customer/import-template` | 客户资料；Excel 批量导入（整批校验、逐行错误、覆盖更新开关） |
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
-| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
+| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；`GET /order/:id` 带 `editGuard`（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
 | order | `GET /order/ledger/detail?orderPartGroupId=` | 台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载 |
 | order | `GET /order/ledger/export` | 台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝 |
@@ -554,7 +554,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 1. **已确认出入库单**只可红字冲销，禁止修改/删除；红字单本身不可再冲销。
 2. **出库确认**校验结存充足（按 order_part_group_id + side + batch_no 定位 balance），不足拒绝。
 3. **外发明细行**被回货登记引用后禁止删除；外发单已有回货禁止作废；发出数量修改需重算回齐状态。
-4. **订单修改限制**：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。
+4. **订单修改限制**：订单编辑按产品行 / 部件组 ID 原地更新（下游锚点不变）。被外发回厂记录、装配批次或出入库明细引用后只允许「更正」录错的信息，且限订单创建人、与其同角色的用户或管理员：订单级字段、产品信息（含数量、规格、表面处理）、部件组的图号/版本/料厚可改，保存时同事务回写下游快照并重算订单完结状态；被引用的产品行不能删，其轨道节数、卡口有无、分体出货不能改，有外发回厂记录的部件组不能删、不能改组类型，有外发回厂记录的产品表面处理不能改为「无」。未被引用的产品行/部件组照常增删。订单删除仍要求无任何下游引用。同产品行内 group_type 唯一。
 5. **卡口守恒**：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，「成品库存」页可按边别下钻。
 6. **回货超发出**允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。
 7. **期初补录订单**（is_opening=1）**仅是一个区分标记**：不改变校验、不影响四数口径，与正常订单走完全相同的流程。
@@ -600,6 +600,6 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 
 1. **外购零配件台账**（钢珠/拨叉等通用件）：期初 + 采购入库 + 领用出库，或按 BOM 随成品入库联动扣减。
 2. **部件台账与单据联动**：外发发出扣部件、回货加部件（表面处理后口径）、成品入库扣部件。
-3. **订单正式变更流程**：被下游引用后的数量变更单据化。
+3. **订单正式变更流程**：被下游引用后的变更单据化（V1 的「更正」直接改订单、靠操作日志留痕，不留变更单据）。
 4. **对账/发货单打印**、客户端口径的对账单导出。
 5. **FQC 质检**：外发回货验收目前仅备注承载，需求成熟后单独建模。
