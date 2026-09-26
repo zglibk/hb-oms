@@ -66,7 +66,7 @@ async function bootstrap() {
   const port = config.get<number>('PORT') || 8000;
   // 监听 0.0.0.0，允许局域网直连后端
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 MES 后端已启动:`);
+  console.log(`🚀 OMS 后端已启动:`);
   console.log(`   本机: http://localhost:${port}/api`);
   if (isDev) {
     for (const ip of getLanIps()) {

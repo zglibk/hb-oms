@@ -95,6 +95,8 @@ const MIGRATIONS: string[] = [
   'migration-finished-stock-export.sql',
   // 生产BOM：同图号多版本表头 + 物料明细
   'migration-production-bom.sql',
+  // 版本号「01.0 / 02.0」还原为「01 / 02」（旧 normalizeVersion 误补 .0 的历史数据，仅数据修复）
+  'migration-version-leading-zero.sql',
 ];
 
 /**

@@ -45,7 +45,7 @@ interface ImportRow {
 
 const IMPORT_COLUMNS: ImportColumn[] = [
   { header: '部件代码', field: 'materialCode', required: true, width: 18 },
-  { header: '货号', field: 'itemNo', required: true, width: 14 },
+  { header: '产品代码', field: 'itemNo', required: true, width: 14 },
   { header: '产品名称', field: 'productName', required: false, width: 22 },
   { header: '规格', field: 'spec', required: false, width: 14 },
   { header: '产品类型', field: 'productType', required: false, width: 12, dict: 'product_type' },
@@ -209,7 +209,7 @@ export class MaterialService {
     const colCount = cols.length;
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = '海宝五金 PMC/MES';
+    wb.creator = '海宝五金 OMS';
     wb.created = new Date();
 
     const ws = wb.addWorksheet('部件导入', {
@@ -370,6 +370,8 @@ export class MaterialService {
     const headerAliases: Record<string, keyof ImportRow> = {
       默认节数: 'railSection',
       产品类别: 'railSection',
+      // 2026-09-25「货号」改名「产品代码」：用户手上已下载的旧模板仍是「货号」表头，照认
+      货号: 'itemNo',
     };
     const colMap: Partial<Record<keyof ImportRow, number>> = {};
     ws.getRow(headerRowNo).eachCell({ includeEmpty: false }, (cell, colNo) => {
@@ -421,7 +423,7 @@ export class MaterialService {
       const itemNo = get('itemNo');
       const rowErrors: string[] = [];
       if (!materialCode) rowErrors.push('部件代码必填');
-      if (!itemNo) rowErrors.push('货号必填');
+      if (!itemNo) rowErrors.push('产品代码必填');
 
       if (materialCode) {
         const first = seenCodes.get(materialCode);
@@ -534,7 +536,7 @@ export class MaterialService {
 
     const cols: { header: string; get: (m: Material) => any }[] = [
       { header: '部件代码', get: (m) => m.materialCode ?? '' },
-      { header: '货号', get: (m) => m.itemNo ?? '' },
+      { header: '产品代码', get: (m) => m.itemNo ?? '' },
       { header: '产品名称', get: (m) => m.productName ?? '' },
       { header: '规格', get: (m) => m.spec ?? '' },
       { header: '产品类型', get: (m) => toLabel('product_type', m.productType) },
@@ -572,7 +574,7 @@ export class MaterialService {
     });
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = '海宝五金 PMC/MES';
+    wb.creator = '海宝五金 OMS';
     wb.created = new Date();
     const ws = wb.addWorksheet('部件清单', {
       views: [{ showGridLines: false }], // 取消表格网格线显示

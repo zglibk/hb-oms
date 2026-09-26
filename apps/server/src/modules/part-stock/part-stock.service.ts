@@ -176,7 +176,7 @@ export class PartStockService {
     const wb = createWorkbook();
     const ws = wb.addWorksheet('部件台账');
     ws.columns = [
-      { header: '货号' },
+      { header: '产品代码' },
       { header: '部件' },
       { header: '边别' },
       { header: '产品类型' },
@@ -217,7 +217,7 @@ export class PartStockService {
     const wb = createWorkbook();
     const ws = wb.addWorksheet('部件台账导入');
     ws.columns = [
-      { header: '货号*' },
+      { header: '产品代码*' },
       { header: '部件*' },
       { header: '边别' },
       { header: '产品类型' },
@@ -236,12 +236,12 @@ export class PartStockService {
       ['导入的性质', '本导入是**批量调整余量**，不是「设置余量」：每一行都会按「调整量」在现有余量上加减，并留下一条变动流水。'],
       ['为什么不能直接填余量', '部件台账要求「不直接改数无痕」，一切变动都必须带调整量与原因，否则事后无法回答「这个数怎么来的」。'],
       ['重复导入会怎样', '会**再加一遍**。同一份文件不要导入两次；导入失败时整批回滚，可以放心改完重来。'],
-      ['货号', '必填。'],
+      ['产品代码', '必填。'],
       ['部件', `必填，只能是 ${PART_TYPE_OPTIONS.map((o) => o.label).join(' / ')}。`],
       ['边别', '产品类型含「卡口」时填 左 / 右；不含卡口请留空。'],
       ['产品类型', `可多选，用逗号分隔，如「普通,自锁」。可选值：${PRODUCT_TYPE_OPTIONS.map((o) => o.label).join(' / ')}。`],
       ['节数', `可填 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}，留空表示不区分。`],
-      ['料厚 / 规格(mm)', '留空按「不区分」处理。注意：货号、部件、边别、节数、产品类型、料厚、规格这 7 项共同决定是哪一行台账，任一项不同就是另一行。'],
+      ['料厚 / 规格(mm)', '留空按「不区分」处理。注意：产品代码、部件、边别、节数、产品类型、料厚、规格这 7 项共同决定是哪一行台账，任一项不同就是另一行。'],
       ['调整量(±)', '必填，整数。正数增加、负数扣减，**不能填 0**。调整后余量为负会被拒绝。'],
       ['调整原因', '必填，会记进流水，如 期初补录 / 盘盈盘亏 / 录错纠正。'],
       ['导入规则', '整批校验通过才落库；任一行有问题会列出逐行原因并**整批回滚**，不会导入一半。'],
@@ -277,7 +277,7 @@ export class PartStockService {
       const at = `第 ${idx} 行`;
       const rowErrors: string[] = [];
 
-      if (!itemNo) rowErrors.push('货号必填');
+      if (!itemNo) rowErrors.push('产品代码必填');
 
       const partType = partByLabel.get(partLabel);
       if (!partLabel) rowErrors.push('部件必填');

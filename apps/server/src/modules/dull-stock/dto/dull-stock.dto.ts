@@ -30,9 +30,9 @@ const DIRECTION_VALUES = [STOCK_DIRECTION.IN, STOCK_DIRECTION.OUT];
  * 否则字段留空时用户看到的会是「货号不能超过 64 个字符」这种驴唇不对马嘴的提示。
  */
 export class DullStockAttrDto {
-  @MaxLength(64, { message: '货号不能超过 64 个字符' })
-  @IsNotEmpty({ message: '货号必填' })
-  @IsString({ message: '货号必填' })
+  @MaxLength(64, { message: '产品代码不能超过 64 个字符' })
+  @IsNotEmpty({ message: '产品代码必填' })
+  @IsString({ message: '产品代码必填' })
   itemNo: string;
 
   @IsOptional() @IsString() @MaxLength(128, { message: '客户名称不能超过 128 个字符' }) customerName?: string;

@@ -17,3 +17,5 @@ export * from './assembly';
 export * from './employee-code';
 export * from './position';
 export * from './export';
+export * from './item-code';
+export * from './rail-name';

@@ -4,7 +4,7 @@
       <el-form :model="query" class="filter-bar" label-position="left" label-width="auto" size="small" @submit.prevent>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="4">
-            <el-form-item label="货号">
+            <el-form-item label="产品代码">
               <el-select v-model="query.itemNo" clearable placeholder="全部" @change="runKeywordSearch">
                 <el-option v-for="itemNo in itemNumbers" :key="itemNo" :label="itemNo" :value="itemNo" />
               </el-select>
@@ -20,7 +20,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="关键字">
-              <el-input v-model="query.keyword" placeholder="部件代码/产品名称/货号" clearable name="keyword" autocomplete="off" @input="scheduleKeywordSearch" />
+              <el-input v-model="query.keyword" placeholder="部件代码/产品名称/产品代码" clearable name="keyword" autocomplete="off" @input="scheduleKeywordSearch" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="4">
@@ -47,7 +47,7 @@
             {{ row.materialCode }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <el-table-column label="货号" prop="itemNo" width="130" />
+        <el-table-column label="产品代码" prop="itemNo" width="130" />
         <el-table-column label="产品名称" prop="productName" min-width="90" />
         <el-table-column label="规格" prop="spec" width="90" />
         <el-table-column label="产品类型" width="100">
@@ -117,7 +117,7 @@
         <el-form-item label="部件代码" prop="materialCode">
           <el-input v-model="form.materialCode" :disabled="!!editId" placeholder="如 WG03000019" name="materialCode" autocomplete="off" :spellcheck="false" />
         </el-form-item>
-        <el-form-item label="货号" prop="itemNo">
+        <el-form-item label="产品代码" prop="itemNo">
           <el-input v-model="form.itemNo" placeholder="如 35#" name="itemNo" autocomplete="off" />
         </el-form-item>
         <el-form-item label="产品名称">
@@ -193,7 +193,7 @@
     <el-dialog v-model="detailVisible" title="部件详情" width="560px">
       <el-descriptions v-if="detailRow" :column="2" border size="small">
         <el-descriptions-item label="部件代码">{{ detailRow.materialCode || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="货号">{{ detailRow.itemNo || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="产品代码">{{ detailRow.itemNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品名称" :span="2">{{ detailRow.productName || '—' }}</el-descriptions-item>
         <el-descriptions-item label="规格">{{ detailRow.spec || '—' }}</el-descriptions-item>
         <el-descriptions-item label="材质">{{ detailRow.sheetMaterial || '—' }}</el-descriptions-item>
@@ -333,7 +333,7 @@ const form = reactive<any>({
 });
 const rules: FormRules = {
   materialCode: [{ required: true, message: '部件代码必填', trigger: 'blur' }],
-  itemNo:       [{ required: true, message: '货号必填', trigger: 'blur' }],
+  itemNo:       [{ required: true, message: '产品代码必填', trigger: 'blur' }],
 };
 
 async function load() {

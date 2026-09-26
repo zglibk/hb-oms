@@ -223,7 +223,7 @@ export class DullStockService {
     const wb = createWorkbook();
     const ws = wb.addWorksheet('呆滞品');
     ws.columns = [
-      { header: '货号' },
+      { header: '产品代码' },
       { header: '客户' },
       { header: '生产单号' },
       { header: '产品型号' },
@@ -275,7 +275,7 @@ export class DullStockService {
     const wb = createWorkbook();
     const ws = wb.addWorksheet('呆滞品导入');
     ws.columns = [
-      { header: '货号*' },
+      { header: '产品代码*' },
       { header: '客户' },
       { header: '生产单号' },
       { header: '产品型号' },
@@ -293,11 +293,11 @@ export class DullStockService {
     styleSheet(ws, { centerColumns: [6, 7, 10, 11, 12] });
 
     addTipsSheet(wb, [
-      ['一行 = 一批货', '呆滞品**刻意不设唯一键**：同货号同客户先后剩下的几批要各建各的档，所以导入的每一行都会**新建一条记录**，不会合并、不会覆盖。'],
+      ['一行 = 一批货', '呆滞品**刻意不设唯一键**：同产品代码同客户先后剩下的几批要各建各的档，所以导入的每一行都会**新建一条记录**，不会合并、不会覆盖。'],
       ['重复导入会怎样', '会**重复建档**。同一份文件不要导入两次；导入失败时整批回滚，可以放心改完重来。'],
-      ['货号', '必填。'],
+      ['产品代码', '必填。'],
       ['客户 / 生产单号', '**两者至少填一项**。呆滞品脱离了订单，这两项是日后认领这批货的仅有线索，都空着事后没人说得清是谁的货。'],
-      ['产品型号', '留空会按「货号 + 产品类型」自动拼。'],
+      ['产品型号', '留空会按「产品代码 + 产品类型」自动拼。'],
       ['产品类型', '可多选，用逗号分隔，如「普通,自锁」。'],
       ['节数', `可填 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}，留空表示不区分。`],
       ['表面处理 / 颜色', '按实物填，如 电泳 / 黑色。这两项是认货的主要依据，建议填全。'],
@@ -338,7 +338,7 @@ export class DullStockService {
       const at = `第 ${idx} 行`;
       const rowErrors: string[] = [];
 
-      if (!itemNo) rowErrors.push('货号必填');
+      if (!itemNo) rowErrors.push('产品代码必填');
       // 与建档/编辑同一条规则（服务端 normalizeAttrs 也会再拦一次）
       if (!customerName && !productionNo) rowErrors.push('客户与生产单号至少填写一项');
 

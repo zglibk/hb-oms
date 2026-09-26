@@ -66,7 +66,7 @@ export class OpeningService {
         } catch (e) {
           // 带上行号重新抛出，整批回滚；用户改完重提不会重复计数
           throw new BadRequestException(
-            `第 ${i + 1} 行（货号 ${it.itemNo}）：${(e as Error)?.message ?? '录入失败'}`,
+            `第 ${i + 1} 行（产品代码 ${it.itemNo}）：${(e as Error)?.message ?? '录入失败'}`,
           );
         }
       }

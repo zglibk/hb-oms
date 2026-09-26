@@ -3,11 +3,16 @@
  * 图纸版本号统一按**文本**存储：纯整数补一位小数（4 → "4.0"），
  * 数值型消除 Excel 浮点尾差（1.1000000000000001 → "1.1"）；
  * 非数值写法（A/1）原样保留。Excel 导出时版本列须强制文本格式（numFmt '@'）。
+ *
+ * **带前导零的纯数字（01 / 02 / 003）原样保留**（2026-09-25 使用方要求）：有的图纸版本就是
+ * 这种两位编号，旧规则把它补成「01.0」不符合实际。补「.0」本是为了还原 Excel 把「4.0」
+ * 存成数字 4 的情况——而 Excel 当数字存时前导零早就丢了，能以「01」到达这里的必是有意写法。
  */
 export function normalizeVersion(s?: string | null): string | undefined {
   if (s === undefined || s === null) return undefined;
   const t = String(s).trim();
   if (!t) return undefined;
+  if (/^0\d+$/.test(t)) return t;
   if (/^\d+$/.test(t)) return `${t}.0`;
   if (/^\d+\.\d+$/.test(t)) {
     const n = Number(t);

@@ -29,9 +29,9 @@ export class PartDimensionDto {
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 
-  @IsString({ message: '货号必填' })
-  @IsNotEmpty({ message: '货号必填' })
-  @MaxLength(64, { message: '货号不能超过 64 个字符' })
+  @IsString({ message: '产品代码必填' })
+  @IsNotEmpty({ message: '产品代码必填' })
+  @MaxLength(64, { message: '产品代码不能超过 64 个字符' })
   itemNo: string;
 
   @IsOptional() @IsString() @MaxLength(32, { message: '轨道节数不能超过 32 个字符' }) railSection?: string;

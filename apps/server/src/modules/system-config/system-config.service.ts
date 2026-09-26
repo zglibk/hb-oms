@@ -131,11 +131,11 @@ export class SystemConfigService {
    */
   async renderShareHtml(origin: string): Promise<string> {
     const row = await this.get();
-    const system = (row.systemName || '海宝五金 MES/PMC 系统').trim();
+    const system = (row.systemName || '海宝五金订单跟踪系统').trim();
     const company = (row.companyName || '海宝五金').trim();
     const title =
       company && !system.includes(company) ? `${company} · ${system}` : system;
-    const description = `${company} PMC 生产计划管理平台 —— 以客户订单为驱动，贯通接单、排产、审核、外协全链路数字化管理。`;
+    const description = `${company}订单跟踪系统 —— 订单 → 外发 → 装配 → 出入库全链路跟踪台账，实时掌握订单数、完成数、库存数与欠数。`;
 
     // og:image 需为可公网访问的绝对地址；优先 logo，回退 favicon，再回退站点默认图标
     const rawImg = row.logoUrl || row.faviconUrl || '/favicon.svg';

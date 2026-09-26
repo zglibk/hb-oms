@@ -4,7 +4,7 @@
       <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
-            v-model="query.keyword" clearable style="width: 200px" placeholder="货号 / 料厚"
+            v-model="query.keyword" clearable style="width: 200px" placeholder="产品代码 / 料厚"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -97,7 +97,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="货号" width="100" align="center">
+        <el-table-column label="产品代码" width="100" align="center">
           <template #default="{ row }">
             {{ row.itemNo }}<audit-info mode="inline" :row="row" />
           </template>
@@ -160,7 +160,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="14">
           <el-col :span="12">
-            <el-form-item label="货号" prop="itemNo">
+            <el-form-item label="产品代码" prop="itemNo">
               <el-input v-model="form.itemNo" :disabled="!!editRow" placeholder="如 53#" />
             </el-form-item>
           </el-col>
@@ -389,7 +389,7 @@ const form = reactive({
 });
 
 const rules: FormRules = {
-  itemNo: [{ required: true, message: '请填写货号', trigger: 'blur' }],
+  itemNo: [{ required: true, message: '请填写产品代码', trigger: 'blur' }],
   partType: [{ required: true, message: '请选择部件', trigger: 'change' }],
   delta: [{ required: true, message: '请填写调整量', trigger: 'blur' }],
   reason: [{ required: true, message: '请选择调整原因', trigger: 'change' }],

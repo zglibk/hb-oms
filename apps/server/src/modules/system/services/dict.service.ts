@@ -277,7 +277,7 @@ export class DictService {
     const cols = IMPORT_COLUMNS;
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = '海宝五金 MES';
+    wb.creator = '海宝五金 OMS';
     wb.created = new Date();
 
     const ws = wb.addWorksheet('数据字典', {
@@ -335,7 +335,7 @@ export class DictService {
     const colCount = cols.length;
 
     const wb = new ExcelJS.Workbook();
-    wb.creator = '海宝五金 MES';
+    wb.creator = '海宝五金 OMS';
     wb.created = new Date();
 
     const ws = wb.addWorksheet('字典导入', {

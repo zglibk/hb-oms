@@ -80,7 +80,7 @@
           </colgroup>
           <thead>
             <tr>
-              <th>货号</th>
+              <th>产品代码</th>
               <th>部件<br />编码</th>
               <th v-if="customerDrawingNoEnabled">客户图号</th>
               <th>产品要求描述</th>
@@ -161,6 +161,7 @@ import {
   formatDimension,
   splitParts,
   splitSuffix,
+  sanitizeItemCode,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 
@@ -249,7 +250,8 @@ function toRow(p: OrderProductItem): TaskRow {
       .filter(Boolean),
   )];
   return {
-    itemNo: [p.itemNo ?? '', formatProductTypes(p.productType ?? '')].filter(Boolean).join(' '),
+    // 存量产品代码可能夹着中文说明（「45#无锁力」），单据上只印代码部分
+    itemNo: [sanitizeItemCode(p.itemNo), formatProductTypes(p.productType ?? '')].filter(Boolean).join(' '),
     partCode: [p.productName, p.materialCode].filter(Boolean).join('-'),
     customerDrawingNo: p.customerDrawingNo ?? '',
     requirement: p.productRequirement ?? '',

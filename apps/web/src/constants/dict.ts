@@ -114,6 +114,15 @@ export {
   splitCombinedGroup,
   // 版本号文本型小数
   normalizeVersion,
+  // 订单「产品代码」写法规则（宽度或代码式内容，不许中文说明）
+  ITEM_CODE_MESSAGE,
+  isValidItemCode,
+  sanitizeItemCode,
+  stripItemCodeInput,
+  ITEM_CODE_STRIP_MESSAGE,
+  // 产品名称补「滑轨」后缀（已含「轨」字不补）
+  withRailSuffix,
+  railNameSuffixOf,
 } from '@hb-oms/shared';
 
 /**

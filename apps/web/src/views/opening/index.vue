@@ -65,7 +65,7 @@
         <!-- ============ 部件期初 ============ -->
         <el-tab-pane label="部件期初" name="part">
           <div class="tab-tip">
-            按<b>部件/边别/货号/节数/产品类型/料厚/规格</b>七维属性累加到部件台账，每行都会留一条
+            按<b>部件/边别/产品代码/节数/产品类型/料厚/规格</b>七维属性累加到部件台账，每行都会留一条
             <b>来源=期初录入</b>的变动流水。整批<b>全有全无</b>——某行出错整批不落库，改完重提不会重复计数。
           </div>
           <div class="toolbar">
@@ -86,7 +86,7 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="货号 *" width="120">
+            <el-table-column label="产品代码 *" width="120">
               <template #default="{ row }"><el-input v-model="row.itemNo" placeholder="如 53#" /></template>
             </el-table-column>
             <el-table-column label="节数" width="115">
@@ -138,7 +138,7 @@
       <div class="picker-bar">
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
-          placeholder="订单号/客户/生产单号/型号/货号"
+          placeholder="订单号/客户/生产单号/型号/产品代码"
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
@@ -312,7 +312,7 @@ function addPartRow() {
 }
 async function submitPart() {
   const noItem = partRows.value.findIndex((r) => !r.itemNo.trim());
-  if (noItem >= 0) return ElMessage.warning(`第 ${noItem + 1} 行必须填货号`);
+  if (noItem >= 0) return ElMessage.warning(`第 ${noItem + 1} 行必须填产品代码`);
   const badQty = partRows.value.findIndex((r) => !r.quantity || r.quantity <= 0);
   if (badQty >= 0) return ElMessage.warning(`第 ${badQty + 1} 行数量必须大于 0`);
   saving.value = true;
