@@ -8,11 +8,13 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ITEM_CODE_MESSAGE, ITEM_CODE_PATTERN } from '@hb-oms/shared';
 
 /** 部件行微调（部件行由服务端按蓝图展开，客户端仅可微调追溯码/备注） */
 export class OrderPartTweakDto {
@@ -26,6 +28,9 @@ export class OrderPartTweakDto {
 }
 
 export class CreateOrderPartGroupDto {
+  /** 编辑时回传的既有部件组 ID（原地更新对行用，外发回厂记录锚在它上面）；新建与新增组不传，新建订单时忽略 */
+  @IsOptional() @Type(() => Number) @IsInt() id?: number;
+
   /** 部件组类型（字典 part_group_type）：whole/outer_middle/inner/outer/middle */
   @IsString({ message: '部件组类型必填' })
   @MaxLength(32)
@@ -53,6 +58,9 @@ export class CreateOrderPartGroupDto {
 }
 
 export class CreateOrderProductDto {
+  /** 编辑时回传的既有产品行 ID（原地更新对行用，装配/成品锚在它上面）；新建与新增行不传，新建订单时忽略 */
+  @IsOptional() @Type(() => Number) @IsInt() id?: number;
+
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([1, 2], { message: '订单类型：1销售订单 2库存备货' }) orderType?: number;
 
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) isNewOrder?: number;
@@ -65,7 +73,12 @@ export class CreateOrderProductDto {
 
   @IsOptional() @IsString() @MaxLength(64) materialCode?: string;
 
-  @IsOptional() @IsString() @MaxLength(64) itemNo?: string;
+  /** 产品代码：只能是宽度或代码式内容，说明文字不予保存（规则见共享包 item-code.ts） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64, { message: '产品代码不能超过 64 个字符' })
+  @Matches(ITEM_CODE_PATTERN, { message: ITEM_CODE_MESSAGE })
+  itemNo?: string;
 
   /** 客户图号：客户来图上的图号，区别于部件组的生产图号 drawingNo */
   @IsOptional()
@@ -134,12 +147,12 @@ export class CreateOrderProductDto {
 
 export class CreateOrderDto {
   /*
-   * PO# 与生产单号 2026-08-14 起**必填**（业务部门要求）：两者都是对账用的业务键——
-   * PO# 是客户订单文件上的号（送货单按各客户叫法印成「采购单编号」「合同编号」），
-   * 生产单号是车间与台账认的「订单编号」。任一为空，下游单据那一栏就是空白。
+   * 生产单号 2026-08-14 起**必填**（业务部门要求）：它是车间与台账认的「订单编号」，
+   * 为空时下游单据那一栏就是空白。PO# 当时一并必填，2026-09-25 放开为**选填**——
+   * 口头订单、手写订单根本没有 PO 号（见下方 poNo 注释）。
    *
    * 更新走 UpdateOrderDto extends CreateOrderDto，故编辑同样受此约束——
-   * 编辑存量空值订单时会被要求补填，这是有意的（顺带把历史数据补齐）。
+   * 编辑存量空值订单时会被要求补填生产单号，这是有意的（顺带把历史数据补齐）。
    * 「期初补录」订单不豁免：is_opening 只是区分标记，从不改变校验行为（§5.6）。
    */
   /*
@@ -147,11 +160,15 @@ export class CreateOrderDto {
    * 而错误消息取 constraints 的第一条。放在上面的话，字段缺失（undefined）时
    * 会报「不能超过 64 个字符」这种驴唇不对马嘴的提示（已实测）。
    */
-  /** PO#：客户订单文件上的订单编号，手工填写 */
+  /**
+   * PO#：客户订单文件上的订单编号，手工填写。**选填**（2026-09-25 由必填放开）：
+   * 有些客户是口头下单、手写订单，根本没有 PO 号，硬性必填只会逼人乱填一个。
+   * 对账业务键靠生产单号（仍必填）；空值落库统一为 NULL（见 order.service）。
+   */
+  @IsOptional()
   @IsString({ message: 'PO# 必须是文本' })
   @MaxLength(64, { message: 'PO# 不能超过 64 个字符' })
-  @IsNotEmpty({ message: '请填写 PO#（客户订单文件上的订单编号）' })
-  poNo: string;
+  poNo?: string | null;
 
   /** 生产单号：订单级，与 PO# 一对一；台账「订单编号」展示此号 */
   @IsString({ message: '生产单号必须是文本' })
@@ -196,7 +213,7 @@ export class CreateOrderDto {
   products: CreateOrderProductDto[];
 }
 
-/** 更新 = 同结构整体重建（订单被下游引用后禁改，见 service） */
+/** 更新 = 按产品行/部件组 ID 原地更新（被下游引用的订单只许更正、不许动结构，见 service） */
 export class UpdateOrderDto extends CreateOrderDto {}
 
 export class QueryOrderDto {
@@ -215,4 +232,33 @@ export class QueryOrderDto {
   @IsOptional() @IsDateString() dateFrom?: string;
 
   @IsOptional() @IsDateString() dateTo?: string;
+
+  /** 业务员 / 跟单员：姓名**精确**匹配（前端是下拉选择，选项来自 GET /order/staff-options） */
+  @IsOptional() @IsString() @MaxLength(64) salesman?: string;
+
+  @IsOptional() @IsString() @MaxLength(64) merchandiser?: string;
+
+  /*
+   * 「更多」折叠区的产品级条件：订单下**任一产品行同时满足**全部所填条件即入选
+   * （同一产品上叠加，不是 A 产品满足这条、B 产品满足那条）。口径与台账筛选一致。
+   */
+  /** 客户图号（模糊） */
+  @IsOptional() @IsString() @MaxLength(128) customerDrawingNo?: string;
+
+  /** 生产图号（模糊，匹配该产品任一部件组） */
+  @IsOptional() @IsString() @MaxLength(128) drawingNo?: string;
+
+  /** 产品类型：单值包含匹配（组合串里含该类型即命中） */
+  @IsOptional() @IsString() @MaxLength(32) productType?: string;
+
+  /** 轨道节数：two_section / three_section */
+  @IsOptional() @IsString() @MaxLength(32) railSection?: string;
+
+  /** 表面处理（字典 surface_type） */
+  @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
+
+  /** 产品交货日期区间 */
+  @IsOptional() @IsDateString({}, { message: '交货日期格式应为 YYYY-MM-DD' }) deliveryFrom?: string;
+
+  @IsOptional() @IsDateString({}, { message: '交货日期格式应为 YYYY-MM-DD' }) deliveryTo?: string;
 }

@@ -21,6 +21,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { extractClientIp } from '../../common/utils/operation-log.util';
 
 /**
  * 读权限口径（§二）：列表/详情用菜单权限点 `order`，台账用 `ledger`。
@@ -38,6 +39,17 @@ export class OrderController {
   @RequirePermissions('order')
   async list(@Query() query: QueryOrderDto) {
     return this.service.findList(query);
+  }
+
+  /**
+   * 订单列表查询区「业务员 / 跟单员」下拉的选项：订单里实际出现过的姓名（去重、去空）。
+   * 表单允许手输名单外的名字，只用前端硬编码名单做筛选会漏人，故从库里取；前端再与名单合并。
+   * 读权限即订单菜单码。**必须注册在 `:id` 之前**。
+   */
+  @Get('staff-options')
+  @RequirePermissions('order')
+  async staffOptions() {
+    return this.service.staffOptions();
   }
 
   /**
@@ -145,8 +157,8 @@ export class OrderController {
 
   @Get(':id')
   @RequirePermissions('order')
-  async detail(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  async detail(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findOne(id, user);
   }
 
   @Post()
@@ -156,6 +168,10 @@ export class OrderController {
     return this.service.create(dto, user);
   }
 
+  /**
+   * 编辑。订单被外发/装配/出入库引用后仍可「更正」（按行 ID 原地更新、回写下游快照），
+   * 但限原创建人 / 同角色用户 / 管理员，且不能动结构——规则见 service.update。
+   */
   @Put(':id')
   @RequirePermissions('order:update')
   @OperationLog('订单管理', '编辑订单')
@@ -163,8 +179,10 @@ export class OrderController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderDto,
     @CurrentUser() user: CurrentUserPayload,
+    @Req() req: Request,
   ) {
-    return this.service.update(id, dto, user);
+    // 服务层另写的「更正已引用订单」日志拿不到请求上下文，IP 由这里取好传下去（与拦截器同一取法）
+    return this.service.update(id, dto, user, extractClientIp(req));
   }
 
   @Post(':id/finish')

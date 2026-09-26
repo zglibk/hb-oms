@@ -6,11 +6,21 @@
           <el-input
             v-model="query.keyword"
             clearable
-            placeholder="订单号/PO#/客户/生产单号/货号"
-            style="width: 240px"
+            placeholder="订单号/PO#/客户/生产单号/产品代码"
+            style="width: 220px"
             @input="scheduleKeywordSearch"
             @keyup.enter="runKeywordSearch"
           />
+        </el-form-item>
+        <el-form-item label="业务员">
+          <el-select v-model="query.salesman" clearable filterable placeholder="全部" style="width: 100px" @change="runKeywordSearch">
+            <el-option v-for="n in salesmanOptions" :key="n" :label="n" :value="n" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="跟单员">
+          <el-select v-model="query.merchandiser" clearable filterable placeholder="全部" style="width: 100px" @change="runKeywordSearch">
+            <el-option v-for="n in merchandiserOptions" :key="n" :label="n" :value="n" />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="query.status" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
@@ -30,8 +40,47 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <filter-more-toggle v-model="showMoreFilters" :count="moreFilterCount" />
         </el-form-item>
       </el-form>
+
+      <!-- 「更多」：产品级条件，订单下任一产品行同时满足全部所填条件即入选 -->
+      <Transition name="filter-more-fade">
+        <el-form v-show="showMoreFilters" :inline="true" class="filter-bar filter-more" @submit.prevent="runKeywordSearch">
+          <el-form-item v-if="customerDrawingNoEnabled" label="客户图号">
+            <el-input v-model="query.customerDrawingNo" placeholder="模糊匹配" style="width: 140px" @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch" />
+          </el-form-item>
+          <el-form-item label="生产图号">
+            <el-input v-model="query.drawingNo" placeholder="模糊匹配" style="width: 140px" @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch" />
+          </el-form-item>
+          <el-form-item label="产品类型">
+            <el-select v-model="query.productType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
+              <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="轨道节数">
+            <el-select v-model="query.railSection" clearable placeholder="全部" style="width: 100px" @change="runKeywordSearch">
+              <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="表面处理">
+            <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
+              <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="交货日期">
+            <el-date-picker
+              v-model="deliveryRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              start-placeholder="开始"
+              end-placeholder="结束"
+              style="width: 240px"
+              @change="runKeywordSearch"
+            />
+          </el-form-item>
+        </el-form>
+      </Transition>
     </el-card>
 
     <el-card shadow="never">
@@ -107,7 +156,7 @@
         <el-table-column label="PO#" prop="poNo" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.poNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="生产单号" prop="productionNo" width="130" show-overflow-tooltip>
+        <el-table-column label="生产单号" prop="productionNo" width="95" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="90" class-name="col-left" show-overflow-tooltip />
@@ -117,34 +166,34 @@
         <el-table-column :label="dimColLabel" min-width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ joinProducts(row, dimViewText) }}</template>
         </el-table-column>
-        <el-table-column label="订单日期" prop="orderDate" width="105">
+        <el-table-column label="订单日期" prop="orderDate" width="95">
           <template #default="{ row }">{{ (row.orderDate || '').slice(0, 10) }}</template>
         </el-table-column>
-        <el-table-column label="款数" width="70">
+        <el-table-column label="款数" width="55">
           <template #default="{ row }">{{ row.products.length }}</template>
         </el-table-column>
-        <el-table-column label="总支数" width="90">
+        <el-table-column label="总支数" width="75">
           <template #default="{ row }">{{ totalPcs(row) }}</template>
         </el-table-column>
-        <el-table-column label="业务员" prop="salesman" width="85">
+        <el-table-column label="业务员" prop="salesman" width="75">
           <template #default="{ row }">
             <color-tag v-if="row.salesman" :seed="row.salesman">{{ row.salesman }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="跟单员" prop="merchandiser" width="85">
+        <el-table-column label="跟单员" prop="merchandiser" width="75">
           <template #default="{ row }">
             <color-tag v-if="row.merchandiser" :seed="row.merchandiser">{{ row.merchandiser }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="85">
+        <el-table-column label="状态" width="75">
           <template #default="{ row }">
             <el-tag size="small" :type="tagTypeOf(ORDER_STATUS, row.status)">{{ labelOf(ORDER_STATUS, row.status) }}</el-tag>
             <el-tag v-if="row.isOpening" size="small" type="info" style="margin-left: 4px">期初</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
@@ -200,6 +249,7 @@ import {
   reopenOrder,
   deleteOrder,
   exportTotalPlan,
+  getOrderStaffOptions,
   type OrderItem,
   type OrderProductItem,
 } from '@/api/order';
@@ -212,6 +262,10 @@ import {
   formatDimension,
   labelOf,
   tagTypeOf,
+  ORDER_SALESMAN_OPTIONS,
+  ORDER_MERCHANDISER_OPTIONS,
+  PRODUCT_TYPE_OPTIONS,
+  RAIL_SECTION_OPTIONS,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
@@ -221,6 +275,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
@@ -229,7 +284,67 @@ const router = useRouter();
 const loading = ref(false);
 const list = ref<OrderItem[]>([]);
 const total = ref(0);
-const query = reactive({ page: 1, pageSize: 20, keyword: '', status: undefined as number | undefined });
+const query = reactive({
+  page: 1,
+  pageSize: 20,
+  keyword: '',
+  status: undefined as number | undefined,
+  salesman: undefined as string | undefined,
+  merchandiser: undefined as string | undefined,
+  customerDrawingNo: '',
+  drawingNo: '',
+  productType: undefined as string | undefined,
+  railSection: undefined as string | undefined,
+  surfaceType: undefined as string | undefined,
+});
+const deliveryRange = ref<[string, string] | null>(null);
+
+/** 查询条件「更多」折叠区：默认收起；收起时按钮上显示折叠区里生效的条件个数（防止被看不见的条件筛过） */
+const showMoreFilters = ref(false);
+const moreFilterCount = computed(
+  () =>
+    [
+      customerDrawingNoEnabled.value ? query.customerDrawingNo : '',
+      query.drawingNo,
+      query.productType,
+      query.railSection,
+      query.surfaceType,
+      deliveryRange.value?.[0],
+    ].filter((v) => v != null && String(v).trim() !== '').length,
+);
+/** 列表与总计划导出共用的筛选参数：两边必须是同一批条件 */
+function filterParams() {
+  return {
+    keyword: query.keyword || undefined,
+    status: query.status,
+    dateFrom: dateRange.value?.[0],
+    dateTo: dateRange.value?.[1],
+    salesman: query.salesman,
+    merchandiser: query.merchandiser,
+    // 客户图号字段停用时不带这个条件（输入框已隐藏，留着旧值会暗中筛掉订单）
+    customerDrawingNo: (customerDrawingNoEnabled.value && query.customerDrawingNo.trim()) || undefined,
+    drawingNo: query.drawingNo.trim() || undefined,
+    productType: query.productType || undefined,
+    railSection: query.railSection || undefined,
+    surfaceType: query.surfaceType || undefined,
+    deliveryFrom: deliveryRange.value?.[0],
+    deliveryTo: deliveryRange.value?.[1],
+  };
+}
+
+/**
+ * 查询区「业务员 / 跟单员」下拉选项 = 硬编码名单 ∪ 订单里实际出现过的姓名。
+ * 名单保证还没录过单的在职人员也选得到；库里的取值兜住表单手输的名单外姓名与历史人员。
+ * 接口失败时退回只用名单，不影响页面其它功能。
+ */
+const staffFromOrders = ref<{ salesmen: string[]; merchandisers: string[] }>({ salesmen: [], merchandisers: [] });
+getOrderStaffOptions()
+  .then((r) => (staffFromOrders.value = r))
+  .catch(() => {});
+const salesmanOptions = computed(() => [...new Set([...ORDER_SALESMAN_OPTIONS, ...staffFromOrders.value.salesmen])]);
+const merchandiserOptions = computed(() => [
+  ...new Set([...ORDER_MERCHANDISER_OPTIONS, ...staffFromOrders.value.merchandisers]),
+]);
 const dateRange = ref<[string, string] | null>(null);
 
 // assembly_workshop 字典不再需要——订单环节已不安排装配车间
@@ -241,11 +356,7 @@ loadDict('surface_type').then((sf: any[]) => {
 async function load() {
   loading.value = true;
   try {
-    const res = await getOrderList({
-      ...query,
-      dateFrom: dateRange.value?.[0],
-      dateTo: dateRange.value?.[1],
-    });
+    const res = await getOrderList({ page: query.page, pageSize: query.pageSize, ...filterParams() });
     list.value = res.list;
     total.value = res.total;
   } finally {
@@ -276,12 +387,7 @@ async function onExportTotalPlan() {
   );
   exporting.value = true;
   try {
-    const blob = await exportTotalPlan({
-      keyword: query.keyword || undefined,
-      status: query.status,
-      dateFrom: dateRange.value?.[0],
-      dateTo: dateRange.value?.[1],
-    });
+    const blob = await exportTotalPlan(filterParams());
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

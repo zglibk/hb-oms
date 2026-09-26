@@ -30,6 +30,23 @@ export interface OrderPartGroupItem {
   remark: string | null;
   sort: number;
   parts?: OrderPartItem[];
+  /** 该组的外发回厂记录条数（仅详情接口带出；> 0 即不能删、不能改组类型） */
+  outsourceCount?: number;
+}
+
+/** 下游引用条数：外发回厂记录 / 装配批次 / 成品出入库明细 */
+export interface OrderRefCounts {
+  outsource: number;
+  assembly: number;
+  finished: number;
+}
+
+/** 编辑守卫（仅详情接口带出）：订单被下游引用后只能「更正」，且限原创建人 / 同角色用户 / 管理员 */
+export interface OrderEditGuard {
+  referenced: boolean;
+  refCounts: OrderRefCounts;
+  /** 当前用户能否保存：未被引用恒为 true */
+  canEdit: boolean;
 }
 
 export interface OrderProductItem {
@@ -65,6 +82,8 @@ export interface OrderProductItem {
   remark: string | null;
   sort: number;
   partGroups: OrderPartGroupItem[];
+  /** 该产品行的下游引用条数（仅详情接口带出） */
+  refCounts?: OrderRefCounts;
 }
 
 export interface OrderItem {
@@ -90,6 +109,8 @@ export interface OrderItem {
   createdAt?: string;
   updatedAt?: string;
   products: OrderProductItem[];
+  /** 编辑守卫（仅详情接口带出） */
+  editGuard?: OrderEditGuard;
 }
 
 export interface OrderQuery {
@@ -101,10 +122,23 @@ export interface OrderQuery {
   dateTo?: string;
   /** PO# 精确匹配（新建保存前的同 PO# 软提醒用） */
   poNo?: string;
+  /** 业务员 / 跟单员：姓名精确匹配 */
+  salesman?: string;
+  merchandiser?: string;
+  /** 「更多」产品级条件：订单下任一产品行同时满足全部所填条件即入选 */
+  customerDrawingNo?: string;
+  drawingNo?: string;
+  productType?: string;
+  railSection?: string;
+  surfaceType?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
 }
 
 /** 提交负载：产品行嵌套部件组（部件行由服务端蓝图展开，仅传微调） */
 export interface OrderPartGroupPayload {
+  /** 编辑时回传既有部件组 ID（服务端按它原地更新，外发回厂记录锚在它上面）；新增组不传 */
+  id?: number;
   groupType: string;
   drawingNo?: string;
   drawingVersion?: string;
@@ -116,6 +150,8 @@ export interface OrderPartGroupPayload {
 }
 
 export interface OrderProductPayload {
+  /** 编辑时回传既有产品行 ID（服务端按它原地更新，装配/成品锚在它上面）；新增行不传 */
+  id?: number;
   orderType?: number;
   isNewOrder?: number;
   isExport?: number;
@@ -146,9 +182,9 @@ export interface OrderProductPayload {
 }
 
 export interface OrderPayload {
-  /** PO#（客户订单文件上的订单编号）——2026-08-14 起必填，服务端 DTO 同样硬校验 */
-  poNo: string;
-  /** 生产单号（台账「订单编号」口径）——同上，必填 */
+  /** PO#（客户订单文件上的订单编号）——2026-09-25 起选填（口头 / 手写订单没有 PO 号），空传 null */
+  poNo?: string | null;
+  /** 生产单号（台账「订单编号」口径）——2026-08-14 起必填，服务端 DTO 同样硬校验 */
   productionNo: string;
   customerId?: number;
   customerName: string;
@@ -167,6 +203,10 @@ export interface OrderPayload {
 export const getOrderList = (params: OrderQuery) =>
   request.get<any, PageResult<OrderItem>>('/api/order', { params });
 
+/** 订单里实际出现过的业务员 / 跟单员姓名（列表查询区下拉用，页面再与硬编码名单合并） */
+export const getOrderStaffOptions = () =>
+  request.get<any, { salesmen: string[]; merchandisers: string[] }>('/api/order/staff-options');
+
 export const getOrderDetail = (id: number) =>
   request.get<any, OrderItem>(`/api/order/${id}`);
 
@@ -177,8 +217,21 @@ export const exportTotalPlan = (params: Omit<OrderQuery, 'page' | 'pageSize'>) =
 export const createOrder = (data: OrderPayload) =>
   request.post<any, { id: number; orderNo: string }>('/api/order', data);
 
+/** 编辑结果：被引用订单的更正会回写下游快照，并可能自动完结 / 重开订单 */
+export interface OrderUpdateResult {
+  id: number;
+  /** 是否为「更正已引用订单」 */
+  corrected: boolean;
+  /** 逐项改动明细（仅更正时有） */
+  changes: string[];
+  /** 同步到的下游记录条数（仅更正时有） */
+  synced: OrderRefCounts | null;
+  finished: string[];
+  reopened: string[];
+}
+
 export const updateOrder = (id: number, data: OrderPayload) =>
-  request.put(`/api/order/${id}`, data);
+  request.put<any, OrderUpdateResult>(`/api/order/${id}`, data);
 
 export const finishOrder = (id: number) => request.post(`/api/order/${id}/finish`);
 export const reopenOrder = (id: number) => request.post(`/api/order/${id}/reopen`);

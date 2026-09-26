@@ -10,9 +10,27 @@
         </div>
         <div>
           <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
+          <el-button size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
         </div>
       </div>
+
+      <!-- 被下游引用的订单：可更正信息、不能动结构；无更正权限时只读 -->
+      <el-alert
+        v-if="editGuard?.referenced"
+        :type="editGuard.canEdit ? 'warning' : 'error'"
+        :closable="false"
+        show-icon
+        class="ref-alert"
+        :title="`本订单已被 ${refText(editGuard.refCounts)} 引用`"
+      >
+        <template v-if="editGuard.canEdit">
+          可以更正录错的订单信息，保存后自动同步到这些下游记录（入库单、送货单重新打印即为新值）。
+          已被引用的产品行不能删除，轨道节数、卡口、分体出货不能修改；有外发回厂记录的部件组不能删除或改组类型。
+        </template>
+        <template v-else>
+          只有订单创建人（{{ auditRow?.creatorName || '未知' }}）、与其同角色的用户或管理员可以更正，您当前只能查看。
+        </template>
+      </el-alert>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small" class="order-form">
         <div class="section-title">订单信息</div>
@@ -41,7 +59,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="PO#" prop="poNo">
-              <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
+              <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号，没有可留空" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
             </el-form-item>
           </el-col>
           <!-- 生产单号与 PO# 一对一，都是订单级；不再挂在产品行上 -->
@@ -103,7 +121,12 @@
               </el-tooltip>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :md="16">
+          <el-col :xs="24" :sm="12" :md="8">
+            <el-form-item label="备注">
+              <el-input v-model="form.remark" placeholder="一句话摘要，列表可见" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24">
             <el-form-item label="订单附件">
               <el-upload
                 :show-file-list="false"
@@ -123,11 +146,6 @@
                   @click="openAttachment(a)"
                 >{{ attachmentName(a) }}</el-tag>
               </div>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="备注">
-              <el-input v-model="form.remark" placeholder="一句话摘要，列表可见" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -158,11 +176,16 @@
         <el-card v-for="(p, pi) in form.products" :key="p._key" shadow="never" class="product-card">
           <template #header>
             <div class="pc-header">
-              <span class="pc-title">产品 {{ pi + 1 }}<template v-if="p.itemNo">：{{ productTitle(p) }}</template></span>
+              <span class="pc-title">
+                产品 {{ pi + 1 }}<template v-if="p.itemNo">：{{ productTitle(p) }}</template>
+                <el-tooltip v-if="productLocked(p)" placement="top" :content="`已被 ${refText(p._refs)} 引用：不能删除，轨道节数、卡口、分体出货不能修改`">
+                  <el-tag size="small" type="warning" disable-transitions class="pc-ref-tag">已被引用</el-tag>
+                </el-tooltip>
+              </span>
               <span class="pc-meta">支数口径：<b>{{ pcsOf(p) }}</b> 支</span>
               <div>
                 <el-button size="small" link type="primary" :icon="CopyDocument" @click="copyProduct(pi)">复制</el-button>
-                <el-button size="small" link type="danger" :icon="Delete" :disabled="form.products.length <= 1" @click="removeProduct(pi)">删除</el-button>
+                <el-button size="small" link type="danger" :icon="Delete" :disabled="form.products.length <= 1 || productLocked(p)" @click="removeProduct(pi)">删除</el-button>
               </div>
             </div>
           </template>
@@ -220,7 +243,7 @@
                 <!-- 仅三节轨可开；已开着的异常数据不锁死（否则用户关不掉），见 :disabled 条件 -->
                 <el-switch
                   v-model="p.isSplit" :active-value="1" :inactive-value="0"
-                  :disabled="!canSplitShipping(p.railSection) && !p.isSplit"
+                  :disabled="(!canSplitShipping(p.railSection) && !p.isSplit) || productLocked(p)"
                 />
                 <el-tooltip
                   placement="top"
@@ -253,13 +276,25 @@
 
           <el-row :gutter="12">
             <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="货号" label-width="80px">
-                <el-input v-model="p.itemNo" placeholder="如 53#" />
+              <!-- 只能填宽度或代码式内容：输入不合规时下方即时标红（保存时 onSave 再拦一次，服务端 DTO 兜底） -->
+              <el-form-item
+                label="产品代码"
+                label-width="80px"
+                :error="isValidItemCode(p.itemNo) ? '' : '只能填宽度或代码，说明文字请填到产品名称'"
+              >
+                <!-- 打字时逐字清掉中文（onItemNoInput），失焦再收拾「-」空格并给纯宽度补「#」 -->
+                <el-input
+                  :model-value="p.itemNo"
+                  placeholder="输入产品代码"
+                  @update:model-value="(v: string) => onItemNoInput(p, v)"
+                  @change="p.itemNo = withWidthHash(sanitizeItemCode(p.itemNo))"
+                />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品名称" label-width="80px">
-                <el-input v-model="p.productName" />
+                <!-- 新增订单时失焦自动补「滑轨」后缀（已含「轨」字不补，规则见共享包 rail-name.ts）；编辑存量订单不改原写法 -->
+                <el-input v-model="p.productName" @change="if (!editId) p.productName = nameWithRail(p);" />
               </el-form-item>
             </el-col>
             <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
@@ -275,15 +310,19 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品类型" label-width="80px">
+                <!-- 被引用的产品行不能增减「卡口」：它决定装配与出入库按左右分边记账 -->
                 <el-select v-model="p._types" multiple placeholder="可多选（如 普通+自锁）" style="width: 100%">
-                  <el-option v-for="o in productTypeDict" :key="o.value" :label="o.label" :value="o.value" />
+                  <el-option
+                    v-for="o in productTypeDict" :key="o.value" :label="o.label" :value="o.value"
+                    :disabled="o.value === 'socket' && productLocked(p)"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="轨道节数" label-width="80px">
                 <!-- 改节数要同步部件组：二节轨无中轨，留着中轨组保存必被服务端拒 -->
-                <el-select v-model="p.railSection" style="width: 100%" @change="onRailSectionChange(p)">
+                <el-select v-model="p.railSection" style="width: 100%" :disabled="productLocked(p)" @change="onRailSectionChange(p)">
                   <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
@@ -311,7 +350,11 @@
               <el-form-item label="表面处理" label-width="80px">
                 <!-- 改成需外发时，组合型组（外中轨/整品）要按部件拆开，否则外发回厂记不清 -->
                 <el-select v-model="p.surfaceType" style="width: 100%" @change="maybeSplitCombinedGroups(p)">
-                  <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
+                  <!-- 已有外发回厂记录的产品不能改回「无」，否则台账外发欠数失去口径 -->
+                  <el-option
+                    v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value"
+                    :disabled="o.value === 'none' && !!p._refs?.outsource"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -381,7 +424,11 @@
               <tr v-for="(g, gi) in p.partGroups" :key="g._key">
                 <td>
                   <!-- 需外发时选了组合型组会被自动拆成单部件组（见 maybeSplitCombinedGroups） -->
-                  <el-select v-model="g.groupType" style="width: 100%" @change="maybeSplitCombinedGroups(p)">
+                  <el-select
+                    v-model="g.groupType" style="width: 100%" :disabled="groupLocked(g)"
+                    :title="groupLocked(g) ? `已有 ${g._refs} 条外发回厂记录，不能改组类型` : undefined"
+                    @change="maybeSplitCombinedGroups(p)"
+                  >
                     <el-option
                       v-for="o in PART_GROUP_OPTIONS"
                       :key="o.value"
@@ -399,7 +446,7 @@
                 <td><el-input-number v-model="g.qtyPcs" :min="1" :controls="false" :placeholder="String(pcsOf(p))" style="width: 100%" /></td>
                 <td class="gg-parts">{{ partsPreview(p, g) }}</td>
                 <td>
-                  <el-button size="small" link type="danger" :icon="Delete" :disabled="p.partGroups.length <= 1" @click="p.partGroups.splice(gi, 1)" />
+                  <el-button size="small" link type="danger" :icon="Delete" :disabled="p.partGroups.length <= 1 || groupLocked(g)" @click="p.partGroups.splice(gi, 1)" />
                 </td>
               </tr>
             </tbody>
@@ -411,7 +458,7 @@
 
         <div class="form-footer">
           <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" @click="onSave">保存</el-button>
+          <el-button size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
         </div>
       </el-form>
     </el-card>
@@ -428,8 +475,10 @@ import {
   getOrderDetail,
   getOrderList,
   updateOrder,
+  type OrderEditGuard,
   type OrderPayload,
   type OrderProductPayload,
+  type OrderRefCounts,
 } from '@/api/order';
 import { getAllCustomers, type CustomerItem } from '@/api/customer';
 import { getProcessInfoByDrawing } from '@/api/process-info';
@@ -455,6 +504,13 @@ import {
   splitSuffix,
   hasSocket,
   normalizeVersion,
+  ITEM_CODE_MESSAGE,
+  isValidItemCode,
+  sanitizeItemCode,
+  stripItemCodeInput,
+  ITEM_CODE_STRIP_MESSAGE,
+  withRailSuffix,
+  railNameSuffixOf,
   parseProductTypes,
   partTypeLabel,
   sideLabel,
@@ -477,6 +533,45 @@ const COUNTRY_FIELD_PROPS = { label: 'name', value: 'name' };
 
 /* 输入自动大写：PO#/生产单号/材质/生产图号统一调用 */
 const upperFmt = (v: string) => (v ?? '').toUpperCase();
+
+/**
+ * 产品代码只填了 2~3 位纯数字（35 / 45 / 100）时自动补「#」——这类值是滑轨宽度，
+ * 厂里的写法是「45#」，漏打 # 会让同一种宽度出现「45」「45#」两种写法（2026-09-25 使用方要求）。
+ * 其它写法一律不动：「45#无锁力」、客户料号「DS3832A-22Z-DM」、纯数字料号「785140753」、单个数字等。
+ * 输入框失焦时补一次，保存 payload 再兜一次（没失焦直接点保存的情况）。
+ */
+/**
+ * 新增订单时产品名称补「滑轨」：整品补「滑轨」，**分体行补它的出货形态**（外中轨/内轨），
+ * 否则分体两行名字一模一样（规则见共享包 rail-name.ts，与入库单/送货单同一实现）。
+ */
+function nameWithRail(p: ProductRow): string {
+  return withRailSuffix(
+    p.productName,
+    railNameSuffixOf(p.isSplit, p.partGroups.map((g) => g.groupType), p.railSection),
+  );
+}
+
+/**
+ * 产品代码不许有中文（2026-09-25 使用方要求）：打字时当场清掉、并提示说明文字该去产品名称。
+ * el-input 在输入法组字期间不回写 v-model，所以这里拿到的已是上屏后的字，不会打断拼音输入。
+ * 提示节流 3 秒：粘贴一长串中文会连续触发，每次都弹一条会刷屏。
+ */
+let lastStripTip = 0;
+function onItemNoInput(p: ProductRow, v: string) {
+  const clean = stripItemCodeInput(v);
+  p.itemNo = clean;
+  if (clean !== (v ?? '').replace(/＃/g, '#') && Date.now() - lastStripTip > 3000) {
+    lastStripTip = Date.now();
+    ElMessage.warning({ message: ITEM_CODE_STRIP_MESSAGE, duration: 4000 });
+  }
+}
+
+function withWidthHash(v: string | null | undefined): string {
+  // 中文输入法下常打成全角「＃」，产品代码规则只认半角，顺手换掉（否则会被当成非代码内容拦下）
+  const raw = (v ?? '').replace(/＃/g, '#');
+  const t = raw.trim();
+  return /^\d{2,3}$/.test(t) ? `${t}#` : raw;
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -516,6 +611,30 @@ function suggestNextProductionNo(no: string): string {
 }
 /** 审计追溯原始行（编辑态由详情接口带回，走全局 AuditInfo 展示） */
 const auditRow = ref<any>(null);
+
+/**
+ * 编辑守卫（详情接口带回）：订单被外发/装配/出入库引用后只能「更正」——信息可改、结构不能动，
+ * 且限原创建人 / 同角色用户 / 管理员。这里只做界面引导，服务端 update 另有同样的硬校验。
+ */
+const editGuard = ref<OrderEditGuard | null>(null);
+/** 被引用且当前用户无更正权限：保存按钮禁用 */
+const guardBlocked = computed(() => !!editGuard.value?.referenced && !editGuard.value.canEdit);
+function refText(c: OrderRefCounts | null | undefined): string {
+  if (!c) return '';
+  return [
+    c.outsource ? `${c.outsource} 条外发回厂记录` : '',
+    c.assembly ? `${c.assembly} 条装配批次` : '',
+    c.finished ? `${c.finished} 条成品出入库明细` : '',
+  ].filter(Boolean).join('、');
+}
+/** 该产品行已被下游引用：不能删行，卡口/节数/分体不能改 */
+function productLocked(p: ProductRow): boolean {
+  return !!p._refs && p._refs.outsource + p._refs.assembly + p._refs.finished > 0;
+}
+/** 该部件组已有外发回厂记录：不能删、不能改组类型 */
+function groupLocked(g: GroupRow): boolean {
+  return g._refs > 0;
+}
 const orderNo = ref('');
 
 const pageLoading = ref(false);
@@ -528,6 +647,10 @@ const nextKey = () => ++keySeq;
 
 interface GroupRow {
   _key: number;
+  /** 既有部件组 ID（编辑回显带出、保存时回传，服务端按它原地更新）；新增组为空 */
+  id?: number;
+  /** 外发回厂记录条数：> 0 时不能删、不能改组类型 */
+  _refs: number;
   groupType: string;
   drawingNo: string;
   drawingVersion: string;
@@ -535,8 +658,20 @@ interface GroupRow {
   qtyPcs: number | undefined;
   remark: string;
 }
+/** 被引用产品行的原值：保存前比对，改了数量/规格/表面处理要让用户确认一次 */
+interface ProductOrig {
+  orderQty: number;
+  unit: string;
+  dimensionMm: number | null;
+  surfaceType: string;
+}
 interface ProductRow {
   _key: number;
+  /** 既有产品行 ID（编辑回显带出、保存时回传，服务端按它原地更新）；新增行为空 */
+  id?: number;
+  /** 该行的下游引用条数（编辑回显带出）；有引用即锁结构字段 */
+  _refs: OrderRefCounts | null;
+  _orig: ProductOrig | null;
   _types: string[];
   orderType: number;
   isNewOrder: number;
@@ -568,6 +703,7 @@ interface ProductRow {
 
 const emptyGroup = (groupType = 'outer'): GroupRow => ({
   _key: nextKey(),
+  _refs: 0,
   groupType,
   drawingNo: '',
   drawingVersion: '',
@@ -580,6 +716,8 @@ const defaultGroups = (railSection: string): GroupRow[] =>
   defaultGroupTypes(railSection).map((t) => emptyGroup(t));
 const emptyProduct = (): ProductRow => ({
   _key: nextKey(),
+  _refs: null,
+  _orig: null,
   _types: ['standard'],
   orderType: 1,
   isNewOrder: 0,
@@ -635,16 +773,14 @@ const isOpeningOrder = computed({
   },
 });
 /*
- * PO# 与生产单号 2026-08-14 起必填：两者都是对账用的业务键——PO# 是客户订单文件上的
- * 号（送货单上按客户叫法印成「采购单编号」「合同编号」），生产单号是车间与台账认的
- * 「订单编号」。任一为空，下游单据（送货单、台账、总计划导出）那一栏就是空白。
- * ⚠️ 编辑存量订单时若这两项为空，会被要求补填后才能保存——这是有意的。
+ * 生产单号 2026-08-14 起必填：车间与台账认的「订单编号」，为空时下游单据
+ * （送货单、台账、总计划导出）那一栏就是空白。⚠️ 编辑存量订单时若为空，会被要求补填——有意的。
  * 服务端 CreateOrderDto 另有同样的硬校验（API 直调同样拒绝）。
+ * PO# 2026-09-25 起**选填**：口头订单、手写订单没有 PO 号，硬性必填只会逼人乱填一个。
  */
 const rules = {
   customerName: [{ required: true, message: '请选择或输入客户', trigger: 'change' }],
   orderDate: [{ required: true, message: '请选择订单日期', trigger: 'change' }],
-  poNo: [{ required: true, message: '请输入 PO#（客户订单文件上的订单编号）', trigger: 'blur' }],
   productionNo: [{ required: true, message: '请输入生产单号', trigger: 'blur' }],
 };
 const attachments = ref<string[]>([]);
@@ -711,6 +847,7 @@ async function init() {
       } else {
         orderNo.value = row.orderNo;
         auditRow.value = row; // 底部审计条（创建人/更新人/时间）
+        editGuard.value = row.editGuard ?? null;
       }
       Object.assign(form, {
         poNo: isCopy ? '' : row.poNo ?? '',
@@ -725,8 +862,14 @@ async function init() {
         isOpening: isCopy ? 0 : row.isOpening ?? 0,
         remark: row.remark ?? '',
         otherReq: row.otherReq ?? '',
+        // 复制模式不带 ID 与引用信息：复制出来的是一张全新订单
         products: row.products.map((p) => ({
           _key: nextKey(),
+          id: isCopy ? undefined : p.id,
+          _refs: isCopy ? null : p.refCounts ?? null,
+          _orig: isCopy
+            ? null
+            : { orderQty: p.orderQty, unit: p.unit, dimensionMm: p.dimensionMm, surfaceType: p.surfaceType || 'none' },
           _types: parseProductTypes(p.productType),
           orderType: p.orderType,
           isNewOrder: p.isNewOrder,
@@ -752,6 +895,8 @@ async function init() {
           remark: p.remark ?? '',
           partGroups: p.partGroups.map((g) => ({
             _key: nextKey(),
+            id: isCopy ? undefined : g.id,
+            _refs: isCopy ? 0 : g.outsourceCount ?? 0,
             groupType: g.groupType,
             drawingNo: g.drawingNo ?? '',
             drawingVersion: g.drawingVersion ?? '',
@@ -769,12 +914,36 @@ async function init() {
       // 编辑时有正文才展开，空的 <p><br></p> 仍保持折叠
       const reqText = (row.otherReq ?? '').replace(/<[^>]+>/g, '').trim();
       reqCollapsed.value = !reqText;
+      stripLoadedItemCodes();
     }
   } finally {
     pageLoading.value = false;
   }
 }
 init();
+
+/**
+ * 编辑/复制存量订单时，产品代码里夹着中文说明的（「45#无锁力」，规则上线前录的）当场清掉，
+ * 并把原值列给用户——被清掉的「无锁力」这类说明往往有用，要人自己挪进产品名称，系统不替他猜放哪。
+ * 不清的话服务端 DTO 会拒绝保存，用户只会看到一句报错而不知道该改哪。
+ */
+function stripLoadedItemCodes() {
+  const changed: string[] = [];
+  form.products.forEach((p, i) => {
+    const clean = sanitizeItemCode(p.itemNo);
+    if (clean !== (p.itemNo ?? '').trim()) {
+      changed.push(`产品 ${i + 1}：「${p.itemNo}」→「${clean}」`);
+      p.itemNo = clean;
+    }
+  });
+  if (changed.length) {
+    ElMessage.warning({
+      message: `以下产品代码含中文，已自动去除（${changed.join('；')}）。被去掉的说明文字如需保留，请填写到产品名称中`,
+      duration: 0,
+      showClose: true,
+    });
+  }
+}
 // 出口国家的国旗共约 1.9MB，等下拉打开再下载来不及（见 flag-preload.ts）：
 // 进页面就排队预热，用户填到出口字段时图已在缓存里
 preloadCountryFlagsWhenIdle();
@@ -791,7 +960,15 @@ function copyProduct(pi: number) {
   const src = form.products[pi];
   const dup: ProductRow = JSON.parse(JSON.stringify({ ...src }));
   dup._key = nextKey();
-  dup.partGroups.forEach((g) => (g._key = nextKey()));
+  // 复制出的是新行：去掉 ID 与引用信息，否则保存时会被当成原行去更新
+  dup.id = undefined;
+  dup._refs = null;
+  dup._orig = null;
+  dup.partGroups.forEach((g) => {
+    g._key = nextKey();
+    g.id = undefined;
+    g._refs = 0;
+  });
   form.products.splice(pi + 1, 0, dup);
 }
 function removeProduct(pi: number) {
@@ -833,6 +1010,8 @@ function maybeSplitCombinedGroups(p: ProductRow) {
   // 倒序遍历：splice 会改变后续下标
   for (let i = p.partGroups.length - 1; i >= 0; i--) {
     const g = p.partGroups[i];
+    // 已有外发回厂记录的组不能拆（拆了就是删掉它，服务端会拒）
+    if (groupLocked(g)) continue;
     const targets = splitCombinedGroup(g.groupType, p.railSection);
     if (!targets.length) continue;
     const label = partGroupLabel(g.groupType);
@@ -844,7 +1023,8 @@ function maybeSplitCombinedGroups(p: ProductRow) {
       notes.push(`「${label}」的各部件都已有单独的组，已移除该行（避免重复计量）`);
       continue;
     }
-    p.partGroups.splice(i, 1, ...fresh.map((t) => ({ ...g, _key: nextKey(), groupType: t })));
+    // 拆出的都是新组（不带原组 ID），原组由服务端随之删除
+    p.partGroups.splice(i, 1, ...fresh.map((t) => ({ ...g, _key: nextKey(), id: undefined, _refs: 0, groupType: t })));
     notes.push(`「${label}」已拆为 ${fresh.map(partGroupLabel).join(' + ')}`);
   }
   if (notes.length) {
@@ -1061,7 +1241,71 @@ function openAttachment(url: string) {
 }
 
 /* ===== 保存 ===== */
+/**
+ * 交货地址为空的软提醒（2026-09-25，只提醒不拦截）：送货单的「送货地址」优先取订单产品行的
+ * 交货地址，没填才回落客户资料的送货地址（服务端 buildDeliveryNote）。提醒按回落结果说实话——
+ * 客户资料有地址就告诉用户会用哪个，连客户资料也没有才说「将为空」。点「返回填写」即中止本次保存。
+ */
+async function confirmMissingDeliveryAddress() {
+  const missing = form.products
+    .map((p, i) => ((p.deliveryAddress ?? '').trim() ? 0 : i + 1))
+    .filter(Boolean);
+  if (!missing.length) return;
+  const which = form.products.length > 1 ? `产品 ${missing.join('、')} 未填写交货地址` : '未填写交货地址';
+  const fallback = (customers.value.find((c) => c.id === form.customerId)?.deliveryAddress ?? '').trim();
+  const detail = fallback
+    ? `打印送货单时，「送货地址」将使用客户资料里的地址：<br/><b>${escapeHtml(fallback)}</b>`
+    : '该客户资料里也没有维护送货地址，<b>打印送货单时「送货地址」将为空</b>。';
+  await ElMessageBox.confirm(`${which}。${detail}<br/>如需指定本单的送货地点，请返回填写。`, '交货地址提醒', {
+    type: 'warning',
+    dangerouslyUseHTMLString: true,
+    confirmButtonText: '继续保存',
+    cancelButtonText: '返回填写',
+  });
+}
+/** 地址是用户输入的文本，拼进 HTML 提示前转义 */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+}
+
+/**
+ * 被引用订单的「更正提醒」（只提醒不拦截）：数量/规格/表面处理改了会波及已发生的业务数——
+ * 欠数重算（可能变负、订单自动完结/重开）、已入库已发货的记录一并显示新规格、外发欠数口径变化。
+ * 让用户确认一次这是在纠正录入错误，而不是顺手改了一个已经在车间流转的产品。
+ */
+async function confirmReferencedChanges() {
+  if (!editGuard.value?.referenced) return;
+  const unitText = (u: string) => (u === 'set' ? '套' : '支');
+  const notes: string[] = [];
+  form.products.forEach((p, i) => {
+    const o = p._orig;
+    if (!o || !productLocked(p)) return;
+    const tag = form.products.length > 1 ? `产品 ${i + 1}：` : '';
+    if (p.orderQty !== o.orderQty || p.unit !== o.unit) {
+      notes.push(
+        `${tag}数量 ${o.orderQty}${unitText(o.unit)} → ${p.orderQty}${unitText(p.unit)}，成品欠数与发货欠数随之重算（可能变负，订单也可能因此自动完结或重开）`,
+      );
+    }
+    if ((p.dimensionMm ?? null) !== (o.dimensionMm ?? null)) {
+      notes.push(`${tag}规格已修改，已装配、已入库、已发货的记录会一并显示为新规格`);
+    }
+    if ((p.surfaceType || 'none') !== o.surfaceType) {
+      notes.push(`${tag}表面处理已修改，台账外发欠数按新口径计算`);
+    }
+  });
+  if (!notes.length) return;
+  await ElMessageBox.confirm(
+    `以下改动会影响已发生的业务数据：<br/>${notes.map((n) => `· ${escapeHtml(n)}`).join('<br/>')}<br/><br/>请确认是在更正录入错误。`,
+    '更正提醒',
+    { type: 'warning', dangerouslyUseHTMLString: true, confirmButtonText: '确认更正', cancelButtonText: '返回核对' },
+  );
+}
+
 async function onSave() {
+  if (guardBlocked.value) {
+    ElMessage.warning('该订单已有下游记录，只有订单创建人、与其同角色的用户或管理员可以更正');
+    return;
+  }
   await formRef.value?.validate();
   // 分体行守卫：组并集=全部件就是整品（服务端同样会拒），提前拦下并指明行号
   const badSection = form.products.findIndex((p) => p.isSplit && !canSplitShipping(p.railSection));
@@ -1069,6 +1313,12 @@ async function onSave() {
     ElMessage.error(
       `产品 ${badSection + 1}：只有三节轨可以「分体出货」，请关闭该开关或把轨道节数改回三节轨`,
     );
+    return;
+  }
+  // 产品代码只能是宽度或代码式内容（共享包 item-code.ts，服务端 DTO 同样硬校验）
+  const badCode = form.products.findIndex((p) => !isValidItemCode(p.itemNo));
+  if (badCode >= 0) {
+    ElMessage.error(`产品 ${badCode + 1}（「${form.products[badCode].itemNo}」）：${ITEM_CODE_MESSAGE}`);
     return;
   }
   const badSplit = form.products.findIndex((p) => p.isSplit && splitCoversAll(p));
@@ -1082,8 +1332,9 @@ async function onSave() {
   // URL；不 flush 就提交，落库的 HTML 里全是刷新即失效的 blob 地址。
   await richEditorRef.value?.flushUploads();
   const payload: OrderPayload = {
-    // 两者必填（表单 rules 已拦），故直接传值不再回退 undefined
-    poNo: form.poNo,
+    // PO# 选填：清空后传 null，服务端也会把空白统一存为 NULL
+    poNo: form.poNo?.trim() || null,
+    // 生产单号必填（表单 rules 已拦），直接传值
     productionNo: form.productionNo,
     customerId: form.customerId,
     customerName: form.customerName,
@@ -1096,15 +1347,18 @@ async function onSave() {
     attachmentIds: JSON.stringify(attachments.value),
     remark: form.remark || undefined,
     otherReq: form.otherReq || undefined,
+    // 产品行/部件组回传 ID：服务端按它原地更新，装配/成品/外发记录才不会悬空
     products: form.products.map<OrderProductPayload>((p, i) => ({
+      id: p.id,
       orderType: p.orderType,
       isNewOrder: p.isNewOrder,
       isExport: p.isExport,
       exportCountry: p.isExport ? p.exportCountry || undefined : undefined,
       materialCode: p.materialCode || undefined,
-      itemNo: p.itemNo || undefined,
+      itemNo: withWidthHash(p.itemNo) || undefined,
       customerDrawingNo: p.customerDrawingNo || undefined,
-      productName: p.productName || undefined,
+      // 新增订单：保存时再补一次「滑轨」后缀（没失焦直接点保存的情况）；编辑存量订单保留原写法
+      productName: (editId.value ? p.productName : nameWithRail(p)) || undefined,
       productType: p._types.join(','),
       railSection: p.railSection,
       productRequirement: p.productRequirement || undefined,
@@ -1122,6 +1376,7 @@ async function onSave() {
       remark: p.remark || undefined,
       sort: i,
       partGroups: p.partGroups.map((g, gi) => ({
+        id: g.id,
         groupType: g.groupType,
         drawingNo: g.drawingNo || undefined,
         drawingVersion: g.drawingVersion || undefined,
@@ -1144,11 +1399,26 @@ async function onSave() {
       );
     }
   }
+  await confirmMissingDeliveryAddress();
+  await confirmReferencedChanges();
   saving.value = true;
   try {
     if (editId.value) {
-      await updateOrder(editId.value, payload);
-      ElMessage.success('已保存');
+      const res = await updateOrder(editId.value, payload);
+      if (res?.corrected) {
+        const s = res.synced;
+        const n = s ? s.outsource + s.assembly + s.finished : 0;
+        const extra = [
+          res.finished?.length ? '订单已交清，自动完结' : '',
+          res.reopened?.length ? '订单出现发货欠数，自动重开' : '',
+        ].filter(Boolean);
+        ElMessage.success({
+          message: `已更正，并同步到 ${n} 条下游记录${extra.length ? `；${extra.join('；')}` : ''}`,
+          duration: 5000,
+        });
+      } else {
+        ElMessage.success('已保存');
+      }
     } else {
       const res = await createOrder(payload);
       ElMessage.success(`已创建订单 ${res.orderNo}`);
@@ -1189,6 +1459,16 @@ export default { name: 'OrderForm' };
 </script>
 
 <style scoped lang="scss">
+/* 字号对齐表单标签（small 尺寸 12px）；EP 带说明的 alert 默认标题 16px、图标 28px，放在表单上方太抢眼 */
+.ref-alert {
+  margin: 10px 0 4px;
+  --el-alert-title-font-size: 12px;
+  --el-alert-title-with-description-font-size: 12px;
+  --el-alert-description-font-size: 12px;
+  --el-alert-icon-large-size: 16px;
+  :deep(.el-alert__title) { font-weight: 600; line-height: 20px; }
+  :deep(.el-alert__description) { line-height: 20px; }
+}
 .form-header {
   display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 14px; margin-bottom: 4px;
@@ -1225,7 +1505,8 @@ export default { name: 'OrderForm' };
   border: 1px solid var(--el-border-color);
   :deep(.el-card__header) { padding: 8px 16px; background: var(--el-fill-color-lighter); }
   .pc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .pc-title { font-weight: 600; }
+  .pc-title { font-weight: 600; display: inline-flex; align-items: center; }
+  .pc-ref-tag { margin-left: 8px; font-weight: normal; }
   .pc-meta { color: var(--el-text-color-secondary); font-size: 13px; b { color: var(--el-color-primary); } }
 }
 .group-title {

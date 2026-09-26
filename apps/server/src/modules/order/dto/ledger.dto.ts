@@ -44,6 +44,15 @@ export class QueryLedgerDto {
   /** 产品类型：多选组合按**包含匹配**，传单值即可（FIND_IN_SET 命中） */
   @IsOptional() @IsString() @MaxLength(32) productType?: string;
 
+  /** 轨道节数：two_section / three_section（订单列表「更多」条件透传给总计划导出用） */
+  @IsOptional() @IsString() @MaxLength(32) railSection?: string;
+
+  /** 客户图号（模糊） */
+  @IsOptional() @IsString() @MaxLength(128) customerDrawingNo?: string;
+
+  /** 生产图号（模糊，匹配该产品任一部件组） */
+  @IsOptional() @IsString() @MaxLength(128) drawingNo?: string;
+
   /** 是否出口：0否 1是 */
   @IsOptional() @Type(() => Number) @IsInt() @IsIn([0, 1]) isExport?: number;
 

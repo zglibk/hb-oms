@@ -13,6 +13,7 @@ import {
   needsOutsource,
   productLevelModel,
   UNIT_OPTIONS,
+  sanitizeItemCode,
 } from '@hb-oms/shared';
 import { QueryLedgerDto } from './dto/ledger.dto';
 import { QueryOrderDto } from './dto/order.dto';
@@ -245,6 +246,19 @@ export class OrderLedgerService {
     if (query.productType) {
       where.push('FIND_IN_SET(?, p.product_type)');
       params.push(query.productType);
+    }
+    if (query.railSection) {
+      where.push('p.rail_section = ?');
+      params.push(query.railSection);
+    }
+    if (query.customerDrawingNo) {
+      where.push('p.customer_drawing_no LIKE ?');
+      params.push(`%${query.customerDrawingNo}%`);
+    }
+    if (query.drawingNo) {
+      where.push(`EXISTS (SELECT 1 FROM t_order_part_group g3
+                           WHERE g3.order_product_id = p.id AND g3.drawing_no LIKE ?)`);
+      params.push(`%${query.drawingNo}%`);
     }
 
     // 聚合派生表放在 JOIN 里，筛选条件才能引用其列。
@@ -757,6 +771,17 @@ export class OrderLedgerService {
       orderStatus: query.status,
       orderDateFrom: query.dateFrom,
       orderDateTo: query.dateTo,
+      // 订单列表的业务员/跟单员筛选同样透传，保证「列表看到的」与「导出的」是同一批订单
+      salesman: query.salesman,
+      merchandiser: query.merchandiser,
+      // 「更多」里的产品级条件同样透传：导出按产品行铺开，只导出满足条件的那些产品行
+      customerDrawingNo: query.customerDrawingNo,
+      drawingNo: query.drawingNo,
+      productType: query.productType,
+      railSection: query.railSection,
+      surfaceType: query.surfaceType,
+      deliveryFrom: query.deliveryFrom,
+      deliveryTo: query.deliveryTo,
       page: 1,
       pageSize: EXPORT_MAX_ROWS,
     });
@@ -828,7 +853,7 @@ export class OrderLedgerService {
       { header: '客户', width: 20 },
       { header: '订单编号', width: 16 },
       { header: 'PO#', width: 14 },
-      { header: '货号', width: 10 },
+      { header: '产品代码', width: 10 },
       { header: '产品编码', width: 14 },
       { header: '产品名称', width: 16 },
       ...(cdnEnabled ? [{ header: '客户图号', width: 14 }] : []),
@@ -890,7 +915,7 @@ export class OrderLedgerService {
         f.customerName ?? '',
         f.productionNo || f.orderNo || '',
         ex.poNo ?? '',
-        f.itemNo ?? '',
+        sanitizeItemCode(f.itemNo),
         f.materialCode ?? '',
         ex.productName ?? '',
         ...(cdnEnabled ? [ex.customerDrawingNo ?? ''] : []),
