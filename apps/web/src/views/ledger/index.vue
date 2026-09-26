@@ -1,34 +1,15 @@
 <template>
   <div class="page">
+    <!-- 查询条件：常用条件固定一行，其余折叠到「更多」。收起时若折叠区里有条件生效，
+         按钮上显示个数，避免「列表被隐藏条件筛过却不自知」 -->
     <el-card shadow="never" class="filter-card">
       <el-form :inline="true" class="filter-bar" @submit.prevent="runKeywordSearch">
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 240px"
-            placeholder="订单号/客户/生产单号/型号/货号"
+            placeholder="订单号/客户/生产单号/型号/产品代码"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
-        </el-form-item>
-        <el-form-item label="业务员">
-          <el-input v-model="query.salesman" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
-        </el-form-item>
-        <el-form-item label="跟单员">
-          <el-input v-model="query.merchandiser" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
-        </el-form-item>
-        <el-form-item label="表面处理">
-          <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
-            <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="装配车间">
-          <el-select v-model="query.assemblyWorkshop" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
-            <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="产品类型">
-          <el-select v-model="query.productType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
-            <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
         </el-form-item>
         <el-form-item label="交期">
           <el-date-picker
@@ -48,9 +29,37 @@
             size="small" v-permission="'ledger:export'" plain :icon="Download"
             :loading="exporting" @click="onExport"
           >导出</el-button>
+          <filter-more-toggle v-model="showMoreFilters" :count="moreFilterCount" />
         </el-form-item>
       </el-form>
+
+      <Transition name="filter-more-fade">
+        <el-form v-show="showMoreFilters" :inline="true" class="filter-bar filter-more" @submit.prevent="runKeywordSearch">
+          <el-form-item label="业务员">
+            <el-input v-model="query.salesman" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
+          </el-form-item>
+          <el-form-item label="跟单员">
+            <el-input v-model="query.merchandiser" clearable style="width: 100px" @clear="runKeywordSearch" @keyup.enter="runKeywordSearch" />
+          </el-form-item>
+          <el-form-item label="表面处理">
+            <el-select v-model="query.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runKeywordSearch">
+              <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="装配车间">
+            <el-select v-model="query.assemblyWorkshop" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
+              <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="产品类型">
+            <el-select v-model="query.productType" clearable placeholder="全部" style="width: 110px" @change="runKeywordSearch">
+              <el-option v-for="o in PRODUCT_TYPE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </Transition>
     </el-card>
+
 
     <!-- 汇总卡：当前筛选口径的整体六数（不受分页影响）。版式见 AppStatCard -->
     <div class="sum-bar">
@@ -375,6 +384,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
+import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
@@ -407,6 +417,14 @@ const query = reactive({
   onlyOverdue: false,
 });
 const deliveryRange = ref<[string, string] | null>(null);
+
+/** 查询条件「更多」折叠区：默认收起；收起时按钮上显示折叠区里生效的条件个数 */
+const showMoreFilters = ref(false);
+const moreFilterCount = computed(
+  () =>
+    [query.salesman, query.merchandiser, query.surfaceType, query.assemblyWorkshop, query.productType]
+      .filter((v) => v != null && String(v).trim() !== '').length,
+);
 
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);

@@ -479,6 +479,12 @@ a {
   flex-direction: column;
   gap: var(--hb-page-gap);
   min-width: 0; /* 允许 flex 子项收缩，防止表格溢出 */
+  /* 页面保持内容自然高度，放不下时由 el-main 整体滚动（2026-09-25 修）。
+     布局层给 .main 的子元素设了 min-height:0，不加这行时视口一矮 .page 就被压成视口高，
+     其中 el-card 自带 overflow:hidden（flex 最小高度随之为 0）会被逐个压扁——
+     筛选卡片内部冒出滚动条、查询条件显示不全。
+     真需要「整页不滚动、内部区域撑满」的页面，自行给 .page 设 height:100% 即可。 */
+  flex-shrink: 0;
 }
 
 /* 筛选卡片内表单项：使用 Layout 后恢复行间距，保证换行时垂直对齐 */
@@ -532,6 +538,25 @@ a {
 }
 .filter-card .el-form--inline .el-form-item__content {
   flex: 0 0 auto;
+}
+
+/* 查询条件「更多」折叠区：与常驻行之间一条虚线分隔（开关按钮见 components/FilterMoreToggle.vue） */
+.filter-card .filter-more {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--el-border-color-lighter);
+}
+/* 展开/收起过渡：只动 opacity + transform（合成层，不触发重排），排版只在显隐瞬间变一次。
+   不要换回 el-collapse-transition：它逐帧改 max-height，下方的统计卡与大表格（固定列、
+   按内容算列宽、ResizeObserver 逐帧重算）跟着逐帧重排，展开收起明显卡顿（2026-09-25 修） */
+.filter-more-fade-enter-active,
+.filter-more-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.filter-more-fade-enter-from,
+.filter-more-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* 表格上方工具条（新增按钮等） */

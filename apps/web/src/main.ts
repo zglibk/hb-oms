@@ -13,6 +13,7 @@ import AppTable from './components/AppTable.vue';
 import AppPagination from './components/AppPagination.vue';
 import AppActions from './components/AppActions.vue';
 import AuditInfo from './components/AuditInfo.vue';
+import HintTip from './components/HintTip.vue';
 // 统计卡数字回退字体（无本机 Bahnschrift 时仍能显示相近的轻字宽无衬线）
 import '@fontsource/barlow-semi-condensed/300.css';
 import './styles/index.scss';
@@ -41,6 +42,8 @@ app.component('AppPagination', AppPagination);
 app.component('AppActions', AppActions);
 // 审计追溯统一展示（列表悬浮图标 / 详情底部审计条），禁止各页面重复拼
 app.component('AuditInfo', AuditInfo);
+// 列表标题行的 ⓘ 帮助提示，气泡跟随鼠标显示在光标上方
+app.component('HintTip', HintTip);
 // 全局甘特图组件（基于 dhtmlxGantt 二次封装，多处可调用）
 
 app.use(createPinia());

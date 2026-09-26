@@ -3,25 +3,50 @@
     <el-tabs v-model="activeTab" class="ps-tabs">
       <!-- ==================== Tab1 产品汇总（累计口径） ==================== -->
       <el-tab-pane label="产品汇总" name="summary">
+        <!-- 查询条件：常用条件固定一行，其余折叠到「更多」（开关见 FilterMoreToggle） -->
         <el-card shadow="never" class="filter-card">
           <el-form :inline="true" class="filter-bar" @submit.prevent="runSummarySearch">
-            <!-- 首行：筛选维度（客户/表面处理/产品类型/下单日期/订单状态） -->
-            <div class="filter-line">
-              <el-form-item label="客户">
-                <el-select
-                  v-model="sQuery.customerName" clearable filterable placeholder="全部"
-                  :filter-method="filterCustomers"
-                  style="width: 200px" @change="runSummarySearch"
-                  @visible-change="(v: boolean) => v && resetCustomerFilter()"
-                >
-                  <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
-                  <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
-                    <span>{{ c.customerName }}</span>
-                    <!-- 内联样式：下拉面板 teleport 到 body，scoped 类选择器够不到 -->
-                    <span style="float: right; margin-left: 16px; font-size: 12px; color: var(--el-text-color-secondary)">{{ c.customerCode }}</span>
-                  </el-option>
-                </el-select>
-              </el-form-item>
+            <el-form-item label="关键字">
+              <el-input
+                v-model="sQuery.keyword" clearable style="width: 220px"
+                placeholder="产品代码/型号/订单号/客户"
+                @input="scheduleSummaryKeywordSearch" @keyup.enter="runSummarySearch"
+              />
+            </el-form-item>
+            <el-form-item label="客户">
+              <el-select
+                v-model="sQuery.customerName" clearable filterable placeholder="全部"
+                :filter-method="filterCustomers"
+                style="width: 100px" @change="runSummarySearch"
+                @visible-change="(v: boolean) => v && resetCustomerFilter()"
+              >
+                <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
+                <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
+                  <span>{{ c.customerName }}</span>
+                  <!-- 内联样式：下拉面板 teleport 到 body，scoped 类选择器够不到 -->
+                  <span style="float: right; margin-left: 16px; font-size: 12px; color: var(--el-text-color-secondary)">{{ c.customerCode }}</span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-checkbox v-model="sQuery.onlyOwed" @change="runSummarySearch">只看有欠数</el-checkbox>
+            </el-form-item>
+            <el-form-item>
+              <el-checkbox v-model="sQuery.onlyStocked" @change="runSummarySearch">只看有库存</el-checkbox>
+            </el-form-item>
+            <el-form-item>
+              <el-button size="small" type="primary" :icon="Search" @click="runSummarySearch">查询</el-button>
+              <el-button size="small" :icon="RefreshLeft" @click="resetSummaryFilters">重置</el-button>
+              <el-button
+                size="small" v-permission="'product-summary:export'" plain :icon="Download"
+                :loading="exporting" @click="onExportSummary"
+              >导出 Excel</el-button>
+              <filter-more-toggle v-model="showSummaryMore" :count="summaryMoreCount" />
+            </el-form-item>
+          </el-form>
+
+          <Transition name="filter-more-fade">
+            <el-form v-show="showSummaryMore" :inline="true" class="filter-bar filter-more" @submit.prevent="runSummarySearch">
               <el-form-item label="表面处理">
                 <el-select v-model="sQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runSummarySearch">
                   <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
@@ -44,32 +69,8 @@
                   <el-option label="已完结" :value="ORDER_STATUS_VALUE.FINISHED" />
                 </el-select>
               </el-form-item>
-            </div>
-            <!-- 次行：开关 + 关键字 + 操作按钮 -->
-            <div class="filter-line">
-              <el-form-item>
-                <el-checkbox v-model="sQuery.onlyOwed" @change="runSummarySearch">只看有欠数</el-checkbox>
-              </el-form-item>
-              <el-form-item>
-                <el-checkbox v-model="sQuery.onlyStocked" @change="runSummarySearch">只看有库存</el-checkbox>
-              </el-form-item>
-              <el-form-item label="关键字">
-                <el-input
-                  v-model="sQuery.keyword" clearable style="width: 220px"
-                  placeholder="货号/型号/订单号/客户"
-                  @input="scheduleSummaryKeywordSearch" @keyup.enter="runSummarySearch"
-                />
-              </el-form-item>
-              <el-form-item>
-                <el-button size="small" type="primary" :icon="Search" @click="runSummarySearch">查询</el-button>
-                <el-button size="small" :icon="RefreshLeft" @click="resetSummaryFilters">重置</el-button>
-                <el-button
-                  size="small" v-permission="'product-summary:export'" plain :icon="Download"
-                  :loading="exporting" @click="onExportSummary"
-                >导出 Excel</el-button>
-              </el-form-item>
-            </div>
-          </el-form>
+            </el-form>
+          </Transition>
         </el-card>
 
         <!-- 汇总卡：当前筛选的整体口径（不受分页影响） -->
@@ -225,9 +226,10 @@
               <el-select
                 v-model="pQuery.customerName" clearable filterable placeholder="全部"
                 :filter-method="filterCustomers"
-                style="width: 200px" @change="runPeriodSearch"
+                style="width: 100px" @change="runPeriodSearch"
                 @visible-change="(v: boolean) => v && resetCustomerFilter()"
               >
+                <!-- 主数据允许同名客户（不同编码），右侧带出编码便于区分 -->
                 <el-option v-for="c in customerOptions" :key="c.id" :label="c.customerName" :value="c.customerName">
                   <span>{{ c.customerName }}</span>
                   <!-- 内联样式：下拉面板 teleport 到 body，scoped 类选择器够不到 -->
@@ -235,15 +237,10 @@
                 </el-option>
               </el-select>
             </el-form-item>
-            <el-form-item label="表面处理">
-              <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runPeriodSearch">
-                <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
-              </el-select>
-            </el-form-item>
             <el-form-item label="关键字">
               <el-input
                 v-model="pQuery.keyword" clearable style="width: 200px"
-                placeholder="货号/型号/订单号/客户"
+                placeholder="产品代码/型号/订单号/客户"
                 @input="schedulePeriodKeywordSearch" @keyup.enter="runPeriodSearch"
               />
             </el-form-item>
@@ -254,8 +251,19 @@
                 size="small" v-permission="'product-summary:export'" plain :icon="Download"
                 :loading="exporting" @click="onExportPeriod"
               >导出 Excel</el-button>
+              <filter-more-toggle v-model="showPeriodMore" :count="periodMoreCount" />
             </el-form-item>
           </el-form>
+
+          <Transition name="filter-more-fade">
+            <el-form v-show="showPeriodMore" :inline="true" class="filter-bar filter-more" @submit.prevent="runPeriodSearch">
+              <el-form-item label="表面处理">
+                <el-select v-model="pQuery.surfaceType" clearable placeholder="全部" style="width: 120px" @change="runPeriodSearch">
+                  <el-option v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value" />
+                </el-select>
+              </el-form-item>
+            </el-form>
+          </Transition>
         </el-card>
 
         <div class="sum-bar">
@@ -394,7 +402,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, reactive, ref, watch } from 'vue';
+import { computed, onActivated, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   Search,
@@ -435,6 +443,7 @@ import { useDimensionView } from '@/composables/useDimensionView';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
+import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
 
 /** 「颜色」字段全局开关（展示开关；聚合键恒含颜色，与开关无关） */
@@ -488,6 +497,13 @@ const sQuery = reactive({
   onlyStocked: false,
 });
 const orderDateRange = ref<[string, string] | null>(null);
+/** 查询条件「更多」：收起时按钮上显示折叠区里生效的条件个数 */
+const showSummaryMore = ref(false);
+const summaryMoreCount = computed(
+  () =>
+    [sQuery.surfaceType, sQuery.productType, sQuery.orderStatus, orderDateRange.value?.length ? 'range' : undefined]
+      .filter((v) => v != null && v !== '').length,
+);
 
 function summaryFilters() {
   return {
@@ -551,6 +567,8 @@ const pQuery = reactive({
   customerName: undefined as string | undefined,
   surfaceType: undefined as string | undefined,
 });
+const showPeriodMore = ref(false);
+const periodMoreCount = computed(() => (pQuery.surfaceType ? 1 : 0));
 /** 单据日期区间默认本月 1 日 ~ 今天（财务月度对账的常用口径） */
 function localDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -679,10 +697,6 @@ export default { name: 'ProductSummary' };
   gap: 16px;
   flex-wrap: wrap;
   margin: 4px 0;
-}
-/* 筛选区按行分组（首行筛选维度、次行开关+关键字+按钮）；行内仍是 inline form-item */
-.filter-line {
-  &:not(:last-child) { margin-bottom: 2px; }
 }
 /* 客户下拉右侧的客户编码用内联样式（下拉面板 teleport 到 body，scoped 够不到） */
 .pager { margin-top: 12px; }

@@ -5,7 +5,7 @@
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 250px"
-            placeholder="货号/型号/订单号/客户/生产单号"
+            placeholder="产品代码/型号/订单号/客户/生产单号"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -24,29 +24,32 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" v-permission="'stock-balance:import'" plain :icon="Upload" @click="importVisible = true">
+            批量导入
+          </el-button>
+          <el-button
+            size="small" v-permission="'stock-balance:export'" plain :icon="Download"
+            :loading="exporting" @click="onExport"
+          >导出到Excel</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card shadow="never">
       <div class="toolbar">
-        <el-button size="small" v-permission="'stock-balance:import'" :icon="Upload" @click="importVisible = true">
-          批量导入
-        </el-button>
-        <el-button
-          size="small" v-permission="'stock-balance:export'" :icon="Download"
-          :loading="exporting" @click="onExport"
-        >导出到Excel</el-button>
-        <span class="tip">
+        <!-- 用 el-tooltip 而非原生 title：原生提示是浏览器默认样式、且长文不换行。#content 插槽走 EP 默认深色气泡，
+             div 限宽让长文自动折行；插槽内容不受全局 patchElTooltip 的数字序号换行影响 -->
+        <hint-tip class="tip">
           <el-icon><InfoFilled /></el-icon>
           库存只由出入库单据的<b>确认</b>与<b>红字冲销</b>驱动，<b>不能直接修改</b>；结存按「产品 + 边别 + 批次」分行。
-          「批量导入」搬的是<b>上线前的存量</b>，会生成一张<b>期初单</b>入账，同样有单可查、可红字冲销。
-        </span>
+          「批量导入」搬的是<b>本系统投入使用前就已存在的库存</b>，会生成一张<b>期初单</b>入账，同样有单可查、可红字冲销。
+          <template #content>库存只由出入库单据的确认与红字冲销驱动，不能直接修改；结存按「产品 + 边别 + 批次」分行。「批量导入」搬的是本系统投入使用前就已存在的库存，会生成一张期初单入账，同样有单可查、可红字冲销。</template>
+        </hint-tip>
         <span class="total">当前筛选结存合计 <b>{{ totalQty }}</b> 支</span>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
-        <el-table-column label="货号" prop="itemNo" width="90" align="center">
-          <template #default="{ row }">{{ row.itemNo || '—' }}</template>
+        <el-table-column label="产品代码" prop="itemNo" width="90" align="center">
+          <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="160" class-name="col-left" show-overflow-tooltip />
         <el-table-column label="规格" width="110" align="center">
@@ -123,7 +126,7 @@ import {
   importStockBalance,
   type BalanceRow,
 } from '@/api/finished-stock';
-import { SIDE_OPTIONS, sideLabel } from '@/constants/dict';
+import { SIDE_OPTIONS, sanitizeItemCode, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
@@ -211,13 +214,17 @@ export default { name: 'StockBalance' };
 
 <style scoped lang="scss">
 .toolbar {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+  /* 标题行强制单行（2026-09-26）：操作按钮已挪到筛选卡片，这里只剩提示 + 合计。
+     提示可能很长，让它 flex 收缩并 …省略（悬浮看全），合计固定不收缩、始终贴右同一行 */
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: nowrap;
   .tip {
-    display: flex; align-items: center; gap: 4px;
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: 12px; color: var(--el-text-color-secondary);
     b { color: var(--el-text-color-primary); }
+    .el-icon { vertical-align: -2px; margin-right: 4px; }
   }
-  .total { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); }
+  .total { flex: none; font-size: 12px; color: var(--el-text-color-secondary); }
   .total b { color: var(--el-color-primary); font-size: 14px; }
 }
 /* 导入弹窗的额外选项（期初单日期 + 整单备注） */

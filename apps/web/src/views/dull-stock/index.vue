@@ -5,7 +5,7 @@
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 240px"
-            placeholder="货号 / 型号 / 客户 / 生产单号"
+            placeholder="产品代码 / 型号 / 客户 / 生产单号"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -24,28 +24,30 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" v-permission="'dull-stock:create'" type="primary" plain :icon="Plus" @click="openForm()">
+            新增呆滞品
+          </el-button>
+          <el-button size="small" v-permission="'dull-stock:import'" plain :icon="Upload" @click="importVisible = true">
+            批量导入
+          </el-button>
+          <el-button
+            size="small" v-permission="'dull-stock:export'" plain :icon="Download"
+            :loading="exporting" @click="onExport"
+          >导出</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card shadow="never">
       <div class="toolbar">
-        <el-button size="small" v-permission="'dull-stock:create'" type="primary" :icon="Plus" @click="openForm()">
-          新增呆滞品
-        </el-button>
-        <el-button size="small" v-permission="'dull-stock:import'" :icon="Upload" @click="importVisible = true">
-          批量导入
-        </el-button>
-        <el-button
-          size="small" v-permission="'dull-stock:export'" :icon="Download"
-          :loading="exporting" @click="onExport"
-        >导出</el-button>
-        <span class="tip">
+        <!-- 同成品库存：el-tooltip 深色气泡 + 限宽折行，取代原生 title -->
+        <hint-tip class="tip">
           <el-icon><InfoFilled /></el-icon>
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
           <b>结存数 = 期初数 + 入库数 − 出库数</b>，后两个数只能靠「登记出入库」产生，点行首箭头看流水。
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
-        </span>
+          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 入库数 − 出库数，后两个数只能靠「登记出入库」产生，点行首箭头看流水。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
+        </hint-tip>
         <span class="total">
           当前筛选 {{ summary.rows }} 行，结存合计 <b>{{ summary.totalBalancePcs }}</b> 支
         </span>
@@ -99,7 +101,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="货号" width="100" align="center">
+        <el-table-column label="产品代码" width="100" align="center">
           <template #default="{ row }">
             {{ row.itemNo || '—' }}<audit-info mode="inline" :row="row" />
           </template>
@@ -195,7 +197,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="14">
           <el-col :span="12">
-            <el-form-item label="货号" prop="itemNo">
+            <el-form-item label="产品代码" prop="itemNo">
               <el-input v-model="form.itemNo" placeholder="如 53#" />
             </el-form-item>
           </el-col>
@@ -284,7 +286,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="产品型号">
-              <el-input v-model="form.productModel" placeholder="留空按 货号+类型 自动拼" />
+              <el-input v-model="form.productModel" placeholder="留空按 产品代码+类型 自动拼" />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -353,13 +355,13 @@
     </el-dialog>
 
     <!--
-      批量导入。呆滞品刻意不设唯一键（同货号同客户先后剩下的几批要各建各的档），
+      批量导入。呆滞品刻意不设唯一键（同产品代码同客户先后剩下的几批要各建各的档），
       所以导入是「每行新建一条」，重复导入会重复建档——提示条里必须说清楚。
     -->
     <import-dialog
       v-model="importVisible"
       title="批量导入呆滞品"
-      tip="每一行都会新建一条呆滞品记录（本模块允许同货号多批，不会合并、不会覆盖）；整批校验通过才入库，任一行有问题会列出行号并整批回滚"
+      tip="每一行都会新建一条呆滞品记录（本模块允许同产品代码多批，不会合并、不会覆盖）；整批校验通过才入库，任一行有问题会列出行号并整批回滚"
       confirm-text="即将导入文件「{n}」，每一行都会<b>新建</b>一条呆滞品记录。<br/>同一份文件重复导入会<b>重复建档</b>，请确认没有导过。"
       :download-template="downloadDullStockTemplate"
       :do-import="importDullStock"
@@ -584,7 +586,7 @@ const validateSource = (_rule: unknown, _value: unknown, callback: (e?: Error) =
 };
 
 const rules: FormRules = {
-  itemNo: [{ required: true, message: '请填写货号', trigger: 'blur' }],
+  itemNo: [{ required: true, message: '请填写产品代码', trigger: 'blur' }],
   customerName: [{ validator: validateSource, trigger: ['blur', 'change'] }],
   productionNo: [{ validator: validateSource, trigger: ['blur', 'change'] }],
   unit: [{ required: true, message: '请选择单位', trigger: 'change' }],
@@ -785,13 +787,17 @@ export default { name: 'DullStock' };
 
 <style scoped lang="scss">
 .toolbar {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+  /* 标题行强制单行（2026-09-26）：操作按钮已挪到筛选卡片，这里只剩提示 + 合计。
+     提示可能很长，让它 flex 收缩并 …省略（悬浮看全），合计固定不收缩、始终贴右同一行 */
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: nowrap;
   .tip {
-    display: flex; align-items: center; gap: 4px;
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-size: 12px; color: var(--el-text-color-secondary);
     b { color: var(--el-text-color-primary); }
+    .el-icon { vertical-align: -2px; margin-right: 4px; }
   }
-  .total { margin-left: auto; font-size: 12px; color: var(--el-text-color-secondary); }
+  .total { flex: none; font-size: 12px; color: var(--el-text-color-secondary); }
   .total b { color: var(--el-color-primary); font-size: 14px; }
 }
 .pager { margin-top: 12px; }
