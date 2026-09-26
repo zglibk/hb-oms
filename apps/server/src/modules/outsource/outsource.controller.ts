@@ -14,6 +14,7 @@ import {
   CreateOutsourcePartDto,
   QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
+  QueryReturnProgressDto,
   UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -44,6 +45,16 @@ export class OutsourceController {
   @RequirePermissions('outsource')
   async partGroupOptions(@Query() query: QueryPartGroupOptionDto) {
     return this.service.findPartGroupOptions(query);
+  }
+
+  /**
+   * 部件组回厂进度：保存前复核「累计回厂是否超过组支数」（登记页与编辑弹窗共用）。
+   * 保存时现查而不用选择器打开时带回的数——两人同时登记同一批货时，那份数已经过期。
+   */
+  @Get('return-progress')
+  @RequirePermissions('outsource')
+  async returnProgress(@Query() query: QueryReturnProgressDto) {
+    return this.service.findReturnProgress(query);
   }
 
   @Get(':id')

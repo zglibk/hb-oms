@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsInt,
   IsNumber,
@@ -11,7 +12,8 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { toBoolean } from '../../../common/utils/transform.util';
 
 /**
  * 外发件回厂 DTO（设计文档 §4.3 / §6）。
@@ -119,6 +121,12 @@ export class QueryOutsourcePartDto {
   @IsOptional() @IsDateString() dateFrom?: string;
 
   @IsOptional() @IsDateString() dateTo?: string;
+
+  /**
+   * 只看未回齐（2026-09-26）：只列所属部件组**累计回厂 < 组支数**的记录——
+   * 即「这个部件还有货在外面没回来」。判断按组累计，不看单条记录本身的数量。
+   */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() onlyUnreturned?: boolean;
 }
 
 /** 可外发部件组查询：按订单/客户/型号筛选，附组需求与已回厂合计供参考 */
@@ -128,5 +136,30 @@ export class QueryPartGroupOptionDto {
   /** 表面处理过滤（可选；不传则列出全部需外发的组） */
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 
+  /**
+   * 隐藏已回齐的部件组（累计回厂 ≥ 组支数，2026-09-26）：登记页选择器默认传 true。
+   * 过滤放服务端而非前端——选项有条数上限，已回齐的组占着名额会把真正待回的挤出列表。
+   */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() hideReturned?: boolean;
+
+  /**
+   * 只列已回齐的组（2026-09-26）：登记页勾「只看已回齐」时传，与 hideReturned 互斥、两个列表不重叠。
+   * 不做「含已回齐的全部」——选项按新建倒序且有条数上限，新近未回的组会占满列表，
+   * 已回齐的组被挤到后面甚至截掉，用户勾了却一条都看不到（实测反馈）。
+   */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() onlyReturned?: boolean;
+
   @IsOptional() @Type(() => Number) @IsInt() limit?: number;
+}
+
+/** 部件组回厂进度（保存前超量复核用） */
+export class QueryReturnProgressDto {
+  /** 部件组 ID，逗号分隔 */
+  // 装饰器自下而上注册、报错取第一条：「未传」的提示必须写在最靠近属性的一行
+  @MaxLength(4000, { message: '一次查询的部件组过多' })
+  @IsString({ message: '请指定部件组' })
+  groupIds: string;
+
+  /** 编辑时排除正在改的那条记录（它的旧数量不该算进「已回厂」） */
+  @IsOptional() @Type(() => Number) @IsInt() excludeId?: number;
 }

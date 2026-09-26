@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue';
+import { ElMessageBox } from 'element-plus';
 import { qtyFromWeight } from '@/constants/dict';
+import { getReturnProgress } from '@/api/outsource';
 
 /**
  * 外发回厂「录入方式」——登记页与列表编辑弹窗共用。
@@ -53,4 +55,59 @@ export function mismatchedQty(row: {
   const calc = qtyFromWeight(row.returnWeight, row.unitWeight);
   if (calc <= 0) return null;
   return Math.abs(row.returnQty - calc) / row.returnQty > QTY_TOLERANCE ? calc : null;
+}
+
+/**
+ * 保存前的**超量提醒**（2026-09-26，使用方反馈「回完了的外轨还能再登记一次」）：
+ * 同一部件组「已回厂 + 本次登记」超过组支数时弹框列出，确认后才继续。
+ *
+ * - 已回厂数**保存时现查**（getReturnProgress），不用选择器打开时带回的数——两人同时登记同一批货时那份已过期；
+ * - 同一次登记里同一组出现多行时先合并再比；
+ * - **只提醒不拦截**：返工回厂、客户加量先做后补单都会合理超出；拦「重复登记 / 多打一个 0」靠当场确认就够（服务端也不硬拦）。
+ *
+ * @param rows   本次要保存的行（label 用于提示里指认是哪一行，如「第 2 行 GLI46273-A 外轨」）
+ * @param excludeId 编辑弹窗传正在改的记录 id：它的旧数量不该算进「已回厂」
+ * @returns 可以继续保存返回 true
+ */
+export async function confirmOverReturn(
+  rows: Array<{ orderPartGroupId: number; returnQty: number; label: string }>,
+  excludeId?: number,
+): Promise<boolean> {
+  const ids = [...new Set(rows.map((r) => r.orderPartGroupId))];
+  if (!ids.length) return true;
+  const progress = new Map((await getReturnProgress(ids, excludeId)).map((p) => [p.orderPartGroupId, p]));
+  const lines: string[] = [];
+  ids.forEach((gid) => {
+    const p = progress.get(gid);
+    if (!p || p.qtyPcs <= 0) return;
+    const mine = rows.filter((r) => r.orderPartGroupId === gid);
+    const thisQty = mine.reduce((s, r) => s + (Number(r.returnQty) || 0), 0);
+    const total = p.returnedQty + thisQty;
+    if (total <= p.qtyPcs) return;
+    lines.push(
+      `${mine.map((r) => r.label).join('、')}：组需求 ${p.qtyPcs} 支，已回厂 ${p.returnedQty} 支，` +
+        `本次 ${thisQty} 支，累计 ${total} 支（超出 ${total - p.qtyPcs} 支）`,
+    );
+  });
+  if (!lines.length) return true;
+  try {
+    await ElMessageBox.confirm(
+      `<div>以下部件组登记后累计回厂将超过订单需求，请核对是否<b>重复登记</b>或<b>数量多打了位数</b>：</div>` +
+        `<ul style="margin:6px 0 0;padding-left:18px">${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`,
+      '累计回厂超出订单需求',
+      {
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        confirmButtonText: '确认无误，继续登记',
+        cancelButtonText: '返回修改',
+      },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 }

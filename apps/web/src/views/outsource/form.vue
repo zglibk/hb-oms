@@ -168,7 +168,12 @@
           @clear="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
-        <span class="picker-tip">只列出需要表面处理（非「无」）的部件组；同一组分批回厂可重复选。</span>
+        <!-- 两个互不重叠的列表：默认只列未回齐的（2026-09-26：回完了还被重复登记是实测的高发错误）；
+             勾上则**只**列已回齐的，供返工、补货再登记。不做「全部」：新近未回的组会占满条数上限，已回齐的被挤没 -->
+        <el-checkbox v-model="showReturned" @change="loadOptions">只看已回齐</el-checkbox>
+        <span class="picker-tip">
+          {{ showReturned ? '当前只列出已回齐的部件组（返工、补货再登记用）；取消勾选回到待回厂列表。' : '只列出需要表面处理（非「无」）且尚未回齐的部件组；分批回厂可重复选。' }}
+        </span>
       </div>
       <el-table
         ref="pickerTableRef"
@@ -182,7 +187,7 @@
       >
         <el-table-column type="selection" width="46" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
-        <el-table-column label="客户" prop="customerName" width="120" show-overflow-tooltip />
+        <el-table-column label="客户" prop="customerName" width="96" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
         <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
@@ -193,7 +198,12 @@
           </template>
         </el-table-column>
         <el-table-column label="组需求(支)" prop="qtyPcs" width="100" align="center" />
-        <el-table-column label="已回厂(支)" prop="returnedQty" width="100" align="center" />
+        <el-table-column label="已回厂(支)" width="120" align="center">
+          <template #default="{ row }">
+            {{ row.returnedQty }}
+            <el-tag v-if="row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs" size="small" type="success" disable-transitions>已回齐</el-tag>
+          </template>
+        </el-table-column>
       </el-table>
       <template #footer>
         <span class="picker-count">已选 {{ picked.length }} 条</span>
@@ -225,6 +235,7 @@ import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
   useOutsourceEntryMode,
+  confirmOverReturn,
 } from '@/composables/useOutsourceEntry';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
@@ -303,6 +314,8 @@ const pickerTableRef = ref<any>();
 const options = ref<PartGroupOption[]>([]);
 const optionsLoading = ref(false);
 const picked = ref<PartGroupOption[]>([]);
+/** 选择器是否切到「只看已回齐」列表（默认否，每次进页面都重置——同「按数量」模式，不记忆） */
+const showReturned = ref(false);
 
 function openPicker() {
   pickerVisible.value = true;
@@ -310,7 +323,11 @@ function openPicker() {
 async function loadOptions() {
   optionsLoading.value = true;
   try {
-    options.value = await getPartGroupOptions({ keyword: pickerKeyword.value || undefined });
+    options.value = await getPartGroupOptions({
+      keyword: pickerKeyword.value || undefined,
+      hideReturned: !showReturned.value,
+      onlyReturned: showReturned.value,
+    });
   } finally {
     optionsLoading.value = false;
   }
@@ -397,6 +414,15 @@ async function onSave() {
     return;
   }
   if (!(await confirmQtyConsistent())) return;
+  // 累计回厂超出组需求时确认一次（只提醒不拦截，见 confirmOverReturn）
+  const overOk = await confirmOverReturn(
+    form.items.map((it, i) => ({
+      orderPartGroupId: it.orderPartGroupId,
+      returnQty: it.returnQty,
+      label: `第 ${i + 1} 行 ${it.productionNo || it.orderNo || ''} ${it.productModel || ''}`.trim(),
+    })),
+  );
+  if (!overOk) return;
   saving.value = true;
   try {
     const res = await createOutsourceParts({

@@ -13,6 +13,7 @@ import {
   CreateOutsourcePartDto,
   QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
+  QueryReturnProgressDto,
   UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -82,6 +83,14 @@ export class OutsourceService {
         { kw: `%${query.keyword}%` },
       );
     }
+    if (query.onlyUnreturned) {
+      // 按所属部件组累计判定（同 part-group-options 的 hideReturned 口径），不看单条记录
+      qb.andWhere(
+        `(SELECT COALESCE(SUM(x.return_qty), 0) FROM t_outsource_part x
+           WHERE x.order_part_group_id = r.order_part_group_id)
+         < (SELECT g.qty_pcs FROM t_order_part_group g WHERE g.id = r.order_part_group_id)`,
+      );
+    }
     // 回厂日期倒序：最近回来的排最前，符合「看今天回了什么」的使用习惯
     qb.orderBy('r.backDate', 'DESC')
       .addOrderBy('r.id', 'DESC')
@@ -103,6 +112,11 @@ export class OutsourceService {
    * 不再有「已安排 / 剩余可发」的额度概念（应回数量已随发坯单一并取消），
    * 改附**组需求支数**与**该组累计已回厂**供录入时参照；同一组可反复选，
    * 分批回厂本来就要录多条。
+   *
+   * `hideReturned`（2026-09-26）：隐藏已回齐的组（累计回厂 ≥ 组支数）。使用方反馈「回完了的外轨
+   * 还能再登记一次」——实测 29 组被重复登记或多打一个 0，根源就是回齐的组照样列在选择器里。
+   * 这只是**录入引导**，不是闸门：返工、补货等合理超量仍可勾「只看已回齐」（`onlyReturned`）找回来，
+   * 保存前的超量提醒见 findReturnProgress。
    */
   async findPartGroupOptions(query: QueryPartGroupOptionDto): Promise<PartGroupOption[]> {
     const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
@@ -111,6 +125,13 @@ export class OutsourceService {
     if (query.surfaceType) {
       where += ' AND p.surface_type = ?';
       params.push(query.surfaceType);
+    }
+    const returnedSql = `COALESCE((SELECT SUM(op2.return_qty) FROM t_outsource_part op2
+                               WHERE op2.order_part_group_id = g.id), 0)`;
+    if (query.onlyReturned) {
+      where += ` AND g.qty_pcs > 0 AND ${returnedSql} >= g.qty_pcs`;
+    } else if (query.hideReturned) {
+      where += ` AND ${returnedSql} < g.qty_pcs`;
     }
     if (query.keyword) {
       where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
@@ -234,6 +255,38 @@ export class OutsourceService {
    * 登记回厂：一次可录多行（勾选多个部件组，共用加工商与回厂日期）。
    * 展示快照一律服务端从订单侧读取，不采信客户端传值。
    */
+  /**
+   * 部件组回厂进度：组支数 + 累计已回厂（可排除正在编辑的那条）。
+   *
+   * 供前端保存前做**超量提醒**（累计将超过组支数时弹框确认，可继续）——
+   * 刻意不在 create/update 里硬拦：返工回厂、客户加量先做后补单都会合理地超出，
+   * 硬拦会逼人先去改订单或者干脆不录；拦住「重复登记 / 多打一个 0」靠当场确认就够了。
+   */
+  async findReturnProgress(query: QueryReturnProgressDto) {
+    const ids = [
+      ...new Set(
+        String(query.groupIds ?? '')
+          .split(',')
+          .map((v) => Number(v))
+          .filter((v) => Number.isInteger(v) && v > 0),
+      ),
+    ].slice(0, 500);
+    if (!ids.length) return [];
+    const rows: any[] = await this.dataSource.query(
+      `SELECT g.id AS orderPartGroupId, g.qty_pcs AS qtyPcs,
+              COALESCE((SELECT SUM(op.return_qty) FROM t_outsource_part op
+                         WHERE op.order_part_group_id = g.id AND op.id <> ?), 0) AS returnedQty
+         FROM t_order_part_group g
+        WHERE g.id IN (?)`,
+      [query.excludeId ?? 0, ids],
+    );
+    return rows.map((r) => ({
+      orderPartGroupId: Number(r.orderPartGroupId),
+      qtyPcs: Number(r.qtyPcs) || 0,
+      returnedQty: Number(r.returnedQty) || 0,
+    }));
+  }
+
   async create(dto: CreateOutsourcePartDto, user: CurrentUserPayload) {
     const groupIds = dto.items.map((it) => it.orderPartGroupId);
     const snapshots = await this.partGroupSnapshot.load(null, groupIds);

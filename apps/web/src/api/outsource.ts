@@ -70,6 +70,8 @@ export interface OutsourceQuery {
   surfaceType?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** 只看未回齐：所属部件组累计回厂 < 组支数 */
+  onlyUnreturned?: boolean;
 }
 
 /** 登记回厂：一次可录多行（共用加工商与回厂日期） */
@@ -110,8 +112,23 @@ export const getOutsourceDetail = (id: number) =>
 export const getPartGroupOptions = (params: {
   keyword?: string;
   surfaceType?: string;
+  /** 隐藏已回齐（累计回厂 ≥ 组支数）的部件组 */
+  hideReturned?: boolean;
+  /** 只列已回齐的部件组（与 hideReturned 互斥） */
+  onlyReturned?: boolean;
   limit?: number;
 }) => request.get<any, PartGroupOption[]>('/api/outsource/part-group-options', { params });
+
+/** 部件组回厂进度：保存前复核是否超出组支数（excludeId = 编辑中的记录，不计其旧数量） */
+export interface ReturnProgress {
+  orderPartGroupId: number;
+  qtyPcs: number;
+  returnedQty: number;
+}
+export const getReturnProgress = (groupIds: number[], excludeId?: number) =>
+  request.get<any, ReturnProgress[]>('/api/outsource/return-progress', {
+    params: { groupIds: groupIds.join(','), excludeId },
+  });
 
 export const createOutsourceParts = (data: OutsourcePartPayload) =>
   request.post<any, { count: number; ids: number[] }>('/api/outsource', data);

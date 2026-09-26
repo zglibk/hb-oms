@@ -29,6 +29,10 @@
           />
         </el-form-item>
         <el-form-item>
+          <!-- 按所属部件组累计判定：该部件累计回厂还没到订单需求，即还有货在外面 -->
+          <el-checkbox v-model="query.onlyUnreturned" @change="runKeywordSearch">只看未回齐</el-checkbox>
+        </el-form-item>
+        <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
           <el-button size="small" @click="resetQuery">重置</el-button>
         </el-form-item>
@@ -46,56 +50,59 @@
       </div>
 
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize">
-        <el-table-column label="回厂日期" width="115" fixed="left">
+        <el-table-column label="回厂日期" width="92" fixed="left">
           <template #default="{ row }">
             {{ dateText(row.backDate) }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <el-table-column label="加工商" prop="processorName" min-width="120" class-name="col-left" show-overflow-tooltip>
+        <!-- 列宽按「表头与最长内容取大」在浏览器实测定（2026-09-26）：1600 宽屏幕下表格区约 1288px，
+             各列合计恰好放下不出横向滚动条。「产品型号」是唯一的弹性列（吃掉剩余宽度），
+             它与「生产图号」偶有 20+ 字的长值，靠悬浮提示看全。加列或放宽前先算总宽 -->
+        <el-table-column label="加工商" prop="processorName" width="72" show-overflow-tooltip>
           <template #default="{ row }">
             <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="生产单号" width="120" show-overflow-tooltip>
+        <el-table-column label="生产单号" width="94" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="规格" width="90" align="center">
+        <el-table-column label="产品型号" prop="productModel" min-width="110" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="规格" width="70" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
-        <el-table-column label="订单数量" width="100" align="center">
+        <el-table-column label="订单数量" width="80" align="center">
           <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
         </el-table-column>
-        <el-table-column label="表面处理" width="100" align="center">
+        <el-table-column label="表面处理" width="82" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="70" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="生产图号" width="130" show-overflow-tooltip>
+        <el-table-column label="生产图号" width="122" show-overflow-tooltip>
           <template #default="{ row }">{{ row.drawingNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="料厚" width="110" align="center">
+        <el-table-column label="料厚" width="65" align="center">
           <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
         </el-table-column>
-        <el-table-column label="重量(kg)" width="95" align="center">
+        <el-table-column label="重量(kg)" width="80" align="center">
           <template #default="{ row }">{{ Number(row.returnWeight) }}</template>
         </el-table-column>
-        <el-table-column label="单重" width="90" align="center">
+        <el-table-column label="单重" width="70" align="center">
           <template #default="{ row }">{{ Number(row.unitWeight) }}</template>
         </el-table-column>
-        <el-table-column label="回货数量(支)" width="118" align="center">
+        <el-table-column label="回货数量(支)" width="104" align="center">
           <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
         </el-table-column>
-        <el-table-column label="备注" prop="remark" min-width="120" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" fixed="right">
+        <!-- 「备注」列 2026-09-26 起不在列表渲染（使用方要求，腾宽度给其它列）；备注仍可在编辑弹窗里查看与修改 -->
+        <el-table-column label="操作" width="115" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
@@ -213,6 +220,7 @@ import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
   type OutsourceEntryMode,
+  confirmOverReturn,
 } from '@/composables/useOutsourceEntry';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
@@ -235,6 +243,8 @@ const query = reactive({
   pageSize: 20,
   keyword: '',
   surfaceType: undefined as string | undefined,
+  /** 默认勾选「只看未回齐」（2026-09-26 使用方要求）：打开页面先看还有货在外面的部件；「重置」也回到勾选 */
+  onlyUnreturned: true,
 });
 const dateRange = ref<[string, string] | null>(null);
 
@@ -282,6 +292,7 @@ onActivated(load);
 function resetQuery() {
   query.keyword = '';
   query.surfaceType = undefined;
+  query.onlyUnreturned = true;
   dateRange.value = null;
   runKeywordSearch();
 }
@@ -364,6 +375,15 @@ async function onEditSave() {
     } catch {
       return;
     }
+  }
+  // 改数量后累计回厂超出组需求时确认一次（排除本条旧数量；只提醒不拦截，见 confirmOverReturn）
+  if (editForm.returnQty > editRow.value.returnQty) {
+    const r = editRow.value;
+    const overOk = await confirmOverReturn(
+      [{ orderPartGroupId: r.orderPartGroupId, returnQty: editForm.returnQty, label: `${r.productionNo || r.orderNo || ''} ${r.productModel || ''}`.trim() }],
+      r.id,
+    );
+    if (!overOk) return;
   }
   saving.value = true;
   try {
