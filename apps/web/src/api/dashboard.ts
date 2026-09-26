@@ -22,6 +22,8 @@ export interface DashboardOwedRow {
   merchandiser: string | null;
   productionNo: string | null;
   productModel: string | null;
+  /** 产品名称（订单产品名称补「滑轨」/ 分体形态，口径同入库单；订单没填时回落产品型号） */
+  productName: string | null;
   /** 规格（mm 统一口径）；界面按查看单位现算 mm/寸 */
   dimensionMm: number | null;
   deliveryDate: string | null;
@@ -39,6 +41,8 @@ export interface DashboardOutsourceRow {
   surfaceType: string | null;
   color: string | null;
   productModel: string | null;
+  /** 产品名称（订单产品名称补「滑轨」/ 分体形态，口径同入库单；订单没填时回落产品型号） */
+  productName: string | null;
   productionNo: string | null;
   /** 规格（mm，取自订单产品行；本表快照是展示串，换算不了单位） */
   dimensionMm: number | null;

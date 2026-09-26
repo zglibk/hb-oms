@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { FINISHED_DOC_STATUS, ORDER_STATUS, productLevelModel } from '@hb-oms/shared';
+import {
+  FINISHED_DOC_STATUS,
+  ORDER_STATUS,
+  productLevelModel,
+  railNameSuffixOf,
+  withRailSuffix,
+} from '@hb-oms/shared';
 // 欠数口径的唯一事实源在 order-owed.util —— 台账、订单自动完结、本看板三处共用同一份
 // 单据族 SQL，禁止在此另写一份 biz_type 判定（分叉后首页与台账数字对不上，最难查）
 import {
@@ -30,8 +36,15 @@ import {
  * 求和自然抵扣。
  */
 
-/** 列表区每块最多返回条数 */
-const TOP_LIMIT = 10;
+/**
+ * 列表区每块最多返回条数。
+ *
+ * 前端可见高度固定 10 行，超出部分靠自动轮播滚动查看（2026-09-25 由 10 条放宽到 100，
+ * 原先返回条数 = 可见行数，列表从来滚不起来）。封顶 100 是为了首页不因数据增长而卡：
+ * el-table 每行都是真实 DOM，几百上千行会明显拖慢首页；完整清单去台账看。
+ * 聚合 SQL 本就要扫全部进行中订单，LIMIT 大小对数据库开销影响很小。
+ */
+const TOP_LIMIT = 100;
 /** 「临近交期」窗口天数（设计文档 §5.2 定为 7 天） */
 const UPCOMING_DAYS = 7;
 
@@ -45,6 +58,8 @@ export interface DashboardOwedRow {
   merchandiser: string | null;
   productionNo: string | null;
   productModel: string | null;
+  /** 产品名称（首页两张卡片 2026-09-26 起展示它而非产品型号），口径同入库单：见 productNameOf */
+  productName: string | null;
   /** 规格（mm 统一口径）：前端按查看单位现算 mm/寸，故只回数值不回展示串 */
   dimensionMm: number | null;
   deliveryDate: string | null;
@@ -69,6 +84,8 @@ export interface DashboardOutsourceRow {
   surfaceType: string | null;
   color: string | null;
   productModel: string | null;
+  /** 产品名称（取订单产品行，口径同入库单：见 productNameOf） */
+  productName: string | null;
   productionNo: string | null;
   /**
    * 规格（mm）：**取自订单产品行而非本表的 dimension_text 快照**——
@@ -121,7 +138,7 @@ export class DashboardService {
               p.id AS productId, o.id AS orderId, o.order_no AS orderNo,
               o.customer_name AS customerName, o.salesman AS salesman,
               o.merchandiser AS merchandiser, o.production_no AS productionNo,
-              p.item_no AS itemNo, p.product_type AS productType,
+              p.item_no AS itemNo, p.product_type AS productType, p.product_name AS productName,
               p.rail_section AS railSection, p.is_split AS isSplit,
               (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
                  FROM t_order_part_group g
@@ -258,7 +275,10 @@ export class DashboardService {
               op.surface_type AS surfaceType, op.color AS color,
               op.product_model AS productModel, op.production_no AS productionNo,
               op.order_no AS orderNo, op.return_qty AS returnQty,
-              p.dimension_mm AS dimensionMm
+              p.dimension_mm AS dimensionMm, p.product_name AS productName,
+              p.is_split AS isSplit, p.rail_section AS railSection,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
+                 FROM t_order_part_group g WHERE g.order_product_id = p.id) AS groupTypes
          FROM t_outsource_part op
          LEFT JOIN t_order_product p ON p.id = op.order_product_id
         ORDER BY op.back_date DESC, op.id DESC
@@ -272,6 +292,7 @@ export class DashboardService {
       surfaceType: r.surfaceType ?? null,
       color: r.color ?? null,
       productModel: r.productModel ?? null,
+      productName: this.productNameOf(r) || r.productModel || null,
       productionNo: r.productionNo ?? null,
       dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
       orderNo: r.orderNo ?? null,
@@ -280,7 +301,7 @@ export class DashboardService {
   }
 
   private toOwedRow(r: any): DashboardOwedRow {
-    return {
+    const row: DashboardOwedRow = {
       orderProductId: Number(r.productId),
       orderId: Number(r.orderId),
       orderNo: r.orderNo ?? null,
@@ -296,12 +317,28 @@ export class DashboardService {
         String(r.groupTypes ?? '').split(',').filter(Boolean),
         r.railSection ?? null,
       ),
+      productName: this.productNameOf(r) || null,
       dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
       deliveryDate: this.dateText(r.deliveryDate),
       days: Number(r.days) || 0,
       qtyPcs: Number(r.qtyPcs) || 0,
       deliveryOwed: Number(r.deliveryOwed) || 0,
     };
+    // 订单没填产品名称时回落产品型号，不留空格子
+    row.productName ||= row.productModel;
+    return row;
+  }
+
+  /**
+   * 首页卡片的「产品名称」：订单产品名称，补「滑轨」/ 分体行补出货形态（外中轨/内轨），与入库单纸面同一套
+   * （共享包 withRailSuffix + railNameSuffixOf）——分体两行订单里的产品名称常一模一样，不补形态分不出彼此。
+   * 订单没填产品名称时由调用方回落产品型号，不留空格子。
+   */
+  private productNameOf(r: any): string {
+    return withRailSuffix(
+      String(r.productName ?? '').trim(),
+      railNameSuffixOf(Number(r.isSplit) || 0, String(r.groupTypes ?? '').split(','), r.railSection ?? null),
+    );
   }
 
   private dateText(v: any): string | null {

@@ -15,6 +15,19 @@ export interface NextHolidayInfo {
   daysLeft: number;
 }
 
+/**
+ * 今天所在的法定假期。
+ * ⚠️ HolidayUtil 对整段放假的**每一天**都返回节日名（中秋放 3 天，三天都叫「中秋节」），
+ * 节日正日要看 `getTarget()`——不区分的话八月十六也会显示「今天是中秋节」（2026-09-26 已踩）。
+ */
+export interface TodayHolidayInfo {
+  name: string;
+  /** 今天就是节日正日（如八月十五），而不只是假期中的某一天 */
+  isFestivalDay: boolean;
+  /** 本段假期的第几天（从 1 起） */
+  dayIndex: number;
+}
+
 export interface NextJieQiInfo {
   name: string;
   /** 距节气的整天数（未到时刻按日历日差） */
@@ -34,21 +47,28 @@ export interface CalendarBrief {
   yearLeftMinutes: number;
   yearLeftSeconds: number;
   year: number;
+  /** 下一个法定假期（今天正在放假时，跳过当前这段假期） */
   nextHoliday: NextHolidayInfo | null;
-  /** 今天若为法定休息日则返回节日名 */
-  todayHolidayName: string | null;
+  /** 今天所在的法定假期（不在假期为 null） */
+  todayHoliday: TodayHolidayInfo | null;
+}
+
+/** 某天是法定休息日（非调休上班）就返回该 Holiday */
+function restHolidayOf(s: Solar) {
+  const h = HolidayUtil.getHoliday(s.getYear(), s.getMonth(), s.getDay());
+  return h && !h.isWork() ? h : null;
 }
 
 function startOfToday(date: Date): Solar {
   return Solar.fromYmd(date.getFullYear(), date.getMonth() + 1, date.getDate());
 }
 
-/** 向后查找下一个法定休息日（跳过调休上班日） */
-function findNextHoliday(from: Solar): NextHolidayInfo | null {
+/** 向后查找下一个法定休息日（跳过调休上班日，以及 skipTarget 所指的当前这段假期） */
+function findNextHoliday(from: Solar, skipTarget: string | null): NextHolidayInfo | null {
   let cur = from;
   for (let i = 0; i < 400; i++) {
-    const h = HolidayUtil.getHoliday(cur.getYear(), cur.getMonth(), cur.getDay());
-    if (h && !h.isWork()) {
+    const h = restHolidayOf(cur);
+    if (h && h.getTarget() !== skipTarget) {
       return {
         name: h.getName(),
         date: h.getDay(),
@@ -109,8 +129,22 @@ export function getCalendarBrief(date = new Date()): CalendarBrief {
   const monthSize = lm && lm.getDayCount() >= 30 ? '大' : '小';
   const lunarText = `${lunar.getYearInGanZhi()}年 ${lunar.getMonthInChinese()}月${monthSize} ${lunar.getDayInChinese()} ${lunar.getDayInGanZhi()}日`;
 
-  const todayH = HolidayUtil.getHoliday(solar.getYear(), solar.getMonth(), solar.getDay());
-  const todayHolidayName = todayH && !todayH.isWork() ? todayH.getName() : null;
+  const todayH = restHolidayOf(solar);
+  let todayHoliday: TodayHolidayInfo | null = null;
+  if (todayH) {
+    // 往前数同一段假期（同一个 target）连着放了几天，得出「第几天」
+    let dayIndex = 1;
+    let prev = solar.next(-1);
+    while (restHolidayOf(prev)?.getTarget() === todayH.getTarget() && dayIndex < 30) {
+      dayIndex++;
+      prev = prev.next(-1);
+    }
+    todayHoliday = {
+      name: todayH.getName(),
+      isFestivalDay: todayH.getTarget() === todayH.getDay(),
+      dayIndex,
+    };
+  }
 
   return {
     solarText,
@@ -121,7 +155,7 @@ export function getCalendarBrief(date = new Date()): CalendarBrief {
     yearLeftMinutes,
     yearLeftSeconds,
     year,
-    nextHoliday: findNextHoliday(solar),
-    todayHolidayName,
+    nextHoliday: findNextHoliday(solar, todayH ? todayH.getTarget() : null),
+    todayHoliday,
   };
 }

@@ -14,77 +14,121 @@
 <template>
   <div class="page" v-loading="loading">
     <el-card shadow="never" class="welcome-card">
+      <!-- 装饰层：时段色渐变 + 光晕 + 点阵。单独一层并自带裁剪——卡片本身不能 overflow:hidden，
+           否则日历浮层会被裁掉 -->
+      <div class="welcome-bg" aria-hidden="true"></div>
+      <!-- 欢迎词独占横幅；日历折叠进右侧按钮，**只有悬停展开**（2026-09-25 取消了点击固定）：
+           鼠标移到按钮上展开浮层面板（不占横幅空间、不挤动页面），离开按钮+面板即收起；
+           键盘 Tab 聚焦按钮同样展开。 -->
       <div class="welcome__text">
-        <h2 class="welcome-greet" :class="`is-${greetingTone}`">{{ greeting }}，{{ politeName }}</h2>
-        <div class="welcome-cal" aria-label="今日日历">
-          <span class="cal-chip cal-chip--solar">
-            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.7" />
-              <path d="M3 10h18" fill="none" stroke="currentColor" stroke-width="1.7" />
-              <path d="M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-              <circle cx="8.5" cy="14.5" r="1.1" fill="currentColor" />
-              <circle cx="12" cy="14.5" r="1.1" fill="currentColor" />
-              <circle cx="15.5" cy="14.5" r="1.1" fill="currentColor" />
-            </svg>
-            <el-tag size="small" effect="plain" type="primary" round>公历</el-tag>
-            <b>{{ cal.solarText }}</b>
-          </span>
+        <div class="welcome-hero">
+          <span class="welcome-hero__icon"><el-icon><component :is="toneIcon" /></el-icon></span>
+          <div class="welcome-hero__text">
+            <h2 class="welcome-greet">{{ greeting }}，{{ politeName }}</h2>
+            <p class="welcome-sub">{{ welcomeSub }}</p>
+          </div>
+        </div>
+        <!-- 中部舞台：占欢迎词与日历按钮之间的全部空位、铺满横幅高度——放大了也盖不到文字，
+             空位窄时两端被裁掉而不是压扁。滑轨插画在前，法定假期期间（整段假期每一天）烟花在后 -->
+        <div class="welcome-stage" aria-hidden="true">
+          <WelcomeFireworks v-if="cal.todayHoliday" class="welcome-stage__fx" />
+          <WelcomeRailArt class="welcome-stage__art" />
+        </div>
+        <div class="cal-dock" @mouseleave="calOpen = false">
+          <button
+            type="button"
+            class="cal-toggle"
+            :class="{ 'is-open': calOpen }"
+            :aria-expanded="calOpen"
+            aria-label="日历"
+            @mouseenter="calOpen = true"
+            @focus="calOpen = true"
+            @blur="calOpen = false"
+          >
+            <el-icon class="cal-toggle__arrow"><DArrowLeft /></el-icon>
+            <el-icon><Calendar /></el-icon>
+          </button>
 
-          <span class="cal-chip cal-chip--lunar">
-            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M15.2 3.2a8.8 8.8 0 1 0 5.6 15.4A9.2 9.2 0 0 1 15.2 3.2z"
-                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"
-              />
-              <circle cx="9.2" cy="10.2" r="0.9" fill="currentColor" />
-              <circle cx="12.4" cy="13.8" r="0.7" fill="currentColor" />
-            </svg>
-            <el-tag size="small" effect="plain" round class="cal-tag--lunar">农历</el-tag>
-            <b>
-              {{ cal.lunarText }}
-              <template v-if="cal.nextJieQi">
-                <span class="cal-sep">·</span>
-                <template v-if="cal.nextJieQi.daysLeft === 0">今天{{ cal.nextJieQi.name }}</template>
-                <template v-else>距{{ cal.nextJieQi.name }}还有 <em>{{ cal.nextJieQi.daysLeft }}</em> 天</template>
-              </template>
-            </b>
-          </span>
+          <Transition name="cal-reveal">
+            <section v-show="calOpen" class="cal-panel" aria-label="今日日历">
+              <!-- 抬头：大号日期 -->
+              <header class="cal-panel__head">
+                <span class="cal-panel__day">{{ calHead.day }}</span>
+                <div class="cal-panel__ym">
+                  <b>{{ calHead.ym }}</b>
+                  <span>{{ calHead.week }}</span>
+                </div>
+              </header>
 
-          <span class="cal-chip cal-chip--holiday">
-            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 3c2.2 2.4 3.4 4.4 3.4 6.2A3.4 3.4 0 1 1 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-              <path d="M12 3c-2.2 2.4-3.4 4.4-3.4 6.2A3.4 3.4 0 1 0 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-              <path d="M8.2 14.5c1.2 2.8 2.6 4.6 3.8 6.5 1.2-1.9 2.6-3.7 3.8-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-              <circle cx="12" cy="9.4" r="1.2" fill="currentColor" />
-            </svg>
-            <el-tag size="small" effect="plain" type="danger" round>节假</el-tag>
-            <b v-if="cal.nextHoliday">
-              <template v-if="cal.nextHoliday.daysLeft === 0">今天是{{ cal.nextHoliday.name }}</template>
-              <template v-else>距{{ cal.nextHoliday.name }}还有 <em>{{ cal.nextHoliday.daysLeft }}</em> 天</template>
-            </b>
-            <b v-else>近期暂无法定节假日</b>
-          </span>
+              <div class="cal-panel__rows">
+                <div class="cal-row cal-row--lunar">
+                  <svg class="cal-row__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M15.2 3.2a8.8 8.8 0 1 0 5.6 15.4A9.2 9.2 0 0 1 15.2 3.2z"
+                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"
+                    />
+                    <circle cx="9.2" cy="10.2" r="0.9" fill="currentColor" />
+                    <circle cx="12.4" cy="13.8" r="0.7" fill="currentColor" />
+                  </svg>
+                  <span class="cal-row__label">农历</span>
+                  <div class="cal-row__body">
+                    <b>{{ cal.lunarText }}</b>
+                    <small v-if="cal.nextJieQi">
+                      <template v-if="cal.nextJieQi.daysLeft === 0">今天{{ cal.nextJieQi.name }}</template>
+                      <template v-else>距{{ cal.nextJieQi.name }}还有 <em>{{ cal.nextJieQi.daysLeft }}</em> 天</template>
+                    </small>
+                  </div>
+                </div>
 
-          <span class="cal-chip cal-chip--year">
-            <svg class="cal-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 3h10v4.2c0 1.4-.7 2.7-1.9 3.4L12 13l-3.1-2.4A4 4 0 0 1 7 7.2V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-              <path d="M7 21h10v-4.2c0-1.4-.7-2.7-1.9-3.4L12 11l-3.1 2.4A4 4 0 0 0 7 16.8V21z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-              <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-            <el-tag size="small" effect="plain" type="warning" round>年余</el-tag>
-            <span class="year-cd" :aria-label="yearCdLabel">
-              <SevenSegNumber :value="cal.year" :pad="4" class="year-cd__digits" />
-              <span class="year-cd__lbl">年还剩</span>
-              <SevenSegNumber :value="cal.yearLeftDays" class="year-cd__digits" />
-              <span class="year-cd__lbl">天</span>
-              <SevenSegNumber :value="cal.yearLeftHours" :pad="2" class="year-cd__digits" />
-              <span class="year-cd__lbl">小时</span>
-              <SevenSegNumber :value="cal.yearLeftMinutes" :pad="2" class="year-cd__digits" />
-              <span class="year-cd__lbl">分</span>
-              <SevenSegNumber :value="cal.yearLeftSeconds" :pad="2" class="year-cd__digits" />
-              <span class="year-cd__lbl">秒</span>
-            </span>
-          </span>
+                <div class="cal-row cal-row--holiday">
+                  <svg class="cal-row__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3c2.2 2.4 3.4 4.4 3.4 6.2A3.4 3.4 0 1 1 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    <path d="M12 3c-2.2 2.4-3.4 4.4-3.4 6.2A3.4 3.4 0 1 0 12 5.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    <path d="M8.2 14.5c1.2 2.8 2.6 4.6 3.8 6.5 1.2-1.9 2.6-3.7 3.8-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    <circle cx="12" cy="9.4" r="1.2" fill="currentColor" />
+                  </svg>
+                  <span class="cal-row__label">节假</span>
+                  <div class="cal-row__body">
+                    <!-- 正在放假：只有节日正日（如八月十五）才说「今天是中秋节」，假期里其他天说「假期第 N 天」 -->
+                    <template v-if="cal.todayHoliday">
+                      <b>
+                        <span class="is-today">{{
+                          cal.todayHoliday.isFestivalDay
+                            ? `今天是${cal.todayHoliday.name}`
+                            : `${cal.todayHoliday.name}假期 · 第 ${cal.todayHoliday.dayIndex} 天`
+                        }}</span>
+                      </b>
+                      <small v-if="cal.nextHoliday">距{{ cal.nextHoliday.name }}还有 <em>{{ cal.nextHoliday.daysLeft }}</em> 天</small>
+                    </template>
+                    <b v-else-if="cal.nextHoliday">距{{ cal.nextHoliday.name }}还有 <em>{{ cal.nextHoliday.daysLeft }}</em> 天</b>
+                    <b v-else>近期暂无法定节假日</b>
+                  </div>
+                </div>
+
+                <div class="cal-row cal-row--year">
+                  <svg class="cal-row__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 3h10v4.2c0 1.4-.7 2.7-1.9 3.4L12 13l-3.1-2.4A4 4 0 0 1 7 7.2V3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                    <path d="M7 21h10v-4.2c0-1.4-.7-2.7-1.9-3.4L12 11l-3.1 2.4A4 4 0 0 0 7 16.8V21z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                    <path d="M9.5 6.5h5M9.5 17.5h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  </svg>
+                  <span class="cal-row__label">年余</span>
+                  <div class="cal-row__body">
+                    <small>{{ cal.year }} 年还剩</small>
+                    <span class="year-cd" :aria-label="yearCdLabel">
+                      <SevenSegNumber :value="cal.yearLeftDays" class="year-cd__digits" />
+                      <span class="year-cd__lbl">天</span>
+                      <SevenSegNumber :value="cal.yearLeftHours" :pad="2" class="year-cd__digits" />
+                      <span class="year-cd__lbl">时</span>
+                      <SevenSegNumber :value="cal.yearLeftMinutes" :pad="2" class="year-cd__digits" />
+                      <span class="year-cd__lbl">分</span>
+                      <SevenSegNumber :value="cal.yearLeftSeconds" :pad="2" class="year-cd__digits" />
+                      <span class="year-cd__lbl">秒</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </Transition>
         </div>
       </div>
     </el-card>
@@ -114,15 +158,6 @@
       </app-stat-card>
     </div>
 
-    <!-- 规格查看单位：一个开关同时管两张卡的「规格」列（同一屏两个开关会让人以为各管各的），
-         只影响展示不改库，口径与台账/订单列表一致（1 英寸 = 25mm，寸取整） -->
-    <div class="dim-unit-bar" v-if="canDashboard">
-      <span class="dim-unit-label">规格单位</span>
-      <el-radio-group v-model="dimViewUnit" size="small">
-        <el-radio-button :value="DIMENSION_UNIT.MM">mm</el-radio-button>
-        <el-radio-button :value="DIMENSION_UNIT.INCH">寸</el-radio-button>
-      </el-radio-group>
-    </div>
 
     <el-row :gutter="16" class="list-row" v-if="canDashboard">
       <!-- 左：逾期未发货 / 临近交期 合并成一张页签卡。
@@ -176,27 +211,34 @@
               @mouseenter="owedScroll.pause()"
               @mouseleave="owedScroll.resume()"
             >
-              <el-table-column label="客户" prop="customerName" min-width="100" show-overflow-tooltip />
-              <el-table-column label="订单编号" min-width="105" show-overflow-tooltip>
+              <el-table-column label="客户" prop="customerName" min-width="68" show-overflow-tooltip />
+              <el-table-column label="订单编号" min-width="84" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
               </el-table-column>
-              <el-table-column label="产品型号" prop="productModel" min-width="120" show-overflow-tooltip />
-              <el-table-column :label="dimColLabel" width="90" align="center">
-                <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
+              <el-table-column label="产品名称" prop="productName" min-width="110" show-overflow-tooltip />
+              <el-table-column :label="owedDimLabel" width="92" align="center">
+                <template #header>
+                  <el-tooltip content="点击切换本表 mm / 寸" placement="top">
+                    <button type="button" class="dim-toggle" @click="toggleDimUnit('owed')">
+                      {{ owedDimLabel }}<el-icon><Switch /></el-icon>
+                    </button>
+                  </el-tooltip>
+                </template>
+                <template #default="{ row }">{{ owedDimText(row.dimensionMm) }}</template>
               </el-table-column>
-              <el-table-column label="交期" width="95" align="center">
+              <el-table-column label="交期" width="80" align="center">
                 <template #default="{ row }">
                   <span :class="{ 'num-overdue': isOverdueTab }">{{ row.deliveryDate || '—' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column :label="isOverdueTab ? '逾期' : '剩余'" width="70" align="center">
+              <el-table-column :label="isOverdueTab ? '逾期' : '剩余'" width="62" align="center">
                 <template #default="{ row }">
                   <el-tag size="small" :type="isOverdueTab || row.days <= 2 ? 'danger' : 'warning'">
-                    {{ !isOverdueTab && row.days === 0 ? '今天' : `${row.days} 天` }}
+                    {{ row.days }} 天
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="欠数" width="70" align="center">
+              <el-table-column label="欠数" width="58" align="center">
                 <template #default="{ row }"><span class="num-owed">{{ row.deliveryOwed }}</span></template>
               </el-table-column>
             </el-table>
@@ -241,29 +283,36 @@
               @mouseenter="outsourceScroll.pause()"
               @mouseleave="outsourceScroll.resume()"
             >
-              <el-table-column label="回厂日期" width="105">
+              <el-table-column label="回厂日期" width="78">
                 <template #default="{ row }">{{ row.backDate || '—' }}</template>
               </el-table-column>
-              <el-table-column label="生产单号" width="118" show-overflow-tooltip>
+              <el-table-column label="生产单号" min-width="72" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
               </el-table-column>
-              <el-table-column label="加工商" prop="processorName" min-width="110" show-overflow-tooltip>
+              <el-table-column label="加工商" prop="processorName" width="64" show-overflow-tooltip>
                 <template #default="{ row }">
                   <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
-              <el-table-column label="产品型号" prop="productModel" min-width="130" show-overflow-tooltip />
-              <el-table-column :label="dimColLabel" width="90" align="center">
-                <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
+              <el-table-column label="产品名称" prop="productName" min-width="110" show-overflow-tooltip />
+              <el-table-column :label="outDimLabel" width="92" align="center">
+                <template #header>
+                  <el-tooltip content="点击切换本表 mm / 寸" placement="top">
+                    <button type="button" class="dim-toggle" @click="toggleDimUnit('out')">
+                      {{ outDimLabel }}<el-icon><Switch /></el-icon>
+                    </button>
+                  </el-tooltip>
+                </template>
+                <template #default="{ row }">{{ outDimText(row.dimensionMm) }}</template>
               </el-table-column>
-              <el-table-column label="表面处理" width="90" align="center">
+              <el-table-column label="表面处理" width="72" align="center">
                 <template #default="{ row }">
                   <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
-              <el-table-column label="数量(支)" width="86" align="center">
+              <el-table-column label="数量(支)" width="68" align="center">
                 <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
               </el-table-column>
             </el-table>
@@ -280,7 +329,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Tickets, Tools, Van, Warning, Clock, CircleCheck } from '@element-plus/icons-vue';
+import {
+  Tickets, Tools, Van, Warning, Clock, CircleCheck, Switch, Calendar, DArrowLeft,
+  Sunrise, Sunny, Moon, MoonNight, CoffeeCup,
+} from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { DIMENSION_UNIT } from '@/constants/dict';
@@ -289,8 +341,11 @@ import { useAutoScroll } from '@/composables/useAutoScroll';
 import { useDimensionView } from '@/composables/useDimensionView';
 
 import { getCalendarBrief } from '@/utils/calendar-info';
+import { welcomeTip, type TipData } from './welcome-tips';
 import AppStatCard from '@/components/AppStatCard.vue';
 import SevenSegNumber from '@/components/SevenSegNumber.vue';
+import WelcomeRailArt from './WelcomeRailArt.vue';
+import WelcomeFireworks from './WelcomeFireworks.vue';
 import ColorTag from '@/components/ColorTag.vue';
 
 const router = useRouter();
@@ -301,7 +356,18 @@ const loading = ref(false);
  * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
  * 逻辑与台账页、订单列表共用同一个 composable。
  */
-const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimensionView();
+/**
+ * 规格单位开关做在各表的「规格」列表头里（原先两表共用一个开关、单占一行，太费纵向空间）。
+ * 开关就在本表表头上，**各管各的**：左右两张表各调一次 useDimensionView，
+ * 初值都取系统配置的默认单位，手动切换只影响本表。只影响展示不改库。
+ */
+const { viewUnit: owedDimUnit, colLabel: owedDimLabel, text: owedDimText } = useDimensionView();
+const { viewUnit: outDimUnit, colLabel: outDimLabel, text: outDimText } = useDimensionView();
+/** 按表名取 ref 再切：模板里顶层 ref 会被自动解包，直接把 ref 当参数传进来拿到的只是字符串 */
+function toggleDimUnit(table: 'owed' | 'out') {
+  const unit = table === 'owed' ? owedDimUnit : outDimUnit;
+  unit.value = unit.value === DIMENSION_UNIT.INCH ? DIMENSION_UNIT.MM : DIMENSION_UNIT.INCH;
+}
 
 const summary = ref<DashboardSummary>({
   cards: { activeOrders: 0, productionOwed: 0, deliveryOwed: 0, overdueOrders: 0 },
@@ -309,7 +375,7 @@ const summary = ref<DashboardSummary>({
   upcomingOrders: [],
   recentOutsource: [],
   counts: { overdueOrders: 0, upcomingOrders: 0, recentOutsource: 0 },
-  topLimit: 10,
+  topLimit: 100,
   upcomingDays: 7,
 });
 const cards = computed(() => summary.value.cards);
@@ -336,13 +402,14 @@ const owedTruncated = computed(() => owedRows.value.length >= summary.value.topL
 /* ===== 待办列表自动滚动 ===== */
 
 /**
- * 列表可见高度（px）：表头 34 + 10 行 × 32（size="small" 实测值）。
+ * 列表可见高度（px）：表头 33.8 + 10 行 × 31.8 ≈ 352（size="small" 实测值；取整多 1~2px 会露出下一行的边线）。
  *
- * 2026-08-13 由 5 行改 10 行（使用方要求）：接口每块返回 10 条（topLimit），
- * 因此常态下三张表都能一屏看全、不再滚动；只有条数超过 10 行才触发自动轮播。
+ * 2026-08-13 由 5 行改 10 行，2026-09-25 改为 8 行，2026-09-26 又改回 10 行（均为使用方要求）。2026-09-25 起接口每块最多
+ * 返回 100 条（topLimit，原为 10 条、与可见行数相同，列表从来滚不起来）：超过 10 行即自动轮播，
+ * 鼠标移入暂停、可滚轮手动翻看。可见行数与返回条数是两回事，别再改成相等。
  * 改行数只改这个数——行高变了先量一遍 el-table 的实际 header/row 高度再算。
  */
-const LIST_MAX_HEIGHT = 354;
+const LIST_MAX_HEIGHT = 352;
 
 const owedTableRef = ref<any>(null);
 const outsourceTableRef = ref<any>(null);
@@ -408,6 +475,48 @@ const greetingMeta = computed(() => {
 const greeting = computed(() => greetingMeta.value.text);
 const greetingTone = computed(() => greetingMeta.value.tone);
 
+/** 横幅的时段图标与副标题：与问候语同一套时段划分，整条横幅随时段换色调 */
+const TONE_ICON: Record<GreetingTone, unknown> = {
+  night: MoonNight,
+  morning: Sunrise,
+  forenoon: Sunny,
+  noon: CoffeeCup,
+  afternoon: Sunny,
+  evening: Moon,
+};
+const toneIcon = computed(() => TONE_ICON[greetingTone.value]);
+
+/** 看板数据是否已返回：未返回前不拿初始的全 0 拼带数字的提示 */
+const summaryLoaded = ref(false);
+/** 提示文案用的实时数字（口径见 welcome-tips.ts 的 TipData）；无看板权限或未加载时为 null */
+const tipData = computed<TipData | null>(() => {
+  if (!canDashboard.value || !summaryLoaded.value) return null;
+  const s = summary.value;
+  const d = new Date(nowTick.value);
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return {
+    activeOrders: s.cards.activeOrders,
+    overdueOrders: s.cards.overdueOrders,
+    overdueItems: s.counts.overdueOrders,
+    upcomingItems: s.counts.upcomingOrders,
+    upcomingDays: s.upcomingDays,
+    productionOwed: s.cards.productionOwed,
+    deliveryOwed: s.cards.deliveryOwed,
+    // 回厂列表按回厂日期倒序、最多 100 条，一天内回厂一般不会超过这个数
+    todayBack: s.recentOutsource.filter((r) => r.backDate === today).length,
+  };
+});
+/** 日期 + 岗位×时段提示（文案在 welcome-tips.ts）；节日正日换成节日祝福，假期其他天换成假期问候 */
+const welcomeSub = computed(() => {
+  const h = cal.value.todayHoliday;
+  const tip = h
+    ? h.isFestivalDay
+      ? `今天是${h.name}，节日快乐`
+      : `${h.name}假期中，祝您假期愉快`
+    : welcomeTip(userStore.roles, greetingTone.value, tipData.value);
+  return `${calHead.value.ym.replace(/^\d+年/, '')}${calHead.value.day}日 ${calHead.value.week} · ${tip}`;
+});
+
 /**
  * 欢迎称呼：
  * - 姓名为「管理员」或以「管理员」结尾（如系统管理员）→ 原样显示，不做「X先生/女士」
@@ -427,6 +536,19 @@ const politeName = computed(() => {
 /** 欢迎区日历摘要（公历 / 农历+节气 / 节假 / 年余倒计时） */
 const cal = computed(() => getCalendarBrief(new Date(nowTick.value)));
 
+/**
+ * 日历折叠：默认只露右侧按钮。
+ * 只有悬停展开（浮层，不挤布局），鼠标离开按钮+日历整块区域即收起；键盘聚焦按钮同样展开。
+ * 2026-09-25 取消了「点击固定」（使用方要求）。
+ */
+const calOpen = ref(false);
+/** 日历面板抬头：大号「日」+ 年月 + 星期 */
+const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
+const calHead = computed(() => {
+  const d = new Date(nowTick.value);
+  return { day: d.getDate(), ym: `${d.getFullYear()}年${d.getMonth() + 1}月`, week: `星期${WEEK_CN[d.getDay()]}` };
+});
+
 const yearCdLabel = computed(() => {
   const c = cal.value;
   return `${c.year} 年还剩 ${c.yearLeftDays} 天 ${c.yearLeftHours} 小时 ${c.yearLeftMinutes} 分 ${c.yearLeftSeconds} 秒`;
@@ -437,6 +559,7 @@ async function load() {
   loading.value = true;
   try {
     summary.value = await getDashboardSummary();
+    summaryLoaded.value = true;
     pickDefaultTab();
     // 刷新后行数变了，滚动位置要回到第一行
     void nextTick(() => {
@@ -502,19 +625,38 @@ export default { name: 'HomeDashboard' };
   overflow: visible;
 }
 
+/* 纵向间距统一交给全局 .page 的 flex gap（= 页面内边距 --hb-page-padding），与横幅上方空距一致。
+   各块自己不要再加上下 margin：flex 项的 margin 不合并，会与 gap 叠加（曾叠成 30px） */
 .welcome-card {
   flex-shrink: 0;
-  margin-bottom: 12px;
   overflow: visible;
+  /* 日历面板会垂到横幅下方，盖在汇总卡上：横幅整体要叠在后续兄弟元素之上 */
+  position: relative;
+  z-index: 5;
+
+  /* 横幅色调 = 当前主题色（「更换主题」即时生效）：竖条 / 徽章 / 渐变 / 光晕 / 问候语都取它。
+     2026-09-26 前按时段换色（早橙午青晚紫），与用户选的主题色各说各话；时段现在只决定图标（日/月） */
+  --tone-rgb: var(--hb-primary-rgb, 19, 166, 125);
 
   :deep(.el-card__body) {
     overflow: visible;
     max-height: none;
+    padding-top: 16px;
+    padding-bottom: 16px;
   }
 
   .welcome__text {
+    position: relative; /* 叠在装饰层之上 */
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+
     .welcome-greet {
-      margin: 0 0 12px;
+      margin: 0;
+      flex-shrink: 0;
+      white-space: nowrap;
+      line-height: 1.25;
       /* 回退链：自带楷书 → 系统楷体（Win 楷体 / macOS 楷体）→ 通用衬线，
          字体没下完或加载失败时仍是楷味，不会突兀地掉成黑体 */
       font-family: 'Ma Shan Zheng', KaiTi, STKaiti, '楷体', serif;
@@ -522,83 +664,273 @@ export default { name: 'HomeDashboard' };
       font-size: 24px;
       font-weight: 400;
       letter-spacing: 0.01em;
+      color: var(--el-color-primary);
       transition: color 0.35s ease;
-
-      &.is-night { color: #64748b; }
-      &.is-morning { color: #ea580c; }
-      &.is-forenoon { color: #0284c7; }
-      &.is-noon { color: #d97706; }
-      &.is-afternoon { color: #0d9488; }
-      &.is-evening { color: #4f46e5; }
     }
   }
 }
 
-.welcome-cal {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  overflow: visible;
+/* 装饰层：铺满卡片、自带圆角裁剪，不接收鼠标 */
+.welcome-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--el-card-border-radius, 4px);
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 96% -30%, rgba(var(--tone-rgb), 0.16) 0, transparent 42%),
+    radial-gradient(circle at 80% 150%, rgba(var(--tone-rgb), 0.1) 0, transparent 38%),
+    linear-gradient(100deg, rgba(var(--tone-rgb), 0.09) 0%, rgba(var(--tone-rgb), 0.02) 45%, transparent 70%);
+  transition: background 0.35s ease;
+
+  /* 左侧时段色竖条 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, rgba(var(--tone-rgb), 0.9), rgba(var(--tone-rgb), 0.45));
+  }
+  /* 右侧点阵纹理，向左淡出 */
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 42%;
+    background-image: radial-gradient(rgba(var(--tone-rgb), 0.22) 1px, transparent 1.2px);
+    background-size: 14px 14px;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
+    mask-image: linear-gradient(90deg, transparent, #000 70%);
+  }
 }
 
-.cal-chip {
+/* 中部舞台：flex 占满欢迎词与日历按钮之间的空位；上下负外边距抵掉卡片内边距（16px），铺满横幅高度。
+   自己裁剪溢出——卡片本身不能 overflow:hidden（日历浮层会被裁） */
+.welcome-stage {
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  position: relative;
+  margin: -16px 0;
+  overflow: hidden;
+  pointer-events: none;
+
+  &__fx {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  /* 绝对定位 + 上下贴边：高度由横幅决定、宽度按 viewBox 比例算出。
+     不能放在文档流里——SVG 会先按空位宽度铺满、再按比例反推高度，把横幅撑高（曾撑到 110px） */
+  &__art {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    height: 100%;
+    width: auto;
+    transform: translateX(-50%);
+  }
+}
+@media (max-width: 768px) {
+  .welcome-stage { display: none; }
+}
+
+.welcome-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+
+  &__icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 24px;
+    color: rgb(var(--tone-rgb));
+    background: rgba(var(--tone-rgb), 0.12);
+    box-shadow: inset 0 0 0 1px rgba(var(--tone-rgb), 0.18);
+  }
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+}
+.welcome-sub {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 日历停靠区：只有按钮占位（在欢迎词行的最右侧）；面板是它的绝对定位子元素，
+   不参与排版，悬停与固定两种状态都不占横幅空间 */
+.cal-dock {
+  position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.cal-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 6px 10px 6px 8px;
-  border-radius: 999px;
-  background: var(--el-fill-color-lighter);
+  justify-content: center;
+  gap: 2px;
+  width: 40px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--el-text-color-regular);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  /* 无框无底：状态只靠图标颜色和箭头方向表达 */
+  &:hover,
+  &.is-open {
+    color: var(--el-color-primary);
+  }
+  /* 展开时箭头掉头（指向「收回去」的方向） */
+  &.is-open .cal-toggle__arrow { transform: rotate(180deg); }
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary-light-5);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  &__arrow {
+    font-size: 12px;
+    transition: transform 0.2s ease;
+  }
+}
+
+/* 日历面板：贴在按钮左侧、顶边与按钮对齐，向左展开；超出横幅的部分浮在下方内容之上 */
+.cal-panel {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 10px);
+  z-index: 30;
+  width: 340px;
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
   border: 1px solid var(--el-border-color-lighter);
-  line-height: 1.3;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  background: var(--el-bg-color);
+  box-shadow: 0 10px 28px rgba(15, 40, 32, 0.14);
 
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(15, 40, 32, 0.06);
+  /* 桥接按钮与面板之间的 10px 空隙：属于面板的一部分，鼠标从按钮移进面板途中不会触发收起 */
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -10px;
+    width: 10px;
+    height: 40px;
   }
 
-  b {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-    white-space: nowrap;
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--el-border-color-lighter);
   }
-  em {
-    font-style: normal;
+  &__day {
+    min-width: 52px;
+    height: 52px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: var(--el-color-primary);
+    color: #fff;
+    font-size: 28px;
     font-weight: 700;
-    color: inherit;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
+  &__ym {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    b { font-size: 15px; color: var(--el-text-color-primary); }
+    span { font-size: 13px; color: var(--el-text-color-secondary); }
+  }
+}
 
-  .cal-sep {
-    margin: 0 0.25em;
-    opacity: 0.45;
-    font-weight: 400;
-  }
+/* 面板内容：图标 + 标签 + 内容 三列对齐 */
+.cal-row {
+  display: grid;
+  grid-template-columns: 18px 32px 1fr;
+  align-items: start;
+  column-gap: 8px;
+  padding: 9px 0;
+
+  & + & { border-top: 1px solid var(--el-fill-color); }
 
   &__icon {
     width: 18px;
     height: 18px;
-    flex-shrink: 0;
+    margin-top: 1px;
   }
+  &__label {
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--el-text-color-secondary);
+  }
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    line-height: 20px;
 
-  &--solar {
-    .cal-chip__icon { color: var(--el-color-primary); }
-    b { color: var(--el-color-primary); }
-  }
-  &--lunar {
-    .cal-chip__icon { color: #0d9488; }
     b {
-      color: #0f766e;
-      white-space: normal;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
+    }
+    small {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+    }
+    em {
+      font-style: normal;
+      font-weight: 700;
     }
   }
-  &--year {
-    .cal-chip__icon { color: var(--el-color-warning); }
+
+  /* 农历行随主题色；节假（红）与年余（橙）是语义色，不跟主题 */
+  &--lunar {
+    .cal-row__icon { color: var(--el-color-primary); }
+    b { color: var(--el-color-primary-dark-2); }
+    em { color: var(--el-color-primary-dark-2); }
   }
   &--holiday {
-    .cal-chip__icon { color: var(--el-color-danger); }
-    b em { color: var(--el-color-danger); }
+    .cal-row__icon { color: var(--el-color-danger); }
+    em { color: var(--el-color-danger); }
+    /* 节假日当天整句标红 */
+    .is-today { color: var(--el-color-danger); }
+  }
+  &--year {
+    .cal-row__icon { color: var(--el-color-warning); }
   }
 }
 
@@ -628,10 +960,19 @@ export default { name: 'HomeDashboard' };
   }
 }
 
-.cal-tag--lunar {
-  --el-tag-text-color: #0f766e;
-  --el-tag-border-color: rgba(13, 148, 136, 0.35);
-  --el-tag-bg-color: rgba(13, 148, 136, 0.08);
+/* 「向左展开」：从右边缘往左揭开 */
+.cal-reveal-enter-active,
+.cal-reveal-leave-active {
+  transition: clip-path 0.26s ease, opacity 0.2s ease;
+}
+.cal-reveal-enter-from,
+.cal-reveal-leave-to {
+  clip-path: inset(0 0 0 100% round 12px);
+  opacity: 0;
+}
+.cal-reveal-enter-to,
+.cal-reveal-leave-from {
+  clip-path: inset(0 0 0 0 round 12px);
 }
 
 @media (max-width: 768px) {
@@ -639,36 +980,48 @@ export default { name: 'HomeDashboard' };
     font-size: 21px !important; /* 覆盖全局 h2 压缩；楷书字面偏小，比原 18px 略放大 */
   }
 
-  .cal-chip {
-    border-radius: 10px;
-    width: 100%;
-    box-sizing: border-box;
-    overflow: visible;
-    b {
-      white-space: normal;
-      word-break: break-word;
-    }
+  /* 窄屏左侧放不下：面板改从按钮正下方弹出、右对齐 */
+  .cal-panel {
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(340px, calc(100vw - 32px));
+    &::after { display: none; }
   }
 }
+
 .no-stat {
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .sum-bar {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-  margin: 4px 0 16px;
+  margin: 0;
 }
-/* 规格单位切换：贴着两张列表卡的右上角（与台账页同款控件） */
-.dim-unit-bar {
-  display: flex; align-items: center; justify-content: flex-end;
-  gap: 8px; margin-bottom: 8px;
+/* 「规格」列表头即单位开关：保持表头原样式，只加切换图标与悬停反馈 */
+.dim-toggle {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; cursor: pointer; white-space: nowrap;
+  .el-icon { font-size: 12px; color: var(--el-color-primary); }
+  &:hover { color: var(--el-color-primary); }
 }
-.dim-unit-label { color: var(--el-text-color-regular); white-space: nowrap; font-size: 13px; }
-.list-row { margin-bottom: 0; }
+/* 窄屏两卡上下叠放时的间距用 row-gap（只出现在两卡之间），**不要给卡片加 margin-bottom**：
+   宽屏两卡并排时那截 margin 会垫在页面最底部，与 el-main 的底部内边距叠加，
+   内容明明放得下也会冒出垂直滚动条（2026-09-25 修） */
+.list-row {
+  margin-bottom: 0;
+  row-gap: var(--hb-page-padding);
+}
 .list-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+
+  /* 表格与卡头、底部说明之间的留白收紧一些，首页在常见 1080p 屏幕下一屏放得下 */
+  :deep(.el-card__body) {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
 
   /* 空态时收紧内边距，卡片不至于为一行提示撑出大片留白 */
   &.is-empty :deep(.el-card__body) {
@@ -676,11 +1029,14 @@ export default { name: 'HomeDashboard' };
     padding-bottom: 10px;
   }
 
+  /* min-height 与 .lc-tabs 的页签项高度对齐：左卡头是 el-tabs（27px），右卡头只有
+     标题+角标（20px），不统一的话左右两张卡差 7px、底边对不齐 */
   &__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    min-height: 28px;
   }
   &__title {
     display: inline-flex;

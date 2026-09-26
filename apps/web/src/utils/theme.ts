@@ -141,6 +141,8 @@ export function applyThemeColor(color: string): void {
   const root = document.documentElement;
 
   root.style.setProperty('--el-color-primary', primary);
+  // 主色的 RGB 分量「r, g, b」：需要按透明度叠加主色的地方用 rgba(var(--hb-primary-rgb), a)
+  root.style.setProperty('--hb-primary-rgb', parseHex(primary).join(', '));
 
   // 浅色梯度 light-1 ~ light-9（与白色混合）
   for (let i = 1; i <= 9; i++) {
