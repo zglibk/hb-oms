@@ -113,8 +113,13 @@ html {
  * Tooltip 全局（teleport 挂 body，popper-class 含 el-tooltip）
  * - 限宽避免长文撑满屏；pre-line 配合 utils/tooltip 的序号换行
  * - 勿用裸 .el-popper：下拉/日期等面板共用该类
+ * - **必须带 `:not(.is-pure)`**（2026-10-05 修）：EP 的下拉 / 级联 / 日期面板也是 el-tooltip
+ *   渲染的，同样带 el-tooltip 类，区别是它们开了 pure（根上多一个 is-pure）。不排除的话
+ *   这些面板也被卡在 ~360px：日期区间面板 646px 宽 → 溢出弹层；贴近视口右缘时溢出视口，
+ *   body 冒横向滚动条（数据大屏实测：弹出日期面板整页上移 + 底部滚动条）。
+ *   生产BOM 客户下拉曾为此单独打补丁（见 production-bom/form.vue），根因即此。
  * ============================================================ */
-.el-popper.el-tooltip {
+.el-popper.el-tooltip:not(.is-pure) {
   max-width: min(22.5rem, 80vw);
   line-height: 1.55;
   word-break: break-word;
