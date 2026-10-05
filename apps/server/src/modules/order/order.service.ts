@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -40,6 +39,7 @@ import { ProductSnapshotService } from '../../common/services/product-snapshot.s
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 import { OperationLogWriterService } from '../../common/services/operation-log-writer.service';
 import { syncOrderFinishState } from './order-owed.util';
+import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 
 /** 下游引用条数：外发回厂记录 / 装配批次 / 成品出入库明细 */
 export interface RefCounts {
@@ -85,6 +85,7 @@ export class OrderService {
     private readonly productSnapshot: ProductSnapshotService,
     private readonly groupSnapshot: PartGroupSnapshotService,
     private readonly logWriter: OperationLogWriterService,
+    private readonly ownership: RecordOwnershipService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -106,7 +107,8 @@ export class OrderService {
     return { salesmen, merchandisers };
   }
 
-  async findList(query: QueryOrderDto) {
+  /** 列表；传入 user 时每行带 `canModify`（前端据此禁用编辑/删除按钮，服务端 update/remove 另有硬校验） */
+  async findList(query: QueryOrderDto, user?: CurrentUserPayload) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const qb = this.orderRepo.createQueryBuilder('o');
@@ -188,8 +190,14 @@ export class OrderService {
       productsByOrder.set(p.orderId, arr);
     });
 
+    const modifiable = user
+      ? await this.ownership.canModifyMany('order', orders, user)
+      : orders.map(() => false);
+    const list = orders.map((o, i) =>
+      Object.assign(o, { products: productsByOrder.get(o.id) ?? [], canModify: modifiable[i] }),
+    );
     return {
-      list: orders.map((o) => Object.assign(o, { products: productsByOrder.get(o.id) ?? [] })),
+      list,
       total,
       page,
       pageSize,
@@ -198,7 +206,7 @@ export class OrderService {
 
   /**
    * 详情。传入 user 时附带 `editGuard`（编辑页据此锁字段、决定能否保存）：
-   * 订单被下游引用后只能「更正」，且限原创建人 / 同角色用户 / 管理员。
+   * 只有订单创建人与订单修改主管角色能改（RecordOwnershipService）；被下游引用后还只能「更正」、不能动结构。
    */
   async findOne(id: number, user?: CurrentUserPayload) {
     const detail = await this.loadDetail(id);
@@ -213,7 +221,9 @@ export class OrderService {
       editGuard: {
         referenced,
         refCounts: refs.counts,
-        canEdit: !referenced || (user ? await this.canCorrect(detail, user) : false),
+        canEdit: user ? await this.ownership.canModify('order', detail, user) : false,
+        /** 谁能改（提示文案），如「订单创建人（张三）或业务经理」 */
+        editors: await this.ownership.editorsText('order', detail),
       },
     });
   }
@@ -283,15 +293,17 @@ export class OrderService {
    * 为什么不再重建：装配批次、成品明细/余额锚在产品行 ID 上，外发回厂记录锚在部件组 ID 上，
    * 重建会换掉 ID、让下游全部悬空——所以过去订单一被引用就只能一刀切禁改，录错的生产单号
    * 再也改不回来。原地更新保住 ID 后，被引用的订单也能「更正」：
-   *   - 权限：原创建人 / 与其同角色的用户 / 管理员（canCorrect）；
+   *   - 权限：只有订单创建人与订单修改主管角色（RecordOwnershipService，管理员不例外、主管受数据范围约束），与是否被引用无关；
    *   - 结构不许动：被引用的产品行/部件组不能删，卡口/节数/分体不能改（assertReferencedStructure）；
-   *   - 同一事务把新值回写到下游快照、按新订单数重算完结状态；另记一条带改动明细的操作日志。
+   *   - 同一事务把新值回写到下游快照、按新订单数重算完结状态。
+   * 每次编辑都另记一条带逐项改动的操作日志。
    * 部件行没有下游引用，照旧按蓝图重新展开（追溯码/备注按「部件+边别」带回）。
    */
   async update(id: number, dto: UpdateOrderDto, user: CurrentUserPayload, ip?: string) {
     const order = await this.orderRepo.findOne({ where: { id } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status === ORDER_STATUS.CANCELLED) throw new BadRequestException('订单已作废，不能编辑');
+    await this.ownership.assertCanModify('order', order, user, '修改');
     this.assertProductRows(dto);
 
     const result = await this.dataSource.transaction(async (mgr) => {
@@ -299,16 +311,11 @@ export class OrderService {
       await mgr.query('SELECT id FROM t_order WHERE id = ? FOR UPDATE', [id]);
       const refs = await this.loadRefs(mgr, id);
       const referenced = refTotal(refs.counts) > 0;
-      if (referenced && !(await this.canCorrect(order, user))) {
-        throw new ForbiddenException(
-          `订单已被${describeRefs(refs.counts)}引用，只有订单创建人（${order.creatorName || '未知'}）、与其同角色的用户或管理员可以更正`,
-        );
-      }
 
       const existing = await this.loadExisting(mgr, id);
       this.assertIdsBelong(dto, existing);
       if (referenced) this.assertReferencedStructure(dto, existing, refs);
-      const changes = referenced ? this.diffChanges(order, dto, existing) : [];
+      const changes = this.diffChanges(order, dto, existing);
 
       await mgr.getRepository(Order).update(id, {
         poNo: dto.poNo?.trim() || null,
@@ -360,14 +367,16 @@ export class OrderService {
     });
 
     // 请求级的「编辑订单」日志只截得下请求体前 1000 字，看不出改了什么；
-    // 被引用订单的更正另记一条带逐项改动的日志，事后能查清谁把什么从 A 改成了 B
-    if (result.corrected && result.changes.length) {
-      const summary = `更正已引用订单 ${order.orderNo}：${result.changes.join('；')}`;
+    // 每次编辑另记一条带逐项改动的日志，事后能查清谁把什么从 A 改成了 B
+    // （使用方反馈过「自己建的数据被改了」却查不到是谁改的）
+    if (result.changes.length) {
+      const action = result.corrected ? '更正已引用订单' : '订单改动明细';
+      const summary = `${action} ${order.orderNo}：${result.changes.join('；')}`;
       this.logWriter.write({
         userId: user.id,
         userName: user.realName || user.username,
         module: '订单管理',
-        action: '更正已引用订单',
+        action,
         description: summary.length > 250 ? `${summary.slice(0, 247)}...` : summary,
         method: 'PUT',
         url: `/api/order/${id}`,
@@ -581,20 +590,6 @@ export class OrderService {
     await perProduct('t_assembly_batch', 'assembly');
     await perProduct('t_finished_item', 'finished');
     return { counts, byProduct, byGroup };
-  }
-
-  /** 被引用订单谁能更正：原创建人、与创建人有共同角色的用户、管理员 */
-  private async canCorrect(order: Order, user: CurrentUserPayload): Promise<boolean> {
-    if (user.roleCodes?.includes('admin')) return true;
-    if (order.creatorId == null) return false;
-    if (order.creatorId === user.id) return true;
-    const roleIds = (user.roleIds ?? []).filter((v) => Number.isInteger(v));
-    if (!roleIds.length) return false;
-    const rows: unknown[] = await this.dataSource.query(
-      `SELECT 1 FROM t_user_role WHERE user_id = ? AND role_id IN (${roleIds.map(() => '?').join(',')}) LIMIT 1`,
-      [order.creatorId, ...roleIds],
-    );
-    return rows.length > 0;
   }
 
   private async loadExisting(mgr: EntityManager, orderId: number): Promise<ExistingChildren> {
@@ -854,11 +849,13 @@ export class OrderService {
    * 库中已有的 status=9 历史订单原样保留（ORDER_STATUS.CANCELLED 枚举因此不删），
    * 只是不再产生新的作废记录。
    *
-   * 不收 user 参数：行已物理删除，写不了审计列；操作人由 @OperationLog 拦截器
-   * 从请求上下文记入 t_operation_log（含 biz_id），追溯到人靠那条日志。
+   * 行已物理删除、写不了审计列；操作人由 @OperationLog 拦截器从请求上下文记入
+   * t_operation_log（含 biz_id），追溯到人靠那条日志。
+   * 删除与修改同权：只有订单创建人与订单修改主管角色（RecordOwnershipService）。
    */
-  async remove(id: number) {
+  async remove(id: number, user: CurrentUserPayload) {
     const order = await this.mustGet(id);
+    await this.ownership.assertCanModify('order', order, user, '删除');
     const refs = await this.loadRefs(this.dataSource, id);
     if (refTotal(refs.counts) > 0) {
       throw new BadRequestException(

@@ -32,6 +32,7 @@ import { OUTBOUND_FAMILY_PARAMS, OUTBOUND_FAMILY_SQL } from '../order/order-owed
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { ProductSnapshotService } from '../../common/services/product-snapshot.service';
+import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { EXPORT_ROW_LIMIT, createWorkbook, styleSheet } from '../../common/utils/excel.util';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
@@ -97,6 +98,7 @@ export class AssemblyService {
     private readonly dataSource: DataSource,
     // 装配锚产品行，故读产品级快照（部件组级快照留给外发用）
     private readonly productSnapshot: ProductSnapshotService,
+    private readonly ownership: RecordOwnershipService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -286,7 +288,7 @@ export class AssemblyService {
    * 某产品行的装配批次明细 + 分边别小计与可入库量。
    * 供装配管理页的批次弹窗与成品入库表单下钻使用。
    */
-  async findBatches(query: QueryAssemblyBatchDto) {
+  async findBatches(query: QueryAssemblyBatchDto, user?: CurrentUserPayload) {
     if (!query.orderProductId) {
       throw new BadRequestException('请指定订单产品');
     }
@@ -296,7 +298,10 @@ export class AssemblyService {
     if (query.side != null) qb.andWhere('b.side = :side', { side: query.side });
     // 按预计装配区间排：先计划开始、再计划完成，未填计划的沉到最后按录入序
     qb.orderBy('b.planStartDate', 'ASC').addOrderBy('b.planDate', 'ASC').addOrderBy('b.id', 'ASC');
-    const list = await qb.getMany();
+    const rows = await qb.getMany();
+    // 每行带 canModify：前端据此禁用编辑 / 删除（服务端 updateBatch / removeBatch 另有硬校验）
+    const modifiable = user ? await this.ownership.canModifyMany('assembly', rows, user) : rows.map(() => false);
+    const list = rows.map((b, i) => Object.assign(b, { canModify: modifiable[i] }));
 
     // 分边别小计：含卡口按左右各算一份额度，非卡口只有空串一份
     const product = await this.productSnapshot.loadOne(null, query.orderProductId, {
@@ -396,6 +401,8 @@ export class AssemblyService {
     return this.dataSource.transaction(async (mgr) => {
       const pre = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!pre) throw new NotFoundException('装配批次不存在');
+      // 只许创建人与装配主管角色（受数据范围约束，管理员不例外）
+      await this.ownership.assertCanModify('assembly', pre, user, '修改');
       // 统一锁顺序「先锁产品行全部批次行、再改本行」，与入库确认一致，避免交叉等待死锁
       await loadInboundQuota(
         mgr,
@@ -425,12 +432,15 @@ export class AssemblyService {
     });
   }
 
-  /** 删除装配批次：已被成品入库消耗的完成量不得被删掉（§7.14），删后可入库量为负则回滚 */
+  /**
+   * 删除装配批次：已被成品入库消耗的完成量不得被删掉（§7.14），删后可入库量为负则回滚。
+   * 与修改同权：只许创建人与装配主管角色。删除动作的审计由 @OperationLog 记录。
+   */
   async removeBatch(id: number, user: CurrentUserPayload) {
-    void user; // 删除动作的审计由 @OperationLog 记录，行本身已物理删除无处落更新人
     return this.dataSource.transaction(async (mgr) => {
       const pre = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!pre) throw new NotFoundException('装配批次不存在');
+      await this.ownership.assertCanModify('assembly', pre, user, '删除');
       await loadInboundQuota(
         mgr,
         [{ orderProductId: pre.orderProductId, side: pre.side }],

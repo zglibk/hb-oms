@@ -46,6 +46,7 @@ import {
 } from '../../common/services/product-snapshot.service';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 import {
   EXPORT_ROW_LIMIT,
@@ -83,11 +84,13 @@ export class FinishedStockService {
     // 「颜色」是可停用的业务字段（§5.7），导出列随开关增减；导出文件由服务端生成，
     // 前端的列显隐管不到，故这里也要读一次开关
     private readonly systemConfig: SystemConfigService,
+    private readonly ownership: RecordOwnershipService,
   ) {}
 
   /* ==================== 查询 ==================== */
 
-  async findList(query: QueryFinishedDocDto) {
+  /** 列表；传入 user 时每行带 `canModify`（草稿的编辑 / 作废 / 确认按钮据此禁用，服务端另有硬校验） */
+  async findList(query: QueryFinishedDocDto, user?: CurrentUserPayload) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const qb = this.docRepo.createQueryBuilder('d');
@@ -119,13 +122,15 @@ export class FinishedStockService {
       byDoc.set(it.docId, arr);
     });
 
+    const modifiable = user ? await this.ownership.canModifyMany('finished', docs, user) : docs.map(() => false);
     return {
-      list: docs.map((d) => {
+      list: docs.map((d, i) => {
         const its = byDoc.get(d.id) ?? [];
         return Object.assign(d, {
           items: its,
           itemCount: its.length,
           totalQty: its.reduce((s, it) => s + (it.quantity || 0), 0),
+          canModify: modifiable[i],
         });
       }),
       total,
@@ -134,13 +139,16 @@ export class FinishedStockService {
     };
   }
 
-  async findOne(id: number) {
+  /** 详情；传入 user 时附带 `canModify` 与 `editors`（草稿编辑页据此只读并提示找谁改） */
+  async findOne(id: number, user?: CurrentUserPayload) {
     const doc = await this.docRepo.findOne({ where: { id } });
     if (!doc) throw new NotFoundException('单据不存在');
     const items = await this.itemRepo.find({ where: { docId: id }, order: { sort: 'ASC', id: 'ASC' } });
     // 已被红字冲销的数量（按原明细行聚合），供界面显示可再冲销余量
     const reversed = await this.loadReversedQty(items.map((it) => it.id));
     return Object.assign(doc, {
+      canModify: user ? await this.ownership.canModify('finished', doc, user) : false,
+      editors: await this.ownership.editorsText('finished', doc),
       items: items.map((it) =>
         Object.assign(it, {
           reversedQty: reversed.get(it.id) ?? 0,
@@ -1096,10 +1104,16 @@ export class FinishedStockService {
     });
   }
 
+  /*
+   * 草稿的编辑 / 作废 / 确认只许创建人与出入库主管角色（受数据范围约束，管理员不例外）——
+   * RecordOwnershipService；2026-09-26 使用方选定「确认」也在此列。红字冲销是新开一张单，不受此限。
+   */
+
   /** 编辑：仅草稿可改（已确认单禁改禁删，只能红字冲销，§7.1）；明细整体重建 */
   async update(id: number, dto: UpdateFinishedDocDto, user: CurrentUserPayload) {
     const doc = await this.mustGet(id);
     this.assertDraft(doc, '编辑');
+    await this.ownership.assertCanModify('finished', doc, user, '编辑');
     if (doc.bizType !== dto.bizType) {
       throw new BadRequestException('单据业务类型不可更改；如需更换请作废后重新建单');
     }
@@ -1124,6 +1138,7 @@ export class FinishedStockService {
       throw new BadRequestException('单据已作废');
     }
     this.assertDraft(doc, '作废');
+    await this.ownership.assertCanModify('finished', doc, user, '作废');
     await this.docRepo.update(id, {
       status: FINISHED_DOC_STATUS.CANCELLED,
       ...auditOnUpdate(user),
@@ -1148,6 +1163,7 @@ export class FinishedStockService {
       const doc = await mgr.getRepository(FinishedDoc).findOne({ where: { id } });
       if (!doc) throw new NotFoundException('单据不存在');
       this.assertDraft(doc, '确认');
+      await this.ownership.assertCanModify('finished', doc, user, '确认');
 
       const items = await mgr.getRepository(FinishedItem).find({ where: { docId: id } });
       if (!items.length) throw new BadRequestException('单据没有明细，不能确认');

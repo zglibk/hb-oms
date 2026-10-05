@@ -290,6 +290,14 @@ export interface SystemConfig {
   dimensionViewUnit: string;
   /** 送货单全局默认模板编码（客户资料未单独绑定模板时才用它） */
   deliveryTemplateDefault: string;
+  /*
+   * 业务记录修改主管角色（角色编码逗号分隔）：只许创建人与这些角色修改 / 删除，
+   * 管理员不例外，主管受其角色数据范围约束
+   */
+  orderEditRoles: string;
+  outsourceEditRoles: string;
+  assemblyEditRoles: string;
+  finishedEditRoles: string;
   /** 审计（单例配置行只有更新侧语义，接口只回不收） */
   updaterName?: string | null;
   updatedAt?: string | null;

@@ -45,8 +45,8 @@ export class AssemblyController {
   /** 某产品行的批次明细 + 分边别小计与可入库量；注册在 :id 型路由之前 */
   @Get('batch')
   @RequirePermissions('assembly')
-  async batches(@Query() query: QueryAssemblyBatchDto) {
-    return this.service.findBatches(query);
+  async batches(@Query() query: QueryAssemblyBatchDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findBatches(query, user);
   }
 
   /**

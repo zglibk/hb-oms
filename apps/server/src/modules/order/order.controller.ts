@@ -37,8 +37,8 @@ export class OrderController {
 
   @Get()
   @RequirePermissions('order')
-  async list(@Query() query: QueryOrderDto) {
-    return this.service.findList(query);
+  async list(@Query() query: QueryOrderDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findList(query, user);
   }
 
   /**
@@ -169,8 +169,8 @@ export class OrderController {
   }
 
   /**
-   * 编辑。订单被外发/装配/出入库引用后仍可「更正」（按行 ID 原地更新、回写下游快照），
-   * 但限原创建人 / 同角色用户 / 管理员，且不能动结构——规则见 service.update。
+   * 编辑。只有订单创建人与订单修改主管角色能改（管理员不例外）；被外发/装配/出入库引用后
+   * 仍可「更正」（按行 ID 原地更新、回写下游快照），但不能动结构——规则见 service.update。
    */
   @Put(':id')
   @RequirePermissions('order:update')
@@ -199,11 +199,11 @@ export class OrderController {
     return this.service.reopen(id, user);
   }
 
-  /** 删除（取代作废）：仅未被外发/装配/出入库引用的订单可删，连带删四级数据 */
+  /** 删除（取代作废）：仅未被外发/装配/出入库引用的订单可删，连带删四级数据；限创建人与订单修改主管角色 */
   @Delete(':id')
   @RequirePermissions('order:delete')
   @OperationLog('订单管理', '删除订单')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.remove(id, user);
   }
 }

@@ -168,19 +168,23 @@
         <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
             <app-actions>
+              <!-- 草稿的编辑 / 确认 / 作废只许制单人与出入库主管角色（服务端另有硬校验） -->
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:update'" link type="primary" :icon="Edit"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 @click="openEdit(row)"
               >编辑</el-button>
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:confirm'" link type="success" :icon="CircleCheck"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="actingId === row.id" @click="onConfirm(row)"
               >确认</el-button>
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:cancel'" link type="danger" :icon="Delete"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="actingId === row.id" @click="onCancel(row)"
               >作废</el-button>
               <el-button
@@ -248,6 +252,8 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
 
 /** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
+/** 不是自己制的草稿：只有制单人与出入库主管角色能编辑 / 确认 / 作废 */
+const NOT_OWNER_TIP = '只有制单人或主管角色（如计划经理）可以编辑、确认、作废这张草稿';
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
   workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));

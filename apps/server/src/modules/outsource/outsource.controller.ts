@@ -36,8 +36,8 @@ export class OutsourceController {
 
   @Get()
   @RequirePermissions('outsource')
-  async list(@Query() query: QueryOutsourcePartDto) {
-    return this.service.findList(query);
+  async list(@Query() query: QueryOutsourcePartDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findList(query, user);
   }
 
   /** 可外发部件组选项（录入表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
@@ -88,7 +88,7 @@ export class OutsourceController {
   @Delete(':id')
   @RequirePermissions('outsource:delete')
   @OperationLog('外发管理', '删除外发件回厂记录')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.remove(id, user);
   }
 }

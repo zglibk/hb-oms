@@ -88,6 +88,24 @@ export class SystemConfigService {
     };
   }
 
+  /**
+   * 某模块的修改主管角色编码：该模块的记录只允许创建人与这些角色的用户修改（管理员不例外）。
+   * 空串 = 只有创建人能改。判定逻辑在 RecordOwnershipService，这里只负责取配置。
+   */
+  async getEditRoles(module: 'order' | 'outsource' | 'assembly' | 'finished'): Promise<string[]> {
+    const row = await this.get();
+    const raw = {
+      order: row.orderEditRoles,
+      outsource: row.outsourceEditRoles,
+      assembly: row.assemblyEditRoles,
+      finished: row.finishedEditRoles,
+    }[module];
+    return String(raw ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
   /** 更新配置（传入的字段覆盖现有值） */
   async update(
     dto: UpdateSystemConfigDto,

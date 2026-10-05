@@ -41,12 +41,17 @@ export interface OrderRefCounts {
   finished: number;
 }
 
-/** 编辑守卫（仅详情接口带出）：订单被下游引用后只能「更正」，且限原创建人 / 同角色用户 / 管理员 */
+/**
+ * 编辑守卫（仅详情接口带出）：订单只许创建人与「订单修改主管角色」修改（管理员不例外）；
+ * 被下游引用后还只能「更正」、不能动结构。
+ */
 export interface OrderEditGuard {
   referenced: boolean;
   refCounts: OrderRefCounts;
-  /** 当前用户能否保存：未被引用恒为 true */
+  /** 当前用户能否修改这张订单 */
   canEdit: boolean;
+  /** 谁能改（提示文案），如「订单创建人（张三）或业务经理」 */
+  editors: string;
 }
 
 export interface OrderProductItem {
@@ -111,6 +116,8 @@ export interface OrderItem {
   products: OrderProductItem[];
   /** 编辑守卫（仅详情接口带出） */
   editGuard?: OrderEditGuard;
+  /** 当前用户能否修改 / 删除（仅列表接口带出） */
+  canModify?: boolean;
 }
 
 export interface OrderQuery {

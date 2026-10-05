@@ -49,8 +49,8 @@ export class FinishedStockController {
 
   @Get()
   @RequirePermissions('finished-stock')
-  async list(@Query() query: QueryFinishedDocDto) {
-    return this.service.findList(query);
+  async list(@Query() query: QueryFinishedDocDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findList(query, user);
   }
 
   /**
@@ -131,8 +131,8 @@ export class FinishedStockController {
 
   @Get(':id')
   @RequirePermissions('finished-stock')
-  async detail(@Param('id', ParseIntPipe) id: number) {
-    return this.service.findOne(id);
+  async detail(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findOne(id, user);
   }
 
   @Post()

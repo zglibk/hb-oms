@@ -29,6 +29,8 @@ export interface AssemblyBatchRow {
   updaterName: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 当前用户能否修改 / 删除（批次列表带出）：只有创建人与装配主管角色 */
+  canModify?: boolean;
 }
 
 /** 装配管理列表行：按**订单产品行**一行（排产是产品级活动） */

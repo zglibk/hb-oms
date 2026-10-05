@@ -14,22 +14,26 @@
         </div>
       </div>
 
-      <!-- 被下游引用的订单：可更正信息、不能动结构；无更正权限时只读 -->
+      <!-- 无修改权（不是创建人、也不在订单修改主管角色里）：只读 -->
       <el-alert
-        v-if="editGuard?.referenced"
-        :type="editGuard.canEdit ? 'warning' : 'error'"
+        v-if="editGuard && !editGuard.canEdit"
+        type="error"
+        :closable="false"
+        show-icon
+        class="ref-alert"
+        :title="`只有${editGuard.editors}可以修改这张订单，您当前只能查看`"
+      />
+      <!-- 被下游引用的订单：可更正信息、不能动结构 -->
+      <el-alert
+        v-else-if="editGuard?.referenced"
+        type="warning"
         :closable="false"
         show-icon
         class="ref-alert"
         :title="`本订单已被 ${refText(editGuard.refCounts)} 引用`"
       >
-        <template v-if="editGuard.canEdit">
-          可以更正录错的订单信息，保存后自动同步到这些下游记录（入库单、送货单重新打印即为新值）。
-          已被引用的产品行不能删除，轨道节数、卡口、分体出货不能修改；有外发回厂记录的部件组不能删除或改组类型。
-        </template>
-        <template v-else>
-          只有订单创建人（{{ auditRow?.creatorName || '未知' }}）、与其同角色的用户或管理员可以更正，您当前只能查看。
-        </template>
+        可以更正录错的订单信息，保存后自动同步到这些下游记录（入库单、送货单重新打印即为新值）。
+        已被引用的产品行不能删除，轨道节数、卡口、分体出货不能修改；有外发回厂记录的部件组不能删除或改组类型。
       </el-alert>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small" class="order-form">
@@ -613,12 +617,13 @@ function suggestNextProductionNo(no: string): string {
 const auditRow = ref<any>(null);
 
 /**
- * 编辑守卫（详情接口带回）：订单被外发/装配/出入库引用后只能「更正」——信息可改、结构不能动，
- * 且限原创建人 / 同角色用户 / 管理员。这里只做界面引导，服务端 update 另有同样的硬校验。
+ * 编辑守卫（详情接口带回）：订单只许创建人与订单修改主管角色修改（管理员不例外）；
+ * 被外发/装配/出入库引用后还只能「更正」——信息可改、结构不能动。
+ * 这里只做界面引导，服务端 update 另有同样的硬校验。
  */
 const editGuard = ref<OrderEditGuard | null>(null);
 /** 被引用且当前用户无更正权限：保存按钮禁用 */
-const guardBlocked = computed(() => !!editGuard.value?.referenced && !editGuard.value.canEdit);
+const guardBlocked = computed(() => !!editGuard.value && !editGuard.value.canEdit);
 function refText(c: OrderRefCounts | null | undefined): string {
   if (!c) return '';
   return [
@@ -1303,7 +1308,7 @@ async function confirmReferencedChanges() {
 
 async function onSave() {
   if (guardBlocked.value) {
-    ElMessage.warning('该订单已有下游记录，只有订单创建人、与其同角色的用户或管理员可以更正');
+    ElMessage.warning(`只有${editGuard.value?.editors ?? '订单创建人'}可以修改这张订单`);
     return;
   }
   await formRef.value?.validate();

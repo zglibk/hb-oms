@@ -200,7 +200,8 @@
                 size="small"
                 v-permission.disable="'order:update'"
                 link type="primary" class="btn-edit" :icon="Edit"
-                :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED"
+                :disabled="row.status === ORDER_STATUS_VALUE.CANCELLED || row.canModify === false"
+                :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 @click="openEdit(row)"
               >编辑</el-button>
               <!-- 复制历史订单做模板建新单：复制的是内容不是状态，已作废订单也允许复制 -->
@@ -227,6 +228,8 @@
               <!-- 删除取代作废：限制条件本就相同（被下游引用即禁止），留废记录无价值 -->
               <el-button
                 size="small" v-permission.disable="'order:delete'" link type="danger" :icon="Delete"
+                :disabled="row.canModify === false"
+                :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="actingId === row.id" @click="onDelete(row)"
               >删除</el-button>
             </app-actions>
@@ -281,6 +284,8 @@ import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
 
 const router = useRouter();
+/** 不是自己建的订单：只有订单创建人与订单修改主管角色能改 / 删（服务端另有硬校验） */
+const NOT_OWNER_TIP = '只有订单创建人或主管角色（如业务经理）可以修改、删除这张订单';
 const loading = ref(false);
 const list = ref<OrderItem[]>([]);
 const total = ref(0);

@@ -99,6 +99,8 @@ const MIGRATIONS: string[] = [
   'migration-version-leading-zero.sql',
   // 更新日志 v1.1.0「用户反馈问题优化」（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.1.0.sql',
+  // 业务记录修改权收紧：订单/外发/装配/成品出入库四个「主管角色」配置列 + 主管角色补授按钮权限
+  'migration-record-edit-roles.sql',
 ];
 
 /**
@@ -254,6 +256,11 @@ const expectedColumns = [
   // 送货单打印：客户绑定模板 + 全局默认模板
   't_customer.delivery_template',
   't_system_config.delivery_template_default',
+  // 业务记录修改主管角色（只许创建人与这些角色修改）
+  't_system_config.order_edit_roles',
+  't_system_config.outsource_edit_roles',
+  't_system_config.assembly_edit_roles',
+  't_system_config.finished_edit_roles',
   // 查看权限（只读角色）
   't_permission.access_type',
   // 订单备注（图文混排）

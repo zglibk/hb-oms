@@ -56,6 +56,10 @@ export interface FinishedDocRow {
   items?: FinishedItemRow[];
   itemCount?: number;
   totalQty?: number;
+  /** 当前用户能否编辑 / 作废 / 确认草稿：只有创建人与出入库主管角色（列表与详情带出） */
+  canModify?: boolean;
+  /** 谁能改（提示文案，仅详情带出），如「创建人（张三）或计划经理」 */
+  editors?: string;
 }
 
 /** 库存余额行（锚定订单**产品行** + 边别 + 批次；不挂订单的纯属性行锚点为 0） */

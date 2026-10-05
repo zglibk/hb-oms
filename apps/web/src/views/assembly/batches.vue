@@ -81,12 +81,15 @@
         <el-table-column label="操作" width="130" align="center" fixed="right">
           <template #default="{ row }">
             <app-actions>
+              <!-- 只有录入人与装配主管角色能改 / 删（服务端另有硬校验） -->
               <el-button
                 size="small" v-permission.disable="'assembly:update'" link type="primary" :icon="Edit"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 @click="startEdit(row)"
               >编辑</el-button>
               <el-button
                 size="small" v-permission.disable="'assembly:delete'" link type="danger" :icon="Delete"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="removingId === row.id" @click="onRemove(row)"
               >删除</el-button>
             </app-actions>
@@ -229,6 +232,8 @@ import ColorTag from '@/components/ColorTag.vue';
 
 const route = useRoute();
 const router = useRouter();
+/** 不是自己录的批次：只有录入人与装配主管角色能改 / 删 */
+const NOT_OWNER_TIP = '只有录入人或主管角色（如计划经理、生产经理）可以修改、删除这条批次';
 /** 锚点产品行：来自装配列表「录装配」跳转的 query（同页切产品时 watch 重新加载） */
 const orderProductId = computed(() => (route.query.orderProductId ? Number(route.query.orderProductId) : null));
 

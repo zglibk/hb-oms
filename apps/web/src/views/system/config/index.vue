@@ -287,6 +287,43 @@
           </div>
         </el-tab-pane>
 
+        <!-- 数据权限：业务记录只许创建人与这里选的主管角色修改（管理员不例外，主管受数据范围约束） -->
+        <el-tab-pane label="数据权限" name="dataPerm">
+          <el-form :model="form" label-width="130px" class="config-form" v-loading="loading">
+            <el-card shadow="never" class="cfg-section">
+              <div class="section-title">谁能修改别人录的数据</div>
+              <p class="section-desc">
+                下面四类记录只允许<strong>创建人本人</strong>和该类记录的<strong>主管角色</strong>修改、删除，
+                <strong>系统管理员也不例外</strong>（要让管理员能改，就把「系统管理员」选进来）。其他人只能查看。<br />
+                主管角色能改哪些人的记录，再由其角色的<strong>「数据范围」</strong>决定（角色管理里设置）：
+                全部 = 全厂；本部门 / 本部门及下级 / 自定义部门 = 创建人在这些部门的记录；本人 = 只能改自己录的。
+                <strong>数据范围只管能改哪些，不影响查看</strong>——所有人照常能看全厂数据，台账与看板数字不因人而异。
+              </p>
+              <el-form-item v-for="m in EDIT_ROLE_FIELDS" :key="m.key" :label="m.label">
+                <el-select
+                  :model-value="rolesOf(m.key)"
+                  multiple
+                  filterable
+                  clearable
+                  placeholder="不选 = 只有创建人能改"
+                  style="width: 420px"
+                  @update:model-value="(v: string[]) => setRoles(m.key, v)"
+                >
+                  <el-option v-for="r in roleOptions" :key="r.roleCode" :label="r.roleName" :value="r.roleCode" />
+                </el-select>
+                <div class="switch-hint switch-hint--block">{{ m.hint }}</div>
+              </el-form-item>
+              <div class="switch-hint switch-hint--block">
+                选中的角色还须在「角色管理 → 分配权限」里有对应模块的修改 / 删除按钮权限才能真正操作。
+                每次修改订单改了哪些内容，都会记在操作日志里（动作「订单改动明细」/「更正已引用订单」）。
+              </div>
+            </el-card>
+            <el-form-item>
+              <el-button size="small" v-permission="'config:update'" type="primary" :loading="saving" @click="onSave">保存</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+
         <!-- Tab4：危险操作（仅 admin 可见）。
              整个页签隐藏而非禁用：页签标题由 el-tabs 头部另行渲染，
              禁用面板 div 拦不住用户切到该页签。 -->
@@ -370,6 +407,7 @@ import {
   getSystemConfig,
   updateSystemConfig,
   cleanupBusinessData,
+  getRoleList,
   type SystemConfig,
   type CleanupResult,
 } from '@/api/system';
@@ -461,7 +499,34 @@ const form = reactive<SystemConfig>({
    * 服务器当前值读进来、保存时原样回传，因此不会把打印模板页设的值重置掉。
    */
   deliveryTemplateDefault: 'generic',
+  orderEditRoles: 'BUS_MGR',
+  outsourceEditRoles: 'PLN_MGR',
+  assemblyEditRoles: 'PLN_MGR,PROD_MGR',
+  finishedEditRoles: 'PLN_MGR',
 });
+
+/*
+ * 「数据权限」页签：四类业务记录的修改主管角色（多选），存库为逗号分隔的角色编码。
+ * 角色下拉取角色管理列表（本页本就只给管理员用，他有角色管理的读权限）。
+ */
+type EditRoleKey = 'orderEditRoles' | 'outsourceEditRoles' | 'assemblyEditRoles' | 'finishedEditRoles';
+const EDIT_ROLE_FIELDS: Array<{ key: EditRoleKey; label: string; hint: string }> = [
+  { key: 'orderEditRoles', label: '订单', hint: '订单的修改、删除（默认业务经理）' },
+  { key: 'outsourceEditRoles', label: '外发回厂记录', hint: '外发回厂记录的修改、删除（默认计划经理）' },
+  { key: 'assemblyEditRoles', label: '装配批次', hint: '装配批次的修改、删除（默认计划经理、生产经理）' },
+  { key: 'finishedEditRoles', label: '成品出入库单', hint: '草稿的编辑、确认、作废（默认计划经理）；红字冲销不受此限' },
+];
+const roleOptions = ref<Array<{ roleCode: string; roleName: string }>>([]);
+/** 逗号串 ⇄ 多选数组 */
+function rolesOf(key: EditRoleKey): string[] {
+  return String(form[key] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+function setRoles(key: EditRoleKey, v: string[]) {
+  form[key] = v.join(',');
+}
+getRoleList()
+  .then((rows) => (roleOptions.value = rows.map((r: any) => ({ roleCode: r.roleCode, roleName: r.roleName }))))
+  .catch(() => {});
 
 /* 裁剪组件 ref */
 const logoCropperRef = ref<InstanceType<typeof InlineImageCropper>>();

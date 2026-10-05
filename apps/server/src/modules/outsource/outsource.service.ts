@@ -19,6 +19,7 @@ import {
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
+import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 
 /** 可外发部件组行（供录入表单的选择器） */
 export interface PartGroupOption {
@@ -62,11 +63,12 @@ export class OutsourceService {
     private readonly partRepo: Repository<OutsourcePart>,
     private readonly dataSource: DataSource,
     private readonly partGroupSnapshot: PartGroupSnapshotService,
+    private readonly ownership: RecordOwnershipService,
   ) {}
 
   /* ==================== 查询 ==================== */
 
-  async findList(query: QueryOutsourcePartDto) {
+  async findList(query: QueryOutsourcePartDto, user?: CurrentUserPayload) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const qb = this.partRepo.createQueryBuilder('r');
@@ -96,7 +98,10 @@ export class OutsourceService {
       .addOrderBy('r.id', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize);
-    const [list, total] = await qb.getManyAndCount();
+    const [rows, total] = await qb.getManyAndCount();
+    // 每行带 canModify：前端据此禁用编辑 / 删除（服务端 update / remove 另有硬校验）
+    const modifiable = user ? await this.ownership.canModifyMany('outsource', rows, user) : rows.map(() => false);
+    const list = rows.map((r, i) => Object.assign(r, { canModify: modifiable[i] }));
     return { list, total, page, pageSize };
   }
 
@@ -335,9 +340,13 @@ export class OutsourceService {
     return { count: saved.length, ids: saved.map((r) => r.id) };
   }
 
-  /** 编辑单条：锚点与订单侧快照不可改，只改加工商/日期/表面处理/颜色/数量口径/备注 */
+  /**
+   * 编辑单条：锚点与订单侧快照不可改，只改加工商/日期/表面处理/颜色/数量口径/备注。
+   * 只许创建人与外发主管角色（受数据范围约束，管理员不例外）——RecordOwnershipService。
+   */
   async update(id: number, dto: UpdateOutsourcePartDto, user: CurrentUserPayload) {
     const row = await this.findOne(id);
+    await this.ownership.assertCanModify('outsource', row, user, '修改');
     const surfaceType = dto.surfaceType || row.surfaceType;
     if (!needsOutsource(surfaceType)) {
       throw new BadRequestException('表面处理不能为「无」——不外发的产品不该有回厂记录');
@@ -359,9 +368,11 @@ export class OutsourceService {
   /**
    * 删除：录错了直接删（本表是流水记账行，无下游引用——台账每次实时聚合，
    * 删掉即刻反映）。删除动作靠 @OperationLog 留痕，行已物理删除写不了审计列。
+   * 与修改同权：只许创建人与外发主管角色。
    */
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, user: CurrentUserPayload) {
+    const row = await this.findOne(id);
+    await this.ownership.assertCanModify('outsource', row, user, '删除');
     await this.partRepo.delete(id);
     return { id };
   }

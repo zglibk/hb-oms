@@ -35,6 +35,8 @@ export interface OutsourcePartRow {
   updaterName?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** 当前用户能否修改 / 删除（列表带出）：只有创建人与外发主管角色 */
+  canModify?: boolean;
 }
 
 /** 可外发部件组选项（录入表单选择器） */

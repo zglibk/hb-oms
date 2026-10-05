@@ -108,11 +108,13 @@
               <el-button
                 size="small" v-permission.disable="'outsource:update'"
                 link type="primary" class="btn-edit" :icon="Edit"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 @click="openEdit(row)"
               >编辑</el-button>
               <el-button
                 size="small" v-permission.disable="'outsource:delete'"
                 link type="danger" class="btn-delete" :icon="Delete"
+                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="deletingId === row.id" @click="onDelete(row)"
               >删除</el-button>
             </app-actions>
@@ -234,6 +236,8 @@ import ColorTag from '@/components/ColorTag.vue';
 const { colorEnabled } = useFeatureFlags();
 
 const router = useRouter();
+/** 不是自己录的记录：只有录入人与外发主管角色能改 / 删（服务端另有硬校验） */
+const NOT_OWNER_TIP = '只有录入人或主管角色（如计划经理）可以修改、删除这条记录';
 const loading = ref(false);
 const list = ref<OutsourcePartRow[]>([]);
 const total = ref(0);

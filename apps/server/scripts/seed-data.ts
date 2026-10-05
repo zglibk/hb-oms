@@ -81,6 +81,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finished-stock:confirm', 'finished-stock:cancel', 'finished-stock:print', 'finished-stock:export',
     'stock-balance', 'part-stock',
   ],
+  // 业务经理：系统配置「订单修改主管角色」的缺省值——订单只许创建人与主管角色修改，
+  // 主管角色没有「修改订单」按钮权限就改不了（与 migration-order-edit-roles.sql 同步）
+  BUS_MGR: ['production', 'order', 'order:update'],
   // 其余内置角色不预置权限：岗位职责差异大，由管理员在「角色管理 → 分配权限」按需授予，
   // 预置一套猜测出来的权限反而会让人以为已经配好、不再核对。
   // admin 在脚本中绑定全部权限

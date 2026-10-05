@@ -9,9 +9,11 @@
         </div>
         <div>
           <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" @click="onSave">保存草稿</el-button>
+          <el-button size="small" type="primary" :loading="saving" :disabled="!!notOwnerTip" @click="onSave">保存草稿</el-button>
         </div>
       </div>
+      <!-- 不是自己制的草稿：只读（服务端另有硬校验） -->
+      <el-alert v-if="notOwnerTip" type="error" :closable="false" show-icon class="owner-alert" :title="notOwnerTip" />
 
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="16">
@@ -242,12 +244,17 @@ const limitLabel = computed(() => (isInbound.value ? '可入库量' : '当前结
 const totalQty = computed(() => form.items.reduce((s, it) => s + (it.quantity || 0), 0));
 const overRows = computed(() => form.items.filter((it) => (it.quantity || 0) > it.limit));
 
+/** 草稿只许制单人与出入库主管角色编辑：无权时为提示文案（顶部只读提示 + 禁用保存），有权为空串 */
+const notOwnerTip = ref('');
+
 async function init() {
   if (!editId.value) return;
   pageLoading.value = true;
   try {
     const doc = await getFinishedDocDetail(editId.value);
     docNo.value = doc.docNo;
+    notOwnerTip.value =
+      doc.canModify === false ? `只有${doc.editors ?? '制单人'}可以编辑这张草稿，您当前只能查看` : '';
     form.bizType = doc.bizType;
     form.docDate = String(doc.docDate).slice(0, 10);
     form.workTeam = doc.workTeam ?? '';
@@ -365,6 +372,10 @@ function confirmPick() {
 
 /* ===== 保存 ===== */
 async function onSave() {
+  if (notOwnerTip.value) {
+    ElMessage.warning(notOwnerTip.value);
+    return;
+  }
   await formRef.value?.validate();
   if (!form.items.length) {
     ElMessage.warning('请至少添加一条明细');
@@ -413,6 +424,7 @@ export default { name: 'FinishedStockForm' };
 </script>
 
 <style scoped lang="scss">
+.owner-alert { margin: 10px 0 4px; }
 .form-header {
   display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 14px; margin-bottom: 4px;
