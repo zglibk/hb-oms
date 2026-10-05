@@ -324,6 +324,11 @@
           </el-form>
         </el-tab-pane>
 
+        <!-- 数据大屏：车间电视免登录访问码 -->
+        <el-tab-pane label="数据大屏" name="screen">
+          <ScreenKeyTab v-if="activeTab === 'screen'" />
+        </el-tab-pane>
+
         <!-- Tab4：危险操作（仅 admin 可见）。
              整个页签隐藏而非禁用：页签标题由 el-tabs 头部另行渲染，
              禁用面板 div 拦不住用户切到该页签。 -->
@@ -416,12 +421,13 @@ import { useThemeStore } from '@/stores/theme';
 import { useFeatureStore } from '@/stores/feature';
 import { normalizeUploadUrl } from '@/utils/upload-url';
 import InlineImageCropper from '@/components/InlineImageCropper.vue';
+import ScreenKeyTab from './ScreenKeyTab.vue';
 
 const loading = ref(false);
 const saving = ref(false);
 const route = useRoute();
 const router = useRouter();
-const validTabs = ['company', 'loginBg', 'fields', 'danger'] as const;
+const validTabs = ['company', 'loginBg', 'fields', 'dataPerm', 'screen', 'danger'] as const;
 type TabName = (typeof validTabs)[number];
 const initialTab = validTabs.includes(route.query.tab as TabName)
   ? (route.query.tab as TabName)

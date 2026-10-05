@@ -20,6 +20,7 @@ import { PartStockModule } from './modules/part-stock/part-stock.module';
 import { DullStockModule } from './modules/dull-stock/dull-stock.module';
 import { OpeningModule } from './modules/opening/opening.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ScreenModule } from './modules/screen/screen.module';
 import { EquipmentModule } from './modules/equipment/equipment.module';
 import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
@@ -79,6 +80,7 @@ import { ProductionBomModule } from './modules/production-bom/production-bom.mod
     DullStockModule,
     OpeningModule,
     DashboardModule,
+    ScreenModule,
     EquipmentModule,
     ChangelogModule,
     SystemConfigModule,

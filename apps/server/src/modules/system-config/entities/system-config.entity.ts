@@ -199,6 +199,21 @@ export class SystemConfig {
   })
   finishedEditRoles: string;
 
+  /**
+   * 数据大屏免登录访问码的 SHA-256 摘要；NULL = 免登录访问关闭。
+   * `select: false`：完整配置接口会把整行回给前端，摘要也不外露。
+   * 读写只走 SystemConfigService 的 screen-key 系列方法。
+   */
+  @Column({
+    name: 'screen_key_hash',
+    type: 'char',
+    length: 64,
+    nullable: true,
+    select: false,
+    comment: '数据大屏免登录访问码的 SHA-256 摘要（十六进制）；NULL=免登录访问关闭，明文不落库',
+  })
+  screenKeyHash: string | null;
+
   // ===== 元数据 =====
   // 单例配置行（id 恒为 1，由 db:init 建好），语义上只有"被修改"没有"被创建"，
   // 故只带更新侧审计；created_at 仅用于记录该行何时落库。

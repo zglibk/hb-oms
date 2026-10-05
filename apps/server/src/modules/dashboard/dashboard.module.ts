@@ -9,5 +9,7 @@ import { DashboardService } from './dashboard.service';
 @Module({
   controllers: [DashboardController],
   providers: [DashboardService],
+  // 数据大屏（screen 模块）复用看板的卡片与列表口径
+  exports: [DashboardService],
 })
 export class DashboardModule {}

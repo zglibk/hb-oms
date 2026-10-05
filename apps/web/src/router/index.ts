@@ -30,6 +30,14 @@ const constantRoutes: RouteRecordRaw[] = [
     meta: { title: '生产任务单' },
   },
   {
+    // 数据可视化大屏：顶层路由不挂 Layout（全屏画布），且免登录可达——
+    // 车间电视凭访问码看；后台用户经顶栏「数据可视化」按钮带登录态进入。见 views/screen/index.vue
+    path: '/screen',
+    name: 'DataScreen',
+    component: () => import('@/views/screen/index.vue'),
+    meta: { title: '数据可视化大屏', public: true },
+  },
+  {
     path: '/finished-stock/delivery-note',
     name: 'DeliveryNotePrint',
     component: () => import('@/views/finished-stock/delivery-note.vue'),
@@ -145,6 +153,11 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (!hasToken) {
+    // 免登录页（数据大屏）：不加载用户信息、不注册动态路由，直接放行
+    if (to.meta.public) {
+      next();
+      return;
+    }
     next({ path: '/login', query: { redirect: to.fullPath } });
     return;
   }

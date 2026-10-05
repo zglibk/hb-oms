@@ -71,6 +71,17 @@
           <Breadcrumb />
         </div>
         <div class="header-right">
+          <!-- 数据可视化大屏：新标签全屏打开（大屏是顶层路由、不挂 Layout）；无权限置灰（§二） -->
+          <el-button
+            v-permission="'stat:screen'"
+            size="small"
+            text
+            class="doc-btn"
+            @click="openScreen"
+          >
+            <el-icon><DataLine /></el-icon>
+            <span class="mobile-hidden">数据可视化</span>
+          </el-button>
           <theme-picker class="theme-picker" />
           <el-popover
             v-model:visible="userPopoverVisible"
@@ -569,6 +580,11 @@ async function onLogout() {
   await userStore.logout();
   ElMessage.success('已退出登录');
   router.push('/login');
+}
+
+/** 数据大屏开新标签：大屏要占满整块屏幕，嵌在后台布局里没有意义 */
+function openScreen() {
+  window.open(`${import.meta.env.BASE_URL}screen`, '_blank');
 }
 
 function openManual() {

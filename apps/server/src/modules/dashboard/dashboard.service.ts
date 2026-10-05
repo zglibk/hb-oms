@@ -206,10 +206,15 @@ export class DashboardService {
     };
   }
 
-  /** 汇总卡：四个数字一次查完，避免四条 SQL 之间出现时间差 */
-  private async loadCards() {
+  /**
+   * 汇总卡：四个数字一次查完，避免四条 SQL 之间出现时间差。
+   * public：数据大屏（screen 模块）复用同一批行与口径，不另写 SQL。
+   * `totalQty`（进行中订单总支数）首页不用，供大屏算完成率 / 发货率的分母。
+   */
+  async loadCards() {
     const rows: any[] = await this.dataSource.query(
       `SELECT COUNT(DISTINCT o.id) AS activeOrders,
+              SUM(p.qty_pcs) AS totalQty,
               SUM(GREATEST(p.qty_pcs - IFNULL(fin.in_qty, 0), 0))  AS productionOwed,
               SUM(GREATEST(p.qty_pcs - IFNULL(fin.out_qty, 0), 0)) AS deliveryOwed,
               COUNT(DISTINCT CASE WHEN p.delivery_date IS NOT NULL
@@ -225,11 +230,31 @@ export class DashboardService {
       productionOwed: Number(r.productionOwed) || 0,
       deliveryOwed: Number(r.deliveryOwed) || 0,
       overdueOrders: Number(r.overdueOrders) || 0,
+      totalQty: Number(r.totalQty) || 0,
     };
   }
 
+  /**
+   * 客户发货欠数 TOP N（数据大屏用）：同 activeGroupsFrom 的进行中产品行，
+   * 欠数**逐产品行取正**再按客户汇总（同 loadCards 口径：A 产品超发抵不了 B 产品欠的货）。
+   */
+  async loadCustomerOwedTop(limit: number): Promise<Array<{ customerName: string; deliveryOwed: number }>> {
+    const rows: any[] = await this.dataSource.query(
+      `SELECT IFNULL(NULLIF(o.customer_name, ''), '（未填客户）') AS customerName,
+              SUM(GREATEST(p.qty_pcs - IFNULL(fin.out_qty, 0), 0)) AS deliveryOwed
+       ${this.activeGroupsFrom}
+       GROUP BY customerName
+       HAVING deliveryOwed > 0
+       ORDER BY deliveryOwed DESC
+       LIMIT ?`,
+      [...this.activeGroupsParams, limit],
+    );
+    return rows.map((r) => ({ customerName: r.customerName, deliveryOwed: Number(r.deliveryOwed) || 0 }));
+  }
+
   /** 逾期未发货：交期已过且仍欠发货，逾期最久排最前 */
-  private async loadOverdueOrders(): Promise<DashboardOwedRow[]> {
+  /** public：数据大屏复用 */
+  async loadOverdueOrders(): Promise<DashboardOwedRow[]> {
     const rows: any[] = await this.dataSource.query(
       `SELECT ${this.owedRowColumns},
               DATEDIFF(CURDATE(), p.delivery_date) AS days
@@ -267,7 +292,8 @@ export class DashboardService {
    * 取代原「外发超期未回齐」——不再登记计划回厂时间后，系统里既没有超期基准、
    * 也没有"还在外面没回"的记录，那张卡已无法计算（见 DashboardOutsourceRow 注释）。
    */
-  private async loadRecentOutsource(): Promise<DashboardOutsourceRow[]> {
+  /** public：数据大屏复用 */
+  async loadRecentOutsource(): Promise<DashboardOutsourceRow[]> {
     const rows: any[] = await this.dataSource.query(
       // 规格取订单产品行的 dimension_mm 而非本表的 dimension_text 快照：
       // 后者是「350mm」这类展示串，切「寸」视图需要数值才能换算（见接口注释）

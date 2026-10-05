@@ -103,6 +103,8 @@ const MIGRATIONS: string[] = [
   'migration-record-edit-roles.sql',
   // 首页「系统更新」弹窗：t_user 增加更新日志已读水位线
   'migration-changelog-seen.sql',
+  // 数据可视化大屏：车间电视免登录访问码（只存 SHA-256 摘要）
+  'migration-screen.sql',
 ];
 
 /**
@@ -137,6 +139,7 @@ const forbiddenColumns = [
 const expectedColumns = [
   't_user.token_invalid_before',
   't_user.changelog_seen_id',
+  't_system_config.screen_key_hash',
   't_dict.parent_value',
   't_operation_log.biz_type',
   't_operation_log.biz_id',

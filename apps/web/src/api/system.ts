@@ -369,3 +369,10 @@ export interface CleanupResult {
 }
 export const cleanupBusinessData = (confirm: string) =>
   request.post<any, CleanupResult>('/api/system/config/cleanup', { confirm });
+
+/* 数据大屏免登录访问码（库里只存摘要；明文只在生成当次返回） */
+export const getScreenKeyStatus = () =>
+  request.get<any, { enabled: boolean }>('/api/system/config/screen-key');
+export const regenerateScreenKey = () =>
+  request.post<any, { key: string }>('/api/system/config/screen-key');
+export const disableScreenKey = () => request.delete('/api/system/config/screen-key');

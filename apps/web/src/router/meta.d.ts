@@ -14,5 +14,10 @@ declare module 'vue-router' {
      * 工艺录入/履历页应高亮 /basic/process-info。
      */
     activeMenu?: string;
+    /**
+     * 免登录可访问（现役只有数据大屏 /screen：车间电视凭访问码看，页面自行判断走哪个入口）。
+     * 带 token 时照常加载用户信息与动态路由。
+     */
+    public?: boolean;
   }
 }

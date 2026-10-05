@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SystemConfigService } from './system-config.service';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
@@ -18,6 +18,7 @@ import { SkipTransform } from '../../common/decorators/skip-transform.decorator'
  *   GET  /api/system/config/features    业务字段开关（仅需登录，各业务页读取决定字段显隐）
  *   GET  /api/system/config/public      公开接口（登录页免登读取 logo + favicon + 默认背景）
  *   GET  /api/system/config/share-html  公开接口（分享爬虫抓取，实时 og/twitter meta）
+ *   GET/POST/DELETE /api/system/config/screen-key  数据大屏免登录访问码：状态 / 生成或重置 / 关闭
  */
 @Controller('system/config')
 export class SystemConfigController {
@@ -40,6 +41,29 @@ export class SystemConfigController {
     @CurrentUser() user: CurrentUserPayload,
   ) {
     return this.service.update(dto, user);
+  }
+
+  /** 数据大屏免登录访问码：是否已开启（不回摘要） */
+  @Get('screen-key')
+  @RequirePermissions('system:config')
+  getScreenKeyStatus() {
+    return this.service.getScreenKeyStatus();
+  }
+
+  /** 生成 / 重置访问码：明文只在本次响应里出现一次，旧访问码立即失效 */
+  @Post('screen-key')
+  @RequirePermissions('config:update')
+  @OperationLog('系统管理', '重置数据大屏访问码')
+  regenerateScreenKey(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.regenerateScreenKey(user);
+  }
+
+  /** 关闭免登录访问 */
+  @Delete('screen-key')
+  @RequirePermissions('config:update')
+  @OperationLog('系统管理', '关闭数据大屏免登录访问')
+  disableScreenKey(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.disableScreenKey(user);
   }
 
   /**

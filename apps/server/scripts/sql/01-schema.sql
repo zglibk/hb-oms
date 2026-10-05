@@ -383,6 +383,7 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   outsource_edit_roles VARCHAR(255) NOT NULL DEFAULT 'PLN_MGR' COMMENT '外发回厂记录修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
   assembly_edit_roles VARCHAR(255) NOT NULL DEFAULT 'PLN_MGR,PROD_MGR' COMMENT '装配批次修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理、PROD_MGR 生产经理',
   finished_edit_roles VARCHAR(255) NOT NULL DEFAULT 'PLN_MGR' COMMENT '成品出入库单修改主管角色：角色编码逗号分隔；草稿的编辑/作废/确认只允许创建人与这些角色的用户（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
+  screen_key_hash CHAR(64) NULL COMMENT '数据大屏免登录访问码的 SHA-256 摘要（十六进制）；NULL=免登录访问关闭，明文不落库',
   -- 元数据
   updated_by              INT          NULL COMMENT '最后更新人ID',
   updater_name            VARCHAR(64)  NULL COMMENT '最后更新人姓名快照',

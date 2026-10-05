@@ -1,3 +1,4 @@
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -104,6 +105,63 @@ export class SystemConfigService {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
+  }
+
+  // ===== 数据大屏免登录访问码 =====
+  // 库里只存 SHA-256 摘要，明文只在生成当次回给管理员一次（之后谁也看不到，丢了就重置）。
+  // 访问码是 32 字节随机数（base64url 43 位），暴力猜测不可行，故公开接口无需另加限流。
+
+  private hashScreenKey(key: string): string {
+    return createHash('sha256').update(key, 'utf8').digest('hex');
+  }
+
+  private async loadScreenKeyHash(): Promise<string | null> {
+    await this.get(); // 确保单行存在
+    const row = await this.repo
+      .createQueryBuilder('c')
+      .addSelect('c.screenKeyHash')
+      .where('c.id = 1')
+      .getOne();
+    return row?.screenKeyHash ?? null;
+  }
+
+  /** 免登录访问是否开启（配置页展示状态用，不回摘要） */
+  async getScreenKeyStatus(): Promise<{ enabled: boolean }> {
+    return { enabled: !!(await this.loadScreenKeyHash()) };
+  }
+
+  /** 生成 / 重置访问码：旧访问码立即失效；明文只在本次返回 */
+  async regenerateScreenKey(user: CurrentUserPayload): Promise<{ key: string }> {
+    await this.get();
+    const key = randomBytes(32).toString('base64url');
+    const audit = auditOnUpdate(user);
+    await this.repo.update(1, {
+      screenKeyHash: this.hashScreenKey(key),
+      updatedBy: audit.updaterId,
+      updaterName: audit.updaterName,
+    });
+    return { key };
+  }
+
+  /** 关闭免登录访问（清空摘要，现有电视立即失效） */
+  async disableScreenKey(user: CurrentUserPayload): Promise<void> {
+    await this.get();
+    const audit = auditOnUpdate(user);
+    await this.repo.update(1, {
+      screenKeyHash: null,
+      updatedBy: audit.updaterId,
+      updaterName: audit.updaterName,
+    });
+  }
+
+  /** 校验访问码：未开启或不匹配均返回 false；摘要定长比较，防按耗时逐位试探 */
+  async verifyScreenKey(key: string | undefined | null): Promise<boolean> {
+    if (!key) return false;
+    const stored = await this.loadScreenKeyHash();
+    if (!stored) return false;
+    const a = Buffer.from(this.hashScreenKey(key), 'hex');
+    const b = Buffer.from(stored, 'hex');
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 
   /** 更新配置（传入的字段覆盖现有值） */

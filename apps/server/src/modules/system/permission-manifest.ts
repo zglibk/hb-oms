@@ -48,6 +48,8 @@ export const PERMISSIONS: PermSeed[] = [
   // 一条点不开的条目（buildMenuTree 只取 perm_type=1，故不影响侧栏）。 =====
   { perm_code: 'stat', perm_name: '统计查看', perm_type: 2, sort: 1 },
   { perm_code: 'stat:dashboard', perm_name: '查看首页看板', perm_type: 2, parent_code: 'stat', access_type: 1, sort: 1 },
+  // 数据可视化大屏（顶栏「数据可视化」按钮 + GET /screen/data）：只读，不预置角色，由管理员按需授权
+  { perm_code: 'stat:screen', perm_name: '查看数据大屏', perm_type: 2, parent_code: 'stat', access_type: 1, sort: 2 },
 
   // ===== 订单跟踪台账：系统核心产出，按设计文档 §8 作「首页级入口」置于一级菜单最前 =====
   { perm_code: 'ledger', perm_name: '订单跟踪台账', perm_type: 1, menu_path: '/ledger', component: 'ledger/index', icon: 'DataAnalysis', sort: 4 },
