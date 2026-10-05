@@ -501,7 +501,15 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 
 - 汇总卡：进行中订单数、总成品欠数（支）、总发货欠数（支）、逾期订单数。
 - 列表区：逾期未发货 TOP、临近交期 7 天内订单、外发超期未回齐（require_back_date 已过且未回齐）。
-- 无大屏需求，普通管理页即可（不做 ECharts 大屏，需要时后续加）。
+- 首页是普通管理页；全屏的**数据可视化大屏**另见 §5.2.1。
+
+### 5.2.1 数据可视化大屏（只读）
+
+蓝色科幻主题的全屏看板，两个入口、数据相同：后台顶栏「数据可视化」按钮（需 `stat:screen` 权限，新标签全屏打开）；车间电视免登录，凭管理员在「系统配置 → 数据大屏」生成的访问码访问（库里只存摘要，可随时重置 / 关闭）。
+
+- 面板分「实时」与「区间」两类并在界面标注：实时 = 进行中订单 / 双欠数 / 逾期（与首页看板同口径）、成品库存、客户发货欠数 TOP5、逾期未发货与近期外发回厂滚动列表；区间 = 订单状态分布、业务主线流转（下单 / 外发回厂 / 装配完成 / 入库 / 出库）、入库出库与外发回厂趋势、装配车间产出、区间出库。
+- 区间按业务日期（下单日 / 回厂日 / 实际完成日 / 单据日期）落在所选范围统计，界面缺省近 30 天（接口不传参时缺省本月），最长 366 天；≤62 天按日分桶，否则按月。成品进出沿用台账单据族口径（已确认单、红字抵扣、入向含期初）。
+- 只读，不提供任何写操作；排产、审核、报工仍不在本系统范围（决策 #2 不变）。
 
 ### 5.3 产品汇总查询（财务需求，「统计分析 → 产品汇总」）
 
@@ -577,7 +585,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 - **数据库**：新库 `haibao_oms`；迁移规范同 hb-mes（`scripts/sql/01-schema.sql` 全量 + `migration-*.sql` 幂等增量 + db-migrate.ts 唯一清单）。
 - **权限**：permission-manifest.ts SSOT，启动自动 upsert；菜单驱动动态路由。
 - **前端**：`AppTable / AppPagination / AppActions` 等通用组件、`useDict / useClientPager` composable 从 hb-mes 拷贝起步；台账页为首页级入口。
-- **不搬的部分**：plan（排产）、production-report（报工）、subcontract（被新 outsource 取代）、approval-config（审批开关）、大屏 screen、part-stock 的占用/释放逻辑（occupied_qty 不要）。
+- **不搬的部分**：plan（排产）、production-report（报工）、subcontract（被新 outsource 取代）、approval-config（审批开关）、hb-mes 的大屏 screen（OMS 的数据大屏按自身口径另行实现，见 §5.2.1）、part-stock 的占用/释放逻辑（occupied_qty 不要）。
 - **部署**：同 hb-mes 阿里云 ECS（PM2 + Nginx + MySQL），新增独立 Nginx location 与 PM2 进程 `hb-oms-server`（端口避让 8000/3000，建议 8100）；前端本地构建只传 dist；**严禁影响既有 hb-mes 与 QMS 的 location**。
 
 ---

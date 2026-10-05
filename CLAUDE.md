@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 海宝五金**订单跟踪系统**（hb-oms）：订单 → 外发表面处理（可选）→ 装配 → 成品入库 → 出库的全链路台账系统，核心产出是四个数——**订单数 / 完成数 / 库存数 / 双欠数**（成品欠数 = 订单数 − 累计入库；发货欠数 = 订单数 − 累计出库），替代车间现行的手工 Excel 跟踪台账。
 
-**与 hb-mes 的定位差异（关键，决定什么该做什么不该做）**：hb-mes 是带排产与多级审核的 MES；hb-oms **彻底不做排产、不做审核流、不做报工**（设计文档决策 #2）。凡涉及"排产单/审核/报工/审批开关/大屏"的需求，一律不在本项目实现。
+**与 hb-mes 的定位差异（关键，决定什么该做什么不该做）**：hb-mes 是带排产与多级审核的 MES；hb-oms **彻底不做排产、不做审核流、不做报工**（设计文档决策 #2）。凡涉及"排产单/审核/报工/审批开关"的需求，一律不在本项目实现。**只读的数据可视化大屏是例外**（2026-10-05 使用方拍板解禁，口径见 §5.6 数据大屏块）——它不写任何数据，不改变「不做排产/审核/报工」的定位。
 
 pnpm + turbo monorepo：
 
@@ -57,7 +57,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 统一响应：`TransformInterceptor` 包装为 `{ code, message, data }`；文件下载等原始响应用 `@SkipTransform()`。异常统一走 `AllExceptionsFilter`（**会透传 `errors` 数组**，供批量导入返回逐行错误明细）。
 - 操作日志：接口标注 `@OperationLog(模块, 动作)` 即由全局 `OperationLogInterceptor` 自动记录。
 - `CommonModule` 为 `@Global()`，提供 `NumberGeneratorService`（单号采番）、**两个订单侧快照服务**（下游建单统一从它们读展示字段，禁止各模块再写一份 SQL）——`ProductSnapshotService`（产品级，给装配/成品出入库/成品期初）与 `PartGroupSnapshotService`（部件组级，给外发件回厂），分层理由见 §5.2；审计字段统一用 `common/utils/audit.util.ts` 的 `auditOnCreate` / `auditOnUpdate`（注意：实体属性名是 `creatorId/creatorName/updaterId/updaterName`，其中 `updaterId` 映射列 `updated_by`）。
-- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、supplier（供应商）、position（岗位主数据）、process-info（开单信息）、production-bom（生产BOM）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、dull-stock（呆滞品管理）、employee（**人事档案**，HR 一级菜单）、equipment（设备信息）、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
+- 业务模块在 `src/modules/` 下，标准结构 `controller / service / dto / entities`。现有模块：auth、captcha（滑块验证码）、customer（客户资料）、supplier（供应商）、position（岗位主数据）、process-info（开单信息）、production-bom（生产BOM）、order（订单四级 + **订单跟踪台账** `order-ledger.service.ts`）、outsource（外发件回厂记录）、assembly（装配批次）、finished-stock（成品出入库 + 余额）、dull-stock（呆滞品管理）、employee（**人事档案**，HR 一级菜单）、equipment（设备信息）、**screen（数据可视化大屏，只读）**、file、changelog（更新日志）、system-config（系统配置）、system（用户/角色/菜单/字典/部件信息/部门/操作日志）。
 - **GET 查询串的布尔参数必须用 `common/utils/transform.util.ts` 的 `toBoolean`**（`@IsOptional() @Transform(toBoolean) @IsBoolean()`），**不得用 `@Type(() => Boolean)`**：全局 ValidationPipe 开了 `enableImplicitConversion`，字符串 `"false"` 会被隐式转成 `true`，且 `@Transform` 拿到的 `value` 已是转换后的结果，必须从原始 `obj[key]` 取值。踩坑实例见该文件注释（装配页两个未勾选的复选框把列表从 3 条筛成 1 条）。
 
 ### 前端架构
@@ -68,7 +68,8 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - 开发期 Vite proxy 将 `/api`、`/uploads` 代理到 `localhost:8100`；`@` 别名指向 `src/`。生产构建 `base = '/oms/admin/'`。
 - 状态用 Pinia（`stores/user.ts` 含 token/权限/菜单）。
 - **localStorage 键一律 `hb_oms_` / `hb-oms-` 前缀，禁止再用 `hb_mes_`**：生产环境 OMS 与 hb-mes 同机同端口（共用 Nginx server 块）= **同源**，localStorage 完全共享。2026-08-12 前四个键沿用 MES 同名（token/refresh/记住密码/系统名缓存），后果是两套系统互相顶掉对方登录态、登录页互相回填对方保存的账号密码，已全部改名。改名时 token/记住密码**刻意不迁移旧值**（旧值可能是 MES 的），tour 标记做了一次性迁移（该键只可能是 OMS 写的）。
-- **懒加载 chunk 失效兜底**（`router/index.ts` 的 `router.onError`）：部署脚本会 `rm -rf web-dist/assets` 再解包新产物，**发版前打开的页面**持有的旧哈希 chunk 全部消失；此时请求老 chunk 会被 Nginx 的 SPA 规则回吐 `index.html`（`Content-Type: text/html`），动态 import 因 MIME 不符而 reject，vue-router **中止导航、页面原地不动**，用户以为按钮失灵（2026-08-06 发版后实测复现，退出按钮首当其冲）。兜底逻辑识别到 chunk 加载失败即带目标路径硬跳转一次，sessionStorage 打标防死循环，导航成功后清标。**新增懒加载路由无需额外处理；但不要删掉这段 onError**。
+- **顶栏不放独立「退出」按钮**（2026-10-05 使用方要求取消）：退出登录只在右上角头像的用户面板里。
+- **懒加载 chunk 失效兜底**（`router/index.ts` 的 `router.onError`）：部署脚本会 `rm -rf web-dist/assets` 再解包新产物，**发版前打开的页面**持有的旧哈希 chunk 全部消失；此时请求老 chunk 会被 Nginx 的 SPA 规则回吐 `index.html`（`Content-Type: text/html`），动态 import 因 MIME 不符而 reject，vue-router **中止导航、页面原地不动**，用户以为按钮失灵（2026-08-06 发版后实测复现，当时顶栏的退出按钮首当其冲）。兜底逻辑识别到 chunk 加载失败即带目标路径硬跳转一次，sessionStorage 打标防死循环，导航成功后清标。**新增懒加载路由无需额外处理；但不要删掉这段 onError**。
 - 通用组件优先复用 `src/components/`（`AppTable`、`AppPagination`、`AppActions`、`AppChart`、`AppStatCard`、`FilterMoreToggle` 等）与 `src/composables/`（`useDict`、`useClientPager`、`useResponsive`、`useTour`、`useAutoScroll`），**禁止在页面内重复造轮子**。
 - **`useAutoScroll`（列表超高自动滚动 + 悬停暂停）**：首页三张待办列表在用（`max-height` 露 10 行 = 表头 33.8 + 10×31.8 ≈ 352（2026-09-25 曾改 8 行，2026-09-26 使用方要求改回 10 行）；接口 `TOP_LIMIT` 2026-09-25 由 10 放宽到 **100**，超过 10 行即轮播。两张卡片的「产品名称」列（2026-09-26 取代「产品型号」）取订单产品名称，口径同入库单（`withRailSuffix` + `railNameSuffixOf`，分体行带形态），订单没填时回落产品型号；⚠️ 右卡外发回厂原先显示的是部件组型号（外轨/中轨/内轨），改名称后同一产品的各部件回厂行名称相同。**可见行数与返回条数刻意不等**——原先两者都是 10，列表从来滚不起来；上限封顶 100 是因为 el-table 每行都是真实 DOM，放开全量会随数据增长拖慢首页，完整清单去台账看）。传入「解析滚动元素」的函数而非元素本身——el-table 的滚动元素是 `.el-table__body-wrapper .el-scrollbar__wrap`，数据/页签切换会重建，取一次存下来会失效。滚动位置由 composable 自己累加后写 `scrollTop`，**不要改成每帧读 `scrollTop` 再加**：慢速下每帧位移不足 1px，浏览器取整后原地不动。
  - **只向下滚、到底停顿后跳回顶部，不要再改回「回卷」**（2026-08-13 修）：原实现到底后原速倒着往回滚，看着像录像倒放、同一批行来回扫两遍，使用方直接当成 bug 报了过来。顶部也停顿一次再开滚，否则跳回瞬间就滑走、第一行看不清。
@@ -84,6 +85,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - **查询条件「一行常驻 + 更多折叠」统一用 [FilterMoreToggle.vue](apps/web/src/components/FilterMoreToggle.vue)**（2026-09-25，现役：订单跟踪台账、产品汇总两个页签、订单管理）：常用条件放第一个 el-form 并把按钮放行末，其余放紧随其后的第二个 el-form（`class="filter-bar filter-more"` + `v-show` + `<Transition name="filter-more-fade">`，虚线分隔与过渡样式在全局 `.filter-card .filter-more`）。⚠️ **不要用 `el-collapse-transition`**：它逐帧改 max-height，下方大表格（固定列 + 按内容算列宽 + ResizeObserver）跟着逐帧重排，展开收起明显卡顿。**必须传 `count`**（折叠区生效条件个数）：收起时显示在按钮上，防止列表被看不见的条件筛过却不自知。
 - `AppTable` 约定：序号列自动排在最后一个功能列（expand/selection）之后；展开列需显式 `fixed="left"` 才不会被固定列挤到中间。
 - **订单表单「出口国家」下拉的国旗必须靠 [flag-preload.ts](apps/web/src/utils/flag-preload.ts) 在进页面时预热**（271 面 4x3 约 1.9MB，其中 142 面带纹章的超过 Vite 内联阈值、要真发请求；实测 8 并发本地也要 1.2 秒）。下拉用 `el-select-v2` 虚拟滚动，**不要为了「让国旗都显示」改回全量渲染**——那只是把「滚到哪行请求哪行」换成「打开面板一次全发」，第一次打开照样一片空白格，还额外背上 250 个 DOM 节点的卡顿。图在不在取决于请求何时发出，与渲染多少行无关。预热另有两个坑：URL 必须从**已生效的 CSS 规则**里现取（写死路径或用 `import.meta.glob` 都会与 CSS 实际引用的 URL 不一致，缓存命中不了）；**只取 4x3**，连 1x1 方形变体一起取会让下载量翻倍到近 4MB。
+- **全局 tooltip 限宽必须写成 `.el-popper.el-tooltip:not(.is-pure)`**（[styles/index.scss](apps/web/src/styles/index.scss)，2026-10-05 修）：EP 的下拉 / 级联 / 日期面板同样由 el-tooltip 渲染、同样带 `el-tooltip` 类，只是多一个 `is-pure`。不排除时它们也被卡在 ~360px——日期区间面板（646px）溢出弹层，靠近视口右缘时溢出视口、body 冒横向滚动条（数据大屏实测：一点日期框整页上移）。生产BOM 客户下拉那段 `max-width: none` 补丁是同一根因的旧症状。
 - **Element Plus 组件的全局默认行为一律在 `main.ts` 统一覆盖，禁止各页面逐处重复写**（个别场景可在组件上显式传值反转）。现役三项：
  - `el-dialog` 默认 `close-on-click-modal=false`（防误点遮罩丢表单数据）——直接改 props 默认值；
  - `el-tooltip` 的 `content` 按「1. / 2、」数字序号自动换行（[utils/tooltip.ts](apps/web/src/utils/tooltip.ts) 的 `patchElTooltip`）；
@@ -105,7 +107,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
  - `.hide` 只留给「禁用讲不通」的容器型元素，现役唯一一处是系统配置的「危险操作」`el-tab-pane`——页签由 el-tabs 头部另行渲染，禁用面板 div 拦不住用户切过去。
  - **禁用是引导，不是防线**：服务端守卫才是（§2.1），API 可直调。
 - `perm_type`：1=菜单 2=按钮；菜单节点的 `component` 对应前端 `src/views/` 下的组件路径。
-- `access_type`：0=操作 1=查看，缺省由 `accessTypeOf()` 按「菜单=查看、按钮=操作」推导；**按钮型的读权限点必须在清单显式写 `access_type: 1`**（现役唯一一个是 `stat:dashboard`），否则角色权限树的「仅授只读」漏掉它、服务端的同页读权限补齐也认不出它。
+- `access_type`：0=操作 1=查看，缺省由 `accessTypeOf()` 按「菜单=查看、按钮=操作」推导；**按钮型的读权限点必须在清单显式写 `access_type: 1`**（现役两个：`stat:dashboard`、`stat:screen`），否则角色权限树的「仅授只读」漏掉它、服务端的同页读权限补齐也认不出它。
 - 现有菜单树（2026-08-07 调整后）：
   - **订单跟踪台账(4)** —— 一级叶子菜单，系统核心产出
   - 生产管理(5)：订单管理、外发管理、装配管理
@@ -145,6 +147,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
 - **跨页引用型只读接口刻意只要求登录**（各 controller 有注释说明理由）：`/customer/all`（订单/开单信息表单的客户下拉）、`/supplier/all`（外发登记的加工商下拉，投影只回 id/编码/名称）、`/process-info/by-drawing`（订单表单按图号带入）、`/system/material/by-code`、`/system/dept` 与 `/system/dept/tree`（用户管理选部门、角色数据范围）、`/system/dict/type/:type`（全局字典）。挂菜单码会让「录订单的人没有客户资料菜单」直接 403。作为补偿，`/customer/all` 已收窄投影，只回下拉需要的 6 个字段，联系人电话/备注/审计信息不外露。
 - **一个接口服务两个页面时用 `@RequireAnyPermissions`（OR）**：`/finished-stock/group-options`（成品出入库 + 期初录入）、`/assembly/inbound-quota`（装配 + 成品出入库）、`/system/menu/tree`（菜单权限页 + 角色分配权限弹窗）。最后一个此前只认 `system:menu`，导致「只能管角色、不能改菜单」的管理员打不开分配权限弹窗。
 - **业务字段开关** `GET /system/config/features` **刻意只要求登录、不挂菜单权限点**（同上一条的跨页引用型只读接口）：各业务页开局都要读它决定字段显隐（现有「颜色」「客户图号」两个开关），挂 `system:config` 会让所有业务页 403。返回的只是几个布尔开关，不含业务数据。详见 §5.7。
+- **数据大屏两个入口**：`GET /screen/data` 由 `stat:screen` 管控（按钮型读权限、不预置角色）；`GET /screen/public-data` 是 **`@Public()` 免登录接口**，凭请求头 `X-Screen-Key` 访问码放行（车间电视用），访问码只存 SHA-256 摘要、可重置可关闭。两者返回完全相同的数据。
 - **首页看板** `GET /dashboard/summary` 由 `stat:dashboard` 管控（容器 `stat` 是 perm_type=2 的根节点，`buildMenuTree` 只取 perm_type=1 故侧栏不受影响）。迁移已补授全部存量角色、行为不变，可按角色收回；前端无该权限时**不发请求、不弹 403**，欢迎区与日历照常显示。
 - **`RoleService.normalizePermissionIds` 服务端兜底**（放后端而非只靠前端勾选，API 直调同样造不出半残授权）：① 父链补齐——缺父级会让 `buildMenuTree` 断链，出现「权限在、菜单不显示」；② 同页读权限补齐——授了菜单 M 下任一按钮，就补上 M 下所有 **perm_type=2** 的 access_type=1 点，杜绝「页面能开、列表接口 403」。
   > ⚠️ **规则②必须限定 perm_type=2**。菜单节点自身也是 access_type=1，不限定的话「系统管理」下清一色兄弟菜单，只授「数据字典」会被连带补上用户管理/角色管理/菜单权限——**静默越权**（hb-mes 曾真实踩过）。兄弟菜单是各自独立的页面，必须逐个授权。
@@ -189,6 +192,8 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 现有迁移清单见 `db-migrate.ts`（**数组本身即权威清单，顺序即执行顺序**；此处不再复述条数，历史上这个计数反复过期）；现役业务表：`t_order` / `t_order_product` / `t_order_part_group` / `t_order_part` / `t_outsource_part` / `t_assembly_batch` / `t_finished_doc` / `t_finished_item` / `t_finished_balance` / `t_dull_stock` / `t_dull_stock_flow` / `t_part_balance` / `t_part_adjust` / `t_customer` / `t_supplier` / `t_position` / `t_job_level` / `t_process_info`(+history) / `t_production_bom` / `t_production_bom_item` / `t_material` / `t_equipment_info` / `t_department` / `t_dict` / `t_changelog` / `t_system_config` / `t_no_sequence` / `t_file` / `t_operation_log` / 权限体系五表。
 
 > **更新日志随发布写入**（2026-09-26 起）：`t_changelog` 平时在界面维护，没有种子数据；要让某次发布的更新说明随部署同步出现在生产，就写一个 `migration-changelog-vX.Y.Z.sql`，`INSERT … SELECT … WHERE NOT EXISTS (同版本号 + 同标题)`，重复执行不会插第二条（首例 v1.1.0）。
+>
+> **首页「系统更新」弹窗**（2026-10-05）：每轮发布后用户首次进首页时弹出未读更新（[ChangelogNoticeDialog.vue](apps/web/src/views/home/ChangelogNoticeDialog.vue)），明细复用 `useAutoScroll` 缓慢滚动、悬停暂停。已读按人记在服务端 `t_user.changelog_seen_id`（已读水位线 = 看过的最大 `t_changelog.id`，`GET /changelog/unseen` + `POST /changelog/seen`，仅需登录）：换电脑不重复弹；水位线为空（新账号 / 上线前的老账号）**只弹最新一个版本**；登记已读用 `GREATEST` 只升不降、**不写 updated_by**（系统簿记，§5.5）。改旧条目的文字不会再弹，要让大家重看就新建一条。新手引导要自动弹出时，更新弹窗**等引导结束再弹**，不叠两层遮罩。E2E 见 `e2e-changelog-notice.mjs`。
 >
 > **一次性清数据的迁移必须做成「只生效一次」**（`migration-product-level-tracking.sql` 的写法，抄它）：`db:migrate` 每次跑**全量清单**，直接写 `DELETE FROM` 会让上线后任何一次重跑都清空生产数据。做法是用「被删的旧列是否还存在」当守卫——
 > ```sql
@@ -531,6 +536,21 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
   - 作废订单（9）不参与，更新带 `status` 前置条件防并发覆盖；
   - 结果随接口回传（`finished` / `reopened` 订单号），前端 toast 提示——不提示的话用户会以为订单状态被人偷改了。
 
+**数据可视化大屏（2026-10-05，screen 模块，只读）**
+
+蓝色科幻主题全屏看板（标题「海宝订单数据大屏」）。前端 [views/screen/](apps/web/src/views/screen/index.vue)，后端 `screen.service.ts`。
+
+- **两个入口、同一份数据**：后台顶栏「数据可视化」按钮（`stat:screen`，在「更换主题」左侧，新标签打开）→ `GET /screen/data`；车间电视免登录 → `GET /screen/public-data` + 请求头 `X-Screen-Key`。
+- **访问码**：32 字节随机串，`t_system_config.screen_key_hash` **只存 SHA-256 摘要**（实体 `select: false`，完整配置接口不外露），明文只在「系统配置 → 数据大屏」生成当次显示一次；重置即旧码失效，关闭即清空。校验用 `timingSafeEqual`。未开启与码错误回同一句 401，不暴露是否开启。
+  - TV 地址形如 `/oms/admin/screen#key=…`，访问码放 **hash**（不发给服务器、不进 Nginx 日志）；页面读到后存 `localStorage hb_oms_screen_key` 并 `history.replaceState` 抹掉 hash。
+  - 免登录请求**刻意不走 `utils/request`**（[api/screen.ts](apps/web/src/api/screen.ts) 用原生 fetch）：那里的 401 会刷新 token、跳登录页，电视没有登录态。
+  - 路由 `/screen` 是顶层路由、`meta.public: true`，`router.beforeEach` 对它放行无 token 访问——**新增免登录页照此打标，别在守卫里写死路径**。
+- **面板分「实时 / 区间」并在标题右侧标注**：实时（进行中订单、双欠数、逾期、成品库存、客户欠数 TOP5、逾期未发货与近期外发回厂滚动列表、呆滞品结存、部件台账档数）不受时间筛选；区间（订单状态分布、主线流转、入库出库与外发回厂趋势、车间产出、区间出库、区间新订单）按业务日期统计。前端缺省「近30天」（滚动窗口——月初/季初选本月、本季只有几天，区间面板几乎全 0，电视上像坏了；服务端不传参时仍缺省本月），最长 366 天（服务端校验）；区间图表全为 0 时盖「所选时间段暂无数据」提示，≤62 天按日分桶否则按月，空桶补 0。
+- **口径全部复用，禁止另写**：实时四卡与两张列表直接调 `DashboardService`（`loadCards` / `loadOverdueOrders` / `loadRecentOutsource` 为此改 public，模块已 export；客户欠数 TOP 新增 `loadCustomerOwedTop`，同用 `activeGroupsFrom`、欠数逐产品取正）；成品进出走 `order-owed.util` 单据族（入向含期初，同台账完成数）；装配完成按 `actual_date` 判定、不看 status 列；车间名走 `dictLabeler`。
+- **流转节点里「外发」计零件支数**，其余是成品支数（同台账「部件 / 成品」分栏），节点下方单位文字写明，别改成同一单位。
+- **画布宽高都铺满视口**（2026-10-05 使用方反馈「只适配了高度」后改）：逻辑高度固定 1080、逻辑宽度 = 视口宽高比 × 1080，再整体 `transform: scale`——16:9 / 21:9 / 32:9 都满屏、字不变形；逻辑宽不足 `MIN_W`(1800，约 4:3、16:10 以下) 时改按宽度缩放、逻辑高度变大，面板纵向拉长。三列按 26:48:26 比例分宽，**别改回固定像素列宽**（宽屏时只会拉长中间列）。标题框 600px **绝对居中**（原先放在 grid 的 `1fr 固定 1fr` 中列，右侧控件一多就把 1fr 撑宽、标题被推偏、控件溢出画布），`MIN_W`=1920 是按「右上角 7 个预设 + 日期框 ≈570px 放进标题框右侧」实测定的——改标题、增减预设按钮后要重新量。日期框宽度只能改 EP 变量 `--el-date-editor-daterange-width`（直接写 width 不生效）。日期弹层深色要把变量写到 `.el-date-range-picker` / `.el-picker-panel` 本身：EP 在这两个元素上**重新声明**了 `--el-datepicker-*`，只写在外层 popper 上会被就近声明遮住（区间格子曾因此一片白）。标题上有白色光影从左往右循环掠过（`::after` 叠同一行字 + `background-clip: text` 的斜向亮带，linear infinite、首尾帧亮带都在字外所以循环无闪；**标题底色刻意是浅天蓝 `#9fd8ff`，别改回近白**——白底字上白光影看不见）。左上角时钟旁有「全屏 / 退出全屏」按钮（Fullscreen API，以 `fullscreenchange` 同步状态；F11 进的浏览器全屏 API 感知不到，属正常）。`AppChart` 为此改用 ResizeObserver 观察容器（window resize 回调里画布还没按新逻辑尺寸重排）；60 秒刷新、页面不可见时跳过；滚动列表复用 `useAutoScroll`；「减少动态效果」下停流动线与滚动。配色**不跟随主题色**（`views/screen/theme.ts`）。
+- E2E：`e2e-screen.mjs`（权限 / 参数守卫 / 朴素 SQL 对拍 / 访问码生命周期，37 项）与 `e2e-screen-tv.mjs`（无头 Chrome 走电视路径，8 项）。
+
 **产品汇总查询（M9，「统计分析 → 产品汇总」，财务需求 2026-08-14）**
 
 - 台账的「产品视角」姊妹页：跨订单把「相同产品」归并成一行，双页签（Tab1 累计口径 / Tab2 期间进销存）。后端 `product-summary.service.ts`（order 模块内），接口 `GET /product-summary(/export)(/period)(/period/export)`。
@@ -683,6 +703,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | `inch_to_mm` | **英寸换算系数**（1 英寸 = N mm），缺省 25（我司口径，非国标 25.4），抽自共享包写死的 `INCH_TO_MM` | 订单表单英寸录入折算、开单信息「10寸」文本归一（前端失焦 + 服务端保存/导入各一次）、全系统「寸」视图显示 |
 | `dimension_view_unit` | **规格默认查看单位**（mm / inch） | 首页 / 订单跟踪台账 / 订单管理三页的 mm/寸 切换初值，以及**台账导出与总计划导出**的规格列（表头随之变「规格(mm)」/「规格(寸)」） |
 | `order_edit_roles` / `outsource_edit_roles` / `assembly_edit_roles` / `finished_edit_roles` | **四个模块的修改主管角色**（2026-09-26 加，角色编码逗号分隔，缺省见 §2.2 表） | 「系统配置 → 数据权限」页签多选维护；记录只许创建人与这些角色修改（管理员不例外，主管受数据范围约束）。**不经 `/system/config/features` 下发**——前端只看服务端算好的 `canModify` / `editGuard`，见 §2.2 |
+| `screen_key_hash` | **数据大屏免登录访问码摘要**（2026-10-05 加，SHA-256，NULL=关闭） | 「系统配置 → 数据大屏」页签生成 / 重置 / 关闭（`/system/config/screen-key`），**不进 `PUT /system/config`、不经 features 下发**；实体 `select: false`。见 §5.6 数据大屏块 |
 | `delivery_template_default` | **送货单默认模板**（2026-08-14 加） | ⚠️ **编辑入口不在系统配置页**，在「系统管理 → 打印模板」（那里能同时看到每套模板的实际效果）；系统配置页只是把它读进 form 原样回传，别再往「业务字段」Tab 里加回编辑框。只在**客户资料未单独绑定模板**时兜底，取模板顺序：客户资料 `t_customer.delivery_template` → 本配置 → 通用模板。见 §5.6 送货单块 |
 
 - ⚠️ **改系数不重算已落库的 `dimension_mm`**（核心不变式，E2E 有断言）：存储值永远是权威，只影响「之后的录入折算」与「所有寸视图的显示」。配置页提示里必须写明这句，否则管理员会以为历史数据跟着变。
@@ -719,7 +740,7 @@ TypeORM `synchronize=false`，**所有表结构变更必须走手写 SQL 迁移*
 | M8 分体出货 | 产品行 `is_split` 开关承载「一支滑轨拆多行下单」（外中轨/内轨分开出货不组装）：形态由组构成推导、产品级型号统一走 `productLevelModel`（口径见 §5.2/§5.6；原「单部件分体行免装配」已于 2026-08-13 取消） | ✅ 已完成（2026-08-12） |
 | M9 产品汇总 | 财务需求：新一级菜单「统计分析」下的**产品汇总**双页签（Tab1 跨订单相同产品累计汇总，复用 findLedger 二次聚合；Tab2 按单据日期的期间进销存，期末=期初+入−出）；六要素聚合键、两个双 Sheet 导出（口径见 §5.6 产品汇总块） | ✅ 已完成（2026-08-14） |
 
-期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉、**送货单打印**（多客户模板）、**入库单打印**（A5 横向，交仓库收货）、**生产BOM**（工艺管理下的成套物料清单主数据）——后三者口径均见 §5.6。
+期间另行完成（非里程碑）：菜单四个一级重构、设备信息模块、部门信息模块、更新日志与系统配置移植（**审批管理永不移植**——OMS 无审核流）、部件信息/开单信息两次改名改版、深色侧栏主题、订单表单国旗国家下拉、**送货单打印**（多客户模板）、**入库单打印**（A5 横向，交仓库收货）、**生产BOM**（工艺管理下的成套物料清单主数据）、**数据可视化大屏**（只读，车间电视免登录访问码）——后四者口径均见 §5.6。
 
 ---
 
@@ -776,7 +797,7 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2a | 订单自动完结/重开 | §3.1 状态机的自动边，出入库确认/冲销后同事务同步；口径与台账共用 order-owed.util | ✅ 已完成（2026-08-07） |
 | 2b | 部件台账 part-stock | 两表 + 模块 + 页面已落地；余量唯一写入口是 `POST /part-stock/adjust`（带 delta + 原因走流水），期初与手工调整共用并靠 `source` 区分。**M5 期初模块请复用该通道，勿另写余量写入**。调整原因前端收敛为下拉（期初补录/盘盈盘亏/录错纠正/其他，选其他补填具体原因、落库为「其他：xxx」）；**后端仍不做枚举校验**——「其他」本就是自由文本、期初模块也传自己的文案，校验只能退化成「非空」，加了无意义。选项在 `web/constants/dict.ts`（仅前端用，不进共享包） | ✅ 已完成（2026-08-08） |
 | 2c | 期初录入 opening | 成品期初（挂订单）+ 部件期初 + 订单「期初补录」开关全部落地，部件期初整批全有全无。**「成品期初（纯属性 / 不挂订单）」已于 2026-08-11 下线**，改由呆滞品管理承载（见 2o） | ✅ 已完成（2026-08-07） |
-| 2d | 首页看板 dashboard | `GET /dashboard/summary` + 首页四卡三列表已落地（§5.2，不做 ECharts 大屏）。**欠数口径复用 order-owed.util 的单据族 SQL**，与台账、订单自动完结同一事实源；两处刻意的差异见 dashboard.service 头注释（看板只看进行中 + 欠数逐组取正） | ✅ 已完成（2026-08-07） |
+| 2d | 首页看板 dashboard | `GET /dashboard/summary` + 首页四卡三列表已落地（§5.2；全屏大屏另见 2ab）。**欠数口径复用 order-owed.util 的单据族 SQL**，与台账、订单自动完结同一事实源；两处刻意的差异见 dashboard.service 头注释（看板只看进行中 + 欠数逐组取正） | ✅ 已完成（2026-08-07） |
 | 2e | 台账 Excel 导出 | `GET /order/ledger/export`（权限 `ledger:export`，`@SkipTransform` 返回文件流）已落地。**直接复用 `findLedger`，不为导出另写聚合 SQL**——两份 SQL 迟早分叉，届时「页面 100、导出 98」最难查。26 列对齐台账页（合并列拆开成独立列便于筛选），产品级列跨组合并规则与页面一致（只合并相邻同产品行），末尾带汇总行，字典值转中文。上限 5000 行，**超限拒绝而非静默截断** | ✅ 已完成（2026-08-08） |
 | 2f | 台账行内展开 / 跨组合并单元格 | 均已落地。展开走独立接口 `GET /order/ledger/detail?orderPartGroupId=`（**按需加载**，不随列表返回——一页几十行全查三张流水太重），口径与台账主表一致（成品只取已确认、外发排除已作废、装配按 actual_date 派生完成态）。跨行合并只合并**相邻**的同 `orderProductId` 行：排序由服务端决定，万一同产品的组没挨着，宁可不合并也不能把中间夹着的别的产品错并进来 | ✅ 已完成（2026-08-08） |
 | 2g | 新手引导 | 已补成完整业务主线十步（首页看板→订单→外发→装配→出入库→台账→物料→基础数据→系统管理），章节顺序与操作手册一一对应；过时文案（工艺信息/物料档案/「首页后续将展示」）一并订正；版本号递增到 `hb_mes_tour_done_v2` 让老用户重看。**踩坑**：引导目标多为二级菜单，父级 sub-menu 折叠时节点在 DOM 里但尺寸 0×0，el-tour 会把气泡定位到左上角空白；又因 el-menu 开了 `unique-opened`（手风琴）逐个 open 会互相顶掉。解法是引导期间把 `unique-opened` 置 false 并一次性展开全部相关父级、等 360ms 过渡结束再 startTour，结束时恢复手风琴并只留当前路由的父级 | ✅ 已完成（2026-08-08） |
@@ -807,5 +828,6 @@ ssh root@120.79.138.198 "bash /var/www/hb-oms/app/deploy/deploy-oms-app.sh"
 | 2y | 送货单打印 | 成品出库单一键出送货单（打印页 + 服务端 PDF），版式按客户套模板。锚出库单不新建表；**版式全在前端注册表**（加客户模板 = 加一条纯数据配置）；数量跟随订单单位、混合单位表头退化；含卡口左右合并成一行。权限 `finished-stock:print`（迁移按持有 `:create` 的角色补授）。口径见 §5.6 送货单块 | ✅ 已完成（2026-08-14） |
 | 2z | 入库单打印 | 生产入库单一键出 **A5 横向**入库单（打印页 + 服务端 PDF），交仓库收货签字。锚入库单不新建表、单号不派生；仅 `inbound` 可打；列集合直接写在纸面组件、不进模板注册表；与送货单的共用取数件抽到 `print-note.util.ts`。权限**复用** `finished-stock:print`（清单改名「打印单据」，无迁移）。⚠️ A5 只有 128mm 可用高，字号行高不得调大——口径见 §5.6 入库单块 | ✅ 已完成（2026-08-14） |
 | 2aa | 生产BOM | 「工艺管理 → 生产BOM」：按 (生产图号, 版本) 维护成套物料清单，表头 + 明细两表（迁移 `migration-production-bom.sql`）；可从开单信息/部件信息带入、客户与供应商软关联 + 快照；批量导入（表头可留空继承、覆盖更新整份替换）+ 批量/单份正式表导出。纯工艺资料，不参与业务流转。口径见 §5.6 生产BOM块 | ✅ 已完成（2026-08-14） |
+| 2ab | 数据可视化大屏 | 蓝色科幻主题只读大屏（screen 模块）：后台按钮 `stat:screen` + 车间电视免登录访问码（只存摘要、hash 传码）；实时/区间两类面板、时间范围筛选（≤366 天）；口径全部复用 DashboardService 与 order-owed.util。口径见 §5.6 数据大屏块 | ✅ 已完成（2026-10-05） |
 | 7 | 事务写法约定 | 默认 `dataSource.transaction(mgr => ...)`；仅需悲观锁/手动控制提交时用 QueryRunner，并注释说明原因 | 📘 已定约定 |
 | 8 | 前端大 chunk 告警 | vite build 提示主包 > 500KB，暂未做代码分割；影响首屏但不影响功能，需要时再治理 | ⬜ 低优先级 |
