@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS t_user (
   must_change_pwd TINYINT      NOT NULL DEFAULT 0 COMMENT '首次登录强制改密：1是 0否',
   last_login_at   DATETIME     NULL COMMENT '最后登录时间',
   token_invalid_before DATETIME(3) NULL COMMENT '会话撤销水位线：签发时间早于此刻的 token 一律失效',
+  changelog_seen_id INT NULL COMMENT '更新日志已读水位线：本人已看过的最大 t_changelog.id，NULL=从未看过（首页只弹最新一个版本）',
   remark          VARCHAR(255) NULL,
   avatar          VARCHAR(255) NULL COMMENT '头像URL',
   creator_id      INT          NULL COMMENT '创建人ID',

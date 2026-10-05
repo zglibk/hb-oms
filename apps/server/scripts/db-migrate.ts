@@ -101,6 +101,8 @@ const MIGRATIONS: string[] = [
   'migration-changelog-v1.1.0.sql',
   // 业务记录修改权收紧：订单/外发/装配/成品出入库四个「主管角色」配置列 + 主管角色补授按钮权限
   'migration-record-edit-roles.sql',
+  // 首页「系统更新」弹窗：t_user 增加更新日志已读水位线
+  'migration-changelog-seen.sql',
 ];
 
 /**
@@ -134,6 +136,7 @@ const forbiddenColumns = [
 /** 结构验证：关键表.列 存在性检查（随里程碑扩充） */
 const expectedColumns = [
   't_user.token_invalid_before',
+  't_user.changelog_seen_id',
   't_dict.parent_value',
   't_operation_log.biz_type',
   't_operation_log.biz_id',

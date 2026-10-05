@@ -323,6 +323,9 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 每轮发布后首次进首页弹出更新明细（是否弹由服务端按人判定） -->
+    <ChangelogNoticeDialog />
   </div>
 </template>
 
@@ -346,6 +349,7 @@ import AppStatCard from '@/components/AppStatCard.vue';
 import SevenSegNumber from '@/components/SevenSegNumber.vue';
 import WelcomeRailArt from './WelcomeRailArt.vue';
 import WelcomeFireworks from './WelcomeFireworks.vue';
+import ChangelogNoticeDialog from './ChangelogNoticeDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
 
 const router = useRouter();

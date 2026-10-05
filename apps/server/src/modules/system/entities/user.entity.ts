@@ -58,6 +58,13 @@ export class User {
   })
   tokenInvalidBefore: Date | null;
 
+  /**
+   * 更新日志已读水位线：本人已看过的最大 t_changelog.id。
+   * 首页「系统更新」弹窗只弹 id 大于它的启用记录；NULL = 从未看过（只弹最新一个版本）。
+   */
+  @Column({ name: 'changelog_seen_id', type: 'int', nullable: true })
+  changelogSeenId: number | null;
+
   @Column({ nullable: true })
   remark: string;
 

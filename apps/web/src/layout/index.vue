@@ -187,11 +187,6 @@
               </div>
             </div>
           </el-popover>
-          <!-- 退出登录按钮：独立操作项，危险色 hover -->
-          <el-button size="small" class="logout-btn" text @click="onLogout">
-            <el-icon><SwitchButton /></el-icon>
-            <span class="mobile-hidden">退出</span>
-          </el-button>
         </div>
       </el-header>
 
@@ -762,40 +757,6 @@ function openManual() {
     margin-right: 0.25rem;
   }
 
-  /* 退出登录按钮：危险色文字按钮，hover 时显浅红底 */
-  .logout-btn {
-    touch-action: manipulation;
-    height: var(--hb-header-control-size);
-    padding: 0 0.75rem;
-    margin-left: 0.5rem;
-    border-radius: 0.5rem;
-    font-size: var(--hb-font-size-xs);
-    font-weight: 400;
-    color: var(--el-color-danger);
-    /* 固定图标与文字间距，避免 hover 时挤压 */
-    gap: 0.25rem;
-    transition:
-      background 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
-      color 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
-      transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1);
-
-    .el-icon {
-      font-size: 0.8125rem;
-      /* 用 transform 做位移，不影响布局 */
-      transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
-    }
-    &:hover {
-      color: var(--el-color-danger);
-      background: var(--el-color-danger-light-9);
-      .el-icon {
-        transform: translateX(0);
-      }
-    }
-    &:active {
-      transform: scale(0.96);
-    }
-  }
-
   /* ============================================================
    * 导航栏按钮统一悬浮动效果、背景晕染
    * ============================================================ */
@@ -1048,7 +1009,6 @@ function openManual() {
 
     /* 按钮 padding 压缩，仅显图标 */
     .doc-btn,
-    .logout-btn,
     .user-info {
       padding: 0 8px !important;
       /* 强制不换行，防止文字竖排 */
@@ -1075,7 +1035,6 @@ function openManual() {
   .collapse-btn,
   .doc-btn,
   .user-info,
-  .logout-btn,
   .collapse-btn .el-icon,
   .doc-btn .el-icon,
   .user-arrow,
@@ -1084,8 +1043,7 @@ function openManual() {
   }
   .collapse-btn:hover .el-icon,
   .doc-btn:hover .el-icon,
-  .user-info:hover .el-arrow,
-  .logout-btn:active {
+  .user-info:hover .el-arrow {
     transform: none !important;
   }
 }
