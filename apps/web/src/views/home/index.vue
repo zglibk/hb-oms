@@ -207,7 +207,7 @@
               ref="owedTableRef"
               :data="owedRows"
               size="small"
-              :max-height="LIST_MAX_HEIGHT"
+              :max-height="listMaxHeight"
               @mouseenter="owedScroll.pause()"
               @mouseleave="owedScroll.resume()"
             >
@@ -279,7 +279,7 @@
               ref="outsourceTableRef"
               :data="summary.recentOutsource"
               size="small"
-              :max-height="LIST_MAX_HEIGHT"
+              :max-height="listMaxHeight"
               @mouseenter="outsourceScroll.pause()"
               @mouseleave="outsourceScroll.resume()"
             >
@@ -406,18 +406,79 @@ const owedTruncated = computed(() => owedRows.value.length >= summary.value.topL
 
 /* ===== 待办列表自动滚动 ===== */
 
-/**
- * 列表可见高度（px）：表头 33.8 + 10 行 × 31.8 ≈ 352（size="small" 实测值；取整多 1~2px 会露出下一行的边线）。
- *
- * 2026-08-13 由 5 行改 10 行，2026-09-25 改为 8 行，2026-09-26 又改回 10 行（均为使用方要求）。2026-09-25 起接口每块最多
- * 返回 100 条（topLimit，原为 10 条、与可见行数相同，列表从来滚不起来）：超过 10 行即自动轮播，
- * 鼠标移入暂停、可滚轮手动翻看。可见行数与返回条数是两回事，别再改成相等。
- * 改行数只改这个数——行高变了先量一遍 el-table 的实际 header/row 高度再算。
- */
-const LIST_MAX_HEIGHT = 352;
-
 const owedTableRef = ref<any>(null);
 const outsourceTableRef = ref<any>(null);
+
+/**
+ * 首页表格高度按「表格顶部 → 当前视口底部」的实际剩余空间换算为整数行：
+ * - 矮屏 / 浏览器放大时减少行数，避免页面底部只露半行；
+ * - 高屏增加行数，利用原本空白的区域；
+ * - 卡片底部说明、body 内边距、el-main 底部内边距都从可用空间扣除。
+ *
+ * size="small" 实测：表头 33.8px、数据行 31.8px。保留 4～30 行的边界，极矮屏仍有
+ * 基本可读性，超高屏也不会把首页拉成过长清单。接口仍最多返回 100 条，超出可见行才
+ * 由 useAutoScroll 轮播；可见行数与接口返回条数是两回事。
+ */
+const TABLE_HEADER_HEIGHT = 33.8;
+const TABLE_ROW_HEIGHT = 31.8;
+const MIN_VISIBLE_ROWS = 4;
+const MAX_VISIBLE_ROWS = 30;
+const listMaxHeight = ref(Math.ceil(TABLE_HEADER_HEIGHT + TABLE_ROW_HEIGHT * 10));
+let listResizeRaf = 0;
+
+function tableRootOf(table: any): HTMLElement | null {
+  return table?.$el instanceof HTMLElement ? table.$el : null;
+}
+
+function updateListMaxHeight() {
+  const roots = [tableRootOf(owedTableRef.value), tableRootOf(outsourceTableRef.value)]
+    .filter((root): root is HTMLElement => !!root);
+  if (!roots.length) return;
+
+  const main = roots[0].closest<HTMLElement>('.main');
+  // rect.top 会随 el-main 的滚动位置变化；补回 scrollTop，窗口在页面已滚动时缩放也不会误算成超大表格。
+  const tableTop = Math.min(...roots.map((root) => root.getBoundingClientRect().top))
+    + (main?.scrollTop ?? 0);
+  const mainBottomPadding = main
+    ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0
+    : 0;
+
+  // 两张卡底部说明可能一边有、一边没有；取较大值，保证并排卡片都不越过视口底边。
+  const cardBottomSpace = Math.max(
+    ...roots.map((root) => {
+      const body = root.closest<HTMLElement>('.el-card__body');
+      if (!body) return 0;
+      const bodyStyle = getComputedStyle(body);
+      const bodyPadding = Number.parseFloat(bodyStyle.paddingBottom) || 0;
+      const more = body.querySelector<HTMLElement>('.list-card__more');
+      if (!more) return bodyPadding;
+      const moreMargin = Number.parseFloat(getComputedStyle(more).marginTop) || 0;
+      return bodyPadding + more.offsetHeight + moreMargin;
+    }),
+  );
+
+  // 再留 2px 给卡片边框与浏览器的小数像素取整，避免刚好卡在底边时露出半条边线。
+  const available = window.innerHeight - tableTop - mainBottomPadding - cardBottomSpace - 2;
+  const rows = Math.min(
+    MAX_VISIBLE_ROWS,
+    Math.max(MIN_VISIBLE_ROWS, Math.floor((available - TABLE_HEADER_HEIGHT) / TABLE_ROW_HEIGHT)),
+  );
+  const nextHeight = Math.ceil(TABLE_HEADER_HEIGHT + TABLE_ROW_HEIGHT * rows);
+  if (nextHeight === listMaxHeight.value) return;
+
+  listMaxHeight.value = nextHeight;
+  void nextTick(() => {
+    owedTableRef.value?.doLayout?.();
+    outsourceTableRef.value?.doLayout?.();
+    owedScroll.reset();
+    outsourceScroll.reset();
+  });
+}
+
+function scheduleListHeightUpdate() {
+  cancelAnimationFrame(listResizeRaf);
+  listResizeRaf = requestAnimationFrame(updateListMaxHeight);
+}
 
 /**
  * el-table 的实际滚动元素：body-wrapper 里包着一层 el-scrollbar，滚的是它的 wrap。
@@ -437,10 +498,15 @@ const outsourceScroll = useAutoScroll(() => scrollWrapOf(outsourceTableRef.value
 onMounted(() => {
   owedScroll.start();
   outsourceScroll.start();
+  window.addEventListener('resize', scheduleListHeightUpdate);
+  void nextTick(scheduleListHeightUpdate);
 });
 
-/** 换页签等于换了一份数据，停在半路的滚动位置对新列表没有意义 */
-watch(owedTab, () => owedScroll.reset());
+/** 换页签等于换了一份数据：滚动归零；底部说明可能随条数出现/消失，也要重算可见行。 */
+watch(owedTab, () => {
+  owedScroll.reset();
+  void nextTick(scheduleListHeightUpdate);
+});
 
 /** 没有逾期、却有临近到期的，默认停在「临近交期」页，省用户一次点击 */
 function pickDefaultTab() {
@@ -463,6 +529,8 @@ onMounted(() => {
 });
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer);
+  window.removeEventListener('resize', scheduleListHeightUpdate);
+  cancelAnimationFrame(listResizeRaf);
 });
 
 type GreetingTone = 'night' | 'morning' | 'forenoon' | 'noon' | 'afternoon' | 'evening';
@@ -580,6 +648,7 @@ async function load() {
     pickDefaultTab();
     // 刷新后行数变了，滚动位置要回到第一行
     void nextTick(() => {
+      scheduleListHeightUpdate();
       owedScroll.reset();
       outsourceScroll.reset();
     });
@@ -592,6 +661,7 @@ load();
 // 首次跳过，之后每次从别的页签切回来才刷新（看板是 5 条聚合查询，值得省这一次）。
 let activatedOnce = false;
 onActivated(() => {
+  scheduleListHeightUpdate();
   if (activatedOnce) load();
   else activatedOnce = true;
 });
