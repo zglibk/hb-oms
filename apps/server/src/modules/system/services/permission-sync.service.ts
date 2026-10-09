@@ -6,6 +6,7 @@ import { Role } from '../entities/role.entity';
 import { RolePermission } from '../entities/role-permission.entity';
 import { ADMIN_ONLY_PERMISSION_CODES, PERMISSIONS, accessTypeOf } from '../permission-manifest';
 import { UserAuthCacheService } from '../../auth/user-auth-cache.service';
+import { ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_CODE } from '@hb-oms/shared';
 
 /** 清单同步写入行的审计署名（区别于人工在菜单管理里创建/修改的行） */
 const SYNC_ACTOR = '系统同步';
@@ -139,7 +140,7 @@ export class PermissionSyncService implements OnApplicationBootstrap {
   /** admin 补授全库权限（幂等 INSERT ... NOT EXISTS，含 UI 手工创建的权限行） */
   private async grantAllToAdmin(): Promise<number> {
     const admin = await this.roleRepo.findOne({
-      where: { roleCode: 'admin' },
+      where: { roleCode: SUPER_ADMIN_ROLE_CODE },
     });
     if (!admin) {
       this.logger.warn('未找到内置 admin 角色，跳过补授');
@@ -154,7 +155,7 @@ export class PermissionSyncService implements OnApplicationBootstrap {
        )`,
       [admin.id, admin.id],
     );
-    const manager = await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
+    const manager = await this.roleRepo.findOne({ where: { roleCode: ADMIN_ROLE_CODE } });
     if (manager) {
       const placeholders = ADMIN_ONLY_PERMISSION_CODES.map(() => '?').join(',');
       await this.rolePermRepo.query(

@@ -13,6 +13,7 @@ import {
 } from '../decorators/operation-log.decorator';
 import { CurrentUserPayload } from '../decorators/current-user.decorator';
 import { OperationLogWriterService } from '../services/operation-log-writer.service';
+import { auditDisplayName } from '../utils/audit.util';
 import {
   buildLogDescription,
   extractBizFromRequest,
@@ -44,7 +45,7 @@ export class OperationLogInterceptor implements NestInterceptor {
     const { bizType, bizId } = extractBizFromRequest(request);
     const base = {
       userId: user?.id ?? null,
-      userName: user?.realName ?? user?.username ?? null,
+      userName: auditDisplayName(user) || null,
       module: meta.module,
       action: meta.action,
       description: buildLogDescription(meta.action, bizId),

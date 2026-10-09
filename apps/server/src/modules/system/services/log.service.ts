@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { OperationLog } from '../entities/operation-log.entity';
 import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
+import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 
 @Injectable()
 export class LogService {
@@ -76,10 +77,13 @@ export class LogService {
     return rows.map((r) => r.action as string);
   }
 
-  /** 批量删除操作日志（仅系统管理员 admin 角色可执行） */
+  /** 批量删除操作日志（仅超级管理员 admin 账号可执行） */
   async removeMany(ids: number[], user: CurrentUserPayload) {
-    if (!user.roleCodes?.includes('admin')) {
-      throw new ForbiddenException('仅系统管理员可删除操作日志');
+    if (
+      user.username !== SUPER_ADMIN_USERNAME ||
+      !user.roleCodes?.includes(SUPER_ADMIN_ROLE_CODE)
+    ) {
+      throw new ForbiddenException('仅超级管理员可删除操作日志');
     }
     const validIds = (ids || [])
       .map((id) => Number(id))

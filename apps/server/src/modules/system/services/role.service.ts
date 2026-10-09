@@ -22,6 +22,11 @@ import {
   auditOnUpdate,
 } from '../../../common/utils/audit.util';
 import { ADMIN_ONLY_PERMISSION_CODES } from '../permission-manifest';
+import {
+  SUPER_ADMIN_ROLE_CODE,
+  SUPER_ADMIN_USERNAME,
+  isPrivilegedAdminRoleCode,
+} from '@hb-oms/shared';
 
 @Injectable()
 export class RoleService {
@@ -41,13 +46,18 @@ export class RoleService {
 
   async findAll(user: CurrentUserPayload) {
     const roles = await this.roleRepo.find({ order: { sort: 'ASC', id: 'ASC' } });
-    return user.username === 'admin' ? roles : roles.filter((r) => r.roleCode !== 'SYS_OPR');
+    return user.username === SUPER_ADMIN_USERNAME
+      ? roles
+      : roles.filter((r) => !isPrivilegedAdminRoleCode(r.roleCode));
   }
 
-  private async assertManagerRoleVisible(id: number, user: CurrentUserPayload) {
+  private async assertPrivilegedRoleManageable(id: number, user: CurrentUserPayload) {
     const role = await this.roleRepo.findOne({ where: { id } });
     if (!role) throw new NotFoundException('角色不存在');
-    if (role.roleCode === 'SYS_OPR' && user.username !== 'admin') {
+    if (
+      isPrivilegedAdminRoleCode(role.roleCode) &&
+      user.username !== SUPER_ADMIN_USERNAME
+    ) {
       throw new NotFoundException('角色不存在');
     }
     return role;
@@ -79,7 +89,7 @@ export class RoleService {
   }
 
   async update(id: number, dto: UpdateRoleDto, user: CurrentUserPayload) {
-    const role = await this.assertManagerRoleVisible(id, user);
+    const role = await this.assertPrivilegedRoleManageable(id, user);
     const result = await this.dataSource.transaction(async (manager) => {
       await manager.update(Role, id, {
         roleName: dto.roleName ?? role.roleName,
@@ -112,9 +122,8 @@ export class RoleService {
     }
   }
 
-  async remove(id: number) {
-    const role = await this.roleRepo.findOne({ where: { id } });
-    if (!role) throw new NotFoundException('角色不存在');
+  async remove(id: number, user: CurrentUserPayload) {
+    const role = await this.assertPrivilegedRoleManageable(id, user);
     if (role.isBuiltin === 1) {
       throw new BadRequestException('系统内置角色不可删除');
     }
@@ -133,7 +142,7 @@ export class RoleService {
 
   /** 获取角色已分配的权限ID */
   async getPermissions(id: number, user: CurrentUserPayload) {
-    await this.assertManagerRoleVisible(id, user);
+    await this.assertPrivilegedRoleManageable(id, user);
     const rows = await this.rolePermRepo.find({ where: { roleId: id } });
     return rows.map((r) => r.permissionId);
   }
@@ -189,11 +198,11 @@ export class RoleService {
     dto: AssignPermsDto,
     user: CurrentUserPayload,
   ) {
-    const role = await this.assertManagerRoleVisible(id, user);
+    const role = await this.assertPrivilegedRoleManageable(id, user);
     const permissionIds = await this.normalizePermissionIds(
       dto.permissionIds ?? [],
     );
-    if (role.roleCode !== 'admin' && permissionIds.length) {
+    if (role.roleCode !== SUPER_ADMIN_ROLE_CODE && permissionIds.length) {
       const forbidden = await this.permRepo.find({
         where: { id: In(permissionIds), permCode: In([...ADMIN_ONLY_PERMISSION_CODES]) },
       });
@@ -217,7 +226,7 @@ export class RoleService {
   }
 
   async getDepts(id: number, user: CurrentUserPayload) {
-    await this.assertManagerRoleVisible(id, user);
+    await this.assertPrivilegedRoleManageable(id, user);
     const rows = await this.roleDeptRepo.find({ where: { roleId: id } });
     return rows.map((r) => r.deptId);
   }

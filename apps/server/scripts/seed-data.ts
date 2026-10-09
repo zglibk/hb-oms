@@ -225,7 +225,7 @@ export const JOB_LEVELS = [
 
 // ---------- 账号（plainPwd 在 db-init 中 bcrypt 加密）----------
 export const USERS = [
-  { username: 'admin', plainPwd: 'Admin@123', real_name: '系统管理员', dept_code: 'IT', roles: ['admin'] },
+  { username: 'admin', plainPwd: 'Admin@123', real_name: '超级管理员', dept_code: 'IT', roles: ['admin'] },
   { username: 'sales01', plainPwd: 'Sale@123', real_name: '业务员01', dept_code: 'SALE', roles: ['BUS_OPR'] },
   { username: 'follow01', plainPwd: 'Sale@123', real_name: '跟单员01', dept_code: 'SALE', roles: ['DOC_OPR'] },
   { username: 'wh01', plainPwd: 'Wh@12345', real_name: '仓管员01', dept_code: 'WAREHOUSE', roles: ['WH_OPR'] },

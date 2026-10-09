@@ -140,7 +140,7 @@
       :closable="false"
       show-icon
       title="您的角色未获授「查看首页看板」权限，经营汇总数据不予显示"
-      description="如需查看，请联系系统管理员在「角色管理 → 分配权限」中勾选「统计查看 → 查看首页看板」。"
+      description="如需查看，请联系管理员在「角色管理 → 分配权限」中勾选「统计查看 → 查看首页看板」。"
     />
 
     <div class="sum-bar" v-if="canDashboard">
@@ -351,6 +351,7 @@ import WelcomeRailArt from './WelcomeRailArt.vue';
 import WelcomeFireworks from './WelcomeFireworks.vue';
 import ChangelogNoticeDialog from './ChangelogNoticeDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_CODE } from '@hb-oms/shared';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -523,7 +524,7 @@ const welcomeSub = computed(() => {
 
 /**
  * 欢迎称呼：其余有性别时用「姓+先生/女士」。
- * 「管理员 / 系统管理员」属于默认账号的角色占位名，由 welcomeGreeting 改成「欢迎回来」。
+ * 「管理员 / 系统管理员 / 超级管理员」属于账号的角色占位名，由 welcomeGreeting 改成「欢迎回来」。
  */
 const politeName = computed(() => {
   const u = userStore.userInfo;
@@ -538,7 +539,11 @@ const politeName = computed(() => {
 /** 管理员使用「X先生/女士晚上好，欢迎回来」；角色占位名不直接用于称呼 */
 const welcomeGreeting = computed(() => {
   const name = (userStore.userInfo?.realName || '').trim();
-  if (userStore.roles.some((role) => role === 'admin' || role === 'SYS_OPR')) {
+  if (
+    userStore.roles.some(
+      (role) => role === SUPER_ADMIN_ROLE_CODE || role === ADMIN_ROLE_CODE,
+    )
+  ) {
     if (name === '管理员' || /管理员$/.test(name)) return `${greeting.value}，欢迎回来`;
     return `${politeName.value}${greeting.value}，欢迎回来`;
   }

@@ -18,7 +18,7 @@ import {
   UpdateProcessInfoDto,
 } from './dto/process-info.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { auditDisplayName, auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { normalizeDimensionText, normalizeVersion } from '@hb-oms/shared';
 import { SystemConfigService } from '../system-config/system-config.service';
 
@@ -296,7 +296,7 @@ export class ProcessInfoService {
       action,
       changes: JSON.stringify(changes),
       operatorId: user.id ?? null,
-      operatorName: user.realName || user.username || null,
+      operatorName: auditDisplayName(user) || null,
     };
   }
 

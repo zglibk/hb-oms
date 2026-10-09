@@ -157,7 +157,7 @@ export class SystemConfig {
   /*
    * 业务记录修改主管角色（角色编码逗号分隔，2026-09-26 使用方要求——防止自己建的数据被别人改掉）：
    * 订单 / 外发回厂记录 / 装配批次 / 成品出入库单只允许创建人与对应模块的主管角色修改、删除，
-   * **管理员不例外**；主管再受其角色「数据范围」约束。判定统一在 RecordOwnershipService。
+   * **管理员与超级管理员均不例外**；主管再受其角色「数据范围」约束。判定统一在 RecordOwnershipService。
    */
   @Column({
     name: 'order_edit_roles',
@@ -165,7 +165,7 @@ export class SystemConfig {
     length: 255,
     default: 'BUS_MGR',
     comment:
-      '订单修改主管角色：角色编码逗号分隔；订单只允许创建人与这些角色的用户修改/删除（管理员不例外，主管受数据范围约束），缺省 BUS_MGR 业务经理',
+      '订单修改主管角色：角色编码逗号分隔；订单只允许创建人与这些角色的用户修改/删除（管理员与超级管理员均不例外，主管受数据范围约束），缺省 BUS_MGR 业务经理',
   })
   orderEditRoles: string;
 
@@ -175,7 +175,7 @@ export class SystemConfig {
     length: 255,
     default: 'PLN_MGR',
     comment:
-      '外发回厂记录修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
+      '外发回厂记录修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员与超级管理员均不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
   })
   outsourceEditRoles: string;
 
@@ -185,7 +185,7 @@ export class SystemConfig {
     length: 255,
     default: 'PLN_MGR,PROD_MGR',
     comment:
-      '装配批次修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理、PROD_MGR 生产经理',
+      '装配批次修改主管角色：角色编码逗号分隔；只允许创建人与这些角色的用户修改/删除（管理员与超级管理员均不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理、PROD_MGR 生产经理',
   })
   assemblyEditRoles: string;
 
@@ -195,7 +195,7 @@ export class SystemConfig {
     length: 255,
     default: 'PLN_MGR',
     comment:
-      '成品出入库单修改主管角色：角色编码逗号分隔；草稿的编辑/作废/确认只允许创建人与这些角色的用户（管理员不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
+      '成品出入库单修改主管角色：角色编码逗号分隔；草稿的编辑/作废/确认只允许创建人与这些角色的用户（管理员与超级管理员均不例外，主管受数据范围约束），缺省 PLN_MGR 计划经理',
   })
   finishedEditRoles: string;
 

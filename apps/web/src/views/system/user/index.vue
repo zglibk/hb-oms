@@ -76,7 +76,7 @@
           type="selection"
           width="44"
           reserve-selection
-          :selectable="(row: any) => row.username !== 'admin'"
+          :selectable="(row: any) => row.canManage !== false && row.username !== SUPER_ADMIN_USERNAME"
         />
         <el-table-column label="账号" width="130">
           <template #default="{ row }">
@@ -112,12 +112,12 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <app-actions>
-              <el-button size="small" v-permission.disable="'user:update'" link type="primary" class="btn-edit" :icon="Edit" @click="openEdit(row)">编辑</el-button>
-              <el-button size="small" v-permission.disable="'user:assign_role'" link type="primary" class="btn-view" :icon="Avatar" @click="openAssign(row)">角色</el-button>
-              <el-button size="small" v-permission.disable="'user:reset_pwd'" link type="primary" class="btn-warning" :icon="Key" @click="onResetPwd(row)">重置密码</el-button>
+            <app-actions :title="row.canManage === false ? '管理员和超级管理员账号仅可由超级管理员维护' : ''">
+              <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:update'" link type="primary" class="btn-edit" :icon="Edit" @click="openEdit(row)">编辑</el-button>
+              <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:assign_role'" link type="primary" class="btn-view" :icon="Avatar" @click="openAssign(row)">角色</el-button>
+              <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:reset_pwd'" link type="primary" class="btn-warning" :icon="Key" @click="onResetPwd(row)">重置密码</el-button>
               <el-button size="small"
-                :disabled="row.username === 'admin'"
+                :disabled="row.canManage === false || row.username === SUPER_ADMIN_USERNAME"
                 v-permission.disable="'user:update'"
                 link
                 type="primary"
@@ -189,7 +189,13 @@
     <!-- 分配角色 -->
     <el-dialog v-model="assignVisible" title="分配角色" width="420px">
       <el-select v-model="assignRoleIds" multiple style="width:100%">
-        <el-option v-for="r in assignableRoles" :key="r.id" :label="r.roleName" :value="r.id" />
+        <el-option
+          v-for="r in assignableRoles"
+          :key="r.id"
+          :label="r.roleName"
+          :value="r.id"
+          :disabled="assignUsername === SUPER_ADMIN_USERNAME && r.roleCode === SUPER_ADMIN_ROLE_CODE"
+        />
       </el-select>
       <template #footer>
         <el-button size="small" @click="assignVisible=false">取消</el-button>
@@ -208,6 +214,7 @@ import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { Plus, Delete, Edit, Avatar, Key, CircleClose, Open } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import ColorTag from '@/components/ColorTag.vue';
+import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
   getUserList, getUserDetail, createUser, updateUser,
@@ -222,7 +229,9 @@ const selection = ref<any[]>([]);
 const query = reactive<any>({ page: 1, pageSize: 10 });
 const roles = ref<any[]>([]);
 /** 超级管理员角色不出现在普通账号的选择器中；服务端另有同口径硬校验 */
-const ordinaryRoles = computed(() => roles.value.filter((r) => r.roleCode !== 'admin'));
+const ordinaryRoles = computed(() =>
+  roles.value.filter((r) => r.roleCode !== SUPER_ADMIN_ROLE_CODE),
+);
 const deptTree = ref<any[]>([]);
 
 const formVisible = ref(false);
@@ -243,7 +252,7 @@ const assignUserId = ref<number | null>(null);
 const assignUsername = ref('');
 const assignRoleIds = ref<number[]>([]);
 const assignableRoles = computed(() =>
-  assignUsername.value === 'admin' ? roles.value : ordinaryRoles.value,
+  assignUsername.value === SUPER_ADMIN_USERNAME ? roles.value : ordinaryRoles.value,
 );
 
 async function load() {
@@ -303,7 +312,7 @@ function openAssign(row: any) {
   assignUsername.value = row.username;
   // 顺手剔除普通账号历史误绑的 admin 角色；保存后数据库关系也会被清理。
   const allowedIds = new Set(
-    (row.username === 'admin' ? roles.value : ordinaryRoles.value).map((r) => r.id),
+    (row.username === SUPER_ADMIN_USERNAME ? roles.value : ordinaryRoles.value).map((r) => r.id),
   );
   assignRoleIds.value = row.roleIds.filter((id: number) => allowedIds.has(id));
   assignVisible.value = true;
@@ -335,7 +344,9 @@ async function onToggle(row: any) {
 }
 
 async function batchDelete() {
-  const rows = selection.value.filter((r) => r.username !== 'admin');
+  const rows = selection.value.filter(
+    (r) => r.canManage !== false && r.username !== SUPER_ADMIN_USERNAME,
+  );
   const ids = rows.map((r) => r.id);
   if (!ids.length) return;
   await ElMessageBox.confirm(

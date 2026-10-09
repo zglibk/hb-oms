@@ -342,7 +342,7 @@ export class OutsourceService {
 
   /**
    * 编辑单条：锚点与订单侧快照不可改，只改加工商/日期/表面处理/颜色/数量口径/备注。
-   * 只许创建人与外发主管角色（受数据范围约束，管理员不例外）——RecordOwnershipService。
+   * 只许创建人与外发主管角色（受数据范围约束，管理员与超级管理员均不例外）——RecordOwnershipService。
    */
   async update(id: number, dto: UpdateOutsourcePartDto, user: CurrentUserPayload) {
     const row = await this.findOne(id);

@@ -1,11 +1,11 @@
 import { CurrentUserPayload } from '../decorators/current-user.decorator';
+import { actorDisplayName, type ActorIdentity } from '@hb-oms/shared';
 
 /** 审计用显示名：优先真实姓名，回退登录账号 */
 export function auditDisplayName(
-  user: CurrentUserPayload | null | undefined,
+  user: ActorIdentity | null | undefined,
 ): string {
-  if (!user) return '';
-  return (user.realName || user.username || '').trim();
+  return actorDisplayName(user);
 }
 
 /** 新建记录时写入：创建人/更新人 ID 与姓名快照（更新人初始同创建人） */

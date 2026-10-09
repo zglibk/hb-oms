@@ -10,6 +10,7 @@ import {
   PERMISSIONS_KEY,
 } from '../decorators/permissions.decorator';
 import { CurrentUserPayload } from '../decorators/current-user.decorator';
+import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 
 /**
  * 功能权限守卫（文档 7.2 接口权限）——真正的权限边界。
@@ -37,10 +38,13 @@ export class PermissionGuard implements CanActivate {
     const user = request.user as CurrentUserPayload;
     if (!user) throw new ForbiddenException('无访问权限');
 
-    // admin 超管旁路：系统管理员天然拥有全部功能权限，不受权限点落库进度影响。
+    // admin 超管旁路：超级管理员天然拥有全部功能权限，不受权限点落库进度影响。
     // 安全前提：admin 为内置角色（不可删除、role_code 不可修改），
     // 且启动期 PermissionSyncService 会把全库权限补授给 admin（用于前端按钮显隐）。
-    if (user.roleCodes?.includes('admin')) return true;
+    if (
+      user.username === SUPER_ADMIN_USERNAME &&
+      user.roleCodes?.includes(SUPER_ADMIN_ROLE_CODE)
+    ) return true;
 
     const owned = new Set(user.permissions || []);
     if (requiredAll?.length && !requiredAll.every((p) => owned.has(p))) {

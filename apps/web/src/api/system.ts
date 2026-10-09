@@ -292,7 +292,7 @@ export interface SystemConfig {
   deliveryTemplateDefault: string;
   /*
    * 业务记录修改主管角色（角色编码逗号分隔）：只许创建人与这些角色修改 / 删除，
-   * 管理员不例外，主管受其角色数据范围约束
+   * 管理员与超级管理员均不例外，主管受其角色数据范围约束
    */
   orderEditRoles: string;
   outsourceEditRoles: string;
@@ -346,10 +346,10 @@ export interface PublicSystemConfig {
   loginBgSetAsDefault: number;
 }
 
-/** 管理员读取完整配置 */
+/** 有权限的管理员或超级管理员读取完整配置 */
 export const getSystemConfig = () =>
   request.get<any, SystemConfig>('/api/system/config');
-/** 管理员更新配置 */
+/** 有权限的管理员或超级管理员更新配置 */
 export const updateSystemConfig = (data: Partial<SystemConfig>) =>
   request.put('/api/system/config', data);
 /** 公开接口（登录页免登读取） */

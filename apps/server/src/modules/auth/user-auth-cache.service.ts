@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User } from '../system/entities/user.entity';
 import { AuthService } from './auth.service';
+import { normalizeAccountRealName } from '@hb-oms/shared';
 
 /**
  * 用户鉴权上下文（请求级 request.user 的数据来源）
@@ -74,7 +75,7 @@ export class UserAuthCacheService {
     const data: UserAuthContext = {
       id: user.id,
       username: user.username,
-      realName: user.realName,
+      realName: normalizeAccountRealName(user.username, user.realName),
       deptId: user.deptId ?? null,
       status: user.status,
       tokenInvalidBefore: user.tokenInvalidBefore ?? null,

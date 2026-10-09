@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -23,6 +24,12 @@ import {
   auditOnCreate,
   auditOnUpdate,
 } from '../../../common/utils/audit.util';
+import {
+  ADMIN_ROLE_CODE,
+  SUPER_ADMIN_ROLE_CODE,
+  SUPER_ADMIN_USERNAME,
+  normalizeAccountRealName,
+} from '@hb-oms/shared';
 
 @Injectable()
 export class UserService {
@@ -84,21 +91,42 @@ export class UserService {
     operator: CurrentUserPayload,
   ) {
     const adminRole = await this.roleRepo.findOne({
-      where: { roleCode: 'admin' },
+      where: { roleCode: SUPER_ADMIN_ROLE_CODE },
     });
     if (!adminRole) {
       throw new BadRequestException('超级管理员角色不存在，请联系运维人员');
     }
     const hasAdminRole = (roleIds ?? []).includes(adminRole.id);
-    if (username === 'admin' && !hasAdminRole) {
+    if (username === SUPER_ADMIN_USERNAME && !hasAdminRole) {
       throw new BadRequestException('超级管理员账号必须保留超级管理员角色');
     }
-    if (username !== 'admin' && hasAdminRole) {
+    if (username !== SUPER_ADMIN_USERNAME && hasAdminRole) {
       throw new BadRequestException('超级管理员角色仅限内置 admin 账号使用');
     }
-    const managerRole = await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
-    if ((roleIds ?? []).includes(managerRole?.id ?? -1) && operator.username !== 'admin') {
+    const managerRole = await this.roleRepo.findOne({ where: { roleCode: ADMIN_ROLE_CODE } });
+    if ((roleIds ?? []).includes(managerRole?.id ?? -1) && operator.username !== SUPER_ADMIN_USERNAME) {
       throw new BadRequestException('只有超级管理员可以分配管理员角色');
+    }
+  }
+
+  /** 管理员与超级管理员账号只能由超级管理员在用户管理中维护。 */
+  private async assertCanManagePrivilegedAccount(
+    user: User,
+    operator: CurrentUserPayload,
+  ) {
+    if (operator.username === SUPER_ADMIN_USERNAME) return;
+    if (user.username === SUPER_ADMIN_USERNAME) {
+      throw new ForbiddenException('超级管理员账号仅可由超级管理员维护');
+    }
+    const managerRole = await this.roleRepo.findOne({
+      where: { roleCode: ADMIN_ROLE_CODE },
+    });
+    if (!managerRole) return;
+    const bound = await this.userRoleRepo.count({
+      where: { userId: user.id, roleId: managerRole.id },
+    });
+    if (bound > 0) {
+      throw new ForbiddenException('管理员账号仅可由超级管理员维护');
     }
   }
 
@@ -109,9 +137,13 @@ export class UserService {
   ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
+    await this.assertCanManagePrivilegedAccount(user, operator);
     await this.userRepo.update(id, {
       ...auditOnUpdate(operator),
-      realName: dto.realName ?? user.realName,
+      realName: normalizeAccountRealName(
+        user.username,
+        dto.realName ?? user.realName,
+      ),
       gender: dto.gender ?? user.gender,
       deptId: dto.deptId ?? user.deptId,
       phone: dto.phone ?? user.phone,
@@ -130,6 +162,7 @@ export class UserService {
   ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
+    await this.assertCanManagePrivilegedAccount(user, operator);
     await this.assertAdminRoleIsolation(user.username, dto.roleIds, operator);
     await this.dataSource.transaction(async (m) => {
       await this.bindRoles(m, id, dto.roleIds);
@@ -147,6 +180,7 @@ export class UserService {
   ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
+    await this.assertCanManagePrivilegedAccount(user, operator);
     const hash = await bcrypt.hash(dto.password, 12);
     await this.userRepo.update(id, {
       ...auditOnUpdate(operator),
@@ -167,8 +201,9 @@ export class UserService {
   ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
-    if (user.username === 'admin' && status === 0) {
-      throw new BadRequestException('不可停用系统管理员');
+    await this.assertCanManagePrivilegedAccount(user, operator);
+    if (user.username === SUPER_ADMIN_USERNAME && status === 0) {
+      throw new BadRequestException('不可停用超级管理员');
     }
     await this.userRepo.update(id, {
       ...auditOnUpdate(operator),
@@ -181,20 +216,33 @@ export class UserService {
   }
 
   /** 批量删除用户（连带清理其角色绑定）。不可删除 admin 与当前登录账号 */
-  async removeMany(ids: number[], currentUserId?: number) {
+  async removeMany(ids: number[], operator: CurrentUserPayload) {
     const validIds = (ids || [])
       .map((x) => Number(x))
       .filter((x) => Number.isInteger(x) && x > 0);
     if (validIds.length === 0) {
       throw new BadRequestException('请选择要删除的用户');
     }
-    if (currentUserId && validIds.includes(currentUserId)) {
+    if (validIds.includes(operator.id)) {
       throw new BadRequestException('不可删除当前登录账号');
     }
 
     const users = await this.userRepo.find({ where: { id: In(validIds) } });
-    if (users.some((u) => u.username === 'admin')) {
-      throw new BadRequestException('不可删除系统管理员');
+    if (users.some((u) => u.username === SUPER_ADMIN_USERNAME)) {
+      throw new BadRequestException('不可删除超级管理员');
+    }
+    if (operator.username !== SUPER_ADMIN_USERNAME) {
+      const managerRole = await this.roleRepo.findOne({
+        where: { roleCode: ADMIN_ROLE_CODE },
+      });
+      const managerCount = managerRole
+        ? await this.userRoleRepo.count({
+            where: { userId: In(validIds), roleId: managerRole.id },
+          })
+        : 0;
+      if (managerCount > 0) {
+        throw new ForbiddenException('管理员账号仅可由超级管理员删除');
+      }
     }
 
     return this.dataSource.transaction(async (manager) => {
@@ -238,14 +286,17 @@ export class UserService {
       const myRoleIds = userRoles
         .filter((ur) => ur.userId === u.id)
         .map((ur) => ur.roleId);
-      const myRoles = roles.filter(
-        (r) => myRoleIds.includes(r.id) && (viewer.username === 'admin' || r.roleCode !== 'SYS_OPR'),
-      );
+      const myRoles = roles.filter((r) => myRoleIds.includes(r.id));
+      const adminLevel = u.username === SUPER_ADMIN_USERNAME
+        ? 'super'
+        : myRoles.some((r) => r.roleCode === ADMIN_ROLE_CODE)
+          ? 'manager'
+          : null;
       const dept = depts.find((d) => d.id === u.deptId);
       return {
         id: u.id,
         username: u.username,
-        realName: u.realName,
+        realName: normalizeAccountRealName(u.username, u.realName),
         gender: u.gender,
         deptId: u.deptId,
         deptName: dept?.deptName ?? null,
@@ -254,6 +305,8 @@ export class UserService {
         lastLoginAt: u.lastLoginAt,
         roleIds: myRoles.map((r) => r.id),
         roleNames: myRoles.map((r) => r.roleName),
+        adminLevel,
+        canManage: viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null,
         // 审计四件套：列表页悬浮图标展示，手工挑字段的地方最容易漏
         creatorName: u.creatorName,
         createdAt: u.createdAt,
@@ -269,19 +322,26 @@ export class UserService {
     if (!user) throw new NotFoundException('用户不存在');
     const userRoles = await this.userRoleRepo.find({ where: { userId: id } });
     const roleIds = userRoles.map((r) => r.roleId);
-    const managerRole = viewer.username === 'admin'
-      ? null
-      : await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
+    const roles = roleIds.length
+      ? await this.roleRepo.find({ where: { id: In(roleIds) } })
+      : [];
+    const adminLevel = user.username === SUPER_ADMIN_USERNAME
+      ? 'super'
+      : roles.some((r) => r.roleCode === ADMIN_ROLE_CODE)
+        ? 'manager'
+        : null;
     return {
       id: user.id,
       username: user.username,
-      realName: user.realName,
+      realName: normalizeAccountRealName(user.username, user.realName),
       gender: user.gender,
       deptId: user.deptId,
       phone: user.phone,
       status: user.status,
       remark: user.remark,
-      roleIds: roleIds.filter((roleId) => roleId !== managerRole?.id),
+      roleIds,
+      adminLevel,
+      canManage: viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null,
       creatorName: user.creatorName,
       createdAt: user.createdAt,
       updaterName: user.updaterName,

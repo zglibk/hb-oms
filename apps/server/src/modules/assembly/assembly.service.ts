@@ -401,7 +401,7 @@ export class AssemblyService {
     return this.dataSource.transaction(async (mgr) => {
       const pre = await mgr.getRepository(AssemblyBatch).findOne({ where: { id } });
       if (!pre) throw new NotFoundException('装配批次不存在');
-      // 只许创建人与装配主管角色（受数据范围约束，管理员不例外）
+      // 只许创建人与装配主管角色（受数据范围约束，管理员与超级管理员均不例外）
       await this.ownership.assertCanModify('assembly', pre, user, '修改');
       // 统一锁顺序「先锁产品行全部批次行、再改本行」，与入库确认一致，避免交叉等待死锁
       await loadInboundQuota(

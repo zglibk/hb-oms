@@ -10,11 +10,12 @@ import {
 } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 
 /**
  * 系统配置接口
- *   GET  /api/system/config             管理员读取完整配置
- *   PUT  /api/system/config             管理员更新配置
+ *   GET  /api/system/config             有权限的管理员或超级管理员读取完整配置
+ *   PUT  /api/system/config             有权限的管理员或超级管理员更新配置
  *   GET  /api/system/config/features    业务字段开关（仅需登录，各业务页读取决定字段显隐）
  *   GET  /api/system/config/public      公开接口（登录页免登读取 logo + favicon + 默认背景）
  *   GET  /api/system/config/share-html  公开接口（分享爬虫抓取，实时 og/twitter meta）
@@ -25,7 +26,7 @@ export class SystemConfigController {
   // 注：hb-mes 的审批管理（approval）按业务决策不移植——OMS 无审核流（设计文档决策 #2）
   constructor(private readonly service: SystemConfigService) {}
 
-  /** 管理员读取完整配置 */
+  /** 有权限的管理员或超级管理员读取完整配置 */
   @Get()
   @RequirePermissions('system:config')
   get() {
@@ -114,9 +115,12 @@ export class SystemConfigController {
   @RequirePermissions('system:danger')
   @OperationLog('系统管理', '清理业务测试数据')
   async cleanup(@Body() body: { confirm?: string }, @CurrentUser() user: CurrentUserPayload) {
-    // 仅 admin 角色可执行此操作（权限 + 角色双重校验）
-    if (!user.roleCodes?.includes('admin')) {
-      throw new (await import('@nestjs/common')).ForbiddenException('仅系统管理员可执行此操作');
+    // 仅内置 admin 超级管理员账号可执行此操作（权限 + 身份双重校验）
+    if (
+      user.username !== SUPER_ADMIN_USERNAME ||
+      !user.roleCodes?.includes(SUPER_ADMIN_ROLE_CODE)
+    ) {
+      throw new (await import('@nestjs/common')).ForbiddenException('仅超级管理员可执行此操作');
     }
     const result = await this.service.cleanupBusinessData(
       { id: user.id, username: user.username, realName: user.realName },

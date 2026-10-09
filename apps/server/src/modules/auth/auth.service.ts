@@ -20,7 +20,7 @@ import { TokenBlacklistService } from './token-blacklist.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { auditOnUpdate } from '../../common/utils/audit.util';
+import { auditDisplayName, auditOnUpdate } from '../../common/utils/audit.util';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { CaptchaService } from '../captcha/captcha.service';
 import { OperationLogWriterService } from '../../common/services/operation-log-writer.service';
@@ -28,6 +28,11 @@ import { extractClientIp } from '../../common/utils/operation-log.util';
 import { Request } from 'express';
 import { ModuleRef } from '@nestjs/core';
 import { USER_AUTH_CACHE } from './auth.tokens';
+import {
+  SUPER_ADMIN_ROLE_CODE,
+  SUPER_ADMIN_USERNAME,
+  normalizeAccountRealName,
+} from '@hb-oms/shared';
 
 const MAX_FAIL = 5;
 const LOCK_MINUTES = 30;
@@ -102,7 +107,7 @@ export class AuthService {
       throw new UnauthorizedException('账号或密码错误');
     }
     if (user.status !== 1) {
-      writeAuthLog('登录失败(账号停用)', 0, user.id, user.realName || user.username);
+      writeAuthLog('登录失败(账号停用)', 0, user.id, auditDisplayName(user));
       throw new UnauthorizedException('账号已停用，请联系管理员');
     }
 
@@ -111,7 +116,7 @@ export class AuthService {
       const mins = Math.ceil(
         (user.lockedUntil.getTime() - Date.now()) / 60000,
       );
-      writeAuthLog('登录失败(账号锁定)', 0, user.id, user.realName || user.username);
+      writeAuthLog('登录失败(账号锁定)', 0, user.id, auditDisplayName(user));
       throw new UnauthorizedException(`账号已锁定，请 ${mins} 分钟后重试`);
     }
 
@@ -126,12 +131,12 @@ export class AuthService {
       }
       await this.userRepo.update(user.id, patch);
       if (fail >= MAX_FAIL) {
-        writeAuthLog('登录失败(账号锁定)', 0, user.id, user.realName || user.username);
+        writeAuthLog('登录失败(账号锁定)', 0, user.id, auditDisplayName(user));
         throw new UnauthorizedException(
           `密码错误次数过多，账号锁定 ${LOCK_MINUTES} 分钟`,
         );
       }
-      writeAuthLog('登录失败', 0, user.id, user.realName || user.username);
+      writeAuthLog('登录失败', 0, user.id, auditDisplayName(user));
       throw new UnauthorizedException(
         `账号或密码错误（还可尝试 ${MAX_FAIL - fail} 次）`,
       );
@@ -146,7 +151,7 @@ export class AuthService {
       lastLoginAt: new Date(),
     });
 
-    writeAuthLog('登录成功', 1, user.id, user.realName || user.username);
+    writeAuthLog('登录成功', 1, user.id, auditDisplayName(user));
 
     const auth = await this.loadUserAuth(user.id, user.username);
     const tokens = await this.signTokens(user);
@@ -161,7 +166,7 @@ export class AuthService {
       userInfo: {
         id: user.id,
         username: user.username,
-        realName: user.realName,
+        realName: normalizeAccountRealName(user.username, user.realName),
         gender: user.gender,
         deptId: user.deptId,
         deptName: dept?.deptName ?? null,
@@ -196,8 +201,8 @@ export class AuthService {
       // 超管身份与唯一内置账号绑定，而不是谁拿到 admin 角色谁就是超管。
       // 这层过滤同时兜住存量误绑定：普通账号即使数据库里残留 admin 角色关系，
       // 也不会得到其权限、数据范围或 PermissionGuard 旁路。
-      if (username !== 'admin') {
-        roles = roles.filter((r) => r.roleCode !== 'admin');
+      if (username !== SUPER_ADMIN_USERNAME) {
+        roles = roles.filter((r) => r.roleCode !== SUPER_ADMIN_ROLE_CODE);
       }
       // 仅取「启用」角色的 id 用于后续权限/部门查询：
       // 停用角色(status=0)必须完全失去授权能力，否则其绑定的权限点与自定义
@@ -418,7 +423,7 @@ export class AuthService {
       userInfo: {
         id: user.id,
         username: user.username,
-        realName: user.realName,
+        realName: normalizeAccountRealName(user.username, user.realName),
         gender: user.gender,
         deptId: user.deptId,
         deptName: dept?.deptName ?? null,
@@ -446,8 +451,8 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('用户不存在');
     await this.userRepo.update(userId, {
       updaterId: userId,
-      updaterName: (user.realName || user.username || '').trim() || null,
-      realName: dto.realName,
+      updaterName: auditDisplayName(user) || null,
+      realName: normalizeAccountRealName(user.username, dto.realName),
       gender: dto.gender ?? user.gender,
       phone: dto.phone ?? user.phone,
       remark: dto.remark ?? user.remark,

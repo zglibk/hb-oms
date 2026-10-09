@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,6 +18,10 @@ import {
   auditOnCreate,
   auditOnUpdate,
 } from '../../../common/utils/audit.util';
+import { SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
+import { ADMIN_ONLY_PERMISSION_CODES } from '../permission-manifest';
+
+const ADMIN_ONLY_PERMISSIONS = new Set<string>(ADMIN_ONLY_PERMISSION_CODES);
 
 export interface PermTreeNode extends Permission {
   children: PermTreeNode[];
@@ -33,10 +38,15 @@ export class MenuService {
   ) {}
 
   /** 全部权限树（菜单+按钮+接口），供角色分配权限和菜单管理用 */
-  async tree() {
-    const all = await this.permRepo.find({
+  async tree(user: CurrentUserPayload) {
+    let all = await this.permRepo.find({
       order: { sort: 'ASC', id: 'ASC' },
     });
+    if (user.username !== SUPER_ADMIN_USERNAME) {
+      all = all.filter(
+        (p) => !ADMIN_ONLY_PERMISSIONS.has(p.permCode),
+      );
+    }
     return this.buildTree(all, 0);
   }
 
@@ -54,6 +64,12 @@ export class MenuService {
   }
 
   async create(dto: CreatePermissionDto, user: CurrentUserPayload) {
+    if (
+      user.username !== SUPER_ADMIN_USERNAME &&
+      ADMIN_ONLY_PERMISSIONS.has(dto.permCode)
+    ) {
+      throw new ForbiddenException('超级管理员专属权限仅可由超级管理员维护');
+    }
     const exist = await this.permRepo.findOne({
       where: { permCode: dto.permCode },
     });
@@ -82,6 +98,7 @@ export class MenuService {
   async update(id: number, dto: UpdatePermissionDto, user: CurrentUserPayload) {
     const perm = await this.permRepo.findOne({ where: { id } });
     if (!perm) throw new NotFoundException('权限不存在');
+    this.assertAdminOnlyPermissionManageable(perm, user);
     await this.permRepo.update(id, {
       permName: dto.permName ?? perm.permName,
       permType: dto.permType ?? perm.permType,
@@ -99,7 +116,10 @@ export class MenuService {
     return { id };
   }
 
-  async remove(id: number) {
+  async remove(id: number, user: CurrentUserPayload) {
+    const perm = await this.permRepo.findOne({ where: { id } });
+    if (!perm) throw new NotFoundException('权限不存在');
+    this.assertAdminOnlyPermissionManageable(perm, user);
     const children = await this.permRepo.count({ where: { parentId: id } });
     if (children > 0) {
       throw new BadRequestException('请先删除子权限');
@@ -108,5 +128,17 @@ export class MenuService {
     await this.permRepo.delete(id);
     this.authCache.invalidateAll();
     return { id };
+  }
+
+  private assertAdminOnlyPermissionManageable(
+    perm: Permission,
+    user: CurrentUserPayload,
+  ) {
+    if (
+      user.username !== SUPER_ADMIN_USERNAME &&
+      ADMIN_ONLY_PERMISSIONS.has(perm.permCode)
+    ) {
+      throw new ForbiddenException('超级管理员专属权限仅可由超级管理员维护');
+    }
   }
 }

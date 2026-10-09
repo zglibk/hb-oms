@@ -107,6 +107,8 @@ const MIGRATIONS: string[] = [
   'migration-screen.sql',
   // 超管角色只允许唯一内置 admin 账号持有；清理普通账号历史误绑定
   'migration-admin-role-isolation.sql',
+  // 内置 admin 旧占位姓名补正；操作日志与全表审计快照明确标记「超级管理员」
+  'migration-admin-display-name.sql',
 ];
 
 /**

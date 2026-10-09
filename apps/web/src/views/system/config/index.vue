@@ -287,14 +287,14 @@
           </div>
         </el-tab-pane>
 
-        <!-- 数据权限：业务记录只许创建人与这里选的主管角色修改（管理员不例外，主管受数据范围约束） -->
+        <!-- 数据权限：业务记录只许创建人与这里选的主管角色修改（管理员与超级管理员均不例外，主管受数据范围约束） -->
         <el-tab-pane label="数据权限" name="dataPerm">
           <el-form :model="form" label-width="130px" class="config-form" v-loading="loading">
             <el-card shadow="never" class="cfg-section">
               <div class="section-title">谁能修改别人录的数据</div>
               <p class="section-desc">
                 下面四类记录只允许<strong>创建人本人</strong>和该类记录的<strong>主管角色</strong>修改、删除，
-                <strong>系统管理员也不例外</strong>（要让管理员能改，就把「系统管理员」选进来）。其他人只能查看。<br />
+                <strong>管理员和超级管理员也不例外</strong>（需要时把「管理员」或「超级管理员」选进来）。其他人只能查看。<br />
                 主管角色能改哪些人的记录，再由其角色的<strong>「数据范围」</strong>决定（角色管理里设置）：
                 全部 = 全厂；本部门 / 本部门及下级 / 自定义部门 = 创建人在这些部门的记录；本人 = 只能改自己录的。
                 <strong>数据范围只管能改哪些，不影响查看</strong>——所有人照常能看全厂数据，台账与看板数字不因人而异。
@@ -343,7 +343,7 @@
               :closable="false"
               show-icon
               title="危险操作区"
-              description="以下操作不可恢复，仅系统管理员可执行。请确认你已了解后果后再操作。"
+              description="以下操作不可恢复，仅超级管理员可执行。请确认你已了解后果后再操作。"
             />
 
             <el-card shadow="never" class="danger-card">
@@ -354,7 +354,7 @@
               </div>
               <ul class="danger-card__list">
                 <li>适用场景：部署前清理测试阶段产生的业务数据</li>
-                <li>安全判断：订单数 &gt; 50 条时视为已正式使用，<strong>即使管理员也无法清理</strong></li>
+                <li>安全判断：订单数 &gt; 50 条时视为已正式使用，<strong>即使超级管理员也无法清理</strong></li>
                 <li>清理后请同步删除服务器 <code>uploads/</code> 目录下的孤儿文件</li>
               </ul>
 

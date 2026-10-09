@@ -144,9 +144,9 @@ export class SystemController {
   @OperationLog('系统管理', '批量删除用户')
   removeUsers(
     @Body('ids') ids: number[],
-    @CurrentUser('id') currentUserId: number,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.userService.removeMany(ids, currentUserId);
+    return this.userService.removeMany(ids, user);
   }
 
   // ===== 角色 =====
@@ -180,8 +180,11 @@ export class SystemController {
   @Delete('role/:id')
   @RequirePermissions('role:delete')
   @OperationLog('系统管理', '删除角色')
-  removeRole(@Param('id', ParseIntPipe) id: number) {
-    return this.roleService.remove(id);
+  removeRole(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.roleService.remove(id, user);
   }
 
   @Get('role/:id/permissions')
@@ -215,8 +218,8 @@ export class SystemController {
    */
   @Get('menu/tree')
   @RequireAnyPermissions('system:menu', 'system:role')
-  menuTree() {
-    return this.menuService.tree();
+  menuTree(@CurrentUser() user: CurrentUserPayload) {
+    return this.menuService.tree(user);
   }
 
   @Post('menu')
@@ -243,8 +246,11 @@ export class SystemController {
   @Delete('menu/:id')
   @RequirePermissions('menu:delete')
   @OperationLog('系统管理', '删除菜单')
-  removeMenu(@Param('id', ParseIntPipe) id: number) {
-    return this.menuService.remove(id);
+  removeMenu(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.menuService.remove(id, user);
   }
 
   // ===== 字典 =====

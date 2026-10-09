@@ -2,7 +2,7 @@
  * 首页欢迎横幅副标题的「岗位 × 时段」提示文案（2026-09-25）。
  *
  * - **岗位组**：17 个内置业务角色按工作内容归成 7 组（管理层 / 业务 / 计划 / 生产 / 仓库 /
- *   技术品质 / 财务人事），系统管理员单独一组；界面上新建的自定义角色回落「通用」组。
+ *   技术品质 / 财务人事），管理员与超级管理员共用系统维护组；界面上新建的自定义角色回落「通用」组。
  * - **多角色**：按 `GROUP_PRIORITY` 取第一个命中的组——取最能代表主要职责的一组，不拼接多组文案。
  * - **时段**：早上 / 上午 / 中午 / 下午 / 晚上 五个时段分岗位；深夜不分岗位，统一提醒休息。
  * - **实时数字**：`withData` 用首页看板已加载的统计数拼文案；无看板权限或数据尚未返回时
@@ -12,6 +12,8 @@
  *
  * 改措辞只改本文件。节假日当天的节日祝福优先于这里的所有文案（在 index.vue 里判断）。
  */
+
+import { ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_CODE } from '@hb-oms/shared';
 
 export type TipTone = 'night' | 'morning' | 'forenoon' | 'noon' | 'afternoon' | 'evening';
 type DayTone = Exclude<TipTone, 'night'>;
@@ -47,8 +49,8 @@ type TipGroup = 'admin' | 'mgmt' | 'biz' | 'plan' | 'prod' | 'wh' | 'tq' | 'fin'
 
 /** 角色编码 → 岗位组（自定义角色不在表内，回落 generic） */
 const ROLE_GROUP: Record<string, TipGroup> = {
-  admin: 'admin',
-  SYS_OPR: 'admin',
+  [SUPER_ADMIN_ROLE_CODE]: 'admin',
+  [ADMIN_ROLE_CODE]: 'admin',
   GEN_MGR: 'mgmt',
   VICE_MGR: 'mgmt',
   BUS_MGR: 'biz',

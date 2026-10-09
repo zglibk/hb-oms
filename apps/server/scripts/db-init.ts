@@ -79,7 +79,7 @@ async function main() {
 
   await db.end();
   console.log('\n🎉 数据库初始化完成');
-  console.log('   默认账号：admin / Admin@123（系统管理员）');
+  console.log('   默认账号：admin / Admin@123（超级管理员）');
   console.log('   其他账号：sales01/follow01（Sale@123）、wh01（Wh@12345）');
 }
 

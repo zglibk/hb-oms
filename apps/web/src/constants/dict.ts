@@ -1,6 +1,12 @@
 import i18nIsoCountries from 'i18n-iso-countries';
 import zhLocale from 'i18n-iso-countries/langs/zh.json';
 import enLocale from 'i18n-iso-countries/langs/en.json';
+import {
+  ADMIN_ROLE_CODE,
+  ADMIN_ROLE_NAME,
+  SUPER_ADMIN_ROLE_CODE,
+  SUPER_ADMIN_ROLE_NAME,
+} from '@hb-oms/shared';
 
 /**
  * 前端枚举常量统一引用入口。
@@ -147,8 +153,8 @@ export const ROLE_MAP: Record<string, string> = {
   PQE_ENG: 'PQE 工程师',
   FIN_MGR: '财务经理',
   PAY_OPR: '薪资核算员',
-  SYS_OPR: '管理员',
-  admin: '超级管理员',
+  [ADMIN_ROLE_CODE]: ADMIN_ROLE_NAME,
+  [SUPER_ADMIN_ROLE_CODE]: SUPER_ADMIN_ROLE_NAME,
 };
 
 /**

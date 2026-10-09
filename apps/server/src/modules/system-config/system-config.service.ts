@@ -90,7 +90,7 @@ export class SystemConfigService {
   }
 
   /**
-   * 某模块的修改主管角色编码：该模块的记录只允许创建人与这些角色的用户修改（管理员不例外）。
+   * 某模块的修改主管角色编码：该模块的记录只允许创建人与这些角色的用户修改（管理员与超级管理员均不例外）。
    * 空串 = 只有创建人能改。判定逻辑在 RecordOwnershipService，这里只负责取配置。
    */
   async getEditRoles(module: 'order' | 'outsource' | 'assembly' | 'finished'): Promise<string[]> {
@@ -262,7 +262,7 @@ export class SystemConfigService {
    * 保留系统配置（用户/角色/权限/菜单/部门）、物料主数据、字典主数据。
    *
    * 技术性安全判断：订单数 > 50 视为已正式使用，拒绝清理。
-   * 即使管理员也无法清理，避免误删生产数据。
+   * 即使超级管理员也无法清理，避免误删生产数据。
    *
    * @param user  执行清理的操作人（用于审计日志）
    * @param confirm  二次确认口令，必须为 "清理" 二字
