@@ -73,8 +73,16 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
-            <el-form-item label="订单日期" prop="orderDate">
-              <el-date-picker v-model="form.orderDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+            <el-form-item label="下单日期" prop="orderDate">
+              <el-date-picker
+                v-model="form.orderDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="请选择客户下单日"
+                :disabled-date="disableFutureOrderDate"
+                style="width: 100%"
+                @change="onOrderDateChange"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -384,8 +392,20 @@
             </el-col>
             <!-- 装配车间已移除：订单环节不安排车间，车间在「装配管理」新建批次时录入 -->
             <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="交货日期" label-width="80px">
-                <el-date-picker v-model="p.deliveryDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-form-item
+                label="订单交期"
+                :prop="`products.${pi}.deliveryDate`"
+                :rules="deliveryDateRules(pi)"
+                label-width="80px"
+              >
+                <el-date-picker
+                  v-model="p.deliveryDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="请选择预计交货日"
+                  :disabled-date="disableDeliveryBeforeOrderDate"
+                  style="width: 100%"
+                />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
@@ -527,6 +547,7 @@ import {
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { preloadCountryFlags, preloadCountryFlagsWhenIdle } from '@/utils/flag-preload';
+import { formatBusinessDate } from '@/utils/date';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled, inchToMm } =
@@ -582,7 +603,7 @@ const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
 /**
  * 复制来源订单 id（列表「复制」进入）：按详情回显业务内容做模板，走新建保存、单号重新采番。
- * 不继承：PO#（新客户订单文件必然是新号）、订单日期（重置今天）、交期（新单交期几乎必然
+ * 不继承：PO#（新客户订单文件必然是新号）、下单日期（重置今天）、交期（新单交期几乎必然
  * 不同，沿用漏改比重填代价高）、附件（多为旧单的客户来单文件）、期初标记、审计信息。
  * 生产单号预填后缀递推的建议值（见 suggestNextProductionNo），完全可改可清空。
  */
@@ -617,7 +638,7 @@ function suggestNextProductionNo(no: string): string {
 const auditRow = ref<any>(null);
 
 /**
- * 编辑守卫（详情接口带回）：订单只许创建人与订单修改主管角色修改（管理员不例外）；
+ * 编辑守卫（详情接口带回）：订单只许创建人与订单修改主管角色修改（管理员与超级管理员均不例外）；
  * 被外发/装配/出入库引用后还只能「更正」——信息可改、结构不能动。
  * 这里只做界面引导，服务端 update 另有同样的硬校验。
  */
@@ -749,13 +770,16 @@ const emptyProduct = (): ProductRow => ({
   partGroups: defaultGroups('three_section'),
 });
 
+/** 中国标准时间的业务当天，避免 toISOString() 在凌晨取到前一天。 */
+const businessToday = () => formatBusinessDate(new Date());
+
 const form = reactive({
   poNo: '',
   /** 生产单号：订单级，与 PO# 一对一 */
   productionNo: '',
   customerId: undefined as number | undefined,
   customerName: '',
-  orderDate: new Date().toISOString().slice(0, 10),
+  orderDate: businessToday(),
   salesman: '',
   merchandiser: '',
   orderSource: '',
@@ -783,9 +807,59 @@ const isOpeningOrder = computed({
  * 服务端 CreateOrderDto 另有同样的硬校验（API 直调同样拒绝）。
  * PO# 2026-09-25 起**选填**：口头订单、手写订单没有 PO 号，硬性必填只会逼人乱填一个。
  */
+function validateOrderDate(
+  _rule: unknown,
+  value: string,
+  callback: (error?: Error) => void,
+) {
+  if (value && value > businessToday()) {
+    callback(new Error('下单日期不能晚于今天'));
+    return;
+  }
+  callback();
+}
+
+function deliveryDateRules(pi: number) {
+  return [
+    { required: true, message: `请选择产品 ${pi + 1} 的订单交期`, trigger: 'change' },
+    {
+      validator: (
+        _rule: unknown,
+        value: string,
+        callback: (error?: Error) => void,
+      ) => {
+        if (value && form.orderDate && value < form.orderDate) {
+          callback(new Error('订单交期不能早于下单日期'));
+          return;
+        }
+        callback();
+      },
+      trigger: 'change',
+    },
+  ];
+}
+
+function disableFutureOrderDate(date: Date): boolean {
+  return formatBusinessDate(date) > businessToday();
+}
+
+function disableDeliveryBeforeOrderDate(date: Date): boolean {
+  return !!form.orderDate && formatBusinessDate(date) < form.orderDate;
+}
+
+function onOrderDateChange() {
+  form.products.forEach((_product, pi) => {
+    const validation = formRef.value?.validateField(`products.${pi}.deliveryDate`);
+    if (validation) void validation.catch(() => undefined);
+  });
+}
+
 const rules = {
   customerName: [{ required: true, message: '请选择或输入客户', trigger: 'change' }],
-  orderDate: [{ required: true, message: '请选择订单日期', trigger: 'change' }],
+  orderDate: [
+    { required: true, message: '请选择下单日期', trigger: 'change' },
+    { validator: validateOrderDate, trigger: 'change' },
+  ],
   productionNo: [{ required: true, message: '请输入生产单号', trigger: 'blur' }],
 };
 const attachments = ref<string[]>([]);
@@ -846,7 +920,7 @@ async function init() {
       const row = await getOrderDetail(sourceId);
       if (isCopy) {
         copyHint.value =
-          `已复制 ${row.orderNo} 的内容，PO#/交期已清空，请填写新的 PO#` +
+          `已复制 ${row.orderNo} 的内容，PO#/交期已清空，请填写新的订单交期` +
           (row.productionNo ? '；生产单号已预填递推建议值（可改，但不能留空）' : '') +
           '，核对后保存';
       } else {
@@ -859,7 +933,7 @@ async function init() {
         productionNo: isCopy ? suggestNextProductionNo(row.productionNo ?? '') : row.productionNo ?? '',
         customerId: row.customerId ?? undefined,
         customerName: row.customerName,
-        orderDate: isCopy ? new Date().toISOString().slice(0, 10) : (row.orderDate || '').slice(0, 10),
+        orderDate: isCopy ? businessToday() : (row.orderDate || '').slice(0, 10),
         salesman: row.salesman ?? '',
         merchandiser: row.merchandiser ?? '',
         orderSource: row.orderSource ?? '',
@@ -1274,6 +1348,27 @@ function escapeHtml(s: string): string {
 }
 
 /**
+ * 所有产品交期都恰好等于下单日期时二次核对。该组合可能合法，因此只提醒不硬拦；
+ * 但它也是把「交期」误抄进「下单日期」最典型的信号。
+ */
+async function confirmMatchingOrderDates() {
+  if (
+    !form.orderDate
+    || !form.products.length
+    || !form.products.every((product) => product.deliveryDate === form.orderDate)
+  ) return;
+  await ElMessageBox.confirm(
+    `所有产品的订单交期都与下单日期相同（${form.orderDate}）。请确认没有把交期误填成下单日期。`,
+    '日期核对',
+    {
+      type: 'warning',
+      confirmButtonText: '日期无误，继续保存',
+      cancelButtonText: '返回检查',
+    },
+  );
+}
+
+/**
  * 被引用订单的「更正提醒」（只提醒不拦截）：数量/规格/表面处理改了会波及已发生的业务数——
  * 欠数重算（可能变负、订单自动完结/重开）、已入库已发货的记录一并显示新规格、外发欠数口径变化。
  * 让用户确认一次这是在纠正录入错误，而不是顺手改了一个已经在车间流转的产品。
@@ -1312,6 +1407,7 @@ async function onSave() {
     return;
   }
   await formRef.value?.validate();
+  await confirmMatchingOrderDates();
   // 分体行守卫：组并集=全部件就是整品（服务端同样会拒），提前拦下并指明行号
   const badSection = form.products.findIndex((p) => p.isSplit && !canSplitShipping(p.railSection));
   if (badSection >= 0) {
@@ -1376,7 +1472,7 @@ async function onSave() {
       sheetMaterial: p.sheetMaterial || undefined,
       orderQty: p.orderQty,
       unit: p.unit,
-      deliveryDate: p.deliveryDate || undefined,
+      deliveryDate: p.deliveryDate,
       deliveryAddress: p.deliveryAddress || undefined,
       remark: p.remark || undefined,
       sort: i,

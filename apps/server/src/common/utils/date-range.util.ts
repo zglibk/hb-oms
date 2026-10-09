@@ -1,5 +1,25 @@
 import { BadRequestException } from '@nestjs/common';
 
+const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
+const businessDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** 当前业务日期（中国标准时间），避免 UTC 日期在凌晨回退到前一天。 */
+export function businessToday(now = new Date()): string {
+  const parts = businessDateFormatter.formatToParts(now);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) {
+    throw new Error('无法计算当前业务日期');
+  }
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * 业务日期先后关系校验。
  *

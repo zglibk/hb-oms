@@ -33,13 +33,14 @@ import {
   UpdateOrderDto,
 } from './dto/order.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
-import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { auditDisplayName, auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
 import { ProductSnapshotService } from '../../common/services/product-snapshot.service';
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 import { OperationLogWriterService } from '../../common/services/operation-log-writer.service';
 import { syncOrderFinishState } from './order-owed.util';
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
+import { assertNotBefore, businessToday } from '../../common/utils/date-range.util';
 
 /** 下游引用条数：外发回厂记录 / 装配批次 / 成品出入库明细 */
 export interface RefCounts {
@@ -259,6 +260,7 @@ export class OrderService {
   /* ==================== 创建 / 更新 ==================== */
 
   async create(dto: CreateOrderDto, user: CurrentUserPayload) {
+    this.assertOrderDates(dto);
     this.assertProductRows(dto);
     return this.dataSource.transaction(async (mgr) => {
       const orderNo = await this.numberGenerator.generate('ORD', mgr);
@@ -293,7 +295,7 @@ export class OrderService {
    * 为什么不再重建：装配批次、成品明细/余额锚在产品行 ID 上，外发回厂记录锚在部件组 ID 上，
    * 重建会换掉 ID、让下游全部悬空——所以过去订单一被引用就只能一刀切禁改，录错的生产单号
    * 再也改不回来。原地更新保住 ID 后，被引用的订单也能「更正」：
-   *   - 权限：只有订单创建人与订单修改主管角色（RecordOwnershipService，管理员不例外、主管受数据范围约束），与是否被引用无关；
+   *   - 权限：只有订单创建人与订单修改主管角色（RecordOwnershipService，管理员与超级管理员均不例外、主管受数据范围约束），与是否被引用无关；
    *   - 结构不许动：被引用的产品行/部件组不能删，卡口/节数/分体不能改（assertReferencedStructure）；
    *   - 同一事务把新值回写到下游快照、按新订单数重算完结状态。
    * 每次编辑都另记一条带逐项改动的操作日志。
@@ -304,6 +306,7 @@ export class OrderService {
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status === ORDER_STATUS.CANCELLED) throw new BadRequestException('订单已作废，不能编辑');
     await this.ownership.assertCanModify('order', order, user, '修改');
+    this.assertOrderDates(dto);
     this.assertProductRows(dto);
 
     const result = await this.dataSource.transaction(async (mgr) => {
@@ -374,7 +377,7 @@ export class OrderService {
       const summary = `${action} ${order.orderNo}：${result.changes.join('；')}`;
       this.logWriter.write({
         userId: user.id,
-        userName: user.realName || user.username,
+        userName: auditDisplayName(user),
         module: '订单管理',
         action,
         description: summary.length > 250 ? `${summary.slice(0, 247)}...` : summary,
@@ -689,7 +692,7 @@ export class OrderService {
     cmp('生产单号', s(order.productionNo), s(dto.productionNo));
     cmp('PO#', s(order.poNo), s(dto.poNo));
     cmp('客户', s(order.customerName), s(dto.customerName));
-    cmp('订单日期', day(order.orderDate), day(dto.orderDate));
+    cmp('下单日期', day(order.orderDate), day(dto.orderDate));
     cmp('业务员', s(order.salesman), s(dto.salesman));
     cmp('跟单员', s(order.merchandiser), s(dto.merchandiser));
     cmp('订单来源', s(order.orderSource), s(dto.orderSource));
@@ -812,6 +815,31 @@ export class OrderService {
         ],
       );
     }
+  }
+
+  /**
+   * 日期语义由服务端硬兜底，前端禁选与提示只负责体验：
+   * - 下单日期不得晚于中国标准时间的今天；
+   * - 每个产品必须有订单交期；
+   * - 订单交期不得早于下单日期（同日合法）。
+   */
+  private assertOrderDates(dto: CreateOrderDto) {
+    const today = businessToday();
+    assertNotBefore(
+      dto.orderDate,
+      today,
+      `下单日期不能晚于今天（${today}）`,
+    );
+    dto.products.forEach((p, i) => {
+      if (!p.deliveryDate) {
+        throw new BadRequestException(`第 ${i + 1} 行产品：请填写订单交期`);
+      }
+      assertNotBefore(
+        dto.orderDate,
+        p.deliveryDate,
+        `第 ${i + 1} 行产品：订单交期不能早于下单日期`,
+      );
+    });
   }
 
   private assertProductRows(dto: CreateOrderDto) {

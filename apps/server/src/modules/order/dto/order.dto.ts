@@ -128,7 +128,9 @@ export class CreateOrderProductDto {
   // productionNo 已上移订单级（CreateOrderDto.productionNo）；assemblyWorkshop 已移除
   // ——订单环节不安排装配车间，车间在装配批次录入。两者不再接收产品级入参。
 
-  @IsOptional() @IsDateString({}, { message: '交货日期格式应为 YYYY-MM-DD' }) deliveryDate?: string;
+  @IsDateString({}, { message: '订单交期格式应为 YYYY-MM-DD' })
+  @IsNotEmpty({ message: '请填写订单交期' })
+  deliveryDate: string;
 
   @IsOptional() @IsString() @MaxLength(255) deliveryAddress?: string;
 
@@ -182,7 +184,8 @@ export class CreateOrderDto {
   @MaxLength(128)
   customerName: string;
 
-  @IsDateString({}, { message: '订单日期格式应为 YYYY-MM-DD' })
+  @IsDateString({}, { message: '下单日期格式应为 YYYY-MM-DD' })
+  @IsNotEmpty({ message: '请填写下单日期' })
   orderDate: string;
 
   @IsOptional() @IsString() @MaxLength(64) salesman?: string;

@@ -137,11 +137,15 @@
         <a class="toc-l2" href="#5-台账与统计口径系统核心">5. 台账与统计口径（系统核心）</a>
         <a class="toc-l3" href="#51-订单跟踪台账核心页面按部件组一行——对齐手工台账粒度">5.1 订单跟踪台账（核心页面，按部件组一行——对齐手工台账粒度）</a>
         <a class="toc-l3" href="#52-首页看板销售视角">5.2 首页看板（销售视角）</a>
+        <a class="toc-l3" href="#521-数据可视化大屏只读">5.2.1 数据可视化大屏（只读）</a>
+        <a class="toc-l3" href="#53-产品汇总查询财务需求「统计分析-→-产品汇总」">5.3 产品汇总查询（财务需求，「统计分析 → 产品汇总」）</a>
         <a class="toc-l2" href="#6-接口设计模块-→-主要接口">6. 接口设计（模块 → 主要接口）</a>
         <a class="toc-l2" href="#7-边界与不变式">7. 边界与不变式</a>
         <a class="toc-l2" href="#8-技术架构与工程规范照搬-hb-mes差异处注明">8. 技术架构与工程规范（照搬 hb-mes，差异处注明）</a>
         <a class="toc-l2" href="#9-实施里程碑">9. 实施里程碑</a>
         <a class="toc-l2" href="#10-后续扩展v1-明确不做接口与表结构不预埋需求成熟后独立设计">10. 后续扩展（V1 明确不做，接口与表结构不预埋、需求成熟后独立设计）</a>
+        <a class="toc-l2" href="#11-待实施方案">11. 待实施方案</a>
+        <a class="toc-l3" href="#111-出货流程业务发货通知-→-财务审核-→-仓库出库待实施">11.1 出货流程：业务发货通知 → 财务审核 → 仓库出库（待实施）</a>
   </aside>
   <article>
 <p>﻿# 海宝五金订单跟踪系统（hb-oms）设计文档 V1.0</p>
@@ -263,7 +267,7 @@
 <tr>
 <td>13</td>
 <td>单号展示</td>
-<td>手工台账「订单编号」（如 <code>GLI46212-A</code>，客户前缀+业务自编后缀）= <strong>订单级生产单号 t_order.production_no</strong>（2026-08-07 由产品行上移，与 PO# 一对一——一张订单不会有两个生产单号）；台账默认展示此号，ORD 系统采番号仅内部定位用</td>
+<td>订单级生产单号 <code>t_order.production_no</code>（如 <code>GLI46212-A</code>，客户前缀+业务自编后缀）与 PO# 一对一；台账将其与系统订单号 <code>t_order.order_no</code>（<code>ORD...</code>）分列展示，方便和订单管理核对</td>
 </tr>
 </tbody></table></div>
 <h3 id="21-统一口径">2.1 统一口径<a class="anchor" href="#21-统一口径" aria-hidden="true">#</a></h3>
@@ -498,7 +502,7 @@
 <tr>
 <td>production_no</td>
 <td>varchar(64)</td>
-<td><strong>生产单号（订单级）</strong>，手工填写；对应手工台账「订单编号」如 <code>GLI46212-A</code>，-A/-B 后缀由业务自编；<strong>台账默认展示此号</strong>，ORD 系统号仅内部定位</td>
+<td><strong>生产单号（订单级）</strong>，手工填写，如 <code>GLI46212-A</code>，-A/-B 后缀由业务自编；台账与系统生成的 <code>ORD...</code> 订单号分列展示</td>
 </tr>
 <tr>
 <td>customer_id / customer_name</td>
@@ -508,7 +512,7 @@
 <tr>
 <td>order_date</td>
 <td>date</td>
-<td>订单日期</td>
+<td><strong>下单日期</strong>；按中国标准时间默认当天，不得晚于当天</td>
 </tr>
 <tr>
 <td>salesman</td>
@@ -598,6 +602,11 @@
 <td>轨道节数：two_section 二节轨 / three_section 三节轨</td>
 </tr>
 <tr>
+<td>is_split</td>
+<td>tinyint</td>
+<td><strong>分体出货</strong>：0整品 1分体，<strong>仅三节轨可开</strong>（二节轨只有外/内两个部件，业务上不拆单下单；前端禁用开关、服务端硬校验）。客户把一支滑轨拆成多行下单（如三节轨拆「外中轨」+「内轨」两行）、分开包装出货、不组装成整品时，逐行开启。<strong>出货形态不落库</strong>，由该行部件组构成即时推导（组列表即事实源，共享包 <code>splitParts</code>/<code>splitSuffix</code>）：产品级型号后缀随形态变（<code>45#缓冲外中轨</code>/<code>45#缓冲内轨</code>）。<strong>分体行（含内轨等单部件行）同样要装配自身小零件</strong>——与整品行一样录装配批次、受入库闸门约束（使用部门口径，2026-08-13 定）。分体行组并集不得覆盖全部部件（那就是整品，服务端拒绝）</td>
+</tr>
+<tr>
 <td>dimension_mm</td>
 <td>int</td>
 <td>规格（mm 统一口径，计算/匹配用）</td>
@@ -655,7 +664,7 @@
 <tr>
 <td>delivery_date</td>
 <td>date</td>
-<td>交货日期</td>
+<td><strong>订单交期（应用层必填）</strong>；不得早于下单日期，同日合法。数据库列保留可空以兼容存量，不做批量回填</td>
 </tr>
 <tr>
 <td>delivery_address</td>
@@ -670,6 +679,7 @@
 </tbody></table></div>
 <blockquote>
 <p>图号/版本/料厚不在产品行——已下沉至部件组（见下）。</p>
+<p><strong>日期防错</strong>：下单日期与订单交期绝不互相自动回填。创建/编辑均由前后端双重校验：下单日期不得晚于当天，每个产品行必须填写订单交期且不得早于下单日期；全部产品交期都与下单日期相同时，保存前要求二次确认。</p>
 <p><strong>不落台账冗余列</strong>：完成数/出库数/库存数/双欠数一律实时聚合（§5），产品行与部件组不存这些数字，杜绝对账漂移。</p>
 </blockquote>
 <h4 id="torderpartgroup部件组——跟踪-台账锚点">t_order_part_group（部件组——跟踪/台账锚点）<a class="anchor" href="#torderpartgroup部件组——跟踪-台账锚点" aria-hidden="true">#</a></h4>
@@ -721,6 +731,7 @@
 </tr>
 </tbody></table></div>
 <blockquote>
+<p><strong>需外发时必须拆到部件粒度（2026-08-12）</strong>：表面处理 ≠ <code>none</code> 的产品行不得挂组合型组（外中轨 / 整品）——外发锚定部件组，挂组合型组会让 ① 回厂只能按一条记账、分不出各部件回了多少；② 单重按部件建档，组合型组取不到准确单重、按重量折算数量系统性偏差。订单表单在「组类型 / 表面处理 / 轨道节数」任一变化时自动拆成单部件组（图号/版本/料厚原样复制到各行，计划员核对后改差异项），与是否分体出货无关。服务端只做录入引导、不硬拦（硬拦会挡住存量数据编辑，而粒度粗不会算错数）。另：二节轨下「外中轨」组已不可选（实际只剩外轨，组名与实际不符）。</p>
 <p><strong>工艺信息联动（组级）</strong>：部件组录入/选择生产图号后，按图号匹配 <code>t_process_info</code> 自动带入版本号、产品名称（订单客户为空时一并带客户），带入值均为快照、可修改；订单表单提供「查看工艺」抽屉，展示该图号的生产机台、长度要求、特殊要求、模具编号、工艺更新附图——仅参考展示，不落订单字段。</p>
 <p><strong>锚点约定</strong>：外发明细、装配批次、成品出入库明细/余额、台账行一律锚定 <code>order_part_group_id</code>（+side），不再直接锚产品行；产品行/订单 ID 作为冗余列保留便于直查。</p>
 </blockquote>
@@ -1138,7 +1149,7 @@
 </blockquote>
 <h3 id="48-期初录入系统上线初始化菜单常驻可复录">4.8 期初录入（系统上线初始化，菜单常驻可复录）<a class="anchor" href="#48-期初录入系统上线初始化菜单常驻可复录" aria-hidden="true">#</a></h3>
 <ol>
-<li><strong>补录历史订单</strong>：未完结历史订单按正常订单录入，勾选「期初补录」标记 <code>is_opening=1</code>。该标记<strong>仅作区分之用</strong>（订单列表打「期初」标签、便于日后统计时剔除），<strong>不改变任何校验，也不影响四数口径</strong>——订单必填项本就只有客户与订单日期，没有可豁免的余地。</li>
+<li><strong>补录历史订单</strong>：未完结历史订单按正常订单录入，勾选「期初补录」标记 <code>is_opening=1</code>。该标记<strong>仅作区分之用</strong>（订单列表打「期初」标签、便于日后统计时剔除），<strong>不改变任何校验，也不影响四数口径</strong>——客户、生产单号、下单日期、产品数量、订单交期等必填与日期先后校验均不豁免。</li>
 <li><strong>成品期初（挂订单）</strong>：选订单的<strong>产品行</strong>（2026-08-10 由部件组升级）→ 生成 <code>biz_type=&#39;opening_balance&#39;</code> 入库单（FGO 序列、direction=1）→ <strong>建单后同事务立即确认</strong>并累加 balance，不留草稿。字段自动带出：订单号、生产单号、客户、货号、产品型号、产品类型、规格、节数；含卡口组合分左右两行录数量（2 支 = 1 套口径由 qty_pcs 承接）。</li>
 <li><strong>部件期初</strong>：按 7 维属性行录入累加，字段：部件、边别、货号、轨道节数、产品类型、料厚、规格、数量（支）、备注。<strong>整批全有全无</strong>——部件台账是累加语义，部分成功后重提整批会把已成功的行加第二次。</li>
 </ol>
@@ -1211,8 +1222,12 @@
 <td>t_order.customer_name</td>
 </tr>
 <tr>
-<td>订单编号</td>
-<td>t_order.production_no（订单级生产单号，台账默认展示；ORD 系统号仅内部）</td>
+<td>订单号</td>
+<td>t_order.order_no（系统生成的 <code>ORD...</code> 编号，与订单管理列表一致）</td>
+</tr>
+<tr>
+<td>生产单号</td>
+<td>t_order.production_no（订单级业务生产编号）</td>
 </tr>
 <tr>
 <td>产品编码</td>
@@ -1299,7 +1314,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <li>同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。</li>
 <li>装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。</li>
 <li>台账行内可展开：该组的出入库流水、外发流水、装配批次明细。走独立接口 <code>GET /order/ledger/detail?orderPartGroupId=</code>，<strong>展开时才加载</strong>（一页几十行随列表全查三张流水太重）。</li>
-<li>同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单编号/产品编码/规格/数量单位/表面处理/订单交期）<strong>跨行合并</strong>，观感对齐手工台账；仅合并相邻的同产品行。</li>
+<li>同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单号/生产单号/产品编码/规格/数量单位/表面处理/订单交期）<strong>跨行合并</strong>，观感对齐手工台账；仅合并相邻的同产品行。</li>
 <li>筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date &lt; 今天 且 发货欠数 &gt; 0）、表面处理（字典）、是否出口、产品类型（多选组合按<strong>包含匹配</strong>：FIND_IN_SET 单值命中即入选）、装配车间。</li>
 <li>支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。</li>
 </ul>
@@ -1307,8 +1322,24 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <ul>
 <li>汇总卡：进行中订单数、总成品欠数（支）、总发货欠数（支）、逾期订单数。</li>
 <li>列表区：逾期未发货 TOP、临近交期 7 天内订单、外发超期未回齐（require_back_date 已过且未回齐）。</li>
-<li>无大屏需求，普通管理页即可（不做 ECharts 大屏，需要时后续加）。</li>
+<li>首页是普通管理页；全屏的<strong>数据可视化大屏</strong>另见 §5.2.1。</li>
 </ul>
+<h3 id="521-数据可视化大屏只读">5.2.1 数据可视化大屏（只读）<a class="anchor" href="#521-数据可视化大屏只读" aria-hidden="true">#</a></h3>
+<p>蓝色科幻主题的全屏看板，两个入口、数据相同：后台顶栏「数据可视化」按钮（需 <code>stat:screen</code> 权限，新标签全屏打开）；车间电视免登录，凭管理员在「系统配置 → 数据大屏」生成的访问码访问（库里只存摘要，可随时重置 / 关闭）。</p>
+<ul>
+<li>面板分「实时」与「区间」两类并在界面标注：实时 = 进行中订单 / 双欠数 / 逾期（与首页看板同口径）、成品库存、客户发货欠数 TOP5、逾期未发货与近期外发回厂滚动列表；区间 = 订单状态分布、业务主线流转（下单 / 外发回厂 / 装配完成 / 入库 / 出库）、入库出库与外发回厂趋势、装配车间产出、区间出库。</li>
+<li>区间按业务日期（下单日 / 回厂日 / 实际完成日 / 单据日期）落在所选范围统计，界面缺省近 30 天（接口不传参时缺省本月），最长 366 天；≤62 天按日分桶，否则按月。成品进出沿用台账单据族口径（已确认单、红字抵扣、入向含期初）。</li>
+<li>只读，不提供任何写操作；排产、审核、报工仍不在本系统范围（决策 #2 不变）。</li>
+</ul>
+<h3 id="53-产品汇总查询财务需求「统计分析-→-产品汇总」">5.3 产品汇总查询（财务需求，「统计分析 → 产品汇总」）<a class="anchor" href="#53-产品汇总查询财务需求「统计分析-→-产品汇总」" aria-hidden="true">#</a></h3>
+<p>台账是订单视角（一行 = 一张订单的一个产品行），本页是<strong>产品视角</strong>：跨订单把「相同产品」归并成一行。财务四条需求收敛于此——①不同订单相同产品汇总（主表本身）；②入库/出库累计汇总（主表两列 + 合计卡）；③按客户查其所有产品（客户筛选）；④按产品反查客户（客户列并列展示 + 展开逐订单明细）。</p>
+<p><strong>「相同产品」= 六要素聚合键</strong>：产品级型号（<code>productLevelModel</code>，分体行天然与整品分行）| 轨道节数 | 规格 mm 存储值 | 料厚签名（组级料厚按组序去重「/」并列）| 表面处理 | 颜色。各字段 trim 后按<strong>字面值</strong>聚合，不做数值语义归一（「2.0」与「2」分两行暴露的是录入不规范，正确动作是回订单修正）；聚合键<strong>恒含颜色</strong>，与「颜色」显示开关无关。数量一律支；呆滞品为独立台账不进本页。</p>
+<p>双页签：</p>
+<ul>
+<li><strong>Tab1 产品汇总（累计口径）</strong>：一行一种产品，列出 客户（去重并列，超 2 折叠）/ 订单数 / 订单总数(支) / 累计入库 / 成品欠数 / 累计出库 / 发货欠数 / 库存数；展开行是逐订单明细。<strong>复用台账 <code>findLedger</code> 在应用层二次聚合，不另写聚合 SQL</strong>——台账口径（排除作废、完成数含期初、红字自然抵扣）自动继承。「只看有欠数 / 只看有库存」在<strong>聚合行</strong>上过滤（行级过滤会把同产品已交清的订单行剔掉、聚合失真）。</li>
+<li><strong>Tab2 出入库汇总（期间进销存）</strong>：按<strong>单据日期</strong>区间（必填，前端默认本月），每种产品四个数：<strong>期初结存 → 期间入库 → 期间出库 → 期末结存</strong>（期末 = 期初 + 入 − 出，同一份流水推算天然勾稽）；展开行是期间内逐笔已确认单据。入向/出向判定复用 <code>order-owed.util</code> 单据族 SQL；<strong>跨期红字计入红字发生期</strong>（期间数可为负，界面标红）；全量区间下期末合计 = 成品库存余额表合计。</li>
+</ul>
+<p>导出：两页签各自双 Sheet（汇总 + 明细），列随「颜色」开关增减、规格列跟随默认查看单位；空结果/超 5000 行拒绝。权限：菜单 <code>product-summary</code> 即页面读权限，导出 <code>product-summary:export</code>；不预置给内置角色，由管理员按需授权。</p>
 <hr>
 <h2 id="6-接口设计模块-→-主要接口">6. 接口设计（模块 → 主要接口）<a class="anchor" href="#6-接口设计模块-→-主要接口" aria-hidden="true">#</a></h2>
 <p>统一规范沿用 hb-mes：全局前缀 <code>/api</code>；DTO + class-validator 全量校验；业务错误抛 <code>BadRequestException</code> 等（禁止 <code>throw new Error()</code>）；<code>TransformInterceptor</code> 统一包装；增删改及确认/冲销/回货登记/导入等全部 <code>@OperationLog</code>；分页 <code>page/pageSize</code> → <code>{ list, total, page, pageSize }</code>。</p>
@@ -1330,7 +1361,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <tr>
 <td>order</td>
 <td><code>POST /order</code>、<code>PUT /order/:id</code>、<code>GET /order</code>、<code>GET /order/:id</code>、<code>POST /order/:id/finish</code>、<code>POST /order/:id/reopen</code>、<code>DELETE /order/:id</code></td>
-<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO）；被引用后的修改限制见 §7。<strong>DELETE 于 2026-08-07 取代原 <code>/cancel</code></strong>：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；<code>ORDER_STATUS.CANCELLED</code> 枚举保留供历史数据</td>
+<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；<code>GET /order/:id</code> 带 <code>editGuard</code>（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。<strong>DELETE 于 2026-08-07 取代原 <code>/cancel</code></strong>：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；<code>ORDER_STATUS.CANCELLED</code> 枚举保留供历史数据</td>
 </tr>
 <tr>
 <td>order</td>
@@ -1398,6 +1429,11 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>部件台账查询 / 手工调整（写 t_part_adjust 流水）</td>
 </tr>
 <tr>
+<td>product-summary</td>
+<td><code>GET /product-summary</code>、<code>GET /product-summary/export</code>、<code>GET /product-summary/period</code>、<code>GET /product-summary/period/export</code></td>
+<td><strong>产品汇总查询</strong>（§5.3）：Tab1 累计口径复用 findLedger 二次聚合；Tab2 期间进销存按单据日期切区间；两个导出均双 Sheet</td>
+</tr>
+<tr>
 <td>system</td>
 <td>用户/角色/菜单/字典/物料 CRUD</td>
 <td>照搬 hb-mes system 模块裁剪</td>
@@ -1413,23 +1449,24 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>照搬 hb-mes 模式</td>
 </tr>
 </tbody></table></div>
-<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、外发管理（回厂记录列表 / 登记回厂）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
+<p><strong>前端页面清单</strong>：订单管理（列表/表单/详情/附件）、<strong>订单跟踪台账</strong>、<strong>产品汇总</strong>（统计分析，双页签）、外发管理（回厂记录列表 / 登记回厂）、<strong>装配管理</strong>（按产品行录多批装配、计划/实际完成时间、状态标签）、成品入库/出库、成品库存、部件台账、期初录入、客户资料（含导入弹窗）、工艺信息（含多图上传预览）、物料/字典等基础数据、系统管理（用户/角色/菜单）。</p>
 <hr>
 <h2 id="7-边界与不变式">7. 边界与不变式<a class="anchor" href="#7-边界与不变式" aria-hidden="true">#</a></h2>
 <ol>
 <li><strong>已确认出入库单</strong>只可红字冲销，禁止修改/删除；红字单本身不可再冲销。</li>
 <li><strong>出库确认</strong>校验结存充足（按 order_part_group_id + side + batch_no 定位 balance），不足拒绝。</li>
 <li><strong>外发明细行</strong>被回货登记引用后禁止删除；外发单已有回货禁止作废；发出数量修改需重算回齐状态。</li>
-<li><strong>订单修改限制</strong>：部件组被外发单或出入库单引用后，禁止直接改数量/删组/删产品行；需变更走「订单变更」（V1 简化：提示先冲销/作废下游单据再改，正式变更流程列入 V2）。同产品行内 group_type 唯一，组的增删在未被下游引用时允许。</li>
+<li><strong>订单修改限制</strong>：订单只允许订单创建人与订单主管角色修改、删除（规则见第 11 条）；每次修改都在操作日志记一条逐项改动明细。订单编辑按产品行 / 部件组 ID 原地更新（下游锚点不变）。被外发回厂记录、装配批次或出入库明细引用后只允许「更正」录错的信息：订单级字段、产品信息（含数量、规格、表面处理）、部件组的图号/版本/料厚可改，保存时同事务回写下游快照并重算订单完结状态；被引用的产品行不能删，其轨道节数、卡口有无、分体出货不能改，有外发回厂记录的部件组不能删、不能改组类型，有外发回厂记录的产品表面处理不能改为「无」。未被引用的产品行/部件组照常增删。订单删除仍要求无任何下游引用。同产品行内 group_type 唯一。</li>
 <li><strong>卡口守恒</strong>：含卡口组合的部件组内左右数量之和 = 组支数；入库/出库明细按左右分行，台账聚合时左右合并计入组四数，「成品库存」页可按边别下钻。</li>
 <li><strong>回货超发出</strong>允许（重量折算误差）但界面提示；回货撤销后回齐状态自动回退。</li>
 <li><strong>期初补录订单</strong>（is_opening=1）<strong>仅是一个区分标记</strong>：不改变校验、不影响四数口径，与正常订单走完全相同的流程。</li>
 <li><strong>并发</strong>：单号采番走 NumberGeneratorService 原子自增；余额增减在 <code>dataSource.transaction</code> 内行锁（<code>SELECT ... FOR UPDATE</code>）后更新，防并发超扣。</li>
 <li><strong>呆滞品是独立台账</strong>：已完结订单剩下的成品在「呆滞品管理」逐批建档，四个数（期初/入库/出库/结存）自成一本账，<strong>不进订单跟踪台账、也不进成品库存</strong>（§4.9）。</li>
 <li><strong>产品类型组合串</strong>一律经共享包函数规范化（排序+拼接）后入库，禁止两端各自拆拼；被基础数据/台账引用的组合串口径一致。</li>
+<li><strong>业务记录修改权</strong>：订单（修改 / 删除）、外发回厂记录（修改 / 删除）、装配批次（修改 / 删除）、成品出入库单草稿（编辑 / 确认 / 作废）只允许<strong>记录创建人本人</strong>，或<strong>该模块主管角色</strong>中、且记录创建人所在部门落在该主管角色<strong>数据范围</strong>内的用户操作；<strong>管理员与超级管理员均不例外</strong>。主管角色在系统配置「数据权限」按模块设定（缺省：订单=业务经理；外发=计划经理；装配=计划经理、生产经理；成品出入库=计划经理）。数据范围只约束「能改哪些」，<strong>不约束查看</strong>，台账与看板数字不因人而异。红字冲销是新开单据，不受此限。</li>
 <li><strong>客户资料</strong>被订单引用后禁止删除（可停用）；客户导入不回写历史订单快照。</li>
 <li><strong>工艺信息</strong>被订单引用的是快照字段（版本号/产品名称），工艺更新不回写历史订单；图号唯一，重复创建拒绝。</li>
-<li><strong>装配入库闸门</strong>：成品入库（inbound）确认时按 order_part_group_id + side 校验 <code>本次入库量 ≤ 可入库量 = Σ已完成装配量 − 已入库量</code>；期初、红字豁免。闸门计算与入库确认在同一事务、对相关行加锁，防并发绕过。</li>
+<li><strong>装配入库闸门</strong>：成品入库（inbound）确认时按 order_product_id + side 校验 <code>本次入库量 ≤ 可入库量 = Σ已完成装配量 − 已入库量</code>；期初、红字豁免；<strong>分体出货且单部件的产品行（如只出内轨）同样豁免</strong>——它没有装配环节，不豁免就永远入不了库（该类行装配侧禁建批次，闸门豁免不会与装配统计打架）。闸门计算与入库确认在同一事务、对相关行加锁，防并发绕过。</li>
 <li><strong>表面处理字典</strong>：<code>surface_type</code> 为字典驱动，<code>none</code> 是代码保留值（外发必填逻辑判断依据），字典管理界面禁止删除/改值 <code>none</code> 项；其余项被订单引用后禁删（可停用）。</li>
 <li><strong>装配批次不可回退致负</strong>：已完成批次被入库消耗后，禁止删除、下调 qty、或退回计划中致 <code>可入库量 &lt; 已入库量</code>；违反则拒绝并提示先冲销对应入库。红字冲销入库后可入库量自然回补。</li>
 <li><strong>装配卡口分边</strong>：含卡口组合产品的装配批次、入库明细均带 side，闸门按 side 分别核算，左右不串量。</li>
@@ -1441,7 +1478,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <li><strong>数据库</strong>：新库 <code>haibao_oms</code>；迁移规范同 hb-mes（<code>scripts/sql/01-schema.sql</code> 全量 + <code>migration-*.sql</code> 幂等增量 + db-migrate.ts 唯一清单）。</li>
 <li><strong>权限</strong>：permission-manifest.ts SSOT，启动自动 upsert；菜单驱动动态路由。</li>
 <li><strong>前端</strong>：<code>AppTable / AppPagination / AppActions</code> 等通用组件、<code>useDict / useClientPager</code> composable 从 hb-mes 拷贝起步；台账页为首页级入口。</li>
-<li><strong>不搬的部分</strong>：plan（排产）、production-report（报工）、subcontract（被新 outsource 取代）、approval-config（审批开关）、大屏 screen、part-stock 的占用/释放逻辑（occupied_qty 不要）。</li>
+<li><strong>不搬的部分</strong>：plan（排产）、production-report（报工）、subcontract（被新 outsource 取代）、approval-config（审批开关）、hb-mes 的大屏 screen（OMS 的数据大屏按自身口径另行实现，见 §5.2.1）、part-stock 的占用/释放逻辑（occupied_qty 不要）。</li>
 <li><strong>部署</strong>：同 hb-mes 阿里云 ECS（PM2 + Nginx + MySQL），新增独立 Nginx location 与 PM2 进程 <code>hb-oms-server</code>（端口避让 8000/3000，建议 8100）；前端本地构建只传 dist；<strong>严禁影响既有 hb-mes 与 QMS 的 location</strong>。</li>
 </ul>
 <hr>
@@ -1488,10 +1525,74 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <ol>
 <li><strong>外购零配件台账</strong>（钢珠/拨叉等通用件）：期初 + 采购入库 + 领用出库，或按 BOM 随成品入库联动扣减。</li>
 <li><strong>部件台账与单据联动</strong>：外发发出扣部件、回货加部件（表面处理后口径）、成品入库扣部件。</li>
-<li><strong>订单正式变更流程</strong>：被下游引用后的数量变更单据化。</li>
+<li><strong>订单正式变更流程</strong>：被下游引用后的变更单据化（V1 的「更正」直接改订单、靠操作日志留痕，不留变更单据）。</li>
 <li><strong>对账/发货单打印</strong>、客户端口径的对账单导出。</li>
 <li><strong>FQC 质检</strong>：外发回货验收目前仅备注承载，需求成熟后单独建模。</li>
 </ol>
+<hr>
+<h2 id="11-待实施方案">11. 待实施方案<a class="anchor" href="#11-待实施方案" aria-hidden="true">#</a></h2>
+<blockquote>
+<p>本章方案<strong>已完成评估、尚未实施</strong>，接口与表结构均未落地。实施前须按本章「前置决策」逐项确认，并把结论整合进前文对应章节。</p>
+</blockquote>
+<h3 id="111-出货流程业务发货通知-→-财务审核-→-仓库出库待实施">11.1 出货流程：业务发货通知 → 财务审核 → 仓库出库（待实施）<a class="anchor" href="#111-出货流程业务发货通知-→-财务审核-→-仓库出库待实施" aria-hidden="true">#</a></h3>
+<p><strong>来源</strong>：使用方反馈「系统里的出货没有业务部发出通知指令这个步骤」——现行做法是仓库凭纸质出货通知单在系统建销售出库单，再转成送货单；希望流程为「业务部发出指令 → 财务部审核 → 仓库制单、打单」。</p>
+<p><strong>现状</strong>：仓库直接建「销售出库单」→ 确认 → 打印送货单（§4.5）；系统里没有业务指令与财务审核两步。</p>
+<p><strong>目标流程</strong>：</p>
+<pre><code>业务部 建「发货通知单」→ 提交 → 财务 审核（通过 / 驳回）
+      → 仓库 按已审核的通知单生成销售出库单（只能少发、不能多发）→ 确认 → 打印送货单
+</code></pre>
+<p><strong>前置决策（实施前须确认）</strong>：</p>
+<ol>
+<li>与决策 #2「彻底移除审核流」冲突。建议修订为「只在发货这一处做<strong>单级审核</strong>，不引入通用审批引擎」；</li>
+<li>一张通知单是否允许多个客户——建议<strong>不允许</strong>（送货单抬头与收货地址都是客户级，与出库单「跨客户单不可打送货单」同口径）；</li>
+<li>财务审核依据（客户欠款 / 信用额度）是否要在系统里体现——建议首版不做，仅人工判断 + 审核意见栏；</li>
+<li>仓库能否驳回通知单（如库存不足）——建议不驳回，只能部分出库后关闭剩余。</li>
+</ol>
+<p><strong>数据模型</strong>：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>表 / 列</th>
+<th>说明</th>
+</tr>
+</thead><tbody><tr>
+<td><code>t_ship_notice</code>（新表）</td>
+<td>通知单头：<code>notice_no</code>（新增采番前缀 <strong>SHN</strong>，格式同 ORD）、<code>customer_id</code> + <code>customer_name</code> 快照、计划发货日、收货地址、备注、提交人/时间、审核人/时间、审核意见 / 驳回原因、审计六件套；<code>status</code>：1草稿 2待审核 3已审核 4已驳回 5部分出库 6已出齐 9已作废</td>
+</tr>
+<tr>
+<td><code>t_ship_notice_item</code>（新表）</td>
+<td>通知单明细：锚<strong>订单产品行 + 边别</strong>（与成品明细同锚点），数量按支；产品侧展示字段经 <code>ProductSnapshotService</code> 快照。<strong>已出库量不落库</strong>，由出库明细实时聚合（同台账原则）</td>
+</tr>
+<tr>
+<td><code>t_finished_doc.notice_id</code>（新列，可空）</td>
+<td>销售出库单所依托的通知单；入库 / 期初 / 红字单不挂</td>
+</tr>
+<tr>
+<td><code>t_finished_item.notice_item_id</code>（新列，可空）</td>
+<td>出库明细对应的通知单明细，额度核算依据</td>
+</tr>
+</tbody></table></div>
+<p><strong>状态机与守卫</strong>：</p>
+<ul>
+<li>草稿可改可删；提交后锁定为待审核；财务驳回后回到可编辑，改完可再提交；</li>
+<li>已审核且尚无出库时可<strong>撤回审核</strong>回草稿；出过一部分后只能「关闭剩余」（作废未发部分）；</li>
+<li>仓库只能从「已审核 / 部分出库」的通知单生成销售出库单，逐行 <code>出库量 ≤ 通知量 − 已出库量</code>；<strong>确认出库时行锁复核</strong>（写法同装配入库闸门），红字冲销出库单自动回补通知单额度；</li>
+<li>全部明细出齐自动转「已出齐」；</li>
+<li>呆滞品出库（独立台账）、期初录入不受影响；台账四数口径不变（出库仍由出库单驱动），可选在台账增加「已通知未出库」列。</li>
+</ul>
+<p><strong>上线开关（建议有）</strong>：系统配置增加「<strong>销售出库必须挂发货通知单</strong>」开关，<strong>默认关闭</strong>：</p>
+<ul>
+<li>关闭：维持现状，仓库可直接建销售出库单（通知单功能可先试用）；</li>
+<li>开启：销售出库单必须从已审核通知单生成，服务端强制校验；</li>
+<li>用途：分阶段推行；财务不在岗时可由管理员临时关闭应急发货（关闭期间的出库单不挂通知单，事后可查）。</li>
+</ul>
+<p><strong>权限与界面</strong>：</p>
+<ul>
+<li>权限点：菜单 <code>ship-notice</code>（发货通知单）+ 按钮 <code>:create</code> / <code>:update</code> / <code>:delete</code> / <code>:submit</code> / <code>:approve</code> / <code>:cancel</code> / <code>:print</code>；业务员、跟单员建单与提交，财务经理审核，仓管员查看并生成出库单；</li>
+<li>发货通知单列表 + 表单页：选订单产品时旁边显示订单数 / 已出库 / 当前库存 / 发货欠数，辅助判断发多少；</li>
+<li>财务「待我审核」页签；成品出入库「销售出库」新增「从通知单生成」；</li>
+<li>首页待办卡：财务的「待审核」、仓库的「待出库」；</li>
+<li>可打印《出货通知单》交仓库（复用打印页 + 服务端 PDF 的既有做法）。</li>
+</ul>
+<p><strong>工作量评估</strong>：中等偏大，接近一个里程碑——后端 2 张新表 + 2 列 + 新模块（CRUD / 状态机 / 守卫）并改造出库确认的额度校验；前端 2~3 个新页面，改造出库表单、首页待办与打印页；另需迁移、权限、操作手册，以及覆盖状态机每条边与并发额度的 E2E。</p>
 
   </article>
 </div>

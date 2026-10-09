@@ -31,7 +31,7 @@
               <span class="doc-meta__value">{{ order.productionNo || order.orderNo }}</span>
             </div>
             <div class="doc-meta__item">
-              <span class="doc-meta__label">订单日期:</span>
+              <span class="doc-meta__label">下单日期:</span>
               <!-- 日期数字加粗、年月日汉字不加粗（对照纸质单写法） -->
               <span class="doc-meta__value">
                 <template v-if="orderDateParts">

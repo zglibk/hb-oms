@@ -27,7 +27,7 @@
             <el-option v-for="o in ORDER_STATUS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="订单日期">
+        <el-form-item label="下单日期">
           <el-date-picker
             v-model="dateRange"
             type="daterange"
@@ -166,7 +166,7 @@
         <el-table-column :label="dimColLabel" min-width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ joinProducts(row, dimViewText) }}</template>
         </el-table-column>
-        <el-table-column label="订单日期" prop="orderDate" width="95">
+        <el-table-column label="下单日期" prop="orderDate" width="95">
           <template #default="{ row }">{{ (row.orderDate || '').slice(0, 10) }}</template>
         </el-table-column>
         <el-table-column label="款数" width="55">

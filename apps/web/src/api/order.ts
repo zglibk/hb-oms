@@ -42,7 +42,7 @@ export interface OrderRefCounts {
 }
 
 /**
- * 编辑守卫（仅详情接口带出）：订单只许创建人与「订单修改主管角色」修改（管理员不例外）；
+ * 编辑守卫（仅详情接口带出）：订单只许创建人与「订单修改主管角色」修改（管理员与超级管理员均不例外）；
  * 被下游引用后还只能「更正」、不能动结构。
  */
 export interface OrderEditGuard {
@@ -181,7 +181,7 @@ export interface OrderProductPayload {
   sheetMaterial?: string;
   orderQty: number;
   unit: string;
-  deliveryDate?: string;
+  deliveryDate: string;
   deliveryAddress?: string;
   remark?: string;
   sort?: number;
