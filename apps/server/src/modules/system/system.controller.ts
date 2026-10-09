@@ -75,14 +75,14 @@ export class SystemController {
   // ===== 用户 =====
   @Get('user')
   @RequirePermissions('system:user')
-  userList(@Query() query: QueryUserDto) {
-    return this.userService.findList(query);
+  userList(@Query() query: QueryUserDto, @CurrentUser() user: CurrentUserPayload) {
+    return this.userService.findList(query, user);
   }
 
   @Get('user/:id')
   @RequirePermissions('system:user')
-  userDetail(@Param('id', ParseIntPipe) id: number) {
-    return this.userService.findOne(id);
+  userDetail(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.userService.findOne(id, user);
   }
 
   @Post('user')
@@ -152,8 +152,8 @@ export class SystemController {
   // ===== 角色 =====
   @Get('role')
   @RequirePermissions('system:role')
-  roleList() {
-    return this.roleService.findAll();
+  roleList(@CurrentUser() user: CurrentUserPayload) {
+    return this.roleService.findAll(user);
   }
 
   @Post('role')
@@ -186,8 +186,8 @@ export class SystemController {
 
   @Get('role/:id/permissions')
   @RequirePermissions('system:role')
-  rolePerms(@Param('id', ParseIntPipe) id: number) {
-    return this.roleService.getPermissions(id);
+  rolePerms(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.roleService.getPermissions(id, user);
   }
 
   @Post('role/:id/permissions')
@@ -203,8 +203,8 @@ export class SystemController {
 
   @Get('role/:id/depts')
   @RequirePermissions('system:role')
-  roleDepts(@Param('id', ParseIntPipe) id: number) {
-    return this.roleService.getDepts(id);
+  roleDepts(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.roleService.getDepts(id, user);
   }
 
   // ===== 菜单/权限 =====

@@ -70,7 +70,7 @@ export class UserAuthCacheService {
       this.cache.delete(userId);
       return null;
     }
-    const auth = await this.authService.loadUserAuth(userId);
+    const auth = await this.authService.loadUserAuth(userId, user.username);
     const data: UserAuthContext = {
       id: user.id,
       username: user.username,

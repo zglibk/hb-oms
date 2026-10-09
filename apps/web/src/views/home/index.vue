@@ -24,7 +24,7 @@
         <div class="welcome-hero">
           <span class="welcome-hero__icon"><el-icon><component :is="toneIcon" /></el-icon></span>
           <div class="welcome-hero__text">
-            <h2 class="welcome-greet">{{ greeting }}，{{ politeName }}</h2>
+            <h2 class="welcome-greet">{{ welcomeGreeting }}</h2>
             <p class="welcome-sub">{{ welcomeSub }}</p>
           </div>
         </div>
@@ -522,19 +522,27 @@ const welcomeSub = computed(() => {
 });
 
 /**
- * 欢迎称呼：
- * - 姓名为「管理员」或以「管理员」结尾（如系统管理员）→ 原样显示，不做「X先生/女士」
- * - 其余有性别时用「姓+先生/女士」
+ * 欢迎称呼：其余有性别时用「姓+先生/女士」。
+ * 「管理员 / 系统管理员」属于默认账号的角色占位名，由 welcomeGreeting 改成「欢迎回来」。
  */
 const politeName = computed(() => {
   const u = userStore.userInfo;
   const name = (u?.realName || '').trim();
   if (!name) return u?.username || '用户';
-  if (name === '管理员' || /管理员$/.test(name)) return name;
   const surname = name.charAt(0);
   if (u?.gender === 1) return `${surname}先生`;
   if (u?.gender === 2) return `${surname}女士`;
   return name;
+});
+
+/** 管理员使用「X先生/女士晚上好，欢迎回来」；角色占位名不直接用于称呼 */
+const welcomeGreeting = computed(() => {
+  const name = (userStore.userInfo?.realName || '').trim();
+  if (userStore.roles.some((role) => role === 'admin' || role === 'SYS_OPR')) {
+    if (name === '管理员' || /管理员$/.test(name)) return `${greeting.value}，欢迎回来`;
+    return `${politeName.value}${greeting.value}，欢迎回来`;
+  }
+  return `${greeting.value}，${politeName.value}`;
 });
 
 /** 欢迎区日历摘要（公历 / 农历+节气 / 节假 / 年余倒计时） */

@@ -22,6 +22,7 @@ import {
   ROLE_PERMISSIONS,
   DICTS,
   USERS,
+  ADMIN_ONLY_PERMISSION_CODES,
   
 } from './seed-data';
 
@@ -166,12 +167,16 @@ async function seedRolePermissions(db: mysql.Connection) {
   const [permRows]: any = await db.query('SELECT id, perm_code FROM t_permission');
   const permId = new Map<string, number>(permRows.map((p: any) => [p.perm_code, p.id]));
   const allPermIds = permRows.map((p: any) => p.id);
+  const adminOnlyCodes = new Set<string>(ADMIN_ONLY_PERMISSION_CODES);
+  const managerPermIds = permRows.filter((p: any) => !adminOnlyCodes.has(p.perm_code)).map((p: any) => p.id);
 
   for (const [roleCode, rid] of roleId) {
     // admin 绑定全部权限
     const permIds =
       roleCode === 'admin'
         ? allPermIds
+        : roleCode === 'SYS_OPR'
+          ? managerPermIds
         : (ROLE_PERMISSIONS[roleCode] ?? []).map((c) => permId.get(c)).filter((x): x is number => !!x);
 
     for (const pid of permIds) {

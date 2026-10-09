@@ -42,6 +42,7 @@ export class UserService {
       where: { username: dto.username },
     });
     if (exist) throw new BadRequestException('账号已存在');
+    await this.assertAdminRoleIsolation(dto.username, dto.roleIds, operator);
 
     return this.dataSource.transaction(async (manager) => {
       const hash = await bcrypt.hash(dto.password, 12);
@@ -73,6 +74,34 @@ export class UserService {
     }
   }
 
+  /**
+   * 超级管理员角色只属于唯一内置 admin 账号；管理员 SYS_OPR 只允许超级管理员分配。
+   * 必须在服务端校验，不能只靠前端隐藏选项，否则直调 API 仍可制造超管账号。
+   */
+  private async assertAdminRoleIsolation(
+    username: string,
+    roleIds: number[],
+    operator: CurrentUserPayload,
+  ) {
+    const adminRole = await this.roleRepo.findOne({
+      where: { roleCode: 'admin' },
+    });
+    if (!adminRole) {
+      throw new BadRequestException('超级管理员角色不存在，请联系运维人员');
+    }
+    const hasAdminRole = (roleIds ?? []).includes(adminRole.id);
+    if (username === 'admin' && !hasAdminRole) {
+      throw new BadRequestException('超级管理员账号必须保留超级管理员角色');
+    }
+    if (username !== 'admin' && hasAdminRole) {
+      throw new BadRequestException('超级管理员角色仅限内置 admin 账号使用');
+    }
+    const managerRole = await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
+    if ((roleIds ?? []).includes(managerRole?.id ?? -1) && operator.username !== 'admin') {
+      throw new BadRequestException('只有超级管理员可以分配管理员角色');
+    }
+  }
+
   async update(
     id: number,
     dto: UpdateUserDto,
@@ -101,6 +130,7 @@ export class UserService {
   ) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
+    await this.assertAdminRoleIsolation(user.username, dto.roleIds, operator);
     await this.dataSource.transaction(async (m) => {
       await this.bindRoles(m, id, dto.roleIds);
       // 角色绑定是对该账号的人工变更，计入其审计
@@ -175,7 +205,7 @@ export class UserService {
     });
   }
 
-  async findList(query: QueryUserDto) {
+  async findList(query: QueryUserDto, viewer: CurrentUserPayload) {
     const page = Number(query.page) || 1;
     const pageSize = Number(query.pageSize) || 10;
     const qb = this.userRepo.createQueryBuilder('u');
@@ -208,7 +238,9 @@ export class UserService {
       const myRoleIds = userRoles
         .filter((ur) => ur.userId === u.id)
         .map((ur) => ur.roleId);
-      const myRoles = roles.filter((r) => myRoleIds.includes(r.id));
+      const myRoles = roles.filter(
+        (r) => myRoleIds.includes(r.id) && (viewer.username === 'admin' || r.roleCode !== 'SYS_OPR'),
+      );
       const dept = depts.find((d) => d.id === u.deptId);
       return {
         id: u.id,
@@ -220,7 +252,7 @@ export class UserService {
         phone: u.phone,
         status: u.status,
         lastLoginAt: u.lastLoginAt,
-        roleIds: myRoleIds,
+        roleIds: myRoles.map((r) => r.id),
         roleNames: myRoles.map((r) => r.roleName),
         // 审计四件套：列表页悬浮图标展示，手工挑字段的地方最容易漏
         creatorName: u.creatorName,
@@ -232,10 +264,14 @@ export class UserService {
     return { list, total, page, pageSize };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, viewer: CurrentUserPayload) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('用户不存在');
     const userRoles = await this.userRoleRepo.find({ where: { userId: id } });
+    const roleIds = userRoles.map((r) => r.roleId);
+    const managerRole = viewer.username === 'admin'
+      ? null
+      : await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
     return {
       id: user.id,
       username: user.username,
@@ -245,7 +281,7 @@ export class UserService {
       phone: user.phone,
       status: user.status,
       remark: user.remark,
-      roleIds: userRoles.map((r) => r.roleId),
+      roleIds: roleIds.filter((roleId) => roleId !== managerRole?.id),
       creatorName: user.creatorName,
       createdAt: user.createdAt,
       updaterName: user.updaterName,

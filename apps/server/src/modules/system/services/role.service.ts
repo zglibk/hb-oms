@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Role } from '../entities/role.entity';
 import { RolePermission } from '../entities/role-permission.entity';
 import { RoleDept } from '../entities/role-dept.entity';
@@ -21,6 +21,7 @@ import {
   auditOnCreate,
   auditOnUpdate,
 } from '../../../common/utils/audit.util';
+import { ADMIN_ONLY_PERMISSION_CODES } from '../permission-manifest';
 
 @Injectable()
 export class RoleService {
@@ -38,8 +39,18 @@ export class RoleService {
     private readonly authCache: UserAuthCacheService,
   ) {}
 
-  async findAll() {
-    return this.roleRepo.find({ order: { sort: 'ASC', id: 'ASC' } });
+  async findAll(user: CurrentUserPayload) {
+    const roles = await this.roleRepo.find({ order: { sort: 'ASC', id: 'ASC' } });
+    return user.username === 'admin' ? roles : roles.filter((r) => r.roleCode !== 'SYS_OPR');
+  }
+
+  private async assertManagerRoleVisible(id: number, user: CurrentUserPayload) {
+    const role = await this.roleRepo.findOne({ where: { id } });
+    if (!role) throw new NotFoundException('角色不存在');
+    if (role.roleCode === 'SYS_OPR' && user.username !== 'admin') {
+      throw new NotFoundException('角色不存在');
+    }
+    return role;
   }
 
   async create(dto: CreateRoleDto, user: CurrentUserPayload) {
@@ -68,8 +79,7 @@ export class RoleService {
   }
 
   async update(id: number, dto: UpdateRoleDto, user: CurrentUserPayload) {
-    const role = await this.roleRepo.findOne({ where: { id } });
-    if (!role) throw new NotFoundException('角色不存在');
+    const role = await this.assertManagerRoleVisible(id, user);
     const result = await this.dataSource.transaction(async (manager) => {
       await manager.update(Role, id, {
         roleName: dto.roleName ?? role.roleName,
@@ -122,7 +132,8 @@ export class RoleService {
   }
 
   /** 获取角色已分配的权限ID */
-  async getPermissions(id: number) {
+  async getPermissions(id: number, user: CurrentUserPayload) {
+    await this.assertManagerRoleVisible(id, user);
     const rows = await this.rolePermRepo.find({ where: { roleId: id } });
     return rows.map((r) => r.permissionId);
   }
@@ -176,13 +187,18 @@ export class RoleService {
   async assignPermissions(
     id: number,
     dto: AssignPermsDto,
-    user?: CurrentUserPayload,
+    user: CurrentUserPayload,
   ) {
-    const role = await this.roleRepo.findOne({ where: { id } });
-    if (!role) throw new NotFoundException('角色不存在');
+    const role = await this.assertManagerRoleVisible(id, user);
     const permissionIds = await this.normalizePermissionIds(
       dto.permissionIds ?? [],
     );
+    if (role.roleCode !== 'admin' && permissionIds.length) {
+      const forbidden = await this.permRepo.find({
+        where: { id: In(permissionIds), permCode: In([...ADMIN_ONLY_PERMISSION_CODES]) },
+      });
+      if (forbidden.length) throw new BadRequestException('超级管理员专属权限不可授予其他角色');
+    }
     await this.dataSource.transaction(async (manager) => {
       await manager.delete(RolePermission, { roleId: id });
       if (permissionIds.length) {
@@ -192,7 +208,7 @@ export class RoleService {
         await manager.save(RolePermission, rows);
       }
       // 授权即角色变更，计入角色审计（「谁最后调过这个角色的权限」）
-      if (user) await manager.update(Role, id, auditOnUpdate(user));
+      await manager.update(Role, id, auditOnUpdate(user));
     });
     // 主动失效鉴权缓存：该角色下所有在线用户的下一次请求即按新权限校验，
     // 无需重新登录（后端守卫实时读库，前端菜单在刷新/重进页面后同步）。
@@ -200,7 +216,8 @@ export class RoleService {
     return { id, permissionIds };
   }
 
-  async getDepts(id: number) {
+  async getDepts(id: number, user: CurrentUserPayload) {
+    await this.assertManagerRoleVisible(id, user);
     const rows = await this.roleDeptRepo.find({ where: { roleId: id } });
     return rows.map((r) => r.deptId);
   }

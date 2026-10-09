@@ -51,13 +51,14 @@ export const ROLES = [
   { role_code: 'PQE_ENG', role_name: 'PQE 工程师', data_scope: 1, sort: 14, remark: '制程品质工程' },
   { role_code: 'FIN_MGR', role_name: '财务经理', data_scope: 1, sort: 15, remark: '财务核算管理' },
   { role_code: 'PAY_OPR', role_name: '薪资核算员', data_scope: 1, sort: 16, remark: '计件与薪资核算' },
-  { role_code: 'admin', role_name: '系统管理员', data_scope: 1, sort: 17, remark: '系统管理' },
+  { role_code: 'SYS_OPR', role_name: '管理员', data_scope: 1, sort: 17, remark: '日常系统管理（无超管旁路与危险操作）' },
+  { role_code: 'admin', role_name: '超级管理员', data_scope: 1, sort: 18, remark: '系统最高权限，仅限内置 admin 账号' },
 ];
 
 // ---------- 权限树 ----------
 // 权限清单在 src/modules/system/permission-manifest.ts（唯一事实源，
 // 应用启动时由 PermissionSyncService 自动同步落库）。此处 re-export 供 db:init 使用。
-export { PERMISSIONS } from '../src/modules/system/permission-manifest';
+export { ADMIN_ONLY_PERMISSION_CODES, PERMISSIONS } from '../src/modules/system/permission-manifest';
 export type { PermSeed } from '../src/modules/system/permission-manifest';
 
 // ---------- 角色 → 权限 绑定矩阵（值为 perm_code 列表；admin 特殊处理为全部）----------

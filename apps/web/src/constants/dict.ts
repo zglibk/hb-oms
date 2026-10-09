@@ -147,7 +147,8 @@ export const ROLE_MAP: Record<string, string> = {
   PQE_ENG: 'PQE 工程师',
   FIN_MGR: '财务经理',
   PAY_OPR: '薪资核算员',
-  admin: '系统管理员',
+  SYS_OPR: '管理员',
+  admin: '超级管理员',
 };
 
 /**

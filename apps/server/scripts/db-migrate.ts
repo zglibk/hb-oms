@@ -105,6 +105,8 @@ const MIGRATIONS: string[] = [
   'migration-changelog-seen.sql',
   // 数据可视化大屏：车间电视免登录访问码（只存 SHA-256 摘要）
   'migration-screen.sql',
+  // 超管角色只允许唯一内置 admin 账号持有；清理普通账号历史误绑定
+  'migration-admin-role-isolation.sql',
 ];
 
 /**

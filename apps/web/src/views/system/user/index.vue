@@ -176,7 +176,7 @@
         </el-form-item>
         <el-form-item v-if="!editId" label="角色" prop="roleIds">
           <el-select v-model="form.roleIds" multiple placeholder="分配角色…" style="width:100%">
-            <el-option v-for="r in roles" :key="r.id" :label="r.roleName" :value="r.id" />
+            <el-option v-for="r in ordinaryRoles" :key="r.id" :label="r.roleName" :value="r.id" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -189,7 +189,7 @@
     <!-- 分配角色 -->
     <el-dialog v-model="assignVisible" title="分配角色" width="420px">
       <el-select v-model="assignRoleIds" multiple style="width:100%">
-        <el-option v-for="r in roles" :key="r.id" :label="r.roleName" :value="r.id" />
+        <el-option v-for="r in assignableRoles" :key="r.id" :label="r.roleName" :value="r.id" />
       </el-select>
       <template #footer>
         <el-button size="small" @click="assignVisible=false">取消</el-button>
@@ -204,7 +204,7 @@
 // 不显式命名会导致缓存互相顶替、onActivated 打在错误实例上（刷新失效）。
 defineOptions({ name: 'SystemUserList' });
 
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { computed, ref, reactive, onMounted, onActivated } from 'vue';
 import { Plus, Delete, Edit, Avatar, Key, CircleClose, Open } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import ColorTag from '@/components/ColorTag.vue';
@@ -221,6 +221,8 @@ const total = ref(0);
 const selection = ref<any[]>([]);
 const query = reactive<any>({ page: 1, pageSize: 10 });
 const roles = ref<any[]>([]);
+/** 超级管理员角色不出现在普通账号的选择器中；服务端另有同口径硬校验 */
+const ordinaryRoles = computed(() => roles.value.filter((r) => r.roleCode !== 'admin'));
 const deptTree = ref<any[]>([]);
 
 const formVisible = ref(false);
@@ -238,7 +240,11 @@ const rules: FormRules = {
 
 const assignVisible = ref(false);
 const assignUserId = ref<number | null>(null);
+const assignUsername = ref('');
 const assignRoleIds = ref<number[]>([]);
+const assignableRoles = computed(() =>
+  assignUsername.value === 'admin' ? roles.value : ordinaryRoles.value,
+);
 
 async function load() {
   loading.value = true;
@@ -294,7 +300,12 @@ async function onSave() {
 
 function openAssign(row: any) {
   assignUserId.value = row.id;
-  assignRoleIds.value = [...row.roleIds];
+  assignUsername.value = row.username;
+  // 顺手剔除普通账号历史误绑的 admin 角色；保存后数据库关系也会被清理。
+  const allowedIds = new Set(
+    (row.username === 'admin' ? roles.value : ordinaryRoles.value).map((r) => r.id),
+  );
+  assignRoleIds.value = row.roleIds.filter((id: number) => allowedIds.has(id));
   assignVisible.value = true;
 }
 async function onAssignSave() {

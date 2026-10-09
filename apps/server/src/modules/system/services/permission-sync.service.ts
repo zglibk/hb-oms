@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Permission } from '../entities/permission.entity';
 import { Role } from '../entities/role.entity';
 import { RolePermission } from '../entities/role-permission.entity';
-import { PERMISSIONS, accessTypeOf } from '../permission-manifest';
+import { ADMIN_ONLY_PERMISSION_CODES, PERMISSIONS, accessTypeOf } from '../permission-manifest';
 import { UserAuthCacheService } from '../../auth/user-auth-cache.service';
 
 /** 清单同步写入行的审计署名（区别于人工在菜单管理里创建/修改的行） */
@@ -154,6 +154,17 @@ export class PermissionSyncService implements OnApplicationBootstrap {
        )`,
       [admin.id, admin.id],
     );
+    const manager = await this.roleRepo.findOne({ where: { roleCode: 'SYS_OPR' } });
+    if (manager) {
+      const placeholders = ADMIN_ONLY_PERMISSION_CODES.map(() => '?').join(',');
+      await this.rolePermRepo.query(
+        `INSERT INTO t_role_permission (role_id, permission_id)
+         SELECT ?, p.id FROM t_permission p
+         WHERE p.perm_code NOT IN (${placeholders})
+           AND NOT EXISTS (SELECT 1 FROM t_role_permission rp WHERE rp.role_id = ? AND rp.permission_id = p.id)`,
+        [manager.id, ...ADMIN_ONLY_PERMISSION_CODES, manager.id],
+      );
+    }
     return Number(result?.affectedRows ?? 0);
   }
 }

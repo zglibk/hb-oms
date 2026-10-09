@@ -1,9 +1,8 @@
 /**
  * 首页欢迎横幅副标题的「岗位 × 时段」提示文案（2026-09-25）。
  *
- * - **岗位组**：17 个内置角色按工作内容归成 7 组（管理层 / 业务 / 计划 / 生产 / 仓库 / 技术品质 /
- *   财务人事），逐角色写要 85 条、且不少角色无人使用。系统管理员与界面上新建的自定义角色
- *   不在映射表里，一律回落「通用」组。
+ * - **岗位组**：17 个内置业务角色按工作内容归成 7 组（管理层 / 业务 / 计划 / 生产 / 仓库 /
+ *   技术品质 / 财务人事），系统管理员单独一组；界面上新建的自定义角色回落「通用」组。
  * - **多角色**：按 `GROUP_PRIORITY` 取第一个命中的组——取最能代表主要职责的一组，不拼接多组文案。
  * - **时段**：早上 / 上午 / 中午 / 下午 / 晚上 五个时段分岗位；深夜不分岗位，统一提醒休息。
  * - **实时数字**：`withData` 用首页看板已加载的统计数拼文案；无看板权限或数据尚未返回时
@@ -44,10 +43,12 @@ interface Tip {
   withData?: (d: TipData) => string | null;
 }
 
-type TipGroup = 'mgmt' | 'biz' | 'plan' | 'prod' | 'wh' | 'tq' | 'fin' | 'generic';
+type TipGroup = 'admin' | 'mgmt' | 'biz' | 'plan' | 'prod' | 'wh' | 'tq' | 'fin' | 'generic';
 
-/** 角色编码 → 岗位组（admin 与自定义角色不在表内，回落 generic） */
+/** 角色编码 → 岗位组（自定义角色不在表内，回落 generic） */
 const ROLE_GROUP: Record<string, TipGroup> = {
+  admin: 'admin',
+  SYS_OPR: 'admin',
   GEN_MGR: 'mgmt',
   VICE_MGR: 'mgmt',
   BUS_MGR: 'biz',
@@ -67,13 +68,20 @@ const ROLE_GROUP: Record<string, TipGroup> = {
 };
 
 /** 多角色时的取组优先级 */
-const GROUP_PRIORITY: TipGroup[] = ['mgmt', 'biz', 'plan', 'prod', 'wh', 'tq', 'fin'];
+const GROUP_PRIORITY: TipGroup[] = ['admin', 'mgmt', 'biz', 'plan', 'prod', 'wh', 'tq', 'fin'];
 
 const n = (v: number) => v.toLocaleString('zh-CN');
 
 const NOON_REST: Tip = { text: '午间稍作休息，下午继续加油' };
 
 const TIPS: Record<TipGroup, Record<DayTone, Tip>> = {
+  admin: {
+    morning: { text: '新的一天，先看看系统运行与权限配置是否正常' },
+    forenoon: { text: '用户、角色或基础数据有变动时，记得及时维护' },
+    noon: NOON_REST,
+    afternoon: { text: '留意操作日志与系统配置，及时处理异常' },
+    evening: { text: '辛苦了，离开前确认重要配置已妥善保存' },
+  },
   mgmt: {
     morning: {
       text: '新的一天，先看看今天的交付重点',

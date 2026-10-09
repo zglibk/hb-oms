@@ -148,7 +148,7 @@ export class AuthService {
 
     writeAuthLog('登录成功', 1, user.id, user.realName || user.username);
 
-    const auth = await this.loadUserAuth(user.id);
+    const auth = await this.loadUserAuth(user.id, user.username);
     const tokens = await this.signTokens(user);
 
     const dept = user.deptId
@@ -181,7 +181,7 @@ export class AuthService {
   }
 
   /** 聚合用户的角色、权限标识集合、最大数据范围、自定义部门、菜单树 */
-  async loadUserAuth(userId: number) {
+  async loadUserAuth(userId: number, username: string) {
     const userRoles = await this.userRoleRepo.find({ where: { userId } });
     const roleIds = userRoles.map((r) => r.roleId);
 
@@ -193,6 +193,12 @@ export class AuthService {
       roles = await this.roleRepo.find({
         where: { id: In(roleIds), status: 1 },
       });
+      // 超管身份与唯一内置账号绑定，而不是谁拿到 admin 角色谁就是超管。
+      // 这层过滤同时兜住存量误绑定：普通账号即使数据库里残留 admin 角色关系，
+      // 也不会得到其权限、数据范围或 PermissionGuard 旁路。
+      if (username !== 'admin') {
+        roles = roles.filter((r) => r.roleCode !== 'admin');
+      }
       // 仅取「启用」角色的 id 用于后续权限/部门查询：
       // 停用角色(status=0)必须完全失去授权能力，否则其绑定的权限点与自定义
       // 部门范围仍会并入用户权限集合，"停用角色"形同虚设（安全审查 P1）。
@@ -404,7 +410,7 @@ export class AuthService {
   async getProfile(userId: number) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('用户不存在');
-    const auth = await this.loadUserAuth(userId);
+    const auth = await this.loadUserAuth(userId, user.username);
     const dept = user.deptId
       ? await this.deptRepo.findOne({ where: { id: user.deptId } })
       : null;

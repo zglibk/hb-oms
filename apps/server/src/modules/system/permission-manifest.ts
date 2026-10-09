@@ -37,6 +37,9 @@ export interface PermSeed {
   access_type?: number;
 }
 
+/** 仅超级管理员 admin 可持有；管理员及其他角色均不得授权 */
+export const ADMIN_ONLY_PERMISSION_CODES = ['log:delete', 'system:danger'] as const;
+
 /** 权限性质缺省推导：菜单=查看、按钮=操作 */
 export function accessTypeOf(p: PermSeed): number {
   return p.access_type ?? (p.perm_type === 1 ? 1 : 0);
