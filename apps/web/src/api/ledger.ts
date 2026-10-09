@@ -30,8 +30,9 @@ export interface LedgerRow {
   salesman: string | null;
   merchandiser: string | null;
   customerName: string | null;
-  /** 台账「订单编号」= 生产单号 */
+  /** 生产单号：业务侧编号，如 HRE5409-4 */
   productionNo: string | null;
+  /** 系统订单号：与订单管理列表一致，如 ORD260930-0020 */
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
