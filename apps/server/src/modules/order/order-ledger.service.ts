@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import {
+  type LedgerSortField,
   DIMENSION_UNIT,
   EXPORT_ROW_LIMIT,
   FINISHED_DOC_STATUS,
@@ -171,6 +172,25 @@ export interface LedgerRow {
   overdue: boolean;
 }
 
+/** SQL 表达式只来自服务端白名单；NULL 始终置后，产品行 ID 保证分页稳定。 */
+const LEDGER_SORT_SQL: Record<LedgerSortField, string> = {
+  orderDate: 'o.order_date',
+  deliveryDate: 'p.delivery_date',
+  customerName: 'o.customer_name',
+  productionNo: "COALESCE(NULLIF(o.production_no, ''), o.order_no)",
+  materialCode: "NULLIF(p.material_code, '')",
+  dimensionMm: 'p.dimension_mm',
+  orderQty: 'p.order_qty',
+  returnedQty: 'IFNULL(ret.return_qty, 0)',
+  assembledQty: 'IFNULL(asm.done_qty, 0)',
+  qtyPcs: 'p.qty_pcs',
+  inQty: 'IFNULL(fin.in_qty, 0)',
+  productionOwed: '(p.qty_pcs - IFNULL(fin.in_qty, 0))',
+  outQty: 'IFNULL(fin.out_qty, 0)',
+  deliveryOwed: '(p.qty_pcs - IFNULL(fin.out_qty, 0))',
+  stockQty: 'IFNULL(bal.qty, 0)',
+};
+
 @Injectable()
 export class OrderLedgerService {
   constructor(
@@ -329,6 +349,11 @@ export class OrderLedgerService {
     );
     const total = Number(countRows?.[0]?.cnt ?? 0);
 
+    const sortExpression = query.sortBy && Object.prototype.hasOwnProperty.call(LEDGER_SORT_SQL, query.sortBy)
+      ? LEDGER_SORT_SQL[query.sortBy]
+      : LEDGER_SORT_SQL.orderDate;
+    const sortDirection = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
+
     const rows: any[] = await this.dataSource.query(
       `SELECT p.id AS orderProductId, p.order_id AS orderId, p.qty_pcs AS qtyPcs,
               o.order_no AS orderNo, o.order_date AS orderDate, o.customer_name AS customerName,
@@ -347,7 +372,7 @@ export class OrderLedgerService {
               IFNULL(asm.done_qty, 0)   AS assembledQty,
               asm.next_plan_date        AS nextAssemblyPlanDate
        ${fromSql}${havingSql}
-       ORDER BY (p.delivery_date IS NULL), p.delivery_date ASC, p.id DESC
+       ORDER BY (${sortExpression} IS NULL), ${sortExpression} ${sortDirection}, p.id DESC
        LIMIT ? OFFSET ?`,
       [...allParams, pageSize, (page - 1) * pageSize],
     );

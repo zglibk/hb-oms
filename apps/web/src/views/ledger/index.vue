@@ -93,6 +93,7 @@
           </span>
         </div>
         <div class="tip-bar__right">
+          <span class="dim-unit-label">点击列头排序；取消排序恢复下单日期降序</span>
           <span class="dim-unit-label">规格单位</span>
           <el-radio-group v-model="dimViewUnit" size="small">
             <el-radio-button :value="DIMENSION_UNIT.MM">mm</el-radio-button>
@@ -103,6 +104,8 @@
       <app-table
         :data="list" v-loading="loading" border stripe
         :page="query.page" :page-size="query.pageSize" row-key="orderProductId"
+        :default-sort="{ prop: 'orderDate', order: 'descending' }"
+        @sort-change="onSortChange"
         @expand-change="onExpandChange"
       >
         <!-- 行内展开：部件组明细（随主行返回）+ 该产品行的出入库 / 外发 / 装配三条流水，
@@ -232,7 +235,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="下单日期" width="100" align="center">
+        <el-table-column prop="orderDate" sortable="custom" label="下单日期" width="110" align="center">
           <template #default="{ row }">{{ dateText(row.orderDate) }}</template>
         </el-table-column>
         <el-table-column label="业务/跟单" width="110" align="center">
@@ -244,18 +247,18 @@
             <span v-if="!row.salesman && !row.merchandiser">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
-        <el-table-column label="订单编号" width="120" show-overflow-tooltip>
+        <el-table-column sortable="custom" label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
+        <el-table-column prop="productionNo" sortable="custom" label="订单编号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品编码" prop="materialCode" width="110" show-overflow-tooltip>
+        <el-table-column sortable="custom" label="产品编码" prop="materialCode" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ row.materialCode || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
-        <el-table-column :label="dimColLabel" width="110" align="center">
+        <el-table-column prop="dimensionMm" sortable="custom" :label="dimColLabel" width="110" align="center">
           <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
         </el-table-column>
-        <el-table-column label="数量/单位" width="95" align="center">
+        <el-table-column prop="orderQty" sortable="custom" label="数量/单位" width="110" align="center">
           <template #default="{ row }">{{ row.orderQty }}{{ unitLabel(row.unit) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="95" align="center">
@@ -277,7 +280,7 @@
           </template>
         </el-table-column>
         <!-- 交期紧挨数量区：判断急不急要「交期 + 发货欠数」一起看 -->
-        <el-table-column label="订单交期" width="100" align="center">
+        <el-table-column prop="deliveryDate" sortable="custom" label="订单交期" width="110" align="center">
           <template #default="{ row }">
             <span :class="{ 'num-overdue': row.overdue }">{{ dateText(row.deliveryDate) }}</span>
           </template>
@@ -291,7 +294,7 @@
           所以「外发欠数」大于「订单数」是正常的，分栏就是为了让这件事一眼可见。
         -->
         <el-table-column label="部件（支数）" align="center">
-          <el-table-column label="外发已回货" width="100" align="center">
+          <el-table-column prop="returnedQty" sortable="custom" label="外发已回货" width="110" align="center">
             <template #default="{ row }">{{ row.returnedQty }}</template>
           </el-table-column>
           <!-- 外发欠数 = 应外发量(Σ组支数) − 已回货；不外发的产品显示 —（见服务端注释） -->
@@ -304,31 +307,31 @@
         </el-table-column>
 
         <el-table-column label="成品（支数）" align="center">
-          <el-table-column label="装配完成" width="90" align="center">
+          <el-table-column prop="assembledQty" sortable="custom" label="装配完成" width="110" align="center">
             <template #default="{ row }">
               <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="订单数" width="85" align="center" class-name="col-key">
+          <el-table-column prop="qtyPcs" sortable="custom" label="订单数" width="110" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.qtyPcs }}</template>
           </el-table-column>
-          <el-table-column label="成品入库" width="90" align="center" class-name="col-key">
+          <el-table-column prop="inQty" sortable="custom" label="成品入库" width="110" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
           </el-table-column>
-          <el-table-column label="成品欠数" width="90" align="center" class-name="col-key">
+          <el-table-column prop="productionOwed" sortable="custom" label="成品欠数" width="110" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="成品出货" width="90" align="center" class-name="col-key">
+          <el-table-column prop="outQty" sortable="custom" label="成品出货" width="110" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.outQty }}</template>
           </el-table-column>
-          <el-table-column label="发货欠数" width="90" align="center" class-name="col-key">
+          <el-table-column prop="deliveryOwed" sortable="custom" label="发货欠数" width="110" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="库存数" width="85" align="center" class-name="col-key">
+          <el-table-column prop="stockQty" sortable="custom" label="库存数" width="110" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
           </el-table-column>
         </el-table-column>
@@ -367,6 +370,7 @@ import {
   type LedgerRowDetail,
   type LedgerSummary,
 } from '@/api/ledger';
+import { LEDGER_SORT_FIELDS, type LedgerSortField, type LedgerSortOrder } from '@hb-oms/shared';
 import { useExcelExport } from '@/composables/useExcelExport';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
@@ -407,6 +411,8 @@ const summary = ref<LedgerSummary>({
 const query = reactive({
   page: 1,
   pageSize: 15,
+  sortBy: 'orderDate' as LedgerSortField | undefined,
+  sortOrder: 'desc' as LedgerSortOrder | undefined,
   keyword: '',
   salesman: '',
   merchandiser: '',
@@ -454,6 +460,13 @@ async function load() {
     loading.value = false;
   }
 }
+function onSortChange({ prop, order }: { prop?: string; order: 'ascending' | 'descending' | null }) {
+  query.sortBy = order && LEDGER_SORT_FIELDS.includes(prop as LedgerSortField)
+    ? prop as LedgerSortField : undefined;
+  query.sortOrder = order ? (order === 'ascending' ? 'asc' : 'desc') : undefined;
+  reload();
+}
+
 function reload() {
   query.page = 1;
   load();
@@ -490,6 +503,8 @@ const { exporting, exportWithConfirm } = useExcelExport();
 /** 导出用的筛选条件（不含分页——导的是当前筛选全量，不是当前这一页） */
 function exportFilters() {
   return {
+    sortBy: query.sortBy,
+    sortOrder: query.sortOrder,
     keyword: query.keyword || undefined,
     salesman: query.salesman || undefined,
     merchandiser: query.merchandiser || undefined,

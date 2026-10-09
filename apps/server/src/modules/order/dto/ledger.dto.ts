@@ -1,3 +1,4 @@
+import { LEDGER_SORT_FIELDS, type LedgerSortField, type LedgerSortOrder } from '@hb-oms/shared';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { toBoolean } from '../../../common/utils/transform.util';
@@ -11,6 +12,11 @@ export class QueryLedgerDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
+
+  /** 排序字段只接受共享白名单，禁止客户端传 SQL 列名。 */
+  @IsOptional() @IsIn(LEDGER_SORT_FIELDS) sortBy?: LedgerSortField;
+
+  @IsOptional() @IsIn(['asc', 'desc']) sortOrder?: LedgerSortOrder;
 
   /** 关键字：订单号/客户/生产单号/产品型号/货号/产品编码 模糊 */
   @IsOptional() @IsString() keyword?: string;

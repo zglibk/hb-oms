@@ -1,3 +1,4 @@
+import type { LedgerSortField, LedgerSortOrder } from '@hb-oms/shared';
 import request from '@/utils/request';
 
 /**
@@ -88,6 +89,8 @@ export interface LedgerSummary {
 }
 
 export interface LedgerQuery {
+  sortBy?: LedgerSortField;
+  sortOrder?: LedgerSortOrder;
   page?: number;
   pageSize?: number;
   keyword?: string;
