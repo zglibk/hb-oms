@@ -79,6 +79,8 @@ export interface DashboardOwedRow {
  */
 export interface DashboardOutsourceRow {
   id: number;
+  /** 关联订单产品行：首页点击后用它精确打开台账详情。 */
+  orderProductId: number | null;
   backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;
@@ -297,7 +299,8 @@ export class DashboardService {
     const rows: any[] = await this.dataSource.query(
       // 规格取订单产品行的 dimension_mm 而非本表的 dimension_text 快照：
       // 后者是「350mm」这类展示串，切「寸」视图需要数值才能换算（见接口注释）
-      `SELECT op.id AS id, op.back_date AS backDate, op.processor_name AS processorName,
+      `SELECT op.id AS id, op.order_product_id AS orderProductId,
+              op.back_date AS backDate, op.processor_name AS processorName,
               op.surface_type AS surfaceType, op.color AS color,
               op.product_model AS productModel, op.production_no AS productionNo,
               op.order_no AS orderNo, op.return_qty AS returnQty,
@@ -313,6 +316,7 @@ export class DashboardService {
     );
     return rows.map((r) => ({
       id: Number(r.id),
+      orderProductId: r.orderProductId == null ? null : Number(r.orderProductId),
       backDate: this.dateText(r.backDate),
       processorName: r.processorName ?? null,
       surfaceType: r.surfaceType ?? null,

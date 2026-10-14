@@ -36,6 +36,8 @@ export interface DashboardOwedRow {
 /** 近期外发回厂行（原「超期未回齐」——不再登记计划回厂时间后已无超期基准） */
 export interface DashboardOutsourceRow {
   id: number;
+  /** 关联订单产品行：首页点击后用它精确打开台账详情。 */
+  orderProductId: number | null;
   backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;

@@ -205,9 +205,12 @@
           <template v-else>
             <el-table
               ref="owedTableRef"
+              class="home-detail-table"
               :data="owedRows"
               size="small"
               :max-height="listMaxHeight"
+              :row-class-name="detailRowClassName"
+              @row-click="openProductDetail"
               @mouseenter="owedScroll.pause()"
               @mouseleave="owedScroll.resume()"
             >
@@ -277,9 +280,12 @@
           <template v-else>
             <el-table
               ref="outsourceTableRef"
+              class="home-detail-table"
               :data="summary.recentOutsource"
               size="small"
               :max-height="listMaxHeight"
+              :row-class-name="detailRowClassName"
+              @row-click="openProductDetail"
               @mouseenter="outsourceScroll.pause()"
               @mouseleave="outsourceScroll.resume()"
             >
@@ -332,6 +338,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import {
   Tickets, Tools, Van, Warning, Clock, CircleCheck, Switch, Calendar, DArrowLeft,
   Sunrise, Sunny, Moon, MoonNight, CoffeeCup,
@@ -668,6 +675,24 @@ onActivated(() => {
 
 function go(path: string) {
   router.push(path);
+}
+
+/** 首页三张滚动列表统一下钻到产品级台账，并自动展开该行的业务流水。 */
+function openProductDetail(row: { orderProductId?: number | null }) {
+  if (!canLedger.value) {
+    ElMessage.warning('暂无订单跟踪台账查看权限，请联系管理员授权');
+    return;
+  }
+  if (!row.orderProductId) {
+    ElMessage.warning('该记录未关联订单产品，无法打开详情');
+    return;
+  }
+  router.push({ path: '/ledger', query: { orderProductId: String(row.orderProductId) } });
+}
+
+/** 有权限时用手型提示可下钻；无权限仍保留点击反馈，明确告知授权要求。 */
+function detailRowClassName() {
+  return canLedger.value ? 'is-detail-clickable' : 'is-detail-locked';
 }
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';
@@ -1139,6 +1164,19 @@ export default { name: 'HomeDashboard' };
     font-size: 12px;
     color: var(--el-text-color-secondary);
     text-align: right;
+  }
+}
+
+/* 首页待办行可直接下钻；悬停底色同时说明当前点击目标是整行。 */
+.home-detail-table {
+  :deep(.el-table__body tr.is-detail-clickable) {
+    cursor: pointer;
+  }
+  :deep(.el-table__body tr.is-detail-clickable:hover > td.el-table__cell) {
+    background: var(--el-color-primary-light-9);
+  }
+  :deep(.el-table__body tr.is-detail-locked) {
+    cursor: not-allowed;
   }
 }
 
