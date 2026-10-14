@@ -13,6 +13,9 @@ export class QueryLedgerDto {
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
 
+  /** 首页待办列表跳转时精确定位一个订单产品行。 */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) orderProductId?: number;
+
   /** 排序字段只接受共享白名单，禁止客户端传 SQL 列名。 */
   @IsOptional() @IsIn(LEDGER_SORT_FIELDS) sortBy?: LedgerSortField;
 
@@ -70,6 +73,12 @@ export class QueryLedgerDto {
 
   /** 只看逾期（交期已过且仍欠发货） */
   @IsOptional() @Transform(toBoolean) onlyOverdue?: boolean;
+
+  /** 只看净成品入库数不为 0 的产品行 */
+  @IsOptional() @Transform(toBoolean) hasFinishedInbound?: boolean;
+
+  /** 只看净成品出货数不为 0 的产品行 */
+  @IsOptional() @Transform(toBoolean) hasFinishedOutbound?: boolean;
 }
 
 /** 台账行内展开：查某产品行的出入库/外发/装配三条流水 */

@@ -73,9 +73,13 @@ export interface LedgerRow {
   outsourceOwed: number | null;
   /** 装配完成量（actual_date 非空的批次合计）；分体行同样要装配，一律出数字 */
   assembledQty: number;
+  /** 最近一次已完成装配批次的实际完成日 */
+  lastAssemblyCompletedDate: string | null;
   /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
   assemblyPendingQty: number;
   nextAssemblyPlanDate: string | null;
+  /** 最近一次已确认销售出库的单据日期 */
+  lastOutboundDate: string | null;
   overdue: boolean;
 }
 
@@ -94,6 +98,8 @@ export interface LedgerQuery {
   sortOrder?: LedgerSortOrder;
   page?: number;
   pageSize?: number;
+  /** 首页待办列表跳转时精确定位一个订单产品行。 */
+  orderProductId?: number;
   keyword?: string;
   customerName?: string;
   salesman?: string;
@@ -107,6 +113,10 @@ export interface LedgerQuery {
   orderStatus?: number;
   onlyOwed?: boolean;
   onlyOverdue?: boolean;
+  /** 只看净成品入库数不为 0 的产品行 */
+  hasFinishedInbound?: boolean;
+  /** 只看净成品出货数不为 0 的产品行 */
+  hasFinishedOutbound?: boolean;
 }
 
 export interface LedgerResult {

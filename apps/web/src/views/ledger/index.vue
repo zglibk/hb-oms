@@ -17,11 +17,11 @@
             start-placeholder="开始" end-placeholder="结束" style="width: 230px" @change="runKeywordSearch"
           />
         </el-form-item>
-        <el-form-item>
+        <el-form-item class="ledger-checks">
           <el-checkbox v-model="query.onlyOwed" @change="runKeywordSearch">只看有欠数</el-checkbox>
-        </el-form-item>
-        <el-form-item>
           <el-checkbox v-model="query.onlyOverdue" @change="runKeywordSearch">只看逾期</el-checkbox>
+          <el-checkbox v-model="query.hasFinishedInbound" @change="runKeywordSearch">成品入库</el-checkbox>
+          <el-checkbox v-model="query.hasFinishedOutbound" @change="runKeywordSearch">成品出货</el-checkbox>
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
@@ -30,6 +30,7 @@
             :loading="exporting" @click="onExport"
           >导出</el-button>
           <filter-more-toggle v-model="showMoreFilters" :count="moreFilterCount" />
+          <el-button size="small" @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
 
@@ -102,6 +103,7 @@
         </div>
       </div>
       <app-table
+        ref="ledgerTableRef"
         :data="list" v-loading="loading" border stripe
         :page="query.page" :page-size="query.pageSize" row-key="orderProductId"
         :default-sort="{ prop: 'orderDate', order: 'descending' }"
@@ -315,6 +317,17 @@
               <span :class="{ 'num-ok': row.assemblyPendingQty <= 0 }">{{ row.assembledQty }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="完成时间" width="96" align="center">
+            <template #header>
+              <span class="time-header">
+                完成时间
+                <el-tooltip content="只能显示最近一次装配批次实际完成日期" placement="top">
+                  <sup class="time-header__help" aria-label="完成时间说明">?</sup>
+                </el-tooltip>
+              </span>
+            </template>
+            <template #default="{ row }">{{ dateText(row.lastAssemblyCompletedDate) }}</template>
+          </el-table-column>
           <el-table-column prop="qtyPcs" sortable="custom" label="订单数" width="82" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.qtyPcs }}</template>
           </el-table-column>
@@ -328,6 +341,17 @@
           </el-table-column>
           <el-table-column prop="outQty" sortable="custom" label="成品出货" width="90" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.outQty }}</template>
+          </el-table-column>
+          <el-table-column label="出货时间" width="96" align="center">
+            <template #header>
+              <span class="time-header">
+                出货时间
+                <el-tooltip content="只显示最近一次已确认销售出库日期。" placement="top">
+                  <sup class="time-header__help" aria-label="出货时间说明">?</sup>
+                </el-tooltip>
+              </span>
+            </template>
+            <template #default="{ row }">{{ dateText(row.lastOutboundDate) }}</template>
           </el-table-column>
           <el-table-column prop="deliveryOwed" sortable="custom" label="发货欠数" width="90" align="center" class-name="col-key">
             <template #default="{ row }">
@@ -352,8 +376,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onActivated, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   Search,
   Download,
@@ -404,7 +428,9 @@ const { colorEnabled } = useFeatureFlags();
 const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimensionView();
 
 const router = useRouter();
+const route = useRoute();
 const loading = ref(false);
+const ledgerTableRef = ref<any>(null);
 const list = ref<LedgerRow[]>([]);
 const total = ref(0);
 const summary = ref<LedgerSummary>({
@@ -424,6 +450,8 @@ const query = reactive({
   productType: undefined as string | undefined,
   onlyOwed: false,
   onlyOverdue: false,
+  hasFinishedInbound: false,
+  hasFinishedOutbound: false,
 });
 const deliveryRange = ref<[string, string] | null>(null);
 
@@ -447,8 +475,13 @@ loadDict('assembly_workshop').then((rows: any[]) => {
 async function load() {
   loading.value = true;
   try {
+    const routeProductId = Number(route.query.orderProductId);
+    const focusedProductId = Number.isInteger(routeProductId) && routeProductId > 0
+      ? routeProductId
+      : undefined;
     const res = await getLedger({
       ...query,
+      orderProductId: focusedProductId,
       salesman: query.salesman || undefined,
       merchandiser: query.merchandiser || undefined,
       deliveryFrom: deliveryRange.value?.[0],
@@ -459,6 +492,14 @@ async function load() {
     summary.value = res.summary;
     // 换页/换筛选后旧明细已无意义，清空避免展开时闪出上一页的数据
     detailCache.value = {};
+    // 从首页待办列表进入时，精确定位并展开该产品行；展开事件会继续加载三条流水。
+    if (focusedProductId) {
+      const focusedRow = list.value.find((row) => row.orderProductId === focusedProductId);
+      if (focusedRow) {
+        await nextTick();
+        ledgerTableRef.value?.tableRef?.toggleRowExpansion(focusedRow, true);
+      }
+    }
   } finally {
     loading.value = false;
   }
@@ -474,7 +515,39 @@ function reload() {
   query.page = 1;
   load();
 }
-const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+const {
+  schedule: scheduleKeywordSearch,
+  flush: runKeywordSearch,
+  cancel: cancelKeywordSearch,
+} = useDebouncedSearch(reload);
+
+/** 清空页面筛选及首页跳转带入的产品定位条件，恢复完整台账列表。 */
+async function resetFilters() {
+  cancelKeywordSearch();
+  Object.assign(query, {
+    page: 1,
+    keyword: '',
+    salesman: '',
+    merchandiser: '',
+    surfaceType: undefined,
+    assemblyWorkshop: undefined,
+    productType: undefined,
+    onlyOwed: false,
+    onlyOverdue: false,
+    hasFinishedInbound: false,
+    hasFinishedOutbound: false,
+  });
+  deliveryRange.value = null;
+  showMoreFilters.value = false;
+
+  // 从首页点击记录进入时，URL 带 orderProductId；不移除它，重置后仍只会显示这一行。
+  if (route.query.orderProductId != null) {
+    const routeQuery = { ...route.query };
+    delete routeQuery.orderProductId;
+    await router.replace({ path: route.path, query: routeQuery });
+  }
+  await load();
+}
 load();
 
 /* ===== 行内展开：按需加载该产品行的三条流水 =====
@@ -516,6 +589,8 @@ function exportFilters() {
     productType: query.productType,
     onlyOwed: query.onlyOwed,
     onlyOverdue: query.onlyOverdue,
+    hasFinishedInbound: query.hasFinishedInbound,
+    hasFinishedOutbound: query.hasFinishedOutbound,
     deliveryFrom: deliveryRange.value?.[0],
     deliveryTo: deliveryRange.value?.[1],
   };
@@ -585,6 +660,10 @@ export default { name: 'OrderLedger' };
   margin: 4px 0;
 }
 .pager { margin-top: 12px; }
+.ledger-checks {
+  :deep(.el-form-item__content) { gap: 14px; }
+  :deep(.el-checkbox) { margin-right: 0; }
+}
 .tip-bar {
   display: flex;
   align-items: center;
@@ -613,6 +692,33 @@ export default { name: 'OrderLedger' };
 }
 /* 四数列加浅底，从一堆属性列里凸显出来 */
 :deep(.col-key) { background: var(--el-fill-color-light); }
+/* 多级表头第二行信息密度较高：弱化字重并缩小一档，一级分组标题仍保持全局加粗。 */
+:deep(.el-table__header thead tr:nth-child(2) th.el-table__cell .cell) {
+  font-size: var(--hb-font-size-xs);
+  font-weight: 400;
+}
+.time-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+
+  &__help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    margin-top: -8px;
+    border: 1px solid var(--el-color-primary);
+    border-radius: 50%;
+    color: var(--el-color-primary);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: help;
+  }
+}
 .num-ok { color: var(--el-color-success); font-weight: 600; }
 .num-info { color: var(--el-color-primary); font-weight: 600; }
 .num-owed { color: var(--el-color-warning); font-weight: 600; }

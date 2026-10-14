@@ -165,10 +165,14 @@ export interface LedgerRow {
   outsourceOwed: number | null;
   /** 装配完成量（actual_date 非空的批次合计）；分体行同样要装配，一律出数字 */
   assembledQty: number;
+  /** 最近一次已完成装配批次的实际完成日 */
+  lastAssemblyCompletedDate: string | null;
   /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
   assemblyPendingQty: number;
   /** 最早未完成装配批次的计划完成日 */
   nextAssemblyPlanDate: string | null;
+  /** 最近一次已确认销售出库的单据日期（红字冲销本身不作为出货时间） */
+  lastOutboundDate: string | null;
   /** 是否逾期：交期已过且仍欠发货 */
   overdue: boolean;
 }
@@ -207,6 +211,10 @@ export class OrderLedgerService {
     const where: string[] = ['o.status <> ?'];
     const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
 
+    if (query.orderProductId) {
+      where.push('p.id = ?');
+      params.push(query.orderProductId);
+    }
     if (query.keyword) {
       // 生产图号在部件组上（展开行才显示），但要能搜到——故用 EXISTS 下钻匹配
       where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
@@ -291,7 +299,9 @@ export class OrderLedgerService {
         LEFT JOIN (
               SELECT fi.order_product_id AS pid,
                      SUM(CASE WHEN ${INBOUND_FAMILY_SQL}  THEN fd.direction * fi.quantity ELSE 0 END) AS in_qty,
-                     SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty
+                     SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty,
+                     MAX(CASE WHEN ${OUTBOUND_FAMILY_SQL} AND fd.direction < 0
+                              THEN fd.doc_date END) AS last_out_date
                 FROM t_finished_item fi
                 JOIN t_finished_doc  fd ON fd.id = fi.doc_id
                 LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
@@ -314,6 +324,7 @@ export class OrderLedgerService {
         LEFT JOIN (
               SELECT order_product_id AS pid,
                      SUM(CASE WHEN actual_date IS NOT NULL THEN qty ELSE 0 END) AS done_qty,
+                     MAX(CASE WHEN actual_date IS NOT NULL THEN actual_date END) AS last_completed_date,
                      MIN(CASE WHEN actual_date IS NULL THEN plan_date END)      AS next_plan_date,
                      -- 装配车间已下沉批次级，一个产品多批可分在不同车间，聚合成去重列表展示
                      GROUP_CONCAT(DISTINCT NULLIF(workshop, '') ORDER BY workshop SEPARATOR ',') AS workshops
@@ -327,10 +338,11 @@ export class OrderLedgerService {
     const joinParams: Array<string | number> = [
       ...INBOUND_FAMILY_PARAMS,
       ...OUTBOUND_FAMILY_PARAMS,
+      ...OUTBOUND_FAMILY_PARAMS,
       FINISHED_DOC_STATUS.CONFIRMED,
     ];
 
-    // 只看有欠数 / 只看逾期：依赖聚合结果，放 HAVING 之后的外层条件里
+    // 欠数、逾期、是否有成品进出：依赖派生表聚合结果，统一叠加到外层条件。
     const having: string[] = [];
     if (query.onlyOwed) {
       having.push(
@@ -339,6 +351,12 @@ export class OrderLedgerService {
     }
     if (query.onlyOverdue) {
       having.push('(p.delivery_date IS NOT NULL AND p.delivery_date < CURDATE() AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0)');
+    }
+    if (query.hasFinishedInbound) {
+      having.push('IFNULL(fin.in_qty, 0) <> 0');
+    }
+    if (query.hasFinishedOutbound) {
+      having.push('IFNULL(fin.out_qty, 0) <> 0');
     }
     const havingSql = having.length ? ` AND ${having.join(' AND ')}` : '';
 
@@ -371,7 +389,9 @@ export class OrderLedgerService {
               IFNULL(bal.qty, 0)        AS stockQty,
               IFNULL(ret.return_qty, 0) AS returnedQty,
               IFNULL(asm.done_qty, 0)   AS assembledQty,
-              asm.next_plan_date        AS nextAssemblyPlanDate
+              asm.last_completed_date   AS lastAssemblyCompletedDate,
+              asm.next_plan_date        AS nextAssemblyPlanDate,
+              fin.last_out_date         AS lastOutboundDate
        ${fromSql}${havingSql}
        ORDER BY (${sortExpression} IS NULL), ${sortExpression} ${sortDirection}, p.id DESC
        LIMIT ? OFFSET ?`,
@@ -426,8 +446,10 @@ export class OrderLedgerService {
         // 应外发量要按部件组累加，故留到 attachPartGroups 里填
         outsourceOwed: null,
         assembledQty,
+        lastAssemblyCompletedDate: this.dateText(r.lastAssemblyCompletedDate),
         assemblyPendingQty: qtyPcs - assembledQty,
         nextAssemblyPlanDate: this.dateText(r.nextAssemblyPlanDate),
+        lastOutboundDate: this.dateText(r.lastOutboundDate),
         overdue: !!deliveryDate && deliveryDate < today && deliveryOwed > 0,
       };
     });
@@ -693,11 +715,13 @@ export class OrderLedgerService {
       { header: '外发欠数', width: 10 },
       { header: '装配车间', width: 12 },
       { header: '装配完成', width: 10 },
+      { header: '完成时间', width: 12 },
       { header: '订单数(支)', width: 11 },
       { header: '成品入库', width: 10 },
       { header: '成品欠数', width: 10 },
       { header: '订单交期', width: 12 },
       { header: '成品出货', width: 10 },
+      { header: '出货时间', width: 12 },
       { header: '发货欠数', width: 10 },
       { header: '库存数', width: 10 },
       { header: '状态', width: 10 },
@@ -736,11 +760,13 @@ export class OrderLedgerService {
         r.outsourceOwed ?? '',
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
         r.assembledQty,
+        r.lastAssemblyCompletedDate ?? '',
         r.qtyPcs,
         r.inQty,
         r.productionOwed,
         r.deliveryDate ?? '',
         r.outQty,
+        r.lastOutboundDate ?? '',
         r.deliveryOwed,
         r.stockQty,
         r.overdue ? '逾期' : r.deliveryOwed <= 0 ? '已交清' : '跟进中',
