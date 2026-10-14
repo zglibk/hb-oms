@@ -40,6 +40,11 @@ function unitLabel(unit: string): string {
   return UNIT_OPTIONS.find((o) => o.value === unit)?.label ?? '支';
 }
 
+type DullStockListRow = DullStock & {
+  monthlyInboundQty: number;
+  monthlyOutboundQty: number;
+};
+
 /**
  * 呆滞品管理（2026-08-11 由「成品期初（不挂订单）」拆分独立）。
  *
@@ -67,6 +72,7 @@ export class DullStockService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const qb = this.repo.createQueryBuilder('d');
+    const monthRange = query.flowMonth ? this.flowMonthRange(query.flowMonth) : null;
 
     // 默认只看有结存；清空的呆滞品是历史痕迹，日常不看但要能查出来
     if (query.onlyInStock !== false) qb.andWhere('d.balanceQty <> 0');
@@ -79,13 +85,27 @@ export class DullStockService {
         { kw: `%${query.keyword}%` },
       );
     }
+    if (monthRange) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM t_dull_stock_flow mf
+          WHERE mf.dull_id = d.id
+            AND mf.flow_date >= :monthStart
+            AND mf.flow_date < :monthEnd
+        )`,
+        { monthStart: monthRange.start, monthEnd: monthRange.end },
+      );
+    }
     qb.orderBy('d.itemNo', 'ASC')
       .addOrderBy('d.id', 'DESC')
       .skip((page - 1) * pageSize)
       .take(pageSize);
 
     const [list, total] = await qb.getManyAndCount();
-    return { list, total, page, pageSize };
+    const result: DullStockListRow[] = monthRange
+      ? await this.attachMonthlyFlow(list, monthRange)
+      : list.map((row) => Object.assign(row, { monthlyInboundQty: 0, monthlyOutboundQty: 0 }));
+    return { list: result, total, page, pageSize };
   }
 
   /**
@@ -99,7 +119,62 @@ export class DullStockService {
     return {
       rows: all.total,
       totalBalancePcs: all.list.reduce((s, r) => s + toPieces(r.balanceQty, r.unit), 0),
+      monthlyInboundPcs: query.flowMonth
+        ? all.list.reduce((s, r) => s + toPieces(r.monthlyInboundQty || 0, r.unit), 0)
+        : 0,
+      monthlyOutboundPcs: query.flowMonth
+        ? all.list.reduce((s, r) => s + toPieces(r.monthlyOutboundQty || 0, r.unit), 0)
+        : 0,
     };
+  }
+
+  /** 月筛选按 [当月 1 日, 下月 1 日) 取流水，避免月底天数与时区换算造成边界错误。 */
+  private flowMonthRange(flowMonth: string): { start: string; end: string } {
+    const [year, month] = flowMonth.split('-').map(Number);
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    return {
+      start: `${flowMonth}-01`,
+      end: `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`,
+    };
+  }
+
+  /** 给当前页档案附上所选月份的入库/出库数；累计字段保持原口径不变。 */
+  private async attachMonthlyFlow(
+    list: DullStock[],
+    monthRange: { start: string; end: string },
+  ): Promise<DullStockListRow[]> {
+    if (!list.length) return [];
+    const rows = await this.flowRepo
+      .createQueryBuilder('f')
+      .select('f.dullId', 'dullId')
+      .addSelect(
+        'SUM(CASE WHEN f.direction = :inDirection THEN f.quantity ELSE 0 END)',
+        'monthlyInboundQty',
+      )
+      .addSelect(
+        'SUM(CASE WHEN f.direction = :outDirection THEN f.quantity ELSE 0 END)',
+        'monthlyOutboundQty',
+      )
+      .where('f.dullId IN (:...ids)', { ids: list.map((row) => row.id) })
+      .andWhere('f.flowDate >= :monthStart AND f.flowDate < :monthEnd', {
+        monthStart: monthRange.start,
+        monthEnd: monthRange.end,
+      })
+      .setParameters({
+        inDirection: STOCK_DIRECTION.IN,
+        outDirection: STOCK_DIRECTION.OUT,
+      })
+      .groupBy('f.dullId')
+      .getRawMany<{ dullId: string; monthlyInboundQty: string; monthlyOutboundQty: string }>();
+    const byId = new Map(rows.map((row) => [Number(row.dullId), row]));
+    return list.map((row) => {
+      const monthly = byId.get(row.id);
+      return Object.assign(row, {
+        monthlyInboundQty: Number(monthly?.monthlyInboundQty || 0),
+        monthlyOutboundQty: Number(monthly?.monthlyOutboundQty || 0),
+      });
+    });
   }
 
   /**
@@ -237,6 +312,12 @@ export class DullStockService {
       { header: '期初数' },
       { header: '入库数' },
       { header: '出库数' },
+      ...(query.flowMonth
+        ? [
+            { header: `${query.flowMonth}月入库数` },
+            { header: `${query.flowMonth}月出库数` },
+          ]
+        : []),
       { header: '结存数' },
       { header: '备注' },
     ];
@@ -256,11 +337,16 @@ export class DullStockService {
         r.openingQty || 0,
         r.inboundQty || 0,
         r.outboundQty || 0,
+        ...(query.flowMonth ? [r.monthlyInboundQty || 0, r.monthlyOutboundQty || 0] : []),
         r.balanceQty || 0,
         r.remark || '',
       ]);
     }
-    styleSheet(ws, { centerColumns: [6, 7, 10, 11, 12, 13, 14, 15] });
+    styleSheet(ws, {
+      centerColumns: query.flowMonth
+        ? [6, 7, 10, 11, 12, 13, 14, 15, 16, 17]
+        : [6, 7, 10, 11, 12, 13, 14, 15],
+    });
 
     const buf = await wb.xlsx.writeBuffer();
     return Buffer.from(buf);

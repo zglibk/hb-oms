@@ -26,6 +26,9 @@ export interface DullStockRow {
   openingQty: number;
   inboundQty: number;
   outboundQty: number;
+  /** 仅选择 flowMonth 时返回；本行单位口径下的当月流水合计 */
+  monthlyInboundQty?: number;
+  monthlyOutboundQty?: number;
   balanceQty: number;
   remark: string | null;
   creatorName: string | null;
@@ -55,6 +58,8 @@ export interface DullStockQuery {
   keyword?: string;
   surfaceType?: string;
   side?: string;
+  /** 出入库月份 YYYY-MM；只返回该月发生过流水的档案 */
+  flowMonth?: string;
   onlyInStock?: boolean;
 }
 
@@ -62,6 +67,9 @@ export interface DullStockSummary {
   rows: number;
   /** 结存合计：各行单位不同，一律折成支再汇总 */
   totalBalancePcs: number;
+  /** 选择月份时的月入/月出合计，统一折成支 */
+  monthlyInboundPcs: number;
+  monthlyOutboundPcs: number;
 }
 
 /** 建档/编辑入参（属性 + 单位 + 期初数；入库数/出库数不在此列） */

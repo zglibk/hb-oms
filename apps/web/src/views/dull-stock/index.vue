@@ -19,11 +19,20 @@
             <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-checkbox v-model="query.onlyInStock" @change="runKeywordSearch">只看有结存</el-checkbox>
+        <el-form-item label="出入库月份">
+          <el-date-picker
+            v-model="query.flowMonth" type="month" value-format="YYYY-MM" clearable
+            placeholder="全部月份" style="width: 140px" @change="onFlowMonthChange"
+          />
         </el-form-item>
-        <el-form-item>
+        <el-form-item class="query-actions">
+          <el-checkbox v-model="query.onlyInStock" @change="runKeywordSearch">只看有结存</el-checkbox>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" @click="resetFilters">重置</el-button>
+        </el-form-item>
+      </el-form>
+      <div class="filter-second-row">
+        <div class="business-actions">
           <el-button size="small" v-permission="'dull-stock:create'" type="primary" plain :icon="Plus" @click="openForm()">
             新增呆滞品
           </el-button>
@@ -34,8 +43,15 @@
             size="small" v-permission="'dull-stock:export'" plain :icon="Download"
             :loading="exporting" @click="onExport"
           >导出</el-button>
-        </el-form-item>
-      </el-form>
+        </div>
+        <span class="filter-summary">
+          当前筛选 {{ summary.rows }} 行，结存合计 <b>{{ summary.totalBalancePcs }}</b> 支
+          <template v-if="query.flowMonth">
+            ，{{ query.flowMonth }} 入库 <b class="delta-in">{{ summary.monthlyInboundPcs }}</b> 支，
+            出库 <b class="delta-out">{{ summary.monthlyOutboundPcs }}</b> 支
+          </template>
+        </span>
+      </div>
     </el-card>
 
     <el-card shadow="never">
@@ -48,9 +64,6 @@
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
           <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 入库数 − 出库数，后两个数只能靠「登记出入库」产生，点行首箭头看流水。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
         </hint-tip>
-        <span class="total">
-          当前筛选 {{ summary.rows }} 行，结存合计 <b>{{ summary.totalBalancePcs }}</b> 支
-        </span>
       </div>
 
       <app-table
@@ -153,6 +166,30 @@
         <el-table-column label="出库数" width="80" align="center">
           <template #default="{ row }">
             <span :class="row.outboundQty > 0 ? 'delta-out' : ''">{{ row.outboundQty }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="query.flowMonth" label="月入库数" width="90" align="center">
+          <template #header>
+            <el-tooltip :content="`${query.flowMonth} 月入库流水合计`" placement="top">
+              <span>月入库数</span>
+            </el-tooltip>
+          </template>
+          <template #default="{ row }">
+            <span :class="(row.monthlyInboundQty || 0) > 0 ? 'delta-in' : ''">
+              {{ row.monthlyInboundQty || 0 }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="query.flowMonth" label="月出库数" width="90" align="center">
+          <template #header>
+            <el-tooltip :content="`${query.flowMonth} 月出库流水合计`" placement="top">
+              <span>月出库数</span>
+            </el-tooltip>
+          </template>
+          <template #default="{ row }">
+            <span :class="(row.monthlyOutboundQty || 0) > 0 ? 'delta-out' : ''">
+              {{ row.monthlyOutboundQty || 0 }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="备注" min-width="120" show-overflow-tooltip>
@@ -445,13 +482,14 @@ const loading = ref(false);
 const saving = ref(false);
 const list = ref<DullStockRow[]>([]);
 const total = ref(0);
-const summary = ref({ rows: 0, totalBalancePcs: 0 });
+const summary = ref({ rows: 0, totalBalancePcs: 0, monthlyInboundPcs: 0, monthlyOutboundPcs: 0 });
 const query = reactive({
   page: 1,
   pageSize: 20,
   keyword: '',
   surfaceType: undefined as string | undefined,
   side: undefined as string | undefined,
+  flowMonth: undefined as string | undefined,
   onlyInStock: true,
 });
 
@@ -487,7 +525,30 @@ function reload() {
   query.page = 1;
   load();
 }
-const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+function onFlowMonthChange(value: string | null) {
+  // 月度流量应包含当月已经清空的档案；用户仍可随后重新勾选，与“有结存”条件叠加。
+  if (value) query.onlyInStock = false;
+  runKeywordSearch();
+}
+const {
+  schedule: scheduleKeywordSearch,
+  flush: runKeywordSearch,
+  cancel: cancelKeywordSearch,
+} = useDebouncedSearch(reload);
+
+/** 清空查询条件，恢复默认的“只看有结存”列表并返回第一页。 */
+function resetFilters() {
+  cancelKeywordSearch();
+  Object.assign(query, {
+    page: 1,
+    keyword: '',
+    surfaceType: undefined,
+    side: undefined,
+    flowMonth: undefined,
+    onlyInStock: true,
+  });
+  load();
+}
 load();
 onActivated(load);
 
@@ -787,9 +848,7 @@ export default { name: 'DullStock' };
 
 <style scoped lang="scss">
 .toolbar {
-  /* 标题行强制单行（2026-09-26）：操作按钮已挪到筛选卡片，这里只剩提示 + 合计。
-     提示可能很长，让它 flex 收缩并 …省略（悬浮看全），合计固定不收缩、始终贴右同一行 */
-  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: nowrap;
+  display: flex; align-items: center; margin-bottom: 12px;
   .tip {
     flex: 1; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -797,8 +856,21 @@ export default { name: 'DullStock' };
     b { color: var(--el-text-color-primary); }
     .el-icon { vertical-align: -2px; margin-right: 4px; }
   }
-  .total { flex: none; font-size: 12px; color: var(--el-text-color-secondary); }
-  .total b { color: var(--el-color-primary); font-size: 14px; }
+}
+.query-actions :deep(.el-form-item__content) {
+  gap: 8px;
+}
+.filter-second-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--el-border-color-lighter);
+}
+.business-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.filter-summary {
+  margin-left: auto; text-align: right; white-space: nowrap;
+  font-size: 12px; color: var(--el-text-color-secondary);
+  b { color: var(--el-color-primary); font-size: 14px; }
 }
 .pager { margin-top: 12px; }
 .mb12 { margin-bottom: 12px; }

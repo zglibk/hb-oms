@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -111,6 +112,11 @@ export class QueryDullStockDto {
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
+
+  /** 出入库流水月份（YYYY-MM）；选中后只列该月发生过出入库的档案，并返回月度入/出数量 */
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: '出入库月份格式应为 YYYY-MM' })
+  flowMonth?: string;
 
   /**
    * 只看有结存（balance_qty <> 0），默认 true——清空的呆滞品是历史痕迹，日常不看。
