@@ -111,6 +111,8 @@ const MIGRATIONS: string[] = [
   'migration-admin-display-name.sql',
   // 出入库单针式连续纸：命名纸型、草稿/发布版本与每类单据全局默认
   'migration-print-profile.sql',
+  // 更新日志 v1.2.0「订单跟踪与打印功能优化」（仅数据，同版本同标题已存在即跳过）
+  'migration-changelog-v1.2.0.sql',
 ];
 
 /**

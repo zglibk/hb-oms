@@ -301,6 +301,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 台账「外发已回货数量」= `SUM(return_qty)`（按部件组聚合，§5.1）。
 
+登记页的「选择回厂的部件组」支持订单号、客户、生产单号、产品型号、表面处理五个独立条件与关键词组合查询，筛选区尽量单行排列以减少高度占用。订单号、生产单号、关键词使用文本输入框；客户、产品型号、表面处理使用可搜索、可清空的下拉框，其选项按当前「待回厂 / 已回齐」范围从全量可选记录中服务端去重，不受列表条数上限影响。订单号与生产单号模糊匹配，客户、产品型号、表面处理按所选值精确匹配。关键词作为额外叠加的全局模糊条件，覆盖订单、产品、部件组、部件追溯码及相关字典中文标签等主要业务属性，不限定为上述独立条件或生产图号几个固定字段。查询先在服务端过滤，再执行选项条数上限，避免旧订单被前端二次过滤漏掉。
+
 
 > 审计字段：`t_outsource_part` 带齐六件套（§5.5）——回厂记录可编辑（改加工商/日期/数量口径），有更新路径就必须记更新人。
 
@@ -432,9 +434,29 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 - **一行 = 一批呆滞货**，刻意不设属性唯一键：同货号同客户会先后产生多批，逐批建档才追溯得到来源与处置进度。
 - **独立台账**：与订单跟踪台账四数、成品库存 `t_finished_balance` **完全不联动**；页面合计用共享包 `toPieces` 折成支，汇总口径仍统一。
+- **月度查询**：按出入库流水日期 `t_dull_stock_flow.flow_date` 选择自然月，只列该月发生过流水的档案；累计入库/出库字段不变，月入库数、月出库数由该月流水实时聚合，不落月结冗余字段。月度合计与导出同口径，各行数量按自身单位统计，跨行合计统一折算为支。
 - **流水可整条删除**（与部件台账「只能反向调整」不同——呆滞品是可修正的管理账，不是凭证账），删除时同事务回滚累计数，回滚后结存为负则拒绝。
 - 「变动后结存」**不落库**：流水可删，存快照会在删掉中间一笔后让后续行集体失真，改由服务端按 id 正序累计推导。
 - 轻量记账行，不采番、无单据号；档案**有流水时禁止删除**。
+
+### 4.10 出入库单针式纸型与套打配置
+
+送货单、成品入库单使用可发布的命名纸型；生产任务单维持 A4 现状。送货单初始默认显示为 **21.8×14cm 连续纸**：Windows 驱动进纸尺寸（含左右打孔边）为 **241.3×140mm（9.5×5.5 英寸）**，撕除打孔边后的成品纸面为 **218×140mm**，单据内容在驱动进纸页面中水平居中；另带 **A5 横向（210×148mm）**内置回退纸型。成品入库单初始默认使用 **A4 打字纸纵向（210×297mm）**，并保留 21.8×14cm 连续纸和 A5 横向供打印时临时切换。
+
+送货单模板预览、默认纸型设置以及正式送货单/入库单打印页均以纸型档案的运行时解析结果为唯一来源：只加载对应单据类型下启用档案的当前发布版本，未发布草稿不进入正式下拉；发布配置完全相同的历史重复档案合并为一项，优先采用版本号更高、发布时间更新的档案。纸型档案列表保留完整档案和版本历史供维护与回退。
+
+| 表 | 用途 |
+|---|---|
+| `t_print_profile` | 纸型名称、单据类型、启停状态、草稿配置和当前发布版本；配置含空白纸/预印纸模式、尺寸、驱动纸型名、四边距、偏移、字体、线宽、分页与套打布局 |
+| `t_print_profile_version` | 每次发布的不可变历史快照；回退不是改历史，而是把历史配置复制为新的发布版本 |
+| `t_print_document_setting` | 送货单、入库单各自的全局默认纸型；不做客户级纸型绑定 |
+
+- 空白纸模式打印完整标题、标签、表格线、签名与数据；预印套打只输出动态字段和明细重复块，定位底图仅在设计器显示，正式打印/PDF不输出。
+- 套打设计器的可用字段从左侧拖入纸面添加；纸面在工作区水平、垂直居中，并支持以鼠标指针位置为中心的滚轮缩放。元素坐标与尺寸始终按毫米保存，不受预览缩放比例影响。
+- 草稿修改不影响生产打印，发布后才生效。默认纸型不能停用或删除；五个内置回退纸型不能停用或删除。
+- 纸张边长 50–500mm、边距 0–50mm、偏移 -20–20mm、字体缩放 80–120%、每页明细 1–50 行。
+- 打印页动态生成 `@page { size: 宽mm 高mm; margin: 0 }`，四边距在纸面内部实现。每张物理纸独立渲染完整单头、表头和签名栏，单据纸不显示页码，禁止跨连续纸撕纸线。
+- 保留浏览器打印对话框，不做静默直打。Windows 驱动必须建立同尺寸自定义纸型；纸张、100% 缩放、无边距、关闭页眉页脚由使用者在打印对话框确认。
 
 ---
 
@@ -460,10 +482,11 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | 材料厚度 | t_order_part_group.material_thickness |
 | 外发已回货数量 | Σt_outsource_part.return_qty（按组聚合） |
 | 装配车间 | 聚合该部件组各装配批次的 t_assembly_batch.workshop（多批不同车间则并列显示） |
+| 装配完成 / 完成时间 | 已完成批次数量合计 / 最近一次已完成批次的 t_assembly_batch.actual_date |
 | 成品入库 | 完成数（下方聚合） |
 | 订单欠数 | 成品欠数 = 订单数 − 完成数 |
 | 订单交期 | t_order_product.delivery_date |
-| 成品出货 | 出库数 |
+| 成品出货 / 出货时间 | 出库数 / 最近一次已确认销售出库单的 t_finished_doc.doc_date（红字冲销本身不作为出货时间） |
 | 成品结存 | **发货欠数** = 订单数 − 出库数（手工表「结存」即此口径）；当前实物库存另有「库存数」列 |
 
 聚合口径伪 SQL（实时聚合，无冗余列）：
@@ -497,7 +520,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 - 装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
 - 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。走独立接口 `GET /order/ledger/detail?orderPartGroupId=`，**展开时才加载**（一页几十行随列表全查三张流水太重）。
 - 同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单号/生产单号/产品编码/规格/数量单位/表面处理/订单交期）**跨行合并**，观感对齐手工台账；仅合并相邻的同产品行。
-- 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、表面处理（字典）、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）、装配车间。
+- 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、成品入库（净入库数不为 0）、成品出货（净出货数不为 0）、表面处理（字典）、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）、装配车间；多个条件按 AND 叠加。
 - 支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。
 
 ### 5.2 首页看板（销售视角）
@@ -543,12 +566,16 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | order | `GET /order/ledger/export` | 台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝 |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |
+| outsource | `GET /outsource/part-group-options` | 登记页部件组选择器；订单号、客户、生产单号、产品型号、表面处理独立条件与关键词可组合查询，服务端过滤后再限条数 |
+| outsource | `GET /outsource/part-group-filter-options` | 登记页部件组选择器的客户、产品型号、表面处理去重下拉项；按待回厂 / 已回齐范围取全量候选 |
 | assembly | `GET /assembly` | **装配管理列表**：按部件组一行，聚合批次数/已录量/已完成量/最早未完成计划日/逾期标记；筛选关键字、装配车间、交期区间、只看未装完、只看逾期 |
 | assembly | `GET /assembly/batch?orderPartGroupId=&side=` | 某组的批次明细 + 分边别小计（已录/已完成/已入库/可入库） |
 | assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id` | 装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束 |
 | assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
 | finished-stock | `POST /finished-stock`（建单含明细）、`PUT /finished-stock/:id`（仅草稿）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/:id` | confirm 入库时校验装配闸门（§4.5）并驱动余额；reverse=生成红字单并自动确认，支持按行部分冲销；已确认单禁改禁作废 |
 | finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 成品库存（只读结存查询）；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
+| finished-stock | `GET /finished-stock/:id/delivery-note-pdf?profileId=&version=&templateCode=`、`GET /finished-stock/:id/inbound-note-pdf?profileId=&version=` | 服务端渲染与屏幕相同的已发布纸型和版本；等待明确打印就绪标记后生成 PDF |
+| print-config | `/system/print-config/profiles` CRUD、`publish`、`versions`、`rollback`、`defaults`、`runtime` | 针式纸型草稿/发布/回退、全局默认与打印页运行时解析；查看复用 `system:print-template`，修改复用 `config:update` |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
 | product-summary | `GET /product-summary`、`GET /product-summary/export`、`GET /product-summary/period`、`GET /product-summary/period/export` | **产品汇总查询**（§5.3）：Tab1 累计口径复用 findLedger 二次聚合；Tab2 期间进销存按单据日期切区间；两个导出均双 Sheet |
