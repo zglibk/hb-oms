@@ -86,7 +86,17 @@
           <p class="detail-empty__text">还没有回厂明细，请先选择本次回来的部件组</p>
           <el-button type="primary" :icon="Plus" @click="openPicker">添加部件组</el-button>
         </div>
-        <el-table v-else :data="form.items" border stripe size="small" class="detail-table">
+        <el-table
+          v-else
+          ref="detailTableRef"
+          :data="form.items"
+          border
+          stripe
+          size="small"
+          class="detail-table"
+          @keydown.enter="onDetailEditorKeydown"
+          @keyup.enter="onDetailEditorKeyup"
+        >
           <el-table-column type="index" label="#" width="46" align="center" />
           <el-table-column label="生产单号" prop="productionNo" width="120" fixed="left" show-overflow-tooltip />
           <el-table-column label="产品型号" prop="productModel" min-width="140" show-overflow-tooltip />
@@ -102,13 +112,19 @@
           </el-table-column>
           <el-table-column label="表面处理" width="120" align="center">
             <template #default="{ row }">
-              <el-select v-model="row.surfaceType" clearable placeholder="按订单" style="width: 100%">
+              <el-select
+                v-model="row.surfaceType"
+                data-detail-editor
+                clearable
+                placeholder="按订单"
+                style="width: 100%"
+              >
                 <el-option v-for="o in outsourceSurfaces" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </template>
           </el-table-column>
           <el-table-column v-if="colorEnabled" label="颜色" width="90" align="center">
-            <template #default="{ row }"><el-input v-model="row.color" /></template>
+            <template #default="{ row }"><el-input v-model="row.color" data-detail-editor /></template>
           </el-table-column>
           <!-- 数量列排在重量之前：它才是入账依据；必填校验在保存时统一做 -->
           <el-table-column width="125" align="center" class-name="col-focus" label-class-name="col-focus">
@@ -118,7 +134,7 @@
             <template #default="{ row }">
               <el-input-number
                 v-model="row.returnQty" :min="0" :precision="0" :step="1" :controls="false"
-                style="width: 100%" :placeholder="isQtyMode ? '按送货单' : '自动折算'"
+                data-detail-editor style="width: 100%" :placeholder="isQtyMode ? '按送货单' : '自动折算'"
               />
             </template>
           </el-table-column>
@@ -129,7 +145,7 @@
             <template #default="{ row }">
               <el-input-number
                 v-model="row.returnWeight" :min="0" :precision="2" :step="1" :controls="false"
-                style="width: 100%" @change="() => syncQty(row)"
+                data-detail-editor style="width: 100%" @change="() => syncQty(row)"
               />
             </template>
           </el-table-column>
@@ -140,12 +156,12 @@
             <template #default="{ row }">
               <el-input-number
                 v-model="row.unitWeight" :min="0" :precision="4" :step="0.01" :controls="false"
-                style="width: 100%" @change="() => syncQty(row)"
+                data-detail-editor style="width: 100%" @change="() => syncQty(row)"
               />
             </template>
           </el-table-column>
           <el-table-column label="备注" width="110">
-            <template #default="{ row }"><el-input v-model="row.remark" /></template>
+            <template #default="{ row }"><el-input v-model="row.remark" data-detail-editor /></template>
           </el-table-column>
           <el-table-column label="操作" width="70" align="center" fixed="right">
             <template #default="{ $index }">
@@ -157,20 +173,69 @@
     </el-card>
 
     <!-- 可外发部件组选择器 -->
-    <el-dialog v-model="pickerVisible" title="选择回厂的部件组" width="1000px" top="6vh" @open="loadOptions">
+    <el-dialog
+      v-model="pickerVisible"
+      title="选择回厂的部件组"
+      width="min(1460px, 96vw)"
+      top="4vh"
+      @open="loadPickerData"
+    >
+      <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
+        <el-form-item label="订单号">
+          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadOptions" />
+        </el-form-item>
+        <el-form-item label="客户">
+          <el-select
+            v-model="pickerQuery.customerName"
+            clearable
+            filterable
+            :loading="filterOptionsLoading"
+            placeholder="全部"
+          >
+            <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="生产单号">
+          <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadOptions" />
+        </el-form-item>
+        <el-form-item label="产品型号">
+          <el-select-v2
+            v-model="pickerQuery.productModel"
+            clearable
+            filterable
+            :loading="filterOptionsLoading"
+            :options="productModelSelectOptions"
+            popper-class="picker-model-popper"
+            placeholder="全部"
+          />
+        </el-form-item>
+        <el-form-item label="表面处理">
+          <el-select v-model="pickerQuery.surfaceType" clearable :loading="filterOptionsLoading" placeholder="全部">
+            <el-option
+              v-for="value in pickerFilterOptions.surfaceTypes"
+              :key="value"
+              :label="dictLabel(surfaceDict, value)"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input
+            v-model="pickerQuery.keyword"
+            clearable
+            placeholder="请输入关键词"
+            @keyup.enter="loadOptions"
+          />
+        </el-form-item>
+        <el-form-item class="picker-actions">
+          <el-button type="primary" :icon="Search" @click="loadOptions">查询</el-button>
+          <el-button @click="resetPickerQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
       <div class="picker-bar">
-        <el-input
-          v-model="pickerKeyword"
-          clearable
-          placeholder="订单号/客户/生产单号/产品型号/图号"
-          style="width: 320px"
-          @keyup.enter="loadOptions"
-          @clear="loadOptions"
-        />
-        <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
         <!-- 两个互不重叠的列表：默认只列未回齐的（2026-09-26：回完了还被重复登记是实测的高发错误）；
              勾上则**只**列已回齐的，供返工、补货再登记。不做「全部」：新近未回的组会占满条数上限，已回齐的被挤没 -->
-        <el-checkbox v-model="showReturned" @change="loadOptions">只看已回齐</el-checkbox>
+        <el-checkbox v-model="showReturned" @change="loadPickerData">只看已回齐</el-checkbox>
         <span class="picker-tip">
           {{ showReturned ? '当前只列出已回齐的部件组（返工、补货再登记用）；取消勾选回到待回厂列表。' : '只列出需要表面处理（非「无」）且尚未回齐的部件组；分批回厂可重复选。' }}
         </span>
@@ -223,7 +288,9 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
 import {
   createOutsourceParts,
+  getPartGroupFilterOptions,
   getPartGroupOptions,
+  type PartGroupFilterOptions,
   type PartGroupOption,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
@@ -246,6 +313,7 @@ const { entryMode, isQtyMode } = useOutsourceEntryMode();
 
 const router = useRouter();
 const formRef = ref<FormInstance>();
+const detailTableRef = ref<any>();
 const saving = ref(false);
 
 interface ItemRow {
@@ -307,12 +375,76 @@ function syncQty(row: ItemRow) {
   if (qty > 0) row.returnQty = qty;
 }
 
+/* ===== 回厂明细键盘录入 ===== */
+/** Enter 只在明细编辑器内接管；中文输入法确认候选时不能误跳到下一格。 */
+function detailEditorRoot(event: KeyboardEvent): HTMLElement | null {
+  if (event.isComposing || event.keyCode === 229) return null;
+  return event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>('[data-detail-editor]')
+    : null;
+}
+
+/** 普通输入框按下 Enter 时阻止原生表单提交；下拉框要保留 Enter 打开/选择选项。 */
+function onDetailEditorKeydown(event: KeyboardEvent) {
+  const editor = detailEditorRoot(event);
+  if (!editor || editor.classList.contains('el-select')) return;
+  event.preventDefault();
+}
+
+/**
+ * Enter 后按 DOM 顺序移动到下一可编辑格：本行从左到右，行尾进入下一行。
+ * 下拉框展开期间不移动；用 Enter 选中并收起后才进入下一格。
+ */
+function onDetailEditorKeyup(event: KeyboardEvent) {
+  const current = detailEditorRoot(event);
+  if (!current) return;
+  if (current.querySelector('[aria-expanded="true"]')) return;
+  event.preventDefault();
+
+  const table = detailTableRef.value?.$el as HTMLElement | undefined;
+  if (!table) return;
+  const editors = Array.from(table.querySelectorAll<HTMLElement>('[data-detail-editor]'))
+    .filter((editor) => {
+      const control = editor.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+      return !!control && !control.disabled && !editor.classList.contains('is-disabled') && control.offsetParent !== null;
+    });
+  const currentIndex = editors.indexOf(current);
+  const next = currentIndex >= 0 ? editors[currentIndex + 1] : undefined;
+  const control = next?.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+  if (!next || !control) return;
+
+  next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  control.focus();
+  // 自动全选原值，数字、单重等已带入字段可直接敲新值覆盖。
+  try {
+    control.select();
+  } catch {
+    // 某些浏览器不支持选择特定 input 类型；焦点移动仍然有效。
+  }
+}
+
 /* ===== 部件组选择器 ===== */
 const pickerVisible = ref(false);
-const pickerKeyword = ref('');
+const pickerQuery = reactive({
+  orderNo: '',
+  customerName: '',
+  productionNo: '',
+  productModel: '',
+  surfaceType: '',
+  keyword: '',
+});
 const pickerTableRef = ref<any>();
 const options = ref<PartGroupOption[]>([]);
 const optionsLoading = ref(false);
+const filterOptionsLoading = ref(false);
+const pickerFilterOptions = ref<PartGroupFilterOptions>({
+  customerNames: [],
+  productModels: [],
+  surfaceTypes: [],
+});
+const productModelSelectOptions = computed(() =>
+  pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
+);
 const picked = ref<PartGroupOption[]>([]);
 /** 选择器是否切到「只看已回齐」列表（默认否，每次进页面都重置——同「按数量」模式，不记忆） */
 const showReturned = ref(false);
@@ -320,17 +452,48 @@ const showReturned = ref(false);
 function openPicker() {
   pickerVisible.value = true;
 }
+async function loadFilterOptions() {
+  filterOptionsLoading.value = true;
+  try {
+    pickerFilterOptions.value = await getPartGroupFilterOptions({
+      hideReturned: !showReturned.value,
+      onlyReturned: showReturned.value,
+    });
+  } finally {
+    filterOptionsLoading.value = false;
+  }
+}
+function loadPickerData() {
+  return Promise.all([loadFilterOptions(), loadOptions()]);
+}
 async function loadOptions() {
   optionsLoading.value = true;
   try {
     options.value = await getPartGroupOptions({
-      keyword: pickerKeyword.value || undefined,
+      orderNo: pickerQuery.orderNo.trim() || undefined,
+      customerName: pickerQuery.customerName.trim() || undefined,
+      productionNo: pickerQuery.productionNo.trim() || undefined,
+      productModel: pickerQuery.productModel.trim() || undefined,
+      surfaceType: pickerQuery.surfaceType || undefined,
+      keyword: pickerQuery.keyword.trim() || undefined,
       hideReturned: !showReturned.value,
       onlyReturned: showReturned.value,
     });
   } finally {
     optionsLoading.value = false;
   }
+}
+function resetPickerQuery() {
+  Object.assign(pickerQuery, {
+    orderNo: '',
+    customerName: '',
+    productionNo: '',
+    productModel: '',
+    surfaceType: '',
+    keyword: '',
+  });
+  showReturned.value = false;
+  loadPickerData();
 }
 function onPickChange(rows: PartGroupOption[]) {
   picked.value = rows;
@@ -571,6 +734,60 @@ function goBack() {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+.picker-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+
+  :deep(.el-form-item) {
+    display: flex;
+    min-width: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  :deep(.el-form-item__label) {
+    width: auto;
+    padding-right: 6px;
+  }
+  :deep(.el-form-item__content) {
+    flex: 1;
+    min-width: 0;
+  }
+  :deep(.el-input),
+  :deep(.el-select),
+  :deep(.el-select-v2) {
+    width: 100%;
+  }
+  .picker-actions {
+    white-space: nowrap;
+    :deep(.el-form-item__content) {
+      flex-wrap: nowrap;
+    }
+  }
+}
+@media (max-width: 1100px) {
+  .picker-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    .picker-actions {
+      grid-column: 3;
+      justify-self: end;
+    }
+  }
+}
+:global(.picker-model-popper) {
+  min-width: 280px !important;
+}
+:global(.picker-model-popper .el-select-dropdown),
+:global(.picker-model-popper .el-vl__wrapper),
+:global(.picker-model-popper .el-vl__window) {
+  width: 100% !important;
 }
 .picker-tip {
   color: var(--el-text-color-secondary);

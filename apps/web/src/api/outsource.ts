@@ -64,6 +64,13 @@ export interface PartGroupOption {
   unitWeight: number;
 }
 
+/** 选择器中由可选记录全量去重得到的下拉项 */
+export interface PartGroupFilterOptions {
+  customerNames: string[];
+  productModels: string[];
+  surfaceTypes: string[];
+}
+
 export interface OutsourceQuery {
   page?: number;
   pageSize?: number;
@@ -113,6 +120,10 @@ export const getOutsourceDetail = (id: number) =>
 
 export const getPartGroupOptions = (params: {
   keyword?: string;
+  orderNo?: string;
+  customerName?: string;
+  productionNo?: string;
+  productModel?: string;
   surfaceType?: string;
   /** 隐藏已回齐（累计回厂 ≥ 组支数）的部件组 */
   hideReturned?: boolean;
@@ -120,6 +131,12 @@ export const getPartGroupOptions = (params: {
   onlyReturned?: boolean;
   limit?: number;
 }) => request.get<any, PartGroupOption[]>('/api/outsource/part-group-options', { params });
+
+export const getPartGroupFilterOptions = (params: {
+  hideReturned?: boolean;
+  onlyReturned?: boolean;
+}) =>
+  request.get<any, PartGroupFilterOptions>('/api/outsource/part-group-filter-options', { params });
 
 /** 部件组回厂进度：保存前复核是否超出组支数（excludeId = 编辑中的记录，不计其旧数量） */
 export interface ReturnProgress {

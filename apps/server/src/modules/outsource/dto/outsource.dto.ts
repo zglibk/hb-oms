@@ -129,13 +129,8 @@ export class QueryOutsourcePartDto {
   @IsOptional() @Transform(toBoolean) @IsBoolean() onlyUnreturned?: boolean;
 }
 
-/** 可外发部件组查询：按订单/客户/型号筛选，附组需求与已回厂合计供参考 */
-export class QueryPartGroupOptionDto {
-  @IsOptional() @IsString() keyword?: string;
-
-  /** 表面处理过滤（可选；不传则列出全部需外发的组） */
-  @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
-
+/** 部件组选择器的回齐状态口径：列表与下拉选项共用，保证两边取数范围一致 */
+export class QueryPartGroupVisibilityDto {
   /**
    * 隐藏已回齐的部件组（累计回厂 ≥ 组支数，2026-09-26）：登记页选择器默认传 true。
    * 过滤放服务端而非前端——选项有条数上限，已回齐的组占着名额会把真正待回的挤出列表。
@@ -148,6 +143,23 @@ export class QueryPartGroupOptionDto {
    * 已回齐的组被挤到后面甚至截掉，用户勾了却一条都看不到（实测反馈）。
    */
   @IsOptional() @Transform(toBoolean) @IsBoolean() onlyReturned?: boolean;
+}
+
+/** 可外发部件组查询：独立条件与关键词可组合，附组需求与已回厂合计供参考 */
+export class QueryPartGroupOptionDto extends QueryPartGroupVisibilityDto {
+  /** 关键词：对订单、产品、部件组的主要业务属性做全局模糊匹配 */
+  @IsOptional() @IsString() @MaxLength(128) keyword?: string;
+
+  @IsOptional() @IsString() @MaxLength(32) orderNo?: string;
+
+  @IsOptional() @IsString() @MaxLength(128) customerName?: string;
+
+  @IsOptional() @IsString() @MaxLength(64) productionNo?: string;
+
+  @IsOptional() @IsString() @MaxLength(128) productModel?: string;
+
+  /** 表面处理过滤（可选；不传则列出全部需外发的组） */
+  @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() limit?: number;
 }

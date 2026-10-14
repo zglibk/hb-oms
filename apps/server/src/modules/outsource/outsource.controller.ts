@@ -14,6 +14,7 @@ import {
   CreateOutsourcePartDto,
   QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
+  QueryPartGroupVisibilityDto,
   QueryReturnProgressDto,
   UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
@@ -45,6 +46,13 @@ export class OutsourceController {
   @RequirePermissions('outsource')
   async partGroupOptions(@Query() query: QueryPartGroupOptionDto) {
     return this.service.findPartGroupOptions(query);
+  }
+
+  /** 选择器下拉条件：按当前待回厂 / 已回齐口径从全量记录中去重，不受列表条数上限影响 */
+  @Get('part-group-filter-options')
+  @RequirePermissions('outsource')
+  async partGroupFilterOptions(@Query() query: QueryPartGroupVisibilityDto) {
+    return this.service.findPartGroupFilterOptions(query);
   }
 
   /**

@@ -13,6 +13,7 @@ import {
   CreateOutsourcePartDto,
   QueryOutsourcePartDto,
   QueryPartGroupOptionDto,
+  QueryPartGroupVisibilityDto,
   QueryReturnProgressDto,
   UpdateOutsourcePartDto,
 } from './dto/outsource.dto';
@@ -46,6 +47,13 @@ export interface PartGroupOption {
   materialThickness: string | null;
   /** 单重（kg/支）：自部件信息带出，回厂折算默认值 */
   unitWeight: number;
+}
+
+/** 部件组选择器的去重下拉项 */
+export interface PartGroupFilterOptions {
+  customerNames: string[];
+  productModels: string[];
+  surfaceTypes: string[];
 }
 
 /**
@@ -111,6 +119,61 @@ export class OutsourceService {
     return row;
   }
 
+  /** 列表与下拉选项共用的基础范围，避免切换「只看已回齐」后两边口径不一致。 */
+  private buildPartGroupVisibilityFilter(query: QueryPartGroupVisibilityDto) {
+    const params: any[] = [ORDER_STATUS.CANCELLED, SURFACE_NONE];
+    let where = ' WHERE o.status <> ? AND p.surface_type <> ?';
+    const returnedSql = `COALESCE((SELECT SUM(op2.return_qty) FROM t_outsource_part op2
+                               WHERE op2.order_part_group_id = g.id), 0)`;
+    if (query.onlyReturned) {
+      where += ` AND g.qty_pcs > 0 AND ${returnedSql} >= g.qty_pcs`;
+    } else if (query.hideReturned) {
+      where += ` AND ${returnedSql} < g.qty_pcs`;
+    }
+    return { where, params };
+  }
+
+  /**
+   * 客户、产品型号、表面处理下拉项：直接从当前可选记录全量去重，
+   * 不从最多 200 条的列表结果反推，避免旧记录中的选项缺失。
+   */
+  async findPartGroupFilterOptions(
+    query: QueryPartGroupVisibilityDto,
+  ): Promise<PartGroupFilterOptions> {
+    const { where, params } = this.buildPartGroupVisibilityFilter(query);
+    const fromSql = `
+      FROM t_order_part_group g
+      JOIN t_order_product p ON p.id = g.order_product_id
+      JOIN t_order o ON o.id = g.order_id
+      ${where}`;
+    const [customers, models, surfaces]: any[][] = await Promise.all([
+      this.dataSource.query(
+        `SELECT DISTINCT o.customer_name AS value ${fromSql}
+          AND o.customer_name IS NOT NULL AND TRIM(o.customer_name) <> ''
+         ORDER BY o.customer_name`,
+        [...params],
+      ),
+      this.dataSource.query(
+        `SELECT DISTINCT g.product_model AS value ${fromSql}
+          AND g.product_model IS NOT NULL AND TRIM(g.product_model) <> ''
+         ORDER BY g.product_model`,
+        [...params],
+      ),
+      this.dataSource.query(
+        `SELECT DISTINCT p.surface_type AS value ${fromSql}
+          AND p.surface_type IS NOT NULL AND TRIM(p.surface_type) <> ''
+         ORDER BY p.surface_type`,
+        [...params],
+      ),
+    ]);
+    const valuesOf = (rows: any[]) => rows.map((row) => String(row.value));
+    return {
+      customerNames: valuesOf(customers),
+      productModels: valuesOf(models),
+      surfaceTypes: valuesOf(surfaces),
+    };
+  }
+
   /**
    * 可外发部件组：表面处理非 none 的订单产品行下的部件组。
    *
@@ -125,24 +188,64 @@ export class OutsourceService {
    */
   async findPartGroupOptions(query: QueryPartGroupOptionDto): Promise<PartGroupOption[]> {
     const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
-    const params: any[] = [ORDER_STATUS.CANCELLED, SURFACE_NONE];
-    let where = ' WHERE o.status <> ? AND p.surface_type <> ?';
+    const visibility = this.buildPartGroupVisibilityFilter(query);
+    const params = visibility.params;
+    let where = visibility.where;
+    const addLikeFilter = (column: string, value?: string) => {
+      const normalized = value?.trim();
+      if (!normalized) return;
+      where += ` AND ${column} LIKE ?`;
+      params.push(`%${normalized}%`);
+    };
+    const addExactFilter = (column: string, value?: string) => {
+      const normalized = value?.trim();
+      if (!normalized) return;
+      where += ` AND ${column} = ?`;
+      params.push(normalized);
+    };
+
+    // 独立条件彼此以及关键词之间按 AND 组合；必须在服务端、LIMIT 之前过滤，
+    // 否则前端从最多 200 条结果里二次筛选会漏掉真正匹配的旧订单。
+    addLikeFilter('o.order_no', query.orderNo);
+    addExactFilter('o.customer_name', query.customerName);
+    addLikeFilter('o.production_no', query.productionNo);
+    addExactFilter('g.product_model', query.productModel);
     if (query.surfaceType) {
       where += ' AND p.surface_type = ?';
       params.push(query.surfaceType);
     }
-    const returnedSql = `COALESCE((SELECT SUM(op2.return_qty) FROM t_outsource_part op2
-                               WHERE op2.order_part_group_id = g.id), 0)`;
-    if (query.onlyReturned) {
-      where += ` AND g.qty_pcs > 0 AND ${returnedSql} >= g.qty_pcs`;
-    } else if (query.hideReturned) {
-      where += ` AND ${returnedSql} < g.qty_pcs`;
-    }
-    if (query.keyword) {
-      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                      OR g.product_model LIKE ? OR g.drawing_no LIKE ?)`;
-      const kw = `%${query.keyword}%`;
-      params.push(kw, kw, kw, kw, kw);
+    const keyword = query.keyword?.trim();
+    if (keyword) {
+      // 关键词是独立条件之外的全局搜索，不绑定在上面四个表单字段上。
+      // 覆盖订单、产品、部件组、部件追溯码及相关字典中文标签；新增独立条件时
+      // 仍与本条件按 AND 叠加，用户可以先缩小范围再搜任意业务属性。
+      const kw = `%${keyword}%`;
+      where += ` AND (
+        (CONVERT(CONCAT_WS('|',
+          o.order_no, o.po_no, o.customer_name, o.production_no,
+          p.material_code, p.item_no, p.product_name, p.product_type, p.rail_section,
+          p.dimension_raw, CAST(p.dimension_mm AS CHAR), p.surface_type, p.color, p.sheet_material,
+          g.product_model, g.group_type, g.drawing_no, g.drawing_version,
+          g.material_thickness, g.remark
+        ) USING utf8mb4) COLLATE utf8mb4_general_ci) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM t_order_part pt_kw
+           WHERE pt_kw.part_group_id = g.id
+             AND (CONVERT(CONCAT_WS('|', pt_kw.cycle_code, pt_kw.remark) USING utf8mb4)
+                  COLLATE utf8mb4_general_ci) LIKE ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM t_dict d_kw
+           WHERE d_kw.dict_label LIKE ?
+             AND (
+               (d_kw.dict_type = 'surface_type' AND d_kw.dict_value = p.surface_type)
+               OR (d_kw.dict_type = 'product_type' AND FIND_IN_SET(d_kw.dict_value, p.product_type))
+               OR (d_kw.dict_type = 'rail_section' AND d_kw.dict_value = p.rail_section)
+               OR (d_kw.dict_type = 'part_group_type' AND d_kw.dict_value = g.group_type)
+             )
+        )
+      )`;
+      params.push(kw, kw, kw);
     }
     params.push(limit);
 
