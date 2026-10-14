@@ -1320,29 +1320,7 @@ function openAttachment(url: string) {
 }
 
 /* ===== 保存 ===== */
-/**
- * 交货地址为空的软提醒（2026-09-25，只提醒不拦截）：送货单的「送货地址」优先取订单产品行的
- * 交货地址，没填才回落客户资料的送货地址（服务端 buildDeliveryNote）。提醒按回落结果说实话——
- * 客户资料有地址就告诉用户会用哪个，连客户资料也没有才说「将为空」。点「返回填写」即中止本次保存。
- */
-async function confirmMissingDeliveryAddress() {
-  const missing = form.products
-    .map((p, i) => ((p.deliveryAddress ?? '').trim() ? 0 : i + 1))
-    .filter(Boolean);
-  if (!missing.length) return;
-  const which = form.products.length > 1 ? `产品 ${missing.join('、')} 未填写交货地址` : '未填写交货地址';
-  const fallback = (customers.value.find((c) => c.id === form.customerId)?.deliveryAddress ?? '').trim();
-  const detail = fallback
-    ? `打印送货单时，「送货地址」将使用客户资料里的地址：<br/><b>${escapeHtml(fallback)}</b>`
-    : '该客户资料里也没有维护送货地址，<b>打印送货单时「送货地址」将为空</b>。';
-  await ElMessageBox.confirm(`${which}。${detail}<br/>如需指定本单的送货地点，请返回填写。`, '交货地址提醒', {
-    type: 'warning',
-    dangerouslyUseHTMLString: true,
-    confirmButtonText: '继续保存',
-    cancelButtonText: '返回填写',
-  });
-}
-/** 地址是用户输入的文本，拼进 HTML 提示前转义 */
+/** 用户输入内容拼进 HTML 提示前统一转义。 */
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 }
@@ -1500,7 +1478,6 @@ async function onSave() {
       );
     }
   }
-  await confirmMissingDeliveryAddress();
   await confirmReferencedChanges();
   saving.value = true;
   try {
