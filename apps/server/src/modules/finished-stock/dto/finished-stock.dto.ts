@@ -104,6 +104,26 @@ export class ReverseFinishedDocDto {
   items?: ReverseItemDto[];
 }
 
+/** 浏览器打印/PDF 共用的本次临时纸型与模板选择。 */
+export class PrintDocumentQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  profileId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  templateCode?: string;
+}
+
 export class ReverseItemDto {
   @Type(() => Number)
   @IsInt({ message: '被冲明细行ID必填' })

@@ -143,7 +143,7 @@ export class PdfService implements OnModuleDestroy {
   }
 
   /**
-   * 渲染前端打印页为 A4 PDF。
+   * 渲染前端打印页为 PDF；具体纸型由页面动态 @page 决定。
    *
    * @param url   打印页完整地址（服务器内网可达，如 http://127.0.0.1/oms/admin/order/print?id=1）
    * @param token 调用者的 JWT——注入到页面 localStorage，让打印页内的接口请求带上登录态。
@@ -164,7 +164,7 @@ export class PdfService implements OnModuleDestroy {
     try {
       page.setDefaultNavigationTimeout(RENDER_TIMEOUT_MS);
       page.setDefaultTimeout(RENDER_TIMEOUT_MS);
-      // 打印页是 A4 版式，视口给足宽度避免响应式样式介入
+      // 视口给足宽度，避免响应式样式介入（纸面物理尺寸仍由 @page 决定）
       await page.setViewport({ width: 1280, height: 1800 });
 
       // 页面脚本执行前塞入登录态（键名与前端 request.ts 的 TOKEN_KEY 一致）。
@@ -179,8 +179,8 @@ export class PdfService implements OnModuleDestroy {
       }, token);
 
       await page.goto(url, { waitUntil: 'networkidle0' });
-      // 打印纸出现即说明数据已渲染（未登录会跳登录页，这里会超时并抛错）
-      await page.waitForSelector('.print-sheet', { timeout: RENDER_TIMEOUT_MS });
+      // 纸型、版本、分页和业务数据全部就绪后页面才会挂该标记；避免只看到纸面壳就提前出 PDF。
+      await page.waitForSelector('[data-print-ready="true"]', { timeout: RENDER_TIMEOUT_MS });
       // 富文本里的图片可能晚于 networkidle0 完成解码，再兜一道
       await page.evaluate(async () => {
         const imgs: any[] = Array.from((globalThis as any).document?.images ?? []);
@@ -193,7 +193,6 @@ export class PdfService implements OnModuleDestroy {
       });
 
       const buf = await page.pdf({
-        format: 'A4',
         printBackground: true,
         // 用打印页 @page 里的纸张与页边距，避免此处再定义一份、两边漂移
         preferCSSPageSize: true,

@@ -57,7 +57,7 @@ export interface DeliveryTemplate {
   signatures: string[];
   /** 明细区最少行数：不足补空行，纸质单版式才稳定 */
   minRows: number;
-  /** 底部联次说明 */
+  /** 纸面右侧竖排联次说明 */
   footerNote: string;
 }
 
@@ -65,7 +65,7 @@ const ADDRESS = '地址：广东省中山市南头穗西月桂东路23号';
 const FAX = 'FAX：0760-87972639';
 const FOOTER_NOTE = '白色联留底  红色联收款凭证  黄色联客户';
 /**
- * 通用版的联次说明：厂里同时在用四联与五联两种单据纸，**差异只有这一行文字**
+ * 通用版的联次说明：厂里同时在用四联与五联两种单据纸，**差异只有右侧竖排文字**
  * （版式、列、行数、签名栏完全相同），故两套模板共用下面的 `GENERIC_BASE`。
  */
 const FOOTER_NOTE_4 = '第一联存根（白）　第二联收款依据（红）　第三联交客户（黄）　第四联入账（蓝）';
@@ -85,7 +85,7 @@ const REQ_FALLBACK: Array<keyof DeliveryNoteRow> = ['productRequirement', 'produ
 const CODE_FALLBACK: Array<keyof DeliveryNoteRow> = ['customerDrawingNo'];
 
 /**
- * 通用版的共用底座：四联与五联**只差底部一行联次说明**，其余（列、行数、签名栏、
+ * 通用版的共用底座：四联与五联**只差右侧竖排联次说明**，其余（列、行数、签名栏、
  * 客户信息区版式）完全相同。抽成底座而不是复制两份——复制迟早改了一边忘了另一边。
  */
 const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'footerNote'> = {
@@ -94,34 +94,32 @@ const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'fo
   // 通用版的客户信息区是「收货单位 + 单号 / 送货地址 + 日期」两行式（2026-09-26 使用方要求：
   // 原「送货单位（我方公司名）」改为送货地址，原第三行我方电话传真取消——抬头联系行里已有）
   metaStyle: 'consignee',
-  // 列宽合计 100%（含颜色列）；颜色开关关闭时 table-layout:fixed 会把空出的 7% 按比例摊给其余列。
-  // 2026-09-26 加「料厚」后**在单元格内**用纸面字体实测重分（含内边距）：订单编号 15.5% 容 16 位 PO#
-  // （PO1070C260800236 需 15.2%）、生产单号/物料编码 10.5% 容 10 位单号（需 10.1%）、单位 5.5%（4.5% 时表头折成「单/位」）；
-  // 备注多为空、本就允许折行，故只留 6.5%。改宽度前先实测，凭字数估算会偏窄
+  // 列宽合计 100%（含颜色列）；短纸面上备注必须有足够宽度，否则真实备注会逐字折行并把整行撑出纸面。
+  // 订单号、生产单号与产品代码允许自然折行，备注保留 14%；纸面右侧另留固定联次说明区。
   columns: [
-    { key: 'seq', label: '序号', width: '5%', align: 'center' },
+    { key: 'seq', label: '序号', width: '4%', align: 'center' },
     // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
     { key: 'poNo', label: '订单编号', width: '15.5%', align: 'center' },
     // 生产单号（2026-09-25 补）：客户来电报货时常报的是我方单号，仓库/业务凭它直接回查订单。
     // 331 家客户全部走通用模板，缺这一列等于所有送货单都没印生产单号
-    { key: 'productionNo', label: '生产单号', width: '10.5%', align: 'center' },
+    { key: 'productionNo', label: '生产单号', width: '10%', align: 'center' },
     // 通用版「物料编码」印我方**产品代码**（item_no，如 45#、客户料号）——2026-09-26 使用方指定，
     // 原取客户方编码 materialCode、空时回落客户图号，现役订单客户方编码全空，印出来的其实都是客户图号。
     // 耐斯克/精工两套客户版的「物料编码/产品编码」仍取客户方编码，不受影响
-    { key: 'itemNo', label: '物料编码', width: '10.5%', align: 'center' },
+    { key: 'itemNo', label: '物料编码', width: '9.5%', align: 'center' },
     // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
     // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
-    { key: 'productModel', label: '物料名称', width: '17.5%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
+    { key: 'productModel', label: '物料名称', width: '18%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
     // 料厚（2026-09-26 加，物料名称与规格之间）：外/中/内轨料厚不同时「/」并列，如 1.2/1.0
-    { key: 'materialThickness', label: '料厚', width: '8%', align: 'center' },
+    { key: 'materialThickness', label: '料厚', width: '6.5%', align: 'center' },
     // 规格是「17寸」「425mm」这种短文本（2026-09-26 表头由「规格型号」改「规格」）
-    { key: 'specText', label: '规格', width: '7%', align: 'center' },
+    { key: 'specText', label: '规格', width: '6%', align: 'center' },
     // 颜色列随全局「颜色」开关整列增减（§5.7）；印的是**表面处理**中文名，表面处理为空/「无」才回落颜色字段（服务端 colorTextOf）
-    { key: 'color', label: '颜色', width: '7%', align: 'center', flag: 'colorEnabled' },
+    { key: 'color', label: '颜色', width: '6%', align: 'center', flag: 'colorEnabled' },
     // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
-    { key: 'unitLabel', label: '单位', width: '5.5%', align: 'center' },
-    { key: 'qty', label: '数量', width: '7%', align: 'center' },
-    { key: 'remark', label: '备注', width: '6.5%', pre: true },
+    { key: 'unitLabel', label: '单位', width: '4.5%', align: 'center' },
+    { key: 'qty', label: '数量', width: '6%', align: 'center' },
+    { key: 'remark', label: '备注', width: '14%', pre: true },
   ],
   signatures: ['制单', '仓库', '提货人', '收货人签名'],
   minRows: 6,
@@ -140,7 +138,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
     ...GENERIC_BASE,
     code: 'generic5',
     name: '通用（五联）',
-    description: '与四联版式相同，底部多一联「第五联仓库（绿）」',
+    description: '与四联版式相同，右侧多一联「第五联仓库（绿）」',
     footerNote: FOOTER_NOTE_5,
   },
   {

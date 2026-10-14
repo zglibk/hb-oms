@@ -333,8 +333,11 @@ export const getDeliveryNote = (id: number) =>
  * 《送货单》PDF：服务端用无头浏览器渲染 /finished-stock/delivery-note 打印页出 PDF，
  * 点一下直接下载（不弹打印对话框），同《生产任务单》做法。
  */
-export const downloadDeliveryNotePdf = (id: number, fallbackName: string) =>
-  downloadFile(`/api/finished-stock/${id}/delivery-note-pdf`, undefined, fallbackName);
+export const downloadDeliveryNotePdf = (
+  id: number,
+  fallbackName: string,
+  options?: { profileId?: number; version?: number; templateCode?: string },
+) => downloadFile(`/api/finished-stock/${id}/delivery-note-pdf`, options, fallbackName);
 
 /* ==================== 入库单打印 ==================== */
 
@@ -399,7 +402,10 @@ export const getInboundNote = (id: number) =>
 
 /**
  * 《入库单》PDF：服务端用无头浏览器渲染 /finished-stock/inbound-note 打印页出 PDF，
- * 点一下直接下载（不弹打印对话框），同《送货单》做法。纸面是 A5 横向。
+ * 点一下直接下载（不弹打印对话框），同《送货单》做法。纸面取当前选择的已发布纸型，默认 A4 纵向。
  */
-export const downloadInboundNotePdf = (id: number, fallbackName: string) =>
-  downloadFile(`/api/finished-stock/${id}/inbound-note-pdf`, undefined, fallbackName);
+export const downloadInboundNotePdf = (
+  id: number,
+  fallbackName: string,
+  options?: { profileId?: number; version?: number },
+) => downloadFile(`/api/finished-stock/${id}/inbound-note-pdf`, options, fallbackName);

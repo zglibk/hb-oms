@@ -24,6 +24,7 @@ import {
   QueryStockGroupOptionDto,
   ReverseFinishedDocDto,
   UpdateFinishedDocDto,
+  PrintDocumentQueryDto,
 } from './dto/finished-stock.dto';
 import {
   RequireAnyPermissions,
@@ -33,6 +34,7 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { sendXlsx } from '../../common/utils/excel-response.util';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { PrintConfigService } from '../print-config/print-config.service';
 
 /**
  * 读权限口径（§二）：单据列表/详情用菜单权限点 `finished-stock`，
@@ -45,6 +47,7 @@ export class FinishedStockController {
     // 送货单 PDF 走同一个单例浏览器（@Global 的 CommonModule 已 exports），
     // 内存纪律见 PdfService 头注释
     private readonly pdfService: PdfService,
+    private readonly printConfigService: PrintConfigService,
   ) {}
 
   @Get()
@@ -188,14 +191,21 @@ export class FinishedStockController {
   @OperationLog('成品出入库', '导出送货单PDF')
   async deliveryNotePdf(
     @Param('id', ParseIntPipe) id: number,
+    @Query() query: PrintDocumentQueryDto,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     // 先取一次数：单据不存在/不是销售出库/已作废时直接报错，省得白起浏览器
     const note = await this.service.buildDeliveryNote(id);
+    // 纸型不存在、停用、未发布或版本不匹配时在启动浏览器前直接返回明确中文错误。
+    await this.printConfigService.runtime({
+      documentType: 'delivery_note',
+      profileId: query.profileId,
+      version: query.version,
+    });
     const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const buf = await this.pdfService.renderPrintPage(
-      this.printPageUrl('/finished-stock/delivery-note', id),
+      this.printPageUrl('/finished-stock/delivery-note', id, query),
       token,
     );
     const filename = `送货单-${note.deliveryNo || note.docNo}.pdf`;
@@ -220,7 +230,7 @@ export class FinishedStockController {
 
   /**
    * 入库单 PDF：同送货单，服务端渲染**前端那张打印页**再回传文件。
-   * 纸面是 A5 横向——`PdfService` 用 `preferCSSPageSize`，纸张由打印页的 @page 决定，
+   * 纸面尺寸取本次选择的已发布纸型——`PdfService` 用 `preferCSSPageSize`，纸张由打印页的 @page 决定，
    * 服务端不必也不该再定义一份。
    */
   @Get(':id/inbound-note-pdf')
@@ -229,14 +239,20 @@ export class FinishedStockController {
   @OperationLog('成品出入库', '导出入库单PDF')
   async inboundNotePdf(
     @Param('id', ParseIntPipe) id: number,
+    @Query() query: PrintDocumentQueryDto,
     @Req() req: Request,
     @Res() res: Response,
   ) {
     // 先取一次数：单据不存在/不是生产入库/已作废时直接报错，省得白起浏览器
     const note = await this.service.buildInboundNote(id);
+    await this.printConfigService.runtime({
+      documentType: 'inbound_note',
+      profileId: query.profileId,
+      version: query.version,
+    });
     const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const buf = await this.pdfService.renderPrintPage(
-      this.printPageUrl('/finished-stock/inbound-note', id),
+      this.printPageUrl('/finished-stock/inbound-note', id, query),
       token,
     );
     const filename = `入库单-${note.docNo}.pdf`;
@@ -253,9 +269,13 @@ export class FinishedStockController {
    * 打印页在**服务器内网**的地址（同 order.controller 的 printPageUrl）。
    * 生产：Nginx 的 `/oms/admin/`（SPA base）；开发：Vite dev server 5174。
    */
-  private printPageUrl(path: string, id: number): string {
+  private printPageUrl(path: string, id: number, query: PrintDocumentQueryDto = {}): string {
     const base = (process.env.PRINT_BASE_URL || 'http://127.0.0.1:5174').replace(/\/+$/, '');
-    return `${base}${path}?id=${id}`;
+    const params = new URLSearchParams({ id: String(id) });
+    if (query.profileId) params.set('profileId', String(query.profileId));
+    if (query.version) params.set('version', String(query.version));
+    if (query.templateCode) params.set('templateCode', query.templateCode);
+    return `${base}${path}?${params.toString()}`;
   }
 
   /** 红字冲销：生成方向相反的 FGR 单并自动确认，原单不变 */

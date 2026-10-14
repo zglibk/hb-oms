@@ -26,6 +26,7 @@ import { ChangelogModule } from './modules/changelog/changelog.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
 import { EmployeeModule } from './modules/employee/employee.module';
 import { ProductionBomModule } from './modules/production-bom/production-bom.module';
+import { PrintConfigModule } from './modules/print-config/print-config.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { ProductionBomModule } from './modules/production-bom/production-bom.mod
     SystemConfigModule,
     EmployeeModule,
     ProductionBomModule,
+    PrintConfigModule,
   ],
 })
 export class AppModule {}

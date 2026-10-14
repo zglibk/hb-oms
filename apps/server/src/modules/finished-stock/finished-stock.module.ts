@@ -6,6 +6,7 @@ import { FinishedBalance } from './entities/finished-balance.entity';
 import { FinishedStockController } from './finished-stock.controller';
 import { FinishedStockService } from './finished-stock.service';
 import { SystemConfigModule } from '../system-config/system-config.module';
+import { PrintConfigModule } from '../print-config/print-config.module';
 
 /**
  * 成品出入库（M4）：单据头 + 明细 + 余额三表，确认驱动余额、更正走红字冲销。
@@ -18,6 +19,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
   imports: [
     TypeOrmModule.forFeature([FinishedDoc, FinishedItem, FinishedBalance]),
     SystemConfigModule,
+    PrintConfigModule,
   ],
   controllers: [FinishedStockController],
   providers: [FinishedStockService],

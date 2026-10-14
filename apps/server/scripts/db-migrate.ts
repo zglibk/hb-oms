@@ -109,6 +109,8 @@ const MIGRATIONS: string[] = [
   'migration-admin-role-isolation.sql',
   // 内置 admin 旧占位姓名补正；操作日志与全表审计快照明确标记「超级管理员」
   'migration-admin-display-name.sql',
+  // 出入库单针式连续纸：命名纸型、草稿/发布版本与每类单据全局默认
+  'migration-print-profile.sql',
 ];
 
 /**
@@ -302,6 +304,11 @@ const expectedColumns = [
   't_employee.graduate_school',
   't_employee.marital_status',
   't_employee.political_status',
+  // 针式打印纸型与发布版本
+  't_print_profile.draft_config',
+  't_print_profile.published_version_id',
+  't_print_profile_version.config_json',
+  't_print_document_setting.default_profile_id',
 ];
 
 async function main() {
