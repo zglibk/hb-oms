@@ -691,8 +691,8 @@ SET @continuous_inbound := JSON_SET(@continuous_delivery, '$.pagination.rowsPerP
 SET @a5_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.pagination.rowsPerPage', 8);
 SET @a4_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 297, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 297, '$.paper.driverFormName', 'A4', '$.pagination.rowsPerPage', 24);
 INSERT IGNORE INTO t_print_profile (name, document_type, status, is_builtin, draft_config, creator_name, updater_name) VALUES
-('21.8×14cm 连续纸','delivery_note',1,1,@continuous_delivery,'系统内置','系统内置'),
-('A5 横向','delivery_note',1,1,@a5_delivery,'系统内置','系统内置'),
+('21.8×14cm 针式打印纸','delivery_note',1,1,@continuous_delivery,'系统内置','系统内置'),
+('A5 打字纸（横向）','delivery_note',1,1,@a5_delivery,'系统内置','系统内置'),
 ('21.8×14cm 连续纸','inbound_note',1,1,@continuous_inbound,'系统内置','系统内置'),
 ('A5 横向','inbound_note',1,1,@a5_inbound,'系统内置','系统内置'),
 ('A4 打字纸（纵向）','inbound_note',1,1,@a4_inbound,'系统内置','系统内置');
@@ -703,7 +703,7 @@ SET p.published_version_id=v.id WHERE p.published_version_id IS NULL AND p.is_bu
 INSERT IGNORE INTO t_print_document_setting (document_type, default_profile_id, updater_name)
 SELECT document_type,id,'系统内置' FROM t_print_profile
 WHERE is_builtin=1 AND (
-  (document_type='delivery_note' AND name='21.8×14cm 连续纸')
+  (document_type='delivery_note' AND name='21.8×14cm 针式打印纸')
   OR (document_type='inbound_note' AND name='A4 打字纸（纵向）')
 );
 

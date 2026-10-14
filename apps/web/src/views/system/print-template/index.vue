@@ -42,7 +42,7 @@
             <el-table-column label="已发布" width="90"><template #default="{ row }">{{ row.publishedVersionNo ? `v${row.publishedVersionNo}` : '未发布' }}</template></el-table-column>
             <el-table-column label="操作" width="330" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="editProfile(row.id)">编辑草稿</el-button>
+                <el-button link type="primary" v-permission.disable="'config:update'" @click="editProfile(row.id)">编辑草稿</el-button>
                 <el-button link type="success" v-permission.disable="'config:update'" @click="publish(row.id)">发布</el-button>
                 <el-button link @click="showVersions(row.id)">版本/回退</el-button>
                 <el-button link v-permission.disable="'config:update'" :disabled="!!row.isBuiltin && !!row.status" @click="toggleStatus(row)">{{ row.status ? '停用' : '启用' }}</el-button>
@@ -68,8 +68,8 @@
         <el-tab-pane label="默认纸型设置" name="defaults">
           <el-alert type="info" :closable="false" title="这里只设置每类单据的全局默认纸型；打印页仍可临时切换，不增加客户级纸型绑定。" />
           <el-form label-width="120px" class="defaults-form">
-            <el-form-item label="送货单默认纸型"><el-select v-model="defaultMap.delivery_note" style="width: 280px"><el-option v-for="p in selectable('delivery_note')" :key="p.id" :label="`${p.name} · v${p.version}`" :value="p.id" /></el-select><el-button type="primary" v-permission.disable="'config:update'" @click="saveDefault('delivery_note')">保存</el-button></el-form-item>
-            <el-form-item label="入库单默认纸型"><el-select v-model="defaultMap.inbound_note" style="width: 280px"><el-option v-for="p in selectable('inbound_note')" :key="p.id" :label="`${p.name} · v${p.version}`" :value="p.id" /></el-select><el-button type="primary" v-permission.disable="'config:update'" @click="saveDefault('inbound_note')">保存</el-button></el-form-item>
+            <el-form-item label="送货单默认纸型"><el-select v-model="defaultMap.delivery_note" :disabled="!canUpdate" style="width: 280px"><el-option v-for="p in selectable('delivery_note')" :key="p.id" :label="`${p.name} · v${p.version}`" :value="p.id" /></el-select><el-button type="primary" v-permission.disable="'config:update'" @click="saveDefault('delivery_note')">保存</el-button></el-form-item>
+            <el-form-item label="入库单默认纸型"><el-select v-model="defaultMap.inbound_note" :disabled="!canUpdate" style="width: 280px"><el-option v-for="p in selectable('inbound_note')" :key="p.id" :label="`${p.name} · v${p.version}`" :value="p.id" /></el-select><el-button type="primary" v-permission.disable="'config:update'" @click="saveDefault('inbound_note')">保存</el-button></el-form-item>
           </el-form>
         </el-tab-pane>
 
@@ -121,6 +121,7 @@ import PrintProfileDesigner from '@/components/print/PrintProfileDesigner.vue';
 import { updateSystemConfig } from '@/api/system';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
+import { useUserStore } from '@/stores/user';
 import { printWithPageSize } from '@/utils/browser-print';
 import { printPaperBodyOf } from '@/utils/print-paper';
 import {
@@ -132,6 +133,8 @@ import {
 const tab = ref('delivery-template');
 const { deliveryTemplateDefault } = useFeatureFlags();
 const featureStore = useFeatureStore();
+const userStore = useUserStore();
+const canUpdate = computed(() => userStore.hasPermission('config:update'));
 const currentTemplate = ref(DEFAULT_DELIVERY_TEMPLATE);
 const defaultTemplate = computed(() => deliveryTemplateDefault.value || DEFAULT_DELIVERY_TEMPLATE);
 const templateSaving = ref(false);

@@ -113,6 +113,8 @@ const MIGRATIONS: string[] = [
   'migration-print-profile.sql',
   // 更新日志 v1.2.0「订单跟踪与打印功能优化」（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.2.0.sql',
+  // 更新日志 v1.2.1「打印与台账稳定性修复」（仅数据，同版本同标题已存在即跳过）
+  'migration-changelog-v1.2.1.sql',
 ];
 
 /**

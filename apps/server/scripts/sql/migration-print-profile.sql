@@ -1,6 +1,7 @@
 -- 出入库单针式连续纸与可视化套打配置 —— 2026-10-13
 -- 幂等：表使用 IF NOT EXISTS，五个内置纸型按「单据类型+名称」唯一键补齐；
 -- A4 入库纸只在首次补入时接替旧默认，后续迁移不会覆盖管理员手工调整的默认纸型。
+-- 发布版本是不可变快照：规格修正必须生成新版本，严禁 UPDATE 历史 config_json。
 
 CREATE TABLE IF NOT EXISTS t_print_profile (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
@@ -61,16 +62,50 @@ SET @a4_inbound_existed := (
   WHERE document_type = 'inbound_note' AND name = 'A4 打字纸（纵向）'
 );
 
--- 名称以用户实际拿到的去孔成品纸面为主；9.5×5.5 英寸仍保留在驱动纸型名称与尺寸中。
--- 先原地改名再 INSERT，保证已执行过旧迁移的库不会多出一份物理规格相同的纸型。
-UPDATE t_print_profile
-SET name = '21.8×14cm 连续纸'
-WHERE is_builtin = 1 AND name = '9.5×5.5 连续纸';
+-- 送货单纸型在功能开发期间曾先由界面建立、后又以旧名称写入迁移，导致同一物理纸型出现两份。
+-- 若规范名称尚不存在，先把一条旧内置档案原地归一，保留其 ID、默认引用与完整版本历史。
+UPDATE t_print_profile p
+SET p.name = '21.8×14cm 针式打印纸'
+WHERE p.id = (
+  SELECT legacy.id FROM (
+    SELECT id
+    FROM t_print_profile
+    WHERE document_type = 'delivery_note' AND is_builtin = 1
+      AND name IN ('9.5×5.5 连续纸', '21.8×14cm 连续纸', '21.8×14cm 针式连续纸')
+    ORDER BY id
+    LIMIT 1
+  ) legacy
+)
+AND NOT EXISTS (
+  SELECT 1 FROM (
+    SELECT id FROM t_print_profile
+    WHERE document_type = 'delivery_note' AND name = '21.8×14cm 针式打印纸'
+  ) canonical
+);
+
+UPDATE t_print_profile p
+SET p.name = 'A5 打字纸（横向）'
+WHERE p.id = (
+  SELECT legacy.id FROM (
+    SELECT id
+    FROM t_print_profile
+    WHERE document_type = 'delivery_note' AND is_builtin = 1
+      AND name IN ('A5 横向', 'A5 打字纸')
+    ORDER BY id
+    LIMIT 1
+  ) legacy
+)
+AND NOT EXISTS (
+  SELECT 1 FROM (
+    SELECT id FROM t_print_profile
+    WHERE document_type = 'delivery_note' AND name = 'A5 打字纸（横向）'
+  ) canonical
+);
 
 INSERT IGNORE INTO t_print_profile (name, document_type, status, is_builtin, draft_config, creator_name, updater_name)
 VALUES
-  ('21.8×14cm 连续纸', 'delivery_note', 1, 1, @continuous_delivery, '系统内置', '系统内置'),
-  ('A5 横向',       'delivery_note', 1, 1, @a5_delivery,       '系统内置', '系统内置'),
+  ('21.8×14cm 针式打印纸', 'delivery_note', 1, 1, @continuous_delivery, '系统内置', '系统内置'),
+  ('A5 打字纸（横向）',    'delivery_note', 1, 1, @a5_delivery,       '系统内置', '系统内置'),
   ('21.8×14cm 连续纸', 'inbound_note',  1, 1, @continuous_inbound, '系统内置', '系统内置'),
   ('A5 横向',       'inbound_note',  1, 1, @a5_inbound,        '系统内置', '系统内置'),
   ('A4 打字纸（纵向）', 'inbound_note', 1, 1, @a4_inbound,        '系统内置', '系统内置');
@@ -83,10 +118,64 @@ JOIN t_print_profile_version v ON v.profile_id = p.id AND v.version_no = 1
 SET p.published_version_id = v.id
 WHERE p.published_version_id IS NULL AND p.is_builtin = 1;
 
+-- 只清理由旧迁移重复补入、且草稿与当前发布配置均和规范档案完全一致的送货单档案。
+-- 有任何人工差异就保留，避免把管理员尚未发布的校准草稿当成重复数据误删。
+DROP TEMPORARY TABLE IF EXISTS tmp_duplicate_delivery_profiles;
+CREATE TEMPORARY TABLE tmp_duplicate_delivery_profiles (
+  source_id INT PRIMARY KEY,
+  target_id INT NOT NULL
+);
+
+INSERT IGNORE INTO tmp_duplicate_delivery_profiles (source_id, target_id)
+SELECT source.id, target.id
+FROM t_print_profile source
+JOIN t_print_profile target
+  ON target.document_type = source.document_type
+  AND target.is_builtin = 1
+  AND target.name = CASE
+    WHEN source.name IN ('9.5×5.5 连续纸', '21.8×14cm 连续纸', '21.8×14cm 针式连续纸')
+      THEN '21.8×14cm 针式打印纸'
+    WHEN source.name IN ('A5 横向', 'A5 打字纸')
+      THEN 'A5 打字纸（横向）'
+  END
+JOIN t_print_profile_version source_version ON source_version.id = source.published_version_id
+JOIN t_print_profile_version target_version ON target_version.id = target.published_version_id
+WHERE source.document_type = 'delivery_note'
+  AND source.is_builtin = 1
+  AND source.name IN (
+    '9.5×5.5 连续纸', '21.8×14cm 连续纸', '21.8×14cm 针式连续纸',
+    'A5 横向', 'A5 打字纸'
+  )
+  AND JSON_CONTAINS(source.draft_config, target.draft_config)
+  AND JSON_CONTAINS(target.draft_config, source.draft_config)
+  AND JSON_CONTAINS(source_version.config_json, target_version.config_json)
+  AND JSON_CONTAINS(target_version.config_json, source_version.config_json);
+
+UPDATE t_print_document_setting setting_row
+JOIN tmp_duplicate_delivery_profiles duplicate_row
+  ON duplicate_row.source_id = setting_row.default_profile_id
+SET setting_row.default_profile_id = duplicate_row.target_id,
+    setting_row.updater_name = '系统迁移';
+
+DELETE version_row
+FROM t_print_profile_version version_row
+JOIN tmp_duplicate_delivery_profiles duplicate_row
+  ON duplicate_row.source_id = version_row.profile_id;
+
+DELETE profile_row
+FROM t_print_profile profile_row
+JOIN tmp_duplicate_delivery_profiles duplicate_row
+  ON duplicate_row.source_id = profile_row.id;
+
+DROP TEMPORARY TABLE tmp_duplicate_delivery_profiles;
+
 INSERT IGNORE INTO t_print_document_setting (document_type, default_profile_id, updater_name)
 SELECT document_type, id, '系统内置'
 FROM t_print_profile
-WHERE is_builtin = 1 AND name = '21.8×14cm 连续纸';
+WHERE is_builtin = 1 AND (
+  (document_type = 'delivery_note' AND name = '21.8×14cm 针式打印纸')
+  OR (document_type = 'inbound_note' AND name = '21.8×14cm 连续纸')
+);
 
 -- 已部署系统首次出现 A4 入库纸时切换默认；以「纸型此前是否存在」作一次性标记，
 -- 避免今后重复执行 db:migrate 时覆盖管理员在界面中重新选择的默认纸型。
@@ -95,29 +184,3 @@ JOIN t_print_profile p
   ON p.document_type = 'inbound_note' AND p.name = 'A4 打字纸（纵向）' AND p.is_builtin = 1
 SET s.default_profile_id = p.id, s.updater_name = '系统内置'
 WHERE s.document_type = 'inbound_note' AND @a4_inbound_existed = 0;
-
--- 2026-10-14：21.8×14cm 连续纸的驱动进纸宽包含左右打孔边，规格为 9.5×5.5 英寸。
--- 迁移已执行过的库也要补齐字段；这是内置纸型的规格纠正，草稿与历史发布配置同步修正。
-UPDATE t_print_profile
-SET draft_config = JSON_SET(draft_config,
-  '$.paper.widthMm', 241.3, '$.paper.heightMm', 140,
-  '$.paper.bodyWidthMm', 218, '$.paper.bodyHeightMm', 140)
-WHERE is_builtin = 1 AND name = '21.8×14cm 连续纸';
-
-UPDATE t_print_profile_version v
-JOIN t_print_profile p ON p.id = v.profile_id
-SET v.config_json = JSON_SET(v.config_json,
-  '$.paper.widthMm', 241.3, '$.paper.heightMm', 140,
-  '$.paper.bodyWidthMm', 218, '$.paper.bodyHeightMm', 140)
-WHERE p.is_builtin = 1 AND p.name = '21.8×14cm 连续纸';
-
-UPDATE t_print_profile
-SET draft_config = JSON_SET(draft_config,
-  '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148)
-WHERE is_builtin = 1 AND name = 'A5 横向';
-
-UPDATE t_print_profile_version v
-JOIN t_print_profile p ON p.id = v.profile_id
-SET v.config_json = JSON_SET(v.config_json,
-  '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148)
-WHERE p.is_builtin = 1 AND p.name = 'A5 横向';

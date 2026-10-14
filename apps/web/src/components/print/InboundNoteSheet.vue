@@ -1,5 +1,5 @@
 <template>
-  <article class="print-sheet" :style="sheetStyle">
+  <article class="print-sheet" data-print-sheet :style="sheetStyle">
     <!-- ==================== 抬头 ==================== -->
     <header class="doc-heading">
       <h1>
@@ -28,11 +28,11 @@
     </div>
 
     <!-- ==================== 明细表 ==================== -->
-    <table class="note-table">
+    <table class="note-table" data-print-detail-table>
       <colgroup>
         <col v-for="c in cols" :key="`col${c.key}`" :style="{ width: c.width }" />
       </colgroup>
-      <thead>
+      <thead data-print-table-head>
         <tr>
           <th v-for="c in cols" :key="`th${c.key}`">{{ c.label }}</th>
         </tr>
@@ -56,7 +56,7 @@
     </table>
 
     <!-- ==================== 签名栏 ==================== -->
-    <footer class="doc-signatures">
+    <footer class="doc-signatures" data-print-signatures>
       <div v-for="s in SIGNATURES" :key="s">
         {{ s }}：<span class="sign-value">{{ signValue(s) }}</span>
       </div>

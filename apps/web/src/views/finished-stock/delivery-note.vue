@@ -49,7 +49,7 @@ import { ElMessage } from 'element-plus';
 import { ArrowLeft, Printer, Download } from '@element-plus/icons-vue';
 import { getDeliveryNote, downloadDeliveryNotePdf, type DeliveryNote, type DeliveryNoteRow } from '@/api/finished-stock';
 import { getRuntimePrintProfile, type RuntimePrintProfile } from '@/api/print-config';
-import { paginateRows, type PrintRowMeasurement } from '@/utils/print-pagination';
+import { measurePrintRows, paginateRows, type PrintRowMeasurement } from '@/utils/print-pagination';
 import { readBlobError } from '@/utils/download';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
@@ -118,13 +118,8 @@ async function measurePagination() {
   await document.fonts?.ready;
   await nextTick();
   const host = measureHost.value;
-  const probe = host?.querySelector<HTMLElement>('[data-print-row-probe]');
-  const measuredRows = Array.from(host?.querySelectorAll<HTMLElement>('[data-print-detail-row]') || []);
-  if (!probe || measuredRows.length !== note.value.rows.length) return;
-  rowMeasurement.value = {
-    baseRowHeight: probe.getBoundingClientRect().height,
-    rowHeights: measuredRows.map((row) => row.getBoundingClientRect().height),
-  };
+  if (!host) return;
+  rowMeasurement.value = measurePrintRows(host, note.value.rows.length);
 }
 
 watch(

@@ -1,6 +1,7 @@
 <template>
   <article
     class="print-sheet"
+    data-print-sheet
     :class="[
       `print-sheet--${tpl.code}`,
       { 'print-sheet--compact': isCompactPaper },
@@ -73,11 +74,11 @@
     </div>
 
     <!-- ==================== 明细表（列集合由模板决定） ==================== -->
-    <table class="note-table">
+    <table class="note-table" data-print-detail-table>
       <colgroup>
         <col v-for="(c, i) in cols" :key="`col${i}`" :style="{ width: c.width }" />
       </colgroup>
-      <thead>
+      <thead data-print-table-head>
         <tr>
           <th v-for="(c, i) in cols" :key="`th${i}`">{{ headerOf(c) }}</th>
         </tr>
@@ -95,7 +96,7 @@
             {{ c.key === 'seq' ? note.rows.length + n : '' }}
           </td>
         </tr>
-        <tr class="total-row">
+        <tr class="total-row" data-print-table-foot>
           <td :colspan="totalLabelSpan" class="c"><b>合计</b></td>
           <td class="c"><b>{{ totalText }}</b></td>
           <!-- 合计行右侧：单头备注（车间在这里写「共19托」这类装箱信息） -->
@@ -105,7 +106,7 @@
     </table>
 
     <!-- ==================== 签名栏 ==================== -->
-    <footer class="doc-signatures">
+    <footer class="doc-signatures" data-print-signatures>
       <div v-for="(s, i) in tpl.signatures" :key="`sign${i}`">
         {{ s }}：<span class="sign-value">{{ signValue(s) }}</span>
       </div>

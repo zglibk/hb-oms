@@ -431,6 +431,7 @@ const router = useRouter();
 const route = useRoute();
 const loading = ref(false);
 const ledgerTableRef = ref<any>(null);
+const resettingSort = ref(false);
 const list = ref<LedgerRow[]>([]);
 const total = ref(0);
 const summary = ref<LedgerSummary>({
@@ -505,6 +506,7 @@ async function load() {
   }
 }
 function onSortChange({ prop, order }: { prop?: string; order: 'ascending' | 'descending' | null }) {
+  if (resettingSort.value) return;
   query.sortBy = order && LEDGER_SORT_FIELDS.includes(prop as LedgerSortField)
     ? prop as LedgerSortField : undefined;
   query.sortOrder = order ? (order === 'ascending' ? 'asc' : 'desc') : undefined;
@@ -526,6 +528,8 @@ async function resetFilters() {
   cancelKeywordSearch();
   Object.assign(query, {
     page: 1,
+    sortBy: 'orderDate',
+    sortOrder: 'desc',
     keyword: '',
     salesman: '',
     merchandiser: '',
@@ -539,6 +543,15 @@ async function resetFilters() {
   });
   deliveryRange.value = null;
   showMoreFilters.value = false;
+
+  // query 与表头箭头必须一起恢复默认排序；只改请求参数会让界面仍显示旧排序状态。
+  resettingSort.value = true;
+  try {
+    ledgerTableRef.value?.tableRef?.sort('orderDate', 'descending');
+    await nextTick();
+  } finally {
+    resettingSort.value = false;
+  }
 
   // 从首页点击记录进入时，URL 带 orderProductId；不移除它，重置后仍只会显示这一行。
   if (route.query.orderProductId != null) {

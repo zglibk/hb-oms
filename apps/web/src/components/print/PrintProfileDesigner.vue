@@ -1,23 +1,23 @@
 <template>
   <div class="designer" :style="designerStyle">
     <div class="designer-toolbar">
-      <el-button size="small" @click="addText">添加固定文字</el-button>
-      <el-button size="small" @click="addTable">添加明细表</el-button>
-      <el-upload :show-file-list="false" accept="image/png,image/jpeg" :before-upload="uploadBackground">
-        <el-button size="small" :loading="uploading">上传定位底图</el-button>
+      <el-button size="small" v-permission.disable="'config:update'" :disabled="!canUpdate" @click="addText">添加固定文字</el-button>
+      <el-button size="small" v-permission.disable="'config:update'" :disabled="!canUpdate" @click="addTable">添加明细表</el-button>
+      <el-upload :show-file-list="false" accept="image/png,image/jpeg" :disabled="!canUpdate" :before-upload="uploadBackground">
+        <el-button size="small" v-permission.disable="'config:update'" :loading="uploading" :disabled="!canUpdate">上传定位底图</el-button>
       </el-upload>
-      <el-button size="small" :disabled="!draft.backgroundImageUrl" @click="draft.backgroundImageUrl = ''">清除底图</el-button>
+      <el-button size="small" v-permission.disable="'config:update'" :disabled="!canUpdate || !draft.backgroundImageUrl" @click="draft.backgroundImageUrl = ''">清除底图</el-button>
       <el-checkbox v-model="showGrid">毫米网格</el-checkbox>
       <span>缩放</span><el-slider v-model="zoom" :min="50" :max="150" :step="10" style="width: 120px" />
-      <span>吸附</span><el-input-number v-model="snapMm" :min="0.1" :max="5" :step="0.1" size="small" /> mm
-      <el-button size="small" type="primary" @click="saveDraft">保存草稿</el-button>
+      <span>吸附</span><el-input-number v-model="snapMm" :disabled="!canUpdate" :min="0.1" :max="5" :step="0.1" size="small" /> mm
+      <el-button size="small" type="primary" v-permission.disable="'config:update'" :disabled="!canUpdate" @click="saveDraft">保存草稿</el-button>
       <el-button size="small" @click="testPrint">试打当前画布</el-button>
     </div>
 
     <div class="designer-main">
       <div class="palette">
         <strong>可用字段</strong>
-        <button v-for="f in fields" :key="f.value" draggable="true" class="palette-field"
+        <button v-for="f in fields" :key="f.value" v-permission.disable="'config:update'" :draggable="canUpdate" :disabled="!canUpdate" class="palette-field"
           :class="{ dragging: draggingField === f.value }" :title="`拖到纸面添加${f.label}`"
           @dragstart="startPaletteDrag($event, f)" @dragend="finishPaletteDrag">
           <span class="drag-grip" aria-hidden="true">⋮⋮</span>{{ f.label }}
@@ -42,8 +42,8 @@
             <div ref="canvasRef" class="paper-canvas" :class="{ grid: showGrid, 'drop-ready': draggingField }"
               :style="canvasStyle" @dragover.prevent @drop.prevent="dropField">
               <img v-if="draft.backgroundImageUrl" class="calibration-bg" :src="draft.backgroundImageUrl" alt="定位底图" />
-              <div v-for="item in elements" :key="item.id" tabindex="0" class="design-item"
-                :class="{ active: selectedId === item.id, table: item.type === 'table' }"
+              <div v-for="item in elements" :key="item.id" :tabindex="canUpdate ? 0 : -1" class="design-item"
+                :class="{ active: selectedId === item.id, table: item.type === 'table', readonly: !canUpdate }"
                 :style="itemStyle(item)" @pointerdown="startDrag($event, item)" @keydown="nudge($event, item)" @click.stop="selectedId = item.id">
                 <table v-if="item.type === 'table'" class="sample-table">
                   <colgroup><col v-for="column in item.columns" :key="column.field" :style="{ width: `${column.widthPct}%` }" /></colgroup>
@@ -61,29 +61,29 @@
         <strong>元素属性</strong>
         <template v-if="selected">
           <el-form label-width="62px" size="small">
-            <el-form-item label="X / Y"><el-input-number v-model="selected.xMm" :step="0.1" /> / <el-input-number v-model="selected.yMm" :step="0.1" /></el-form-item>
-            <el-form-item label="宽 / 高"><el-input-number v-model="selected.widthMm" :min="1" :step="0.5" /> / <el-input-number v-model="selected.heightMm" :min="1" :step="0.5" /></el-form-item>
+            <el-form-item label="X / Y"><el-input-number v-model="selected.xMm" :disabled="!canUpdate" :step="0.1" /> / <el-input-number v-model="selected.yMm" :disabled="!canUpdate" :step="0.1" /></el-form-item>
+            <el-form-item label="宽 / 高"><el-input-number v-model="selected.widthMm" :disabled="!canUpdate" :min="1" :step="0.5" /> / <el-input-number v-model="selected.heightMm" :disabled="!canUpdate" :min="1" :step="0.5" /></el-form-item>
             <template v-if="selected.type !== 'table'">
-              <el-form-item v-if="selected.type === 'field'" label="字段"><el-select v-model="selected.field"><el-option v-for="f in fields" :key="f.value" :label="f.label" :value="f.value" /></el-select></el-form-item>
-              <el-form-item v-else label="文字"><el-input v-model="selected.text" /></el-form-item>
-              <el-form-item label="字号"><el-input-number v-model="selected.fontSizePt" :min="6" :max="36" /></el-form-item>
-              <el-form-item label="粗体"><el-switch v-model="selected.fontWeight" active-value="bold" inactive-value="normal" /></el-form-item>
-              <el-form-item label="对齐"><el-select v-model="selected.align"><el-option label="左" value="left" /><el-option label="中" value="center" /><el-option label="右" value="right" /></el-select></el-form-item>
+              <el-form-item v-if="selected.type === 'field'" label="字段"><el-select v-model="selected.field" :disabled="!canUpdate"><el-option v-for="f in fields" :key="f.value" :label="f.label" :value="f.value" /></el-select></el-form-item>
+              <el-form-item v-else label="文字"><el-input v-model="selected.text" :disabled="!canUpdate" /></el-form-item>
+              <el-form-item label="字号"><el-input-number v-model="selected.fontSizePt" :disabled="!canUpdate" :min="6" :max="36" /></el-form-item>
+              <el-form-item label="粗体"><el-switch v-model="selected.fontWeight" :disabled="!canUpdate" active-value="bold" inactive-value="normal" /></el-form-item>
+              <el-form-item label="对齐"><el-select v-model="selected.align" :disabled="!canUpdate"><el-option label="左" value="left" /><el-option label="中" value="center" /><el-option label="右" value="right" /></el-select></el-form-item>
             </template>
             <template v-else>
-              <el-form-item label="行高"><el-input-number v-model="selected.rowHeightMm" :min="2" :max="50" :step="0.5" /></el-form-item>
-              <el-form-item label="表头"><el-switch v-model="selected.showHeader" /></el-form-item>
+              <el-form-item label="行高"><el-input-number v-model="selected.rowHeightMm" :disabled="!canUpdate" :min="2" :max="50" :step="0.5" /></el-form-item>
+              <el-form-item label="表头"><el-switch v-model="selected.showHeader" :disabled="!canUpdate" /></el-form-item>
               <el-form-item label="列宽">
                 <div class="column-widths">
                   <label v-for="column in selected.columns" :key="column.field">
-                    <span>{{ column.label }}</span><el-input-number v-model="column.widthPct" :min="1" :max="100" :step="0.5" />%
+                    <span>{{ column.label }}</span><el-input-number v-model="column.widthPct" :disabled="!canUpdate" :min="1" :max="100" :step="0.5" />%
                   </label>
-                  <el-button size="small" @click="normalizeColumns">平均分配为 100%</el-button>
+                  <el-button size="small" v-permission.disable="'config:update'" :disabled="!canUpdate" @click="normalizeColumns">平均分配为 100%</el-button>
                 </div>
               </el-form-item>
             </template>
           </el-form>
-          <el-button size="small" type="danger" plain @click="removeSelected">删除元素</el-button>
+          <el-button size="small" type="danger" plain v-permission.disable="'config:update'" :disabled="!canUpdate" @click="removeSelected">删除元素</el-button>
         </template>
         <el-empty v-else description="点选画布元素" :image-size="60" />
       </div>
@@ -97,10 +97,13 @@ import { ElMessage } from 'element-plus';
 import { uploadFile } from '@/api/file';
 import { printWithPageSize } from '@/utils/browser-print';
 import { printPaperBodyOf } from '@/utils/print-paper';
+import { useUserStore } from '@/stores/user';
 import type { PrintDocumentType, PrintLayoutField, PrintLayoutTable, PrintProfileConfig } from '@/api/print-config';
 
 const props = defineProps<{ config: PrintProfileConfig; documentType: PrintDocumentType }>();
 const emit = defineEmits<{ save: [config: PrintProfileConfig] }>();
+const userStore = useUserStore();
+const canUpdate = computed(() => userStore.hasPermission('config:update'));
 function cloneConfig(config: PrintProfileConfig): PrintProfileConfig {
   return structuredClone(toRaw(config));
 }
@@ -176,12 +179,14 @@ function addField(field: string, label: string, xMm: number, yMm: number) {
   elements.value.push(item); selectedId.value = item.id; ElMessage.success(`已添加「${label}」`);
 }
 function startPaletteDrag(e: DragEvent, field: { value: string; label: string }) {
+  if (!canUpdate.value) return;
   draggingField.value = field.value;
   e.dataTransfer?.setData('application/x-hb-oms-print-field', JSON.stringify(field));
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
 }
 function finishPaletteDrag() { draggingField.value = ''; }
 function dropField(e: DragEvent) {
+  if (!canUpdate.value) return;
   const canvas = canvasRef.value;
   if (!canvas) return;
   let field: { value: string; label: string } | undefined = fields.value.find((item) => item.value === draggingField.value);
@@ -211,10 +216,12 @@ async function zoomAtPointer(e: WheelEvent) {
   scroller.scrollTop += after.top + pointerYMm * pxPerMm.value - e.clientY;
 }
 function addText() {
+  if (!canUpdate.value) return;
   const item: PrintLayoutField = { id: id(), type: 'staticText', text: '固定文字', xMm: 10, yMm: 20, widthMm: 45, heightMm: 7, fontSizePt: 10, fontWeight: 'normal', align: 'left' };
   elements.value.push(item); selectedId.value = item.id;
 }
 function addTable() {
+  if (!canUpdate.value) return;
   const width = Math.min(200, paperBody.value.widthMm - 20);
   const item: PrintLayoutTable = { id: id(), type: 'table', xMm: 10, yMm: 40, widthMm: width, heightMm: 60, rowHeightMm: 8, showHeader: false,
     columns: rowFields.map(([field, label]) => ({ field, label, widthPct: 100 / rowFields.length, align: 'center' as const })) };
@@ -223,7 +230,7 @@ function addTable() {
 function labelOf(field?: string) { return fields.value.find((x) => x.value === field)?.label || field || '字段'; }
 function sampleField(field?: string) { return sampleFields[field || ''] || labelOf(field); }
 function sampleRowValue(row: Record<string, string | number>, field: string) { return row[field] ?? ''; }
-function saveDraft() { emit('save', cloneConfig(draft)); }
+function saveDraft() { if (canUpdate.value) emit('save', cloneConfig(draft)); }
 function itemStyle(item: any) {
   return {
     left: `${item.xMm * pxPerMm.value}px`, top: `${item.yMm * pxPerMm.value}px`,
@@ -243,6 +250,7 @@ function pointerMove(e: PointerEvent, item: any, mode: 'move' | 'resize', origin
   else { item.widthMm = Math.max(1, snap(origin.a + dx)); item.heightMm = Math.max(1, snap(origin.b + dy)); }
 }
 function startPointer(e: PointerEvent, item: any, mode: 'move' | 'resize') {
+  if (!canUpdate.value) return;
   selectedId.value = item.id; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   const origin = { x: e.clientX, y: e.clientY, a: mode === 'move' ? item.xMm : item.widthMm, b: mode === 'move' ? item.yMm : item.heightMm };
   const target = e.currentTarget as HTMLElement;
@@ -253,13 +261,15 @@ function startPointer(e: PointerEvent, item: any, mode: 'move' | 'resize') {
 function startDrag(e: PointerEvent, item: any) { startPointer(e, item, 'move'); }
 function startResize(e: PointerEvent, item: any) { startPointer(e, item, 'resize'); }
 function nudge(e: KeyboardEvent, item: any) {
+  if (!canUpdate.value) return;
   const step = e.shiftKey ? 1 : .1;
   if (e.key === 'ArrowLeft') item.xMm -= step; else if (e.key === 'ArrowRight') item.xMm += step;
   else if (e.key === 'ArrowUp') item.yMm -= step; else if (e.key === 'ArrowDown') item.yMm += step; else return;
   e.preventDefault();
 }
-function removeSelected() { const i = elements.value.findIndex((x) => x.id === selectedId.value); if (i >= 0) elements.value.splice(i, 1); selectedId.value = ''; }
+function removeSelected() { if (!canUpdate.value) return; const i = elements.value.findIndex((x) => x.id === selectedId.value); if (i >= 0) elements.value.splice(i, 1); selectedId.value = ''; }
 function normalizeColumns() {
+  if (!canUpdate.value) return;
   if (!selected.value?.columns?.length) return;
   const count = selected.value.columns.length;
   const width = Number((100 / count).toFixed(2));
@@ -269,6 +279,7 @@ function normalizeColumns() {
 }
 const uploading = ref(false);
 async function uploadBackground(file: File) {
+  if (!canUpdate.value) return false;
   if (!['image/png', 'image/jpeg'].includes(file.type)) { ElMessage.error('仅支持 PNG/JPG 定位底图'); return false; }
   if (file.size > 10 * 1024 * 1024) { ElMessage.error('定位底图不能超过 10MB'); return false; }
   uploading.value = true;
@@ -315,11 +326,13 @@ function testPrint() {
 .paper-canvas.grid { background-image: linear-gradient(to right,#dbe3ef 1px,transparent 1px),linear-gradient(to bottom,#dbe3ef 1px,transparent 1px); background-size: calc(var(--mm) * 5) calc(var(--mm) * 5); }
 .calibration-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .55; pointer-events: none; }
 .design-item { position: absolute; box-sizing: border-box; padding: 2px; border: 1px dashed #409eff; background: #ecf5ffb8; overflow: hidden; cursor: move; user-select: none; }
+.design-item.readonly { cursor: default; }
 .design-item.table { background: repeating-linear-gradient(#f4f9ff,#f4f9ff 15px,#d9ecff 16px); }
 .sample-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: inherit; }
 .sample-table th, .sample-table td { padding: 0 2px; border: 0; overflow: hidden; white-space: nowrap; }
 .design-item.active { outline: 2px solid #f56c6c; }
 .resize-handle { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; background: #f56c6c; cursor: nwse-resize; }
+.design-item.readonly .resize-handle { display: none; }
 .properties :deep(.el-input-number) { width: 90px; }
 .column-widths { display: flex; flex-direction: column; gap: 5px; }
 .column-widths label { display: grid; grid-template-columns: 72px 90px 12px; align-items: center; gap: 4px; font-size: 12px; }
