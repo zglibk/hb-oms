@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, h, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowUp, Back, Delete, Edit, CircleCheck, Clock, WarningFilled } from '@element-plus/icons-vue';
@@ -389,6 +389,41 @@ async function onSubmit() {
   if (!draft.qty || draft.qty <= 0) {
     ElMessage.warning('装配数量必须大于 0');
     return;
+  }
+  if (!editingId.value) {
+    const missingText = (text: string) => h(
+      'strong',
+      { style: 'color: var(--el-color-danger); font-weight: 600;' },
+      text,
+    );
+    const productModel = data.value?.product?.productModel;
+    const confirmMessage = h('div', { style: 'line-height: 1.9;' }, [
+      h('div', ['请核对本批次：']),
+      h('div', ['产品：', productModel || missingText('未填写产品型号')]),
+      ...(socket.value ? [h('div', ['边别：', sideLabel(draft.side)])] : []),
+      h('div', [
+        '车间：',
+        draft.workshop ? dictLabel(workshopDict.value, draft.workshop) : missingText('未选择'),
+      ]),
+      h('div', [
+        '计划：',
+        draft.planStartDate || missingText('未填'),
+        ' 至 ',
+        draft.planDate || missingText('未填'),
+      ]),
+      h('div', ['实际完成：', draft.actualDate || missingText('未填（计划中）')]),
+      h('div', [`装配数量：${draft.qty} 支`]),
+      h('div', ['确认后将立即录入。']),
+    ]);
+    try {
+      await ElMessageBox.confirm(
+        confirmMessage,
+        '确认录入装配批次',
+        { type: 'warning', confirmButtonText: '确认录入', cancelButtonText: '取消' },
+      );
+    } catch {
+      return;
+    }
   }
   submitting.value = true;
   try {
