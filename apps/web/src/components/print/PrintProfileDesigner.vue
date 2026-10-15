@@ -95,8 +95,8 @@
 import { computed, nextTick, reactive, ref, toRaw, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { uploadFile } from '@/api/file';
-import { printWithPageSize } from '@/utils/browser-print';
-import { printPaperBodyOf } from '@/utils/print-paper';
+import { printWithDriverOrientation } from '@/utils/browser-print';
+import { printDriverOrientationOf, printPaperBodyOf } from '@/utils/print-paper';
 import { useUserStore } from '@/stores/user';
 import type { PrintDocumentType, PrintLayoutField, PrintLayoutTable, PrintProfileConfig } from '@/api/print-config';
 
@@ -288,11 +288,7 @@ async function uploadBackground(file: File) {
   return false;
 }
 function testPrint() {
-  printWithPageSize({
-    widthMm: draft.paper.widthMm,
-    heightMm: draft.paper.heightMm,
-    bodyClass: 'printing-designer',
-  });
+  printWithDriverOrientation(printDriverOrientationOf(draft.paper), 'printing-designer');
 }
 </script>
 

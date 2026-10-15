@@ -1,15 +1,9 @@
-export interface BrowserPrintOptions {
-  widthMm: number;
-  heightMm: number;
-  bodyClass: string;
-}
-
-export type BrowserPrintOrientation = 'portrait' | 'landscape';
+import type { PrintDriverOrientation } from '@hb-oms/shared';
 
 const PRINT_STATE_FALLBACK_MS = 10 * 60 * 1000;
 
 /**
- * 以指定毫米纸型打开浏览器打印预览，并将打印态保留到预览真正结束。
+ * 以临时 @page 规则打开浏览器打印预览，并将打印态保留到预览真正结束。
  *
  * Chromium 的 `window.print()` 在部分版本中会在打印预览完成取样前返回；若调用后
  * 立即移除 `@page` 或 body 状态类，预览会退回默认纸型，页面内容也可能被隐藏。
@@ -47,21 +41,17 @@ function printWithPageRule(pageRule: string, bodyClass?: string) {
   });
 }
 
-/** 设计器/校准页使用精确毫米尺寸，保证所见纸面与标尺一致。 */
-export function printWithPageSize(options: BrowserPrintOptions) {
-  printWithPageRule(
-    `@page{size:${options.widthMm}mm ${options.heightMm}mm;margin:0}`,
-    options.bodyClass,
-  );
-}
-
 /**
- * 正式单据交互打印只向浏览器声明方向，纸张尺寸由 Windows 驱动中选定的纸型决定。
+ * 交互打印：按纸型档案的驱动方向临时覆盖页面常驻的毫米 @page，纸张尺寸取打印对话框所选驱动纸型。
  *
- * Chromium 会把该方向写入 Windows DEVMODE；若同时用两个长度固定 @page，部分旧版
- * Chromium/厂商驱动只接收自定义宽高、仍沿用驱动默认纵向，最终把整页旋转 90°。
- * 服务端 PDF 不调用本函数，仍使用打印页常驻的精确毫米 @page，PDF 物理尺寸不受影响。
+ * Chromium 遇到宽 > 高的 CSS 页面尺寸会判定为横向并写入 Windows DEVMODE，还会隐藏「布局」选项。
+ * 针式连续纸的自定义表单本身按 241.3×140 定义，须以纵向打印；被判成横向时驱动会把页面转 90°
+ * 并缩小。CSS 的 `size: portrait` 也不能用——它要求页面长边竖直，会把宽纸页面框对调成竖长。
+ * 所以纵向一律 `size: auto`（不声明尺寸，Chromium 直接用驱动纸型、布局默认纵向）；
+ * 只有竖长定义的标准纸型打横版（如 A5 横向）才声明 `size: landscape`。
+ * 服务端 PDF 不调用本函数，仍使用打印页常驻的精确毫米 @page。
  */
-export function printWithDriverOrientation(orientation: BrowserPrintOrientation) {
-  printWithPageRule(`@page{size:${orientation};margin:0}`);
+export function printWithDriverOrientation(orientation: PrintDriverOrientation, bodyClass?: string) {
+  const size = orientation === 'landscape' ? 'landscape' : 'auto';
+  printWithPageRule(`@page{size:${size};margin:0}`, bodyClass);
 }

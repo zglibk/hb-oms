@@ -43,5 +43,5 @@ export function printPaperBodyOf(paper: PrintProfileConfig['paper']): PrintPaper
 export function printDriverTipOf(paper: PrintProfileConfig['paper']): string {
   const orientation = printDriverOrientationLabelOf(paper);
   const opposite = oppositePrintDriverOrientationLabelOf(paper);
-  return `OMS 本次请求${orientation}；驱动纸型：${paper.driverFormName || '自定义纸型'}。请确认打印首选项也显示“${orientation}”；若仍为“${opposite}”，表示当前浏览器或驱动未采纳方向请求，整页会旋转 90°。打印时还需设置缩放 100%、边距“无”，并关闭页眉页脚。`;
+  return `驱动纸型：${paper.driverFormName || '自定义纸型'}，方向“${orientation}”。打印对话框请选择该纸型、布局（方向）选“${orientation}”——选成“${opposite}”整页会旋转 90°；并设置缩放 100%、边距“无”，关闭页眉页脚。`;
 }

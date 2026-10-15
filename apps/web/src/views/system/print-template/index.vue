@@ -94,7 +94,7 @@
         <el-form-item label="驱动进纸宽 × 高"><el-input-number v-model="editorConfig.paper.widthMm" :min="50" :max="500" :precision="1" /> × <el-input-number v-model="editorConfig.paper.heightMm" :min="50" :max="500" :precision="1" /> mm</el-form-item>
         <el-form-item label="成品纸面宽 × 高"><el-input-number v-model="editorConfig.paper.bodyWidthMm" :min="50" :max="editorConfig.paper.widthMm" :precision="1" /> × <el-input-number v-model="editorConfig.paper.bodyHeightMm" :min="50" :max="editorConfig.paper.heightMm" :precision="1" /> mm<small>撕除左右打孔边后的纸面尺寸</small></el-form-item>
         <el-form-item label="驱动纸型名称"><el-input v-model="editorConfig.paper.driverFormName" placeholder="如 OMS 9.5x5.5" /></el-form-item>
-        <el-form-item label="驱动打印方向"><el-radio-group v-model="editorConfig.paper.driverOrientation"><el-radio value="portrait">纵向</el-radio><el-radio value="landscape">横向</el-radio></el-radio-group><small>须与 Windows 打印首选项一致；设反会整页旋转 90°</small></el-form-item>
+        <el-form-item label="驱动打印方向"><el-radio-group v-model="editorConfig.paper.driverOrientation"><el-radio value="portrait">纵向</el-radio><el-radio value="landscape">横向</el-radio></el-radio-group><small>自定义表单（如针式连续纸 241.3×140）选纵向；A4/A5 等标准纸打横版选横向。设反会整页旋转 90°</small></el-form-item>
         <el-collapse>
           <el-collapse-item title="高级配置" name="advanced">
             <el-form-item label="四边距"><div class="quad"><el-input-number v-model="editorConfig.margins.top" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.right" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.bottom" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.left" :min="0" :max="50" /></div><small>上 / 右 / 下 / 左（mm）</small></el-form-item>
@@ -125,7 +125,7 @@ import { updateSystemConfig } from '@/api/system';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
 import { useUserStore } from '@/stores/user';
-import { printWithPageSize } from '@/utils/browser-print';
+import { printWithDriverOrientation } from '@/utils/browser-print';
 import {
   oppositePrintDriverOrientationLabelOf,
   printDriverOrientationLabelOf,
@@ -305,11 +305,7 @@ async function printCalibration() {
   await loadCalibration(calibrationId.value);
   const paper = calibrationConfig.value?.paper;
   if (!paper) return;
-  printWithPageSize({
-    widthMm: paper.widthMm,
-    heightMm: paper.heightMm,
-    bodyClass: 'printing-calibration',
-  });
+  printWithDriverOrientation(printDriverOrientationOf(paper), 'printing-calibration');
 }
 
 onMounted(async () => {

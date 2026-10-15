@@ -685,10 +685,10 @@ CREATE TABLE IF NOT EXISTS t_print_document_setting (
   KEY idx_print_document_setting_profile (default_profile_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单据全局默认纸型';
 
-SET @continuous_delivery := JSON_OBJECT('schemaVersion',1,'mode','blank','paper',JSON_OBJECT('widthMm',241.3,'heightMm',140,'bodyWidthMm',218,'bodyHeightMm',140,'driverFormName','OMS 9.5x5.5','driverOrientation','landscape'),'margins',JSON_OBJECT('top',5,'right',5,'bottom',5,'left',5),'offset',JSON_OBJECT('x',0,'y',0),'style',JSON_OBJECT('fontScale',100,'borderWidthPt',0.75),'pagination',JSON_OBJECT('strategy','auto','rowsPerPage',6),'layout',JSON_OBJECT('snapMm',0.5,'elements',JSON_ARRAY()));
-SET @a5_delivery := JSON_SET(@continuous_delivery, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.pagination.rowsPerPage', 7);
+SET @continuous_delivery := JSON_OBJECT('schemaVersion',1,'mode','blank','paper',JSON_OBJECT('widthMm',241.3,'heightMm',140,'bodyWidthMm',218,'bodyHeightMm',140,'driverFormName','OMS 9.5x5.5','driverOrientation','portrait'),'margins',JSON_OBJECT('top',5,'right',5,'bottom',5,'left',5),'offset',JSON_OBJECT('x',0,'y',0),'style',JSON_OBJECT('fontScale',100,'borderWidthPt',0.75),'pagination',JSON_OBJECT('strategy','auto','rowsPerPage',6),'layout',JSON_OBJECT('snapMm',0.5,'elements',JSON_ARRAY()));
+SET @a5_delivery := JSON_SET(@continuous_delivery, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.paper.driverOrientation', 'landscape', '$.pagination.rowsPerPage', 7);
 SET @continuous_inbound := JSON_SET(@continuous_delivery, '$.pagination.rowsPerPage', 7);
-SET @a5_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.pagination.rowsPerPage', 8);
+SET @a5_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.paper.driverOrientation', 'landscape', '$.pagination.rowsPerPage', 8);
 SET @a4_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 297, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 297, '$.paper.driverFormName', 'A4', '$.paper.driverOrientation', 'portrait', '$.pagination.rowsPerPage', 24);
 INSERT IGNORE INTO t_print_profile (name, document_type, status, is_builtin, draft_config, creator_name, updater_name) VALUES
 ('21.8×14cm 针式打印纸','delivery_note',1,1,@continuous_delivery,'系统内置','系统内置'),
