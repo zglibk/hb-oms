@@ -113,10 +113,10 @@ const MIGRATIONS: string[] = [
   'migration-print-profile.sql',
   // 更新日志 v1.2.0「订单跟踪与打印功能优化」（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.2.0.sql',
-  // 更新日志 v1.2.1「打印与台账稳定性修复」（仅数据，同版本同标题已存在即跳过）
-  'migration-changelog-v1.2.1.sql',
   // 针式连续纸驱动方向由横向纠正为纵向（复制为新发布版本，只生效一次）
   'migration-print-orientation-portrait.sql',
+  // 撤下已随发布写入的更新日志 v1.2.1（所述打印修复未达预期）
+  'migration-changelog-v1.2.1-remove.sql',
 ];
 
 /**
