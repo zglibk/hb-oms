@@ -1,3 +1,5 @@
+import type { PrintDriverOrientation } from '@hb-oms/shared';
+
 export type PrintDocumentType = 'delivery_note' | 'inbound_note';
 export type PrintMode = 'blank' | 'preprinted';
 export type PrintPaginationStrategy = 'auto' | 'fixed';
@@ -44,6 +46,7 @@ export interface PrintProfileConfig {
     bodyWidthMm?: number;
     bodyHeightMm?: number;
     driverFormName: string;
+    driverOrientation?: PrintDriverOrientation;
   };
   margins: { top: number; right: number; bottom: number; left: number };
   offset: { x: number; y: number };

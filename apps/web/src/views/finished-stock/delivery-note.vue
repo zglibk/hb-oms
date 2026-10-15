@@ -21,7 +21,7 @@
     </header>
 
     <div v-if="runtime" class="driver-tip no-print">
-      驱动纸型：{{ runtime.config.paper.driverFormName || '自定义纸型' }}；打印时请选择相同纸型、缩放 100%、边距“无”，并关闭页眉页脚。
+      {{ driverPrintTip }}
     </div>
     <section class="sheet-stage" v-loading="loading">
       <template v-if="note && runtime">
@@ -54,6 +54,8 @@ import { readBlobError } from '@/utils/download';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
 import { DELIVERY_TEMPLATE_OPTIONS } from '@/constants/delivery-note';
+import { printWithDriverOrientation } from '@/utils/browser-print';
+import { printDriverOrientationOf, printDriverTipOf } from '@/utils/print-paper';
 import DeliveryNoteSheet from '@/components/print/DeliveryNoteSheet.vue';
 import PreprintedNoteSheet from '@/components/print/PreprintedNoteSheet.vue';
 
@@ -77,6 +79,7 @@ const printReady = computed(() => !!note.value && !!runtime.value
   && (runtime.value.config.mode === 'preprinted'
     || runtime.value.config.pagination.strategy === 'fixed'
     || !!rowMeasurement.value));
+const driverPrintTip = computed(() => runtime.value ? printDriverTipOf(runtime.value.config.paper) : '');
 
 const pages = computed(() => note.value && runtime.value
   ? paginateRows(
@@ -142,7 +145,10 @@ watch(() => runtime.value?.config.paper, (paper) => {
   document.head.appendChild(pageStyle);
 }, { immediate: true, deep: true });
 
-function onPrint() { window.print(); }
+function onPrint() {
+  if (!runtime.value) return;
+  printWithDriverOrientation(printDriverOrientationOf(runtime.value.config.paper));
+}
 const downloading = ref(false);
 async function onDownloadPdf() {
   if (!runtime.value) return;

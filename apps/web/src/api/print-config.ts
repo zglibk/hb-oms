@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { PrintDriverOrientation } from '@hb-oms/shared';
 
 export type PrintDocumentType = 'delivery_note' | 'inbound_note';
 export type PrintMode = 'blank' | 'preprinted';
@@ -47,6 +48,8 @@ export interface PrintProfileConfig {
     bodyWidthMm?: number;
     bodyHeightMm?: number;
     driverFormName: string;
+    /** Windows 驱动首选项中的方向；旧配置缺省时按进纸宽高推断。 */
+    driverOrientation?: PrintDriverOrientation;
   };
   margins: { top: number; right: number; bottom: number; left: number };
   offset: { x: number; y: number };
@@ -112,6 +115,7 @@ export function defaultPrintConfig(documentType: PrintDocumentType): PrintProfil
       bodyWidthMm: 218,
       bodyHeightMm: 140,
       driverFormName: 'OMS 9.5x5.5',
+      driverOrientation: 'landscape',
     },
     margins: { top: 5, right: 5, bottom: 5, left: 5 },
     offset: { x: 0, y: 0 },

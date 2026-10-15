@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { printDriverOrientationOf } from '@hb-oms/shared';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditDisplayName, auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { CreatePrintProfileDto, RuntimePrintProfileQueryDto, SetPrintDefaultDto, UpdatePrintProfileDto } from './dto/print-config.dto';
@@ -19,6 +20,15 @@ function stableSerialize(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
+}
+
+/** 为旧纸型响应补齐驱动方向；只返回新对象，不改写历史发布快照。 */
+function normalizeConfig(config: PrintProfileConfig): PrintProfileConfig {
+  if (!config?.paper || config.paper.driverOrientation !== undefined) return config;
+  return {
+    ...config,
+    paper: { ...config.paper, driverOrientation: printDriverOrientationOf(config.paper) },
+  };
 }
 
 @Injectable()
@@ -46,17 +56,23 @@ export class PrintConfigService {
     const published = profile.publishedVersionId
       ? await this.versionRepo.findOneBy({ id: profile.publishedVersionId })
       : null;
-    return { ...profile, publishedConfig: published?.configJson ?? null, publishedVersionNo: published?.versionNo ?? null };
+    return {
+      ...profile,
+      draftConfig: normalizeConfig(profile.draftConfig),
+      publishedConfig: published ? normalizeConfig(published.configJson) : null,
+      publishedVersionNo: published?.versionNo ?? null,
+    };
   }
 
   async create(dto: CreatePrintProfileDto, user: CurrentUserPayload) {
-    this.validateConfig(dto.config);
+    const config = normalizeConfig(dto.config);
+    this.validateConfig(config);
     const name = dto.name.trim();
     if (!name) throw new BadRequestException('纸型名称不能为空');
     await this.ensureUniqueName(dto.documentType, name);
     return this.profileRepo.save(this.profileRepo.create({
       name, documentType: dto.documentType, status: 1, isBuiltin: 0,
-      draftConfig: dto.config, publishedVersionId: null, ...auditOnCreate(user),
+      draftConfig: config, publishedVersionId: null, ...auditOnCreate(user),
     }));
   }
 
@@ -69,8 +85,9 @@ export class PrintConfigService {
       profile.name = name;
     }
     if (dto.config !== undefined) {
-      this.validateConfig(dto.config);
-      profile.draftConfig = dto.config;
+      const config = normalizeConfig(dto.config);
+      this.validateConfig(config);
+      profile.draftConfig = config;
     }
     if (dto.status !== undefined && dto.status !== profile.status) {
       if (dto.status === 0 && profile.isBuiltin) throw new BadRequestException('内置回退纸型不能停用');
@@ -94,7 +111,8 @@ export class PrintConfigService {
 
   async publish(id: number, user: CurrentUserPayload) {
     const profile = await this.getProfile(id);
-    this.validateConfig(profile.draftConfig);
+    const config = normalizeConfig(profile.draftConfig);
+    this.validateConfig(config);
     const publisherName = auditDisplayName(user) || null;
     return this.dataSource.transaction(async (manager) => {
       const row = await manager.getRepository(PrintProfileVersion)
@@ -103,11 +121,15 @@ export class PrintConfigService {
       const version = await manager.save(PrintProfileVersion, manager.create(PrintProfileVersion, {
         profileId: id,
         versionNo: Number(row?.max ?? 0) + 1,
-        configJson: profile.draftConfig,
+        configJson: config,
         publisherId: user.id,
         publisherName,
       }));
-      await manager.update(PrintProfile, id, { publishedVersionId: version.id, ...auditOnUpdate(user) });
+      await manager.update(PrintProfile, id, {
+        draftConfig: config,
+        publishedVersionId: version.id,
+        ...auditOnUpdate(user),
+      });
       return version;
     });
   }
@@ -119,7 +141,10 @@ export class PrintConfigService {
   async rollback(profileId: number, versionNo: number, user: CurrentUserPayload) {
     const source = await this.versionRepo.findOneBy({ profileId, versionNo });
     if (!source) throw new NotFoundException('指定的历史发布版本不存在');
-    await this.profileRepo.update(profileId, { draftConfig: source.configJson, ...auditOnUpdate(user) });
+    await this.profileRepo.update(profileId, {
+      draftConfig: normalizeConfig(source.configJson),
+      ...auditOnUpdate(user),
+    });
     return this.publish(profileId, user);
   }
 
@@ -152,7 +177,9 @@ export class PrintConfigService {
     const versionById = new Map(versions.map((version) => [version.id, version]));
     const candidates = profiles.flatMap((profile, index) => {
       const version = profile.publishedVersionId ? versionById.get(profile.publishedVersionId) : undefined;
-      return version ? [{ profile, version, index, signature: stableSerialize(version.configJson) }] : [];
+      return version
+        ? [{ profile, version, index, signature: stableSerialize(normalizeConfig(version.configJson)) }]
+        : [];
     });
 
     /*
@@ -192,7 +219,7 @@ export class PrintConfigService {
     if (!version) throw new BadRequestException('所选纸型尚未发布可用版本');
     return {
       profileId: profile.id, profileName: profile.name, documentType: profile.documentType,
-      version: version.versionNo, config: version.configJson,
+      version: version.versionNo, config: normalizeConfig(version.configJson),
       defaultProfileId: configuredDefaultId ?? options[0]?.id ?? null,
       options,
     };
@@ -226,6 +253,9 @@ export class PrintConfigService {
     if (!['blank', 'preprinted'].includes(config.mode)) throw new BadRequestException('打印模式无效');
     this.finite(config.paper?.widthMm, '纸张宽度', 50, 500);
     this.finite(config.paper?.heightMm, '纸张高度', 50, 500);
+    if (!['portrait', 'landscape'].includes(config.paper?.driverOrientation ?? '')) {
+      throw new BadRequestException('驱动打印方向无效');
+    }
     if (config.paper?.bodyWidthMm !== undefined) {
       this.finite(config.paper.bodyWidthMm, '成品纸面宽度', 50, 500);
       if (config.paper.bodyWidthMm > config.paper.widthMm) throw new BadRequestException('成品纸面宽度不能大于驱动进纸宽度');

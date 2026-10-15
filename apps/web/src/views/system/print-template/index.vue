@@ -57,7 +57,7 @@
             <el-select v-model="designerProfileId" filterable placeholder="选择一个纸型" style="width: 260px" @change="loadDesigner">
               <el-option v-for="p in profiles" :key="p.id" :label="`${docLabel(p.documentType)} · ${p.name}`" :value="p.id" />
             </el-select>
-            <span class="tip">底图只用于定位预览，正式套打不会输出。试打请选择同尺寸驱动纸型、缩放 100%、边距“无”并关闭页眉页脚；保存后仍需发布。</span>
+            <span class="tip">底图只用于定位预览，正式套打不会输出。试打请选择同尺寸驱动纸型、按纸型要求设置方向、缩放 100%、边距“无”并关闭页眉页脚；保存后仍需发布。</span>
           </div>
           <div class="designer-host" v-loading="designerLoading">
             <print-profile-designer v-if="designerDetail" :key="designerDetail.id" :config="designerDetail.draftConfig" :document-type="designerDetail.documentType" @save="saveDesigner" />
@@ -75,10 +75,12 @@
 
         <el-tab-pane label="校准测试页" name="calibration">
           <div class="toolbar"><el-select v-model="calibrationId" style="width: 260px" @change="loadCalibration"><el-option v-for="p in profiles" :key="p.id" :label="`${docLabel(p.documentType)} · ${p.name}`" :value="p.id" /></el-select><el-button type="primary" @click="printCalibration">打印校准页</el-button></div>
-          <el-alert type="warning" :closable="false" title="先在 Windows 打印服务器属性中建立同尺寸自定义纸型；打印对话框选同名纸型、100% 缩放、无边距。若预览出现日期、系统名或网址，请展开“更多设置”，取消勾选“页眉和页脚”。用十字线实测后，把误差填回纸型的 X/Y 偏移。" />
+          <el-alert type="warning" :closable="false" :title="calibrationAlert" />
           <div v-if="calibrationConfig" class="calibration-paper" :style="calibrationStyle">
             <div class="cross tl">＋</div><div class="cross tr">＋</div><div class="cross bl">＋</div><div class="cross br">＋</div>
-            <div class="calibration-center">{{ calibrationName }}<br />成品纸面 {{ calibrationBody?.widthMm }} × {{ calibrationBody?.heightMm }} mm<br />驱动进纸 {{ calibrationConfig.paper.widthMm }} × {{ calibrationConfig.paper.heightMm }} mm<br />横竖线间距 10mm</div>
+            <div class="calibration-reading">← 文字阅读方向 →</div>
+            <div class="calibration-feeding">↕ 走纸方向</div>
+            <div class="calibration-center">{{ calibrationName }}<br />成品纸面 {{ calibrationBody?.widthMm }} × {{ calibrationBody?.heightMm }} mm<br />驱动进纸 {{ calibrationConfig.paper.widthMm }} × {{ calibrationConfig.paper.heightMm }} mm<br />驱动方向 {{ calibrationOrientationLabel }}<br />横竖线间距 10mm</div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -92,6 +94,7 @@
         <el-form-item label="驱动进纸宽 × 高"><el-input-number v-model="editorConfig.paper.widthMm" :min="50" :max="500" :precision="1" /> × <el-input-number v-model="editorConfig.paper.heightMm" :min="50" :max="500" :precision="1" /> mm</el-form-item>
         <el-form-item label="成品纸面宽 × 高"><el-input-number v-model="editorConfig.paper.bodyWidthMm" :min="50" :max="editorConfig.paper.widthMm" :precision="1" /> × <el-input-number v-model="editorConfig.paper.bodyHeightMm" :min="50" :max="editorConfig.paper.heightMm" :precision="1" /> mm<small>撕除左右打孔边后的纸面尺寸</small></el-form-item>
         <el-form-item label="驱动纸型名称"><el-input v-model="editorConfig.paper.driverFormName" placeholder="如 OMS 9.5x5.5" /></el-form-item>
+        <el-form-item label="驱动打印方向"><el-radio-group v-model="editorConfig.paper.driverOrientation"><el-radio value="portrait">纵向</el-radio><el-radio value="landscape">横向</el-radio></el-radio-group><small>须与 Windows 打印首选项一致；设反会整页旋转 90°</small></el-form-item>
         <el-collapse>
           <el-collapse-item title="高级配置" name="advanced">
             <el-form-item label="四边距"><div class="quad"><el-input-number v-model="editorConfig.margins.top" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.right" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.bottom" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.left" :min="0" :max="50" /></div><small>上 / 右 / 下 / 左（mm）</small></el-form-item>
@@ -123,7 +126,12 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
 import { useUserStore } from '@/stores/user';
 import { printWithPageSize } from '@/utils/browser-print';
-import { printPaperBodyOf } from '@/utils/print-paper';
+import {
+  oppositePrintDriverOrientationLabelOf,
+  printDriverOrientationLabelOf,
+  printDriverOrientationOf,
+  printPaperBodyOf,
+} from '@/utils/print-paper';
 import {
   createPrintProfile, defaultPrintConfig, deletePrintProfile, getPrintDefaults, getPrintProfile, getPrintProfiles,
   getPrintProfileVersions, getRuntimePrintProfile, publishPrintProfile, rollbackPrintProfile, setPrintDefault, updatePrintProfile,
@@ -149,10 +157,11 @@ const templatePreviewPaperTip = computed(() => {
   const body = templatePreviewBody.value;
   if (!runtime || !body) return '';
   const feed = runtime.config.paper;
+  const orientation = printDriverOrientationLabelOf(feed);
   const hasTractorEdge = Math.abs(feed.widthMm - body.widthMm) > 0.01
     || Math.abs(feed.heightMm - body.heightMm) > 0.01;
-  if (!hasTractorEdge) return `纸面 ${body.widthMm} × ${body.heightMm}mm`;
-  return `成品纸面 ${body.widthMm} × ${body.heightMm}mm（不含左右打孔边；驱动进纸 ${feed.widthMm} × ${feed.heightMm}mm）`;
+  if (!hasTractorEdge) return `纸面 ${body.widthMm} × ${body.heightMm}mm；驱动方向 ${orientation}`;
+  return `成品纸面 ${body.widthMm} × ${body.heightMm}mm（不含左右打孔边；驱动进纸 ${feed.widthMm} × ${feed.heightMm}mm）；驱动方向 ${orientation}`;
 });
 async function loadTemplatePreviewProfile(profileId?: number) {
   templatePreviewLoading.value = true;
@@ -215,6 +224,7 @@ function fillEditor(config: PrintProfileConfig) {
   const body = printPaperBodyOf(copy.paper);
   copy.paper.bodyWidthMm = body.widthMm;
   copy.paper.bodyHeightMm = body.heightMm;
+  copy.paper.driverOrientation = printDriverOrientationOf(copy.paper);
   Object.assign(editorConfig, copy);
 }
 function openCreate() { editingId.value = undefined; editorName.value = ''; editorType.value = documentType.value; fillEditor(defaultPrintConfig(documentType.value)); editorOpen.value = true; }
@@ -271,6 +281,16 @@ const calibrationDetail = ref<PrintProfileDetail | null>(null);
 const calibrationConfig = computed(() => calibrationDetail.value?.publishedConfig || calibrationDetail.value?.draftConfig);
 const calibrationBody = computed(() => calibrationConfig.value ? printPaperBodyOf(calibrationConfig.value.paper) : null);
 const calibrationName = computed(() => calibrationProfile.value?.name || '校准测试页');
+const calibrationOrientationLabel = computed(() => calibrationConfig.value
+  ? printDriverOrientationLabelOf(calibrationConfig.value.paper)
+  : '');
+const calibrationAlert = computed(() => {
+  const config = calibrationConfig.value;
+  if (!config) return '请选择纸型后打印校准页。';
+  const orientation = printDriverOrientationLabelOf(config.paper);
+  const opposite = oppositePrintDriverOrientationLabelOf(config.paper);
+  return `打印对话框请选择同名纸型，并把驱动方向设为“${orientation}”；若显示“${opposite}”，整页会旋转 90°。同时设置 100% 缩放、无边距、关闭页眉页脚。用十字线实测后，把误差填回纸型的 X/Y 偏移。`;
+});
 const calibrationStyle = computed(() => {
   if (!calibrationConfig.value) return {};
   const body = printPaperBodyOf(calibrationConfig.value.paper);
@@ -310,7 +330,7 @@ onMounted(async () => {
 .template-item { padding: 9px 11px; border: 1px solid #e4e7ed; border-radius: 5px; cursor: pointer; }.template-item.active { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }.template-item div { display: flex; justify-content: space-between; }.template-item span { display: block; margin-top: 4px; color: #909399; font-size: 12px; }
 .defaults-form { margin-top: 24px; max-width: 620px; }.defaults-form .el-button { margin-left: 10px; }.quad { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }.quad :deep(.el-input-number) { width: 140px; }
 .designer-host { min-height: 560px; }
-.calibration-paper { position: relative; box-sizing: border-box; margin: 20px auto; background-color: #fff; background-image: linear-gradient(to right,#d8dee8 1px,transparent 1px),linear-gradient(to bottom,#d8dee8 1px,transparent 1px); background-size: 10mm 10mm; box-shadow: 0 2px 14px #0003; overflow: hidden; }.cross { position: absolute; font-size: 20px; }.tl{left:5mm;top:3mm}.tr{right:5mm;top:3mm}.bl{left:5mm;bottom:3mm}.br{right:5mm;bottom:3mm}.calibration-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1.8; }
+.calibration-paper { position: relative; box-sizing: border-box; margin: 20px auto; background-color: #fff; background-image: linear-gradient(to right,#d8dee8 1px,transparent 1px),linear-gradient(to bottom,#d8dee8 1px,transparent 1px); background-size: 10mm 10mm; box-shadow: 0 2px 14px #0003; overflow: hidden; }.cross { position: absolute; font-size: 20px; }.tl{left:5mm;top:3mm}.tr{right:5mm;top:3mm}.bl{left:5mm;bottom:3mm}.br{right:5mm;bottom:3mm}.calibration-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1.8; }.calibration-reading { position: absolute; top: 4mm; left: 50%; transform: translateX(-50%); font-weight: 700; white-space: nowrap; }.calibration-feeding { position: absolute; top: 50%; right: 2mm; transform: translateY(-50%); writing-mode: vertical-rl; font-weight: 700; white-space: nowrap; }
 @media print {
   :global(body.printing-designer *) { visibility: hidden !important; }
   :global(body.printing-designer .designer), :global(body.printing-designer .designer *) { visibility: visible !important; }
