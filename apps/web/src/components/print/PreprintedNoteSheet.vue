@@ -79,6 +79,6 @@ function rowValue(row: Record<string, any>, field: string, index: number) {
 .placed-table { border-collapse: collapse; table-layout: fixed; }
 .placed-table th, .placed-table td { padding: 0 .8mm; border: 0; vertical-align: middle; overflow: hidden; }
 @media print {
-  .print-sheet { margin: var(--page-offset-y, 0) 0 0 var(--page-offset-x, 0); break-after: page; print-color-adjust: exact; }
+  .print-sheet { margin: var(--page-offset-y, 0) auto 0; break-after: page; print-color-adjust: exact; }
 }
 </style>

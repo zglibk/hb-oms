@@ -500,7 +500,8 @@ function signValue(label: string): string {
      */
     height: var(--paper-height, 297mm);
     min-height: var(--paper-height, 297mm);
-    margin: var(--page-offset-y, 0) 0 0 var(--page-offset-x, 0);
+    /* 水平 auto 居中：纸张与纸型一致时等同左偏移 page-offset-x，换了纸也不会贴左 */
+    margin: var(--page-offset-y, 0) auto 0;
     padding: var(--margin-top, 7mm) var(--margin-right, 5mm) var(--margin-bottom, 7mm) var(--margin-left, 5mm);
     box-shadow: none;
     print-color-adjust: exact;

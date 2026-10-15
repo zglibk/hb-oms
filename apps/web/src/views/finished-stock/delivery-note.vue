@@ -25,12 +25,14 @@
     </div>
     <section class="sheet-stage" v-loading="loading">
       <template v-if="note && runtime">
-        <template v-for="(rows, index) in pages" :key="index">
-          <preprinted-note-sheet v-if="runtime.config.mode === 'preprinted'" class="sheet-shadow"
-            :config="runtime.config" :note="note as any" :rows="rows as any" />
-          <delivery-note-sheet v-else class="sheet-shadow" :note="pageNote(rows)" :template-code="templateCode"
-            :profile-config="runtime.config" />
-        </template>
+        <div class="sheet-pages">
+          <template v-for="(rows, index) in pages" :key="index">
+            <preprinted-note-sheet v-if="runtime.config.mode === 'preprinted'" class="sheet-shadow"
+              :config="runtime.config" :note="note as any" :rows="rows as any" />
+            <delivery-note-sheet v-else class="sheet-shadow" :note="pageNote(rows)" :template-code="templateCode"
+              :profile-config="runtime.config" />
+          </template>
+        </div>
         <div v-if="runtime.config.mode === 'blank' && runtime.config.pagination.strategy === 'auto'"
           ref="measureHost" class="pagination-measure no-print" aria-hidden="true">
           <delivery-note-sheet :note="note" :template-code="templateCode" :profile-config="runtime.config" measurement />
@@ -178,7 +180,9 @@ onBeforeUnmount(() => { document.title = originalTitle; pageStyle?.remove(); });
 @media print {
   :global(html), :global(body), :global(#app) { margin: 0 !important; padding: 0 !important; background: #fff !important; }
   .print-preview-page, .sheet-stage { width: auto; min-height: 0; margin: 0; padding: 0; background: #fff; }
+  .sheet-stage { overflow: visible; }
   .no-print { display: none !important; }
-  :deep(.print-sheet:last-child) { break-after: auto; }
+  /* 纸面单独包一层：分页测量节点排在纸面之后，不包的话最后一张纸面不是 last-child，会多走一张空白纸 */
+  .sheet-pages > :deep(.print-sheet:last-child) { break-after: auto; }
 }
 </style>

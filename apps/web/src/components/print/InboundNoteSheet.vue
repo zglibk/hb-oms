@@ -322,7 +322,8 @@ function signValue(label: string): string {
     /* 见 .print-sheet 顶部说明：128mm 可用高度留 1mm 余量 */
     height: var(--paper-height, 148mm);
     min-height: var(--paper-height, 148mm);
-    margin: var(--page-offset-y, 0) 0 0 var(--page-offset-x, 0);
+    /* 水平 auto 居中：纸张与纸型一致时等同左偏移 page-offset-x，换了纸也不会贴左 */
+    margin: var(--page-offset-y, 0) auto 0;
     padding: var(--margin-top, 10mm) var(--margin-right, 5mm) var(--margin-bottom, 10mm) var(--margin-left, 5mm);
     box-shadow: none;
     print-color-adjust: exact;
