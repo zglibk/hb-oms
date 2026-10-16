@@ -134,13 +134,13 @@ export class OutsourceService {
   }
 
   /**
-   * 客户、产品型号、表面处理下拉项：直接从当前可选记录全量去重，
-   * 不从最多 200 条的列表结果反推，避免旧记录中的选项缺失。
+   * 客户、产品型号、表面处理下拉项：直接从当前可选记录全量去重，按上级条件
+   * 单向收窄，不从最多 200 条的列表结果反推，避免旧记录中的选项缺失。
    */
   async findPartGroupFilterOptions(
     query: QueryPartGroupOptionDto,
   ): Promise<PartGroupFilterOptions> {
-    const buildRange = (exclude: 'customerName' | 'productModel' | 'surfaceType') => {
+    const buildRange = (level: 'customer' | 'productModel' | 'surfaceType') => {
       const visibility = this.buildPartGroupVisibilityFilter(query);
       const params = visibility.params;
       let where = visibility.where;
@@ -150,9 +150,10 @@ export class OutsourceService {
         where += ` AND ${column} = ?`;
         params.push(normalized);
       };
-      if (exclude !== 'customerName') addExact('o.customer_name', query.customerName);
-      if (exclude !== 'productModel') addExact('g.product_model', query.productModel);
-      if (exclude !== 'surfaceType') addExact('p.surface_type', query.surfaceType);
+      // 单向级联：当前字段只受它之前的上级条件约束。下级旧值不得反向限制上级选项，
+      // 因为用户切换上级时前端会立即清空这些下级值。
+      if (level !== 'customer') addExact('o.customer_name', query.customerName);
+      if (level === 'surfaceType') addExact('g.product_model', query.productModel);
       return {
         fromSql: `
           FROM t_order_part_group g
@@ -162,7 +163,7 @@ export class OutsourceService {
         params,
       };
     };
-    const customersRange = buildRange('customerName');
+    const customersRange = buildRange('customer');
     const modelsRange = buildRange('productModel');
     const surfacesRange = buildRange('surfaceType');
     const [customers, models, surfaces]: any[][] = await Promise.all([

@@ -181,9 +181,6 @@
       @open="loadPickerData"
     >
       <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
-        <el-form-item label="订单号">
-          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadPickerData" />
-        </el-form-item>
         <el-form-item label="客户">
           <el-select
             v-model="pickerQuery.customerName"
@@ -194,6 +191,9 @@
           >
             <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadPickerData" />
         </el-form-item>
         <el-form-item label="生产单号">
           <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadPickerData" />
@@ -464,10 +464,33 @@ let pickerRequestId = 0;
 let pickerFilterRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 与成品出入库的订单产品选择器保持一致：下拉框选中与点 × 清空都由模型变化驱动查询。
-// 同步监听便于重置时暂时抑制，避免一次重置连续发出多次请求。
+// 与成品出入库选择器保持一致，按「客户 → 产品型号 → 表面处理」逐级收窄；上级变化时
+// 清空其下级条件，避免不可见的残留条件锁住结果集。每次操作最终只发出一组查询。
 watch(
-  () => [pickerQuery.customerName, pickerQuery.productModel, pickerQuery.surfaceType] as const,
+  () => pickerQuery.customerName,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.productModel = '';
+    pickerQuery.surfaceType = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.productModel,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.surfaceType = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.surfaceType,
   () => {
     if (!suppressPickerAutoSearch && pickerVisible.value) void loadPickerData();
   },

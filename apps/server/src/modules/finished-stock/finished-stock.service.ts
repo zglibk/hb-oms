@@ -571,13 +571,26 @@ export class FinishedStockService {
       surfaceType: query.surfaceType,
       color: query.color,
     };
-    // 各下拉项受其它下拉条件约束，但排除自身条件，既形成级联，又允许用户直接切换
-    // 当前字段。例如选 A 客户后型号只来自 A；客户下拉自身仍可切换到其它符合型号/表面条件的客户。
+    // 选项按「客户 → 产品型号 → 表面处理 → 颜色」单向级联，只受上级条件约束。
+    // 前端切换上级时会清空下级，因此下级旧值不能反过来压缩上级选项，否则会出现
+    // 准备切换型号时只能看到当前表面处理/颜色所对应型号的假死现象。
     const [customerRows, modelRows, surfaceRows, colorRows] = await Promise.all([
-      this.loadGroupOptionCandidates({ ...dropdownQuery, customerName: undefined }),
-      this.loadGroupOptionCandidates({ ...dropdownQuery, productModel: undefined }),
-      this.loadGroupOptionCandidates({ ...dropdownQuery, surfaceType: undefined }),
-      this.loadGroupOptionCandidates({ ...dropdownQuery, color: undefined }),
+      this.loadGroupOptionCandidates({ onlyOpening: dropdownQuery.onlyOpening }),
+      this.loadGroupOptionCandidates({
+        onlyOpening: dropdownQuery.onlyOpening,
+        customerName: dropdownQuery.customerName,
+      }),
+      this.loadGroupOptionCandidates({
+        onlyOpening: dropdownQuery.onlyOpening,
+        customerName: dropdownQuery.customerName,
+        productModel: dropdownQuery.productModel,
+      }),
+      this.loadGroupOptionCandidates({
+        onlyOpening: dropdownQuery.onlyOpening,
+        customerName: dropdownQuery.customerName,
+        productModel: dropdownQuery.productModel,
+        surfaceType: dropdownQuery.surfaceType,
+      }),
     ]);
     const distinct = (values: Array<unknown>) =>
       [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]

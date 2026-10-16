@@ -241,7 +241,7 @@ export const getStockGroupOptions = (params: {
   onlyOpening?: boolean;
 }) => request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
 
-/** 产品选择器的级联去重下拉项；各字段由其它已选下拉条件收窄 */
+/** 产品选择器的级联去重下拉项；各字段只由它之前的上级下拉条件收窄 */
 export const getStockGroupFilterOptions = (params: {
   customerName?: string;
   productModel?: string;

@@ -111,9 +111,6 @@
       @open="loadPickerData"
     >
       <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
-        <el-form-item label="订单号">
-          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadPickerData" />
-        </el-form-item>
         <el-form-item label="客户">
           <el-select
             v-model="pickerQuery.customerName"
@@ -124,6 +121,9 @@
           >
             <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadPickerData" />
         </el-form-item>
         <el-form-item label="生产单号">
           <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadPickerData" />
@@ -400,15 +400,46 @@ let pickerRequestId = 0;
 let pickerFilterRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 下拉框选中与点 × 清空都统一由模型变化驱动查询。同步监听让重置时可以暂时抑制，
-// 避免 Object.assign 改四个下拉字段时连续请求，重置完成后只查一次。
+// 下拉条件按「客户 → 产品型号 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
+// 下级，避免下级残留条件继续锁住结果集；抑制标记确保每次操作最终只发出一组查询。
 watch(
-  () => [
-    pickerQuery.customerName,
-    pickerQuery.productModel,
-    pickerQuery.surfaceType,
-    pickerQuery.color,
-  ] as const,
+  () => pickerQuery.customerName,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.productModel = '';
+    pickerQuery.surfaceType = '';
+    pickerQuery.color = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.productModel,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.surfaceType = '';
+    pickerQuery.color = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.surfaceType,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.color = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.color,
   () => {
     if (!suppressPickerAutoSearch && pickerVisible.value) void loadPickerData();
   },
