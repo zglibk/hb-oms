@@ -21,6 +21,14 @@ export interface SaveChangelogPayload {
   status?: number;
 }
 
+/** 登录页公开读取启用更新日志中的最新版本号。 */
+export function getLatestChangelogVersion() {
+  return request.get<any, { version: string | null }>(
+    '/api/changelog/latest-version',
+    { __silent: true } as any,
+  );
+}
+
 /** 前台展示：仅启用记录 */
 export function getChangelogList() {
   return request.get<any, ChangelogItem[]>('/api/changelog');

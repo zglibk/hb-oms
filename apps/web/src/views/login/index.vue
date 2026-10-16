@@ -171,7 +171,7 @@
             </g>
           </svg>
         </div>
-        <div class="intro-footer">{{ themeStore.copyrightInfo || '海宝五金 · IT部 · V1.0' }}</div>
+        <div class="intro-footer">{{ loginFooter }}</div>
       </div>
 
       <!-- 右侧登录表单 -->
@@ -316,11 +316,35 @@ import { registerDynamicRoutes } from '@/router/dynamic';
 import LoginBgPicker from '@/components/LoginBgPicker.vue';
 import SliderCaptcha from '@/components/SliderCaptcha.vue';
 import CompanyLogo from '@/components/CompanyLogo.vue';
+import { getLatestChangelogVersion } from '@/api/changelog';
 
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const themeStore = useThemeStore();
+const latestVersion = ref('');
+
+/**
+ * 兼容存量配置中已经手工写入的末尾版本号，避免显示成
+ * 「海宝五金 · IT部 · V1.0 · v1.2.0」。真正版本号以更新日志为准。
+ */
+const loginFooter = computed(() => {
+  const configured = (themeStore.copyrightInfo || '海宝五金 · IT部').trim();
+  const base = configured
+    .replace(/\s*[·|｜]\s*(?:系统版本\s*[:：]?\s*)?[vV]\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.-]+)?\s*$/, '')
+    .trim();
+  return [base, latestVersion.value].filter(Boolean).join(' · ');
+});
+
+async function loadLatestVersion() {
+  try {
+    const result = await getLatestChangelogVersion();
+    latestVersion.value = result.version?.trim() || '';
+  } catch {
+    // 登录不应被辅助信息阻断；失败时仅隐藏版本号，不回退到硬编码值。
+    latestVersion.value = '';
+  }
+}
 
 /** 前台首页：生产 base=/oms/admin/ → /oms/；开发环境退回上级路径 */
 const frontendHomeUrl = computed(() => {
@@ -541,7 +565,8 @@ async function doLogin() {
 /** 加载系统配置（logo + favicon + 默认登录背景），写入 :root CSS 变量并应用 favicon */
 onMounted(() => {
   loadRemembered();
-  themeStore.loadSystemConfig();
+  void themeStore.loadSystemConfig();
+  void loadLatestVersion();
 });
 </script>
 

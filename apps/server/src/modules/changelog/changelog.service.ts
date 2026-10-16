@@ -24,6 +24,19 @@ export class ChangelogService {
   ) {}
 
   /**
+   * 登录页只需要版本号，不公开更新内容与审计字段。
+   * 排序与更新日志时间轴保持一致；同日同排序值时用 id 保证结果稳定。
+   */
+  async findLatestVersion(): Promise<{ version: string | null }> {
+    const latest = await this.repo.findOne({
+      select: { version: true },
+      where: { status: 1 },
+      order: { releasedAt: 'DESC', sort: 'DESC', id: 'DESC' },
+    });
+    return { version: latest?.version ?? null };
+  }
+
+  /**
    * 本人尚未看过的更新日志（仅启用记录，排序同前台展示）。
    *
    * 水位线 `t_user.changelog_seen_id` 为空（新账号 / 功能上线前的老账号）时

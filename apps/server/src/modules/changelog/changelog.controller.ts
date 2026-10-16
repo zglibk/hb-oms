@@ -13,6 +13,7 @@ import { SaveChangelogDto } from './dto/save-changelog.dto';
 import { MarkChangelogSeenDto } from './dto/mark-changelog-seen.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { OperationLog } from '../../common/decorators/operation-log.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import {
   CurrentUser,
   CurrentUserPayload,
@@ -31,6 +32,13 @@ import {
 @Controller('changelog')
 export class ChangelogController {
   constructor(private readonly service: ChangelogService) {}
+
+  /** 登录页版本号：登录前可访问，仅返回启用更新日志中的最新版本号。 */
+  @Get('latest-version')
+  @Public()
+  findLatestVersion() {
+    return this.service.findLatestVersion();
+  }
 
   /** 前台展示：登录即可访问，不加 @RequirePermissions */
   @Get()

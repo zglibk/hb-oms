@@ -81,7 +81,8 @@
               <el-input v-model="form.taxNo" name="taxNo" placeholder="统一社会信用代码…" maxlength="64" autocomplete="off" :spellcheck="false" />
             </el-form-item>
             <el-form-item label="版权信息">
-              <el-input v-model="form.copyrightInfo" name="copyrightInfo" placeholder="如：海宝五金 · IT部 · V1.0…" maxlength="255" show-word-limit autocomplete="off" />
+              <el-input v-model="form.copyrightInfo" name="copyrightInfo" placeholder="如：海宝五金 · IT部…" maxlength="255" show-word-limit autocomplete="off" />
+              <div class="switch-hint switch-hint--block">登录页版本号自动取更新日志中的最新启用版本，此处无需填写版本号。</div>
             </el-form-item>
 
             <el-form-item>
