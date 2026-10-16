@@ -60,7 +60,7 @@ hb-oms 表现形态类似**仓库台账**，围绕订单逐行呈现四类数字
 | 9 | 工艺信息 | 独立基础数据模块，创建订单时**按生产图号匹配**自动带入（可修改） |
 | 10 | 装配环节 | 外发回货与成品入库之间新增装配；**一组可多批装配**（锚定部件组），计划员手工录计划/实际完成时间 + 装配数量；作为入库**硬闸门**：`可入库量 = Σ已完成装配量 − 已入库量`，**按量卡**、支持部分装配部分入库；期初入库豁免 |
 | 11 | 部件组跟踪维度 | 产品行下设**部件组**（`t_order_part_group`）作为跟踪/台账锚点：默认一产品一组（整品）；缓冲类可拆「外中轨」「内轨」等多组，各组独立图号/版本/料厚，外发/装配/出入库/台账四数按组核算（对齐手工台账行粒度）；组不拆数量，各组支数默认=产品支数 |
-| 12 | 装配车间 | **仅批次级**（`t_assembly_batch.workshop`，字典：装一~装八，可扩展）。~~产品行 assembly_workshop~~ 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该部件组各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配 |
+| 12 | 装配车间 | **仅批次级且必填**（`t_assembly_batch.workshop`，字典：装一~装九，可扩展）。~~产品行 assembly_workshop~~ 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该产品各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配 |
 | 13 | 单号展示 | 订单级生产单号 `t_order.production_no`（如 `GLI46212-A`，客户前缀+业务自编后缀）与 PO# 一对一；台账将其与系统订单号 `t_order.order_no`（`ORD...`）分列展示，方便和订单管理核对 |
 
 ### 2.1 统一口径
@@ -317,7 +317,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | id | int PK | |
 | order_id / order_product_id / order_part_group_id | int idx | 锚点：**部件组**（订单/产品行为冗余列） |
 | side | varchar(16) | 边别：含卡口组合 left/right，其余 `''`（闸门按 side 分别卡量） |
-| workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；**批次录入时指定**（订单环节不再预设计划车间），默认沿用该组最近一条批次的车间 |
+| workshop | varchar(32) | 装配车间（字典 `assembly_workshop`）；**批次录入/编辑时必填**（订单环节不再预设计划车间），默认沿用该产品最近一条批次的车间 |
 | plan_start_date | date | 计划开始时间（计划员录入的预计开工日；纯计划属性，不参与入库闸门） |
 | plan_date | date | 计划完成时间（计划员录入的预计完工日；与 plan_start_date 组成预计装配区间） |
 | actual_date | date NULL | 实际完成时间；NULL=计划中，非空=已完成（该批数量计入可入库量） |
@@ -328,7 +328,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | （审计字段） | | creator/updater/create_time/update_time |
 
 - **索引**：`idx(order_part_group_id, side)` 供闸门与台账按部件组聚合；另有 `idx_order`（订单下游引用探测）、`idx_status`、`idx_plan_start_date`、`idx_plan_date`、`idx_actual_date`（逾期与进度查询）。
-- **约束**：`plan_date` 与 `actual_date` 至少填一个；`plan_start_date` 不得晚于 `plan_date`；含卡口组合的 `side` 必须为 left/right，非卡口必须为空串。
+- **约束**：`workshop` 必填；`plan_date` 与 `actual_date` 至少填一个；`plan_start_date` 不得晚于 `plan_date`；含卡口组合的 `side` 必须为 left/right，非卡口必须为空串。前端点击「录入批次」直接提交，不再弹二次确认。
 - **闸门口径（唯一实现 `assembly-quota.util.ts`，入库侧复用）**：`可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)`。
   其中「已入库量」**只统计入库方向的已确认单据**：`biz_type='inbound'` 计正、冲销 inbound 的红字单计负；**期初（opening_balance）与销售出库（sale_outbound）都不参与**——期初无装配过程且 §4.5 已明文豁免闸门，若计入会让该组额度永久为负、挡死后续正常入库；出库若参与（direction=-1）反而会凭空放大额度。冲销期初的红字单按 `origin_doc_id` 回查原单 biz_type 一并排除。
 - 批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 < 已入库量（§7）。
@@ -378,6 +378,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 - 出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，**禁止直接改 balance**。
 - **装配入库闸门**：`biz_type='inbound'` 入库单**确认时**，按每条明细的 order_product_id + side 校验 `本次入库量 ≤ 可入库量(§4.4)`；超额则拒绝（`BadRequestException` 中文提示，含产品、可入库量、本次量）。`biz_type='opening_balance'`（期初）与 `reversal`（红字）**豁免**该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，`Σ已入库量` 按 direction 自然回落，可入库量随之回补。
   > ⚠️ 期初豁免闸门是**有意为之**，但也意味着「在正常订单上录期初」会绕过装配闸门凭空增加库存与完成数。故**期初只能挂 `is_opening=1` 的期初补录订单**：期初页的产品选择器按此过滤（`onlyOpening`），服务端建单时再逐行硬校验一次，两层都拦。正常订单的成品必须走「装配 → 成品入库」。
+- **建单产品选择器**：生产入库与销售出库共用「选择订单产品」弹窗；订单号、客户、生产单号、产品型号、表面处理、颜色可组合筛选，关键词作为最后一个 AND 条件全局搜索订单、产品、部件组、追溯码和相关字典中文标签。客户、产品型号、表面处理、颜色选项按当前可选范围全量去重，不受列表 500 条上限影响；全部筛选须在截断结果前完成。
 
 ### 4.6 部件台账：`t_part_balance`（属性锚定，独立参考台账）
 
@@ -560,7 +561,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 |---|---|---|
 | customer | CRUD + `POST /customer/import`、`GET /customer/import-template` | 客户资料；Excel 批量导入（整批校验、逐行错误、覆盖更新开关） |
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
-| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；`GET /order/:id` 带 `editGuard`（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
+| order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；订单列表默认按下单日期降序、同日按 ID 降序后分页；`GET /order/:id` 带 `editGuard`（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
 | order | `GET /order/ledger/detail?orderPartGroupId=` | 台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载 |
 | order | `GET /order/ledger/export` | 台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝 |
@@ -573,7 +574,8 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | assembly | `POST /assembly/batch`、`PUT /assembly/batch/:id`、`DELETE /assembly/batch/:id` | 装配批次增删改（按部件组+边别，一组多批）；编辑不含锚点；删/改受 §7.14 闸门约束 |
 | assembly | `GET /assembly/inbound-quota?orderPartGroupId=&side=` | 供成品入库表单查该组可入库量（§4.4 口径） |
 | finished-stock | `POST /finished-stock`（建单含明细）、`PUT /finished-stock/:id`（仅草稿）、`POST /finished-stock/:id/confirm`、`POST /finished-stock/:id/cancel`、`POST /finished-stock/:id/reverse`、`GET /finished-stock`、`GET /finished-stock/:id` | confirm 入库时校验装配闸门（§4.5）并驱动余额；reverse=生成红字单并自动确认，支持按行部分冲销；已确认单禁改禁作废 |
-| finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 成品库存（只读结存查询）；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
+| finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 成品库存（只读结存查询）；group-options 支持订单号、客户、生产单号、产品型号、表面处理、颜色与全局关键词叠加筛选，按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行 |
+| finished-stock | `GET /finished-stock/group-filter-options` | 建单产品选择器的客户、产品型号、表面处理、颜色去重下拉项；从当前可选范围全量生成，不受 group-options 条数上限影响 |
 | finished-stock | `GET /finished-stock/:id/delivery-note-pdf?profileId=&version=&templateCode=`、`GET /finished-stock/:id/inbound-note-pdf?profileId=&version=` | 服务端渲染与屏幕相同的已发布纸型和版本；等待明确打印就绪标记后生成 PDF |
 | print-config | `/system/print-config/profiles` CRUD、`publish`、`versions`、`rollback`、`defaults`、`runtime` | 针式纸型草稿/发布/回退、全局默认与打印页运行时解析；查看复用 `system:print-template`，修改复用 `config:update` |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |

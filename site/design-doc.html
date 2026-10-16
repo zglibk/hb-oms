@@ -263,7 +263,7 @@
 <tr>
 <td>12</td>
 <td>装配车间</td>
-<td><strong>仅批次级</strong>（<code>t_assembly_batch.workshop</code>，字典：装一~装八，可扩展）。<del>产品行 assembly_workshop</del> 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该部件组各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配</td>
+<td><strong>仅批次级且必填</strong>（<code>t_assembly_batch.workshop</code>，字典：装一~装九，可扩展）。<del>产品行 assembly_workshop</del> 已于 2026-08-07 弃用——订单环节不安排装配车间。装配列表与台账的车间列改为聚合该产品各批次的车间（多批不同车间则并列显示），筛选按批次车间匹配</td>
 </tr>
 <tr>
 <td>13</td>
@@ -869,7 +869,7 @@
 <tr>
 <td>workshop</td>
 <td>varchar(32)</td>
-<td>装配车间（字典 <code>assembly_workshop</code>）；<strong>批次录入时指定</strong>（订单环节不再预设计划车间），默认沿用该组最近一条批次的车间</td>
+<td>装配车间（字典 <code>assembly_workshop</code>）；<strong>批次录入/编辑时必填</strong>（订单环节不再预设计划车间），默认沿用该产品最近一条批次的车间</td>
 </tr>
 <tr>
 <td>plan_start_date</td>
@@ -914,7 +914,7 @@
 </tbody></table></div>
 <ul>
 <li><strong>索引</strong>：<code>idx(order_part_group_id, side)</code> 供闸门与台账按部件组聚合；另有 <code>idx_order</code>（订单下游引用探测）、<code>idx_status</code>、<code>idx_plan_start_date</code>、<code>idx_plan_date</code>、<code>idx_actual_date</code>（逾期与进度查询）。</li>
-<li><strong>约束</strong>：<code>plan_date</code> 与 <code>actual_date</code> 至少填一个；<code>plan_start_date</code> 不得晚于 <code>plan_date</code>；含卡口组合的 <code>side</code> 必须为 left/right，非卡口必须为空串。</li>
+<li><strong>约束</strong>：<code>workshop</code> 必填；<code>plan_date</code> 与 <code>actual_date</code> 至少填一个；<code>plan_start_date</code> 不得晚于 <code>plan_date</code>；含卡口组合的 <code>side</code> 必须为 left/right，非卡口必须为空串。前端点击「录入批次」直接提交，不再弹二次确认。</li>
 <li><strong>闸门口径（唯一实现 <code>assembly-quota.util.ts</code>，入库侧复用）</strong>：<code>可入库量(部件组, side) = Σqty(actual_date 非空) − Σ已入库量(该组该 side，按 direction 抵扣红字)</code>。
 其中「已入库量」<strong>只统计入库方向的已确认单据</strong>：<code>biz_type=&#39;inbound&#39;</code> 计正、冲销 inbound 的红字单计负；<strong>期初（opening_balance）与销售出库（sale_outbound）都不参与</strong>——期初无装配过程且 §4.5 已明文豁免闸门，若计入会让该组额度永久为负、挡死后续正常入库；出库若参与（direction=-1）反而会凭空放大额度。冲销期初的红字单按 <code>origin_doc_id</code> 回查原单 biz_type 一并排除。</li>
 <li>批次被入库消耗后禁删、禁下调 qty 或退回计划中致可入库量 &lt; 已入库量（§7）。</li>
@@ -1055,6 +1055,7 @@
 <p>⚠️ 期初豁免闸门是<strong>有意为之</strong>，但也意味着「在正常订单上录期初」会绕过装配闸门凭空增加库存与完成数。故<strong>期初只能挂 <code>is_opening=1</code> 的期初补录订单</strong>：期初页的产品选择器按此过滤（<code>onlyOpening</code>），服务端建单时再逐行硬校验一次，两层都拦。正常订单的成品必须走「装配 → 成品入库」。</p>
 </blockquote>
 </li>
+<li><strong>建单产品选择器</strong>：生产入库与销售出库共用「选择订单产品」弹窗；订单号、客户、生产单号、产品型号、表面处理、颜色可组合筛选，关键词作为最后一个 AND 条件全局搜索订单、产品、部件组、追溯码和相关字典中文标签。客户、产品型号、表面处理、颜色选项按当前可选范围全量去重，不受列表 500 条上限影响；全部筛选须在截断结果前完成。</li>
 </ul>
 <h3 id="46-部件台账tpartbalance属性锚定独立参考台账">4.6 部件台账：<code>t_part_balance</code>（属性锚定，独立参考台账）<a class="anchor" href="#46-部件台账tpartbalance属性锚定独立参考台账" aria-hidden="true">#</a></h3>
 <div class="table-wrap"><table><thead><tr>
@@ -1205,7 +1206,7 @@
 <li>轻量记账行，不采番、无单据号；档案<strong>有流水时禁止删除</strong>。</li>
 </ul>
 <h3 id="410-出入库单针式纸型与套打配置">4.10 出入库单针式纸型与套打配置<a class="anchor" href="#410-出入库单针式纸型与套打配置" aria-hidden="true">#</a></h3>
-<p>送货单、成品入库单使用可发布的命名纸型；生产任务单维持 A4 现状。送货单初始默认显示为 <strong>21.8×14cm 针式打印纸</strong>：Windows 驱动进纸尺寸（含左右打孔边）为 <strong>241.3×140mm（9.5×5.5 英寸）</strong>，撕除打孔边后的成品纸面为 <strong>218×140mm</strong>，单据内容在驱动进纸页面中水平居中；另带 **A5 打字纸（横向，210×148mm）**内置回退纸型。成品入库单初始默认使用 <strong>A4 打字纸纵向（210×297mm）</strong>，并保留 21.8×14cm 连续纸和 A5 横向供打印时临时切换。</p>
+<p>送货单、成品入库单使用可发布的命名纸型；生产任务单维持 A4 现状。送货单初始默认显示为 <strong>21.8×14cm 针式打印纸</strong>：Windows 驱动进纸尺寸（含左右打孔边）为 <strong>241.3×140mm（9.5×5.5 英寸）</strong>、驱动打印方向为<strong>纵向</strong>（Windows 自定义表单按纸张实际走向定义为 241.3×140，本身已是宽的），撕除打孔边后的成品纸面为 <strong>218×140mm</strong>，单据内容在驱动进纸页面中水平居中；另带 **A5 打字纸（横向，210×148mm，驱动方向横向）**内置回退纸型。成品入库单初始默认使用 <strong>A4 打字纸纵向（210×297mm，驱动方向纵向）</strong>，并保留驱动方向纵向的 21.8×14cm 连续纸和驱动方向横向的 A5 横向供打印时临时切换。</p>
 <p>送货单模板预览、默认纸型设置以及正式送货单/入库单打印页均以纸型档案的运行时解析结果为唯一来源：只加载对应单据类型下启用档案的当前发布版本，未发布草稿不进入正式下拉；发布配置完全相同的历史重复档案合并为一项，优先采用版本号更高、发布时间更新的档案。纸型档案列表保留完整档案和版本历史供维护与回退，历史发布配置是不可变快照，规格修正也只能复制生成新版本。</p>
 <div class="table-wrap"><table><thead><tr>
 <th>表</th>
@@ -1213,7 +1214,7 @@
 </tr>
 </thead><tbody><tr>
 <td><code>t_print_profile</code></td>
-<td>纸型名称、单据类型、启停状态、草稿配置和当前发布版本；配置含空白纸/预印纸模式、尺寸、驱动纸型名、四边距、偏移、字体、线宽、分页与套打布局</td>
+<td>纸型名称、单据类型、启停状态、草稿配置和当前发布版本；配置含空白纸/预印纸模式、尺寸、驱动纸型名、驱动打印方向、四边距、偏移、字体、线宽、分页与套打布局</td>
 </tr>
 <tr>
 <td><code>t_print_profile_version</code></td>
@@ -1228,9 +1229,9 @@
 <li>空白纸模式打印完整标题、标签、表格线、签名与数据；预印套打只输出动态字段和明细重复块，定位底图仅在设计器显示，正式打印/PDF不输出。</li>
 <li>套打设计器的可用字段从左侧拖入纸面添加；纸面在工作区水平、垂直居中，并支持以鼠标指针位置为中心的滚轮缩放。元素坐标与尺寸始终按毫米保存，不受预览缩放比例影响。</li>
 <li>草稿修改不影响生产打印，发布后才生效。默认纸型不能停用或删除；五个内置回退纸型不能停用或删除。</li>
-<li>纸张边长 50–500mm、边距 0–50mm、偏移 -20–20mm、字体缩放 80–120%、每页明细 1–50 行。</li>
-<li>打印页动态生成 <code>@page { size: 宽mm 高mm; margin: 0 }</code>，四边距在纸面内部实现。自动分页按真实纸面扣除单头、表头、合计行、签名栏后的明细可用高度，以及每行实际折行高度计算，配置行数只作上限。每张物理纸独立渲染完整单头、表头和签名栏，单据纸不显示页码，禁止跨连续纸撕纸线。</li>
-<li>保留浏览器打印对话框，不做静默直打。Windows 驱动必须建立同尺寸自定义纸型；纸张、100% 缩放、无边距、关闭页眉页脚由使用者在打印对话框确认。</li>
+<li>纸张边长 50–500mm、边距 0–50mm、偏移 -20–20mm、字体缩放 80–160%（100=纸面默认字号，针式送货单内置 115%）、每页明细 1–50 行。字号在纸型档案主表单调节并发布，不改纸面组件。</li>
+<li>打印页常驻 <code>@page { size: 宽mm 高mm; margin: 0 }</code>，供页面预览和服务端 PDF 保持精确物理尺寸；用户点「打印」时按纸型档案的驱动方向临时覆盖：纵向为 <code>size: auto</code>（不声明尺寸，浏览器直接用驱动纸型、布局默认纵向），横向为 <code>size: landscape</code>，纸张尺寸取打印对话框所选驱动纸型。交互打印不得声明宽 &gt; 高的毫米尺寸，否则浏览器会判定为横向，针式连续纸整页旋转 90°。四边距在纸面内部实现。自动分页按真实纸面扣除单头、表头、合计行、签名栏后的明细可用高度，以及每行实际折行高度计算，配置行数只作上限。每张物理纸独立渲染完整单头、表头和签名栏，单据纸不显示页码，禁止跨连续纸撕纸线。</li>
+<li>保留浏览器打印对话框，不做静默直打。Windows 驱动必须建立同尺寸自定义纸型；纸型档案保存驱动方向（纵向/横向），方向相对 Windows 表单自身定义的宽高：自定义表单选纵向，竖长定义的标准纸型（A4/A5 等）打横版选横向；旧配置缺省时按驱动纸型名与进纸宽高推断。网页不能直接修改 Windows/EPSON 已保存的原生打印首选项；打印时仍由使用者确认纸张、方向、100% 缩放、无边距和关闭页眉页脚，方向设反会让整页旋转 90°。</li>
 </ul>
 <hr>
 <h2 id="5-台账与统计口径系统核心">5. 台账与统计口径（系统核心）<a class="anchor" href="#5-台账与统计口径系统核心" aria-hidden="true">#</a></h2>
@@ -1396,7 +1397,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <tr>
 <td>order</td>
 <td><code>POST /order</code>、<code>PUT /order/:id</code>、<code>GET /order</code>、<code>GET /order/:id</code>、<code>POST /order/:id/finish</code>、<code>POST /order/:id/reopen</code>、<code>DELETE /order/:id</code></td>
-<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；<code>GET /order/:id</code> 带 <code>editGuard</code>（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。<strong>DELETE 于 2026-08-07 取代原 <code>/cancel</code></strong>：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；<code>ORDER_STATUS.CANCELLED</code> 枚举保留供历史数据</td>
+<td>四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；订单列表默认按下单日期降序、同日按 ID 降序后分页；<code>GET /order/:id</code> 带 <code>editGuard</code>（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。<strong>DELETE 于 2026-08-07 取代原 <code>/cancel</code></strong>：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；<code>ORDER_STATUS.CANCELLED</code> 枚举保留供历史数据</td>
 </tr>
 <tr>
 <td>order</td>
@@ -1461,7 +1462,12 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <tr>
 <td>finished-stock</td>
 <td><code>GET /finished-stock/balance</code>、<code>GET /finished-stock/group-options</code></td>
-<td>成品库存（只读结存查询）；group-options 按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行</td>
+<td>成品库存（只读结存查询）；group-options 支持订单号、客户、生产单号、产品型号、表面处理、颜色与全局关键词叠加筛选，按边别展开并附「可入库量」（入库）/「当前结存」（出库），供建单选行</td>
+</tr>
+<tr>
+<td>finished-stock</td>
+<td><code>GET /finished-stock/group-filter-options</code></td>
+<td>建单产品选择器的客户、产品型号、表面处理、颜色去重下拉项；从当前可选范围全量生成，不受 group-options 条数上限影响</td>
 </tr>
 <tr>
 <td>finished-stock</td>
