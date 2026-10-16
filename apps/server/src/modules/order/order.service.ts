@@ -167,7 +167,10 @@ export class OrderService {
         pParams,
       );
     }
-    qb.orderBy('o.id', 'DESC').skip((page - 1) * pageSize).take(pageSize);
+    qb.orderBy('o.orderDate', 'DESC')
+      .addOrderBy('o.id', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
     const [orders, total] = await qb.getManyAndCount();
 
     // 批量装配产品行与部件组（列表折叠展示用；部件行仅详情加载）
