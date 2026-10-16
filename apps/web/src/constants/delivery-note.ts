@@ -97,9 +97,9 @@ const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'fo
   // 列宽合计 100%（含颜色列）。118% 字号下短列（料厚/编码/数量/单位）必须能单行放下，
   // 不够的从物料名称、备注匀；长生产单号仍允许折行。纸面右侧另留固定联次说明区。
   columns: [
-    { key: 'seq', label: '序号', width: '3.5%', align: 'center' },
+    { key: 'seq', label: '序号', width: '5%', align: 'center' },
     // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
-    { key: 'poNo', label: '订单编号', width: '11.6%', align: 'center' },
+    { key: 'poNo', label: '订单编号', width: '10.1%', align: 'center' },
     // 生产单号（2026-09-25 补）：客户来电报货时常报的是我方单号，仓库/业务凭它直接回查订单。
     // 331 家客户全部走通用模板，缺这一列等于所有送货单都没印生产单号
     { key: 'productionNo', label: '生产单号', width: '11%', align: 'center' },
