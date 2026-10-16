@@ -157,7 +157,7 @@
               <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
-          <el-form-item label="装配车间">
+          <el-form-item label="装配车间" required>
             <el-select v-model="draft.workshop" clearable style="width: 120px" placeholder="选择车间">
               <el-option v-for="o in workshopDict" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowDown, ArrowUp, Back, Delete, Edit, CircleCheck, Clock, WarningFilled } from '@element-plus/icons-vue';
@@ -378,6 +378,10 @@ async function onSubmit() {
     ElMessage.warning('该产品含卡口，请选择左/右边别');
     return;
   }
+  if (!draft.workshop) {
+    ElMessage.warning('请选择装配车间');
+    return;
+  }
   if (!draft.planDate && !draft.actualDate) {
     ElMessage.warning('计划完成时间与实际完成时间至少填写一个');
     return;
@@ -390,45 +394,10 @@ async function onSubmit() {
     ElMessage.warning('装配数量必须大于 0');
     return;
   }
-  if (!editingId.value) {
-    const missingText = (text: string) => h(
-      'strong',
-      { style: 'color: var(--el-color-danger); font-weight: 600;' },
-      text,
-    );
-    const productModel = data.value?.product?.productModel;
-    const confirmMessage = h('div', { style: 'line-height: 1.9;' }, [
-      h('div', ['请核对本批次：']),
-      h('div', ['产品：', productModel || missingText('未填写产品型号')]),
-      ...(socket.value ? [h('div', ['边别：', sideLabel(draft.side)])] : []),
-      h('div', [
-        '车间：',
-        draft.workshop ? dictLabel(workshopDict.value, draft.workshop) : missingText('未选择'),
-      ]),
-      h('div', [
-        '计划：',
-        draft.planStartDate || missingText('未填'),
-        ' 至 ',
-        draft.planDate || missingText('未填'),
-      ]),
-      h('div', ['实际完成：', draft.actualDate || missingText('未填（计划中）')]),
-      h('div', [`装配数量：${draft.qty} 支`]),
-      h('div', ['确认后将立即录入。']),
-    ]);
-    try {
-      await ElMessageBox.confirm(
-        confirmMessage,
-        '确认录入装配批次',
-        { type: 'warning', confirmButtonText: '确认录入', cancelButtonText: '取消' },
-      );
-    } catch {
-      return;
-    }
-  }
   submitting.value = true;
   try {
     const body = {
-      workshop: draft.workshop || undefined,
+      workshop: draft.workshop,
       planStartDate: draft.planStartDate || null,
       planDate: draft.planDate || null,
       actualDate: draft.actualDate || null,

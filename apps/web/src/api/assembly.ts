@@ -122,7 +122,7 @@ export interface AssemblyQuery {
 export interface AssemblyBatchPayload {
   orderProductId: number;
   side?: string;
-  workshop?: string;
+  workshop: string;
   planStartDate?: string | null;
   planDate?: string | null;
   actualDate?: string | null;

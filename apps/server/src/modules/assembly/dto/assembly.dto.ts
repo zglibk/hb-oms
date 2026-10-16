@@ -3,8 +3,10 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   Min,
   ValidateIf,
@@ -31,11 +33,12 @@ export class CreateAssemblyBatchDto {
   @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' })
   side?: string;
 
-  /** 装配车间（字典 assembly_workshop）；订单环节不安排车间，由本批次录入决定 */
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  workshop?: string;
+  /** 装配车间（字典 assembly_workshop），必填；订单环节不安排车间，由本批次录入决定 */
+  @IsString({ message: '请选择装配车间' })
+  @IsNotEmpty({ message: '请选择装配车间' })
+  @Matches(/\S/, { message: '请选择装配车间' })
+  @MaxLength(32, { message: '装配车间不能超过 32 个字符' })
+  workshop: string;
 
   /** 计划开始时间（预计开工日；纯计划属性，不参与入库闸门） */
   @ValidateIf((o) => o.planStartDate !== null && o.planStartDate !== '' && o.planStartDate !== undefined)
@@ -67,10 +70,11 @@ export class CreateAssemblyBatchDto {
  * （退回「计划中」），清空后可入库量不得低于已入库量（§7.14）。
  */
 export class UpdateAssemblyBatchDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  workshop?: string;
+  @IsString({ message: '请选择装配车间' })
+  @IsNotEmpty({ message: '请选择装配车间' })
+  @Matches(/\S/, { message: '请选择装配车间' })
+  @MaxLength(32, { message: '装配车间不能超过 32 个字符' })
+  workshop: string;
 
   @ValidateIf((o) => o.planStartDate !== null && o.planStartDate !== '' && o.planStartDate !== undefined)
   @IsDateString({}, { message: '计划开始时间格式不正确' })

@@ -352,7 +352,7 @@ export class AssemblyService {
 
   /**
    * 新增装配批次。锚点与快照由服务端从订单侧读取（§5.5 防伪造）；
-   * 车间未传时继承产品行的计划装配车间。新增只会抬高可入库量，无需闸门校验。
+   * 装配车间由本批次指定且必填。新增只会抬高可入库量，无需闸门校验。
    */
   async createBatch(dto: CreateAssemblyBatchDto, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
@@ -374,7 +374,7 @@ export class AssemblyService {
           orderProductId: snap.orderProductId,
           side,
           // 车间不再继承产品行计划车间（订单环节已不安排装配车间），完全由本批次录入决定
-          workshop: dto.workshop?.trim() || null,
+          workshop: dto.workshop.trim(),
           planStartDate,
           planDate,
           actualDate,
@@ -418,7 +418,7 @@ export class AssemblyService {
       this.assertDates(planStartDate, planDate, actualDate);
 
       await mgr.getRepository(AssemblyBatch).update(id, {
-        workshop: dto.workshop?.trim() || null,
+        workshop: dto.workshop.trim(),
         planStartDate,
         planDate,
         actualDate,
