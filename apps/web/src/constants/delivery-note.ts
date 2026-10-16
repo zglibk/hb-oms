@@ -309,5 +309,5 @@ export function deliveryTemplateOf(code: string | null | undefined): DeliveryTem
  * 拆开后按纸面高度均分，避免整段竖排贴到针式履带孔而被裁切。
  */
 export function footerNotePartsOf(note: string | null | undefined): string[] {
-  return String(note ?? '').split(/[\s　]+/).filter(Boolean);
+  return String(note ?? '').split(/[\s\u3000]+/).filter(Boolean);
 }
