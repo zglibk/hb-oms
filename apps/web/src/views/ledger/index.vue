@@ -64,22 +64,22 @@
 
     <!-- 汇总卡：当前筛选口径的整体六数（不受分页影响）。版式见 AppStatCard -->
     <div class="sum-bar">
-      <app-stat-card color="slate" :value="summary.rows" label="台账行数" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="slate" :value="summary.rows" label="台账行数">
         <template #icon><el-icon><Document /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="blue" :value="summary.totalQty" label="订单数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="blue" :value="summary.totalQty" label="订单数(支)">
         <template #icon><el-icon><Goods /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="green" :value="summary.totalIn" label="完成数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="green" :value="summary.totalIn" label="完成数(支)">
         <template #icon><el-icon><CircleCheckFilled /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="teal" :value="summary.totalStock" label="库存数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="teal" :value="summary.totalStock" label="库存数(支)">
         <template #icon><el-icon><Box /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="amber" :value="summary.totalProductionOwed" label="成品欠数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="amber" :value="summary.totalProductionOwed" label="成品欠数(支)">
         <template #icon><el-icon><Tools /></el-icon></template>
       </app-stat-card>
-      <app-stat-card color="red" :value="summary.totalDeliveryOwed" label="发货欠数(支)" link-text="详情&gt;" @link="goDetail">
+      <app-stat-card color="red" :value="summary.totalDeliveryOwed" label="发货欠数(支)">
         <template #icon><el-icon><Van /></el-icon></template>
       </app-stat-card>
     </div>
@@ -654,10 +654,6 @@ function owedClass(v: number): string {
   return 'num-owed';
 }
 
-/** 卡片「详情>」跳转：当前统一跳台账页（后续可按卡片类型细化目标） */
-function goDetail() {
-  router.push('/ledger');
-}
 </script>
 
 <script lang="ts">
