@@ -967,6 +967,15 @@ function openManual() {
   }
 }
 
+/* 笔记本低视口：收紧侧栏纵向密度，让更多一级菜单无需滚动即可看到。
+   仅调整菜单行高，不缩字号；一级仍保留 48px、二级 44px 的清晰点击区域。 */
+@media (min-width: 768px) and (max-height: 900px) {
+  .sidebar :deep(.el-menu) {
+    --el-menu-item-height: 48px;
+    --el-menu-sub-item-height: 44px;
+  }
+}
+
 /* ============================================================
  * 手机端适配（≤767px）
  * ============================================================ */
@@ -1394,6 +1403,14 @@ function openManual() {
   .el-menu-item.is-active {
     color: var(--el-color-white) !important;
     background: var(--sidebar-active-bg) !important;
+  }
+}
+
+/* 折叠侧栏的浮层菜单会 teleport 到 body，需在全局样式中同步低视口行高。 */
+@media (min-width: 768px) and (max-height: 900px) {
+  .el-menu--vertical.el-menu--popup {
+    --el-menu-item-height: 48px;
+    --el-menu-sub-item-height: 44px;
   }
 }
 
