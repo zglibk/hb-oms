@@ -204,8 +204,11 @@ function headerOf(col: DeliveryColumn): string {
   return unit ? col.label.replace('{unit}', unit) : '数量';
 }
 
+const NOWRAP_KEYS: Array<DeliveryColumn['key']> = [
+  'seq', 'itemNo', 'materialThickness', 'specText', 'color', 'unitLabel', 'qty',
+];
 function cellClass(col: DeliveryColumn) {
-  return { c: col.align === 'center', pre: !!col.pre };
+  return { c: col.align === 'center', pre: !!col.pre, nowrap: NOWRAP_KEYS.includes(col.key) };
 }
 
 function cellOf(row: DeliveryNoteRow, col: DeliveryColumn): string {
@@ -337,8 +340,8 @@ function signValue(label: string): string {
 
 .print-sheet--compact .note-table {
   margin-top: 1.8mm;
-  /* 给右侧联次栏留出宽度，避免备注格顶到竖排文字。 */
-  width: calc(100% - 9mm);
+  /* 联次右移后表可加宽；仍给竖排文字留缝，避免备注格顶上。 */
+  width: calc(100% - 6.5mm);
 }
 
 .print-sheet--compact .note-table th,
@@ -443,10 +446,13 @@ function signValue(label: string): string {
   border: var(--border-width, 1px) solid #333;
   padding: 1.2mm 1.5mm;
   vertical-align: middle;
-  word-break: break-all;
+  /* 优先在空格/标点折行；不要 break-all，118% 下会把 16080、494.02.065 拦腰截开。 */
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
-.note-table th { font-weight: 700; text-align: center; }
+.note-table th { font-weight: 700; text-align: center; white-space: nowrap; }
 .note-table .c { text-align: center; }
+.note-table .nowrap { white-space: nowrap; overflow-wrap: normal; }
 /* 品名/备注是多行文本，保留换行 */
 .note-table .pre { white-space: pre-wrap; }
 .total-row td { font-size: calc(13px * var(--font-scale, 1)); }
@@ -498,9 +504,9 @@ function signValue(label: string): string {
 .print-sheet--compact .doc-side-note {
   top: calc(3mm + var(--offset-y, 0mm));
   bottom: calc(3mm - var(--offset-y, 0mm));
-  /* 约 6mm 起算：躲开履带孔（12.7mm）与针式右不可印区，仍落在 218mm 成品纸内。 */
-  right: calc(6mm - var(--offset-x, 0mm));
-  width: 7.5mm;
+  /* 约 4mm：相对 6mm 稍向右，仍躲开履带孔与 LQ 右不可印区（禁止再贴 2.5mm）。 */
+  right: calc(4mm - var(--offset-x, 0mm));
+  width: 7mm;
 }
 .print-sheet--compact .doc-side-note__part {
   /* 基线 11px：115% 缩放后约 12.6px，仍落在四联均分槽内。 */

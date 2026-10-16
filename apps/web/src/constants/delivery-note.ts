@@ -94,32 +94,32 @@ const GENERIC_BASE: Omit<DeliveryTemplate, 'code' | 'name' | 'description' | 'fo
   // 通用版的客户信息区是「收货单位 + 单号 / 送货地址 + 日期」两行式（2026-09-26 使用方要求：
   // 原「送货单位（我方公司名）」改为送货地址，原第三行我方电话传真取消——抬头联系行里已有）
   metaStyle: 'consignee',
-  // 列宽合计 100%（含颜色列）；短纸面上备注必须有足够宽度，否则真实备注会逐字折行并把整行撑出纸面。
-  // 订单号、生产单号与产品代码允许自然折行，备注保留 14%；纸面右侧另留固定联次说明区。
+  // 列宽合计 100%（含颜色列）。118% 字号下短列（料厚/编码/数量/单位）必须能单行放下，
+  // 不够的从物料名称、备注匀；长生产单号仍允许折行。纸面右侧另留固定联次说明区。
   columns: [
-    { key: 'seq', label: '序号', width: '4%', align: 'center' },
+    { key: 'seq', label: '序号', width: '3.5%', align: 'center' },
     // 「订单编号」印客户 PO#：送货单是给客户的，他按自己的采购单号对账
-    { key: 'poNo', label: '订单编号', width: '15.5%', align: 'center' },
+    { key: 'poNo', label: '订单编号', width: '11.6%', align: 'center' },
     // 生产单号（2026-09-25 补）：客户来电报货时常报的是我方单号，仓库/业务凭它直接回查订单。
     // 331 家客户全部走通用模板，缺这一列等于所有送货单都没印生产单号
-    { key: 'productionNo', label: '生产单号', width: '10%', align: 'center' },
+    { key: 'productionNo', label: '生产单号', width: '11%', align: 'center' },
     // 通用版「物料编码」印我方**产品代码**（item_no，如 45#、客户料号）——2026-09-26 使用方指定，
     // 原取客户方编码 materialCode、空时回落客户图号，现役订单客户方编码全空，印出来的其实都是客户图号。
     // 耐斯克/精工两套客户版的「物料编码/产品编码」仍取客户方编码，不受影响
-    { key: 'itemNo', label: '物料编码', width: '9.5%', align: 'center' },
+    { key: 'itemNo', label: '物料编码', width: '11%', align: 'center' },
     // 「物料名称」印**系统型号**（如 53#普通卡口滑轨）而不是订单里手填的产品名称：
     // 型号由货号+产品类型组合拼出，全厂一个口径，客户对账时也认这个号
     { key: 'productModel', label: '物料名称', width: '18%', pre: true, fallbackKeys: ['productName', 'productRequirement'] },
     // 料厚（2026-09-26 加，物料名称与规格之间）：外/中/内轨料厚不同时「/」并列，如 1.2/1.0
-    { key: 'materialThickness', label: '料厚', width: '6.5%', align: 'center' },
+    { key: 'materialThickness', label: '料厚', width: '8%', align: 'center' },
     // 规格是「17寸」「425mm」这种短文本（2026-09-26 表头由「规格型号」改「规格」）
     { key: 'specText', label: '规格', width: '6%', align: 'center' },
     // 颜色列随全局「颜色」开关整列增减（§5.7）；印的是**表面处理**中文名，表面处理为空/「无」才回落颜色字段（服务端 colorTextOf）
-    { key: 'color', label: '颜色', width: '6%', align: 'center', flag: 'colorEnabled' },
+    { key: 'color', label: '颜色', width: '5.5%', align: 'center', flag: 'colorEnabled' },
     // 有独立的「单位」列，故数量列表头就写「数量」、单元格也不再带单位后缀
-    { key: 'unitLabel', label: '单位', width: '4.5%', align: 'center' },
-    { key: 'qty', label: '数量', width: '6%', align: 'center' },
-    { key: 'remark', label: '备注', width: '14%', pre: true },
+    { key: 'unitLabel', label: '单位', width: '5%', align: 'center' },
+    { key: 'qty', label: '数量', width: '7.5%', align: 'center' },
+    { key: 'remark', label: '备注', width: '12.9%', pre: true },
   ],
   signatures: ['制单', '仓库', '提货人', '收货人签名'],
   minRows: 6,
