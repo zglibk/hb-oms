@@ -95,11 +95,14 @@
         <el-form-item label="成品纸面宽 × 高"><el-input-number v-model="editorConfig.paper.bodyWidthMm" :min="50" :max="editorConfig.paper.widthMm" :precision="1" /> × <el-input-number v-model="editorConfig.paper.bodyHeightMm" :min="50" :max="editorConfig.paper.heightMm" :precision="1" /> mm<small>撕除左右打孔边后的纸面尺寸</small></el-form-item>
         <el-form-item label="驱动纸型名称"><el-input v-model="editorConfig.paper.driverFormName" placeholder="如 OMS 9.5x5.5" /></el-form-item>
         <el-form-item label="驱动打印方向"><el-radio-group v-model="editorConfig.paper.driverOrientation"><el-radio value="portrait">纵向</el-radio><el-radio value="landscape">横向</el-radio></el-radio-group><small>自定义表单（如针式连续纸 241.3×140）选纵向；A4/A5 等标准纸打横版选横向。设反会整页旋转 90°</small></el-form-item>
+        <el-form-item label="字体缩放">
+          <el-slider v-model="editorConfig.style.fontScale" :min="PRINT_FONT_SCALE_MIN" :max="PRINT_FONT_SCALE_MAX" :step="1" show-input :format-tooltip="formatFontScale" />
+          <small>100% 为纸面默认字号。针式偏小可调到 115–130；改完请保存草稿并发布，无需改代码。</small>
+        </el-form-item>
         <el-collapse>
           <el-collapse-item title="高级配置" name="advanced">
             <el-form-item label="四边距"><div class="quad"><el-input-number v-model="editorConfig.margins.top" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.right" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.bottom" :min="0" :max="50" /><el-input-number v-model="editorConfig.margins.left" :min="0" :max="50" /></div><small>上 / 右 / 下 / 左（mm）</small></el-form-item>
             <el-form-item label="X / Y 偏移"><el-input-number v-model="editorConfig.offset.x" :min="-20" :max="20" :step="0.1" /> / <el-input-number v-model="editorConfig.offset.y" :min="-20" :max="20" :step="0.1" /> mm</el-form-item>
-            <el-form-item label="字体缩放"><el-slider v-model="editorConfig.style.fontScale" :min="80" :max="120" show-input /></el-form-item>
             <el-form-item label="线条粗细"><el-input-number v-model="editorConfig.style.borderWidthPt" :min="0.1" :max="3" :step="0.05" /> pt</el-form-item>
             <el-form-item label="分页"><el-radio-group v-model="editorConfig.pagination.strategy"><el-radio value="auto">自动</el-radio><el-radio value="fixed">固定行数</el-radio></el-radio-group></el-form-item>
             <el-form-item label="每页明细"><el-input-number v-model="editorConfig.pagination.rowsPerPage" :min="1" :max="50" /> 行</el-form-item>
@@ -131,6 +134,8 @@ import {
   printDriverOrientationLabelOf,
   printDriverOrientationOf,
   printPaperBodyOf,
+  PRINT_FONT_SCALE_MAX,
+  PRINT_FONT_SCALE_MIN,
 } from '@/utils/print-paper';
 import {
   createPrintProfile, defaultPrintConfig, deletePrintProfile, getPrintDefaults, getPrintProfile, getPrintProfiles,
@@ -216,6 +221,7 @@ async function saveDefault(type: PrintDocumentType) {
   ElMessage.success(`${docLabel(type)}默认纸型已保存`);
 }
 
+function formatFontScale(value: number) { return `${value}%`; }
 const editorOpen = ref(false); const editingId = ref<number>(); const editorName = ref(''); const editorType = ref<PrintDocumentType>('delivery_note');
 const editorConfig = reactive<PrintProfileConfig>(defaultPrintConfig('delivery_note')); const saving = ref(false);
 function cloneConfig(config: PrintProfileConfig): PrintProfileConfig { return structuredClone(toRaw(config)); }

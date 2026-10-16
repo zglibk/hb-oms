@@ -3,11 +3,17 @@ import {
   oppositePrintDriverOrientationLabelOf,
   printDriverOrientationLabelOf,
   printDriverOrientationOf,
+  PRINT_FONT_SCALE_DEFAULT,
+  PRINT_FONT_SCALE_MAX,
+  PRINT_FONT_SCALE_MIN,
 } from '@hb-oms/shared';
 export {
   oppositePrintDriverOrientationLabelOf,
   printDriverOrientationLabelOf,
   printDriverOrientationOf,
+  PRINT_FONT_SCALE_DEFAULT,
+  PRINT_FONT_SCALE_MAX,
+  PRINT_FONT_SCALE_MIN,
 };
 
 export interface PrintPaperBody {

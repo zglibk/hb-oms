@@ -1,3 +1,8 @@
+/** 纸型「字体缩放」百分比。100 对应纸面组件默认字号（正文 12px）。改字号只调纸型，不要改组件。 */
+export const PRINT_FONT_SCALE_MIN = 80;
+export const PRINT_FONT_SCALE_MAX = 160;
+export const PRINT_FONT_SCALE_DEFAULT = 100;
+
 /** Windows 打印驱动中的纸张方向。 */
 export type PrintDriverOrientation = 'portrait' | 'landscape';
 

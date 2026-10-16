@@ -370,11 +370,11 @@ function signValue(label: string): string {
 
 /* ===== 抬头 ===== */
 .doc-heading { position: relative; text-align: center; }
-.doc-heading__main h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 1px; }
-.doc-heading__main h2 { margin: 1.5mm 0 0; font-size: 17px; font-weight: 700; letter-spacing: 6px; }
+.doc-heading__main h1 { margin: 0; font-size: calc(20px * var(--font-scale, 1)); font-weight: 700; letter-spacing: 1px; }
+.doc-heading__main h2 { margin: 1.5mm 0 0; font-size: calc(17px * var(--font-scale, 1)); font-weight: 700; letter-spacing: 6px; }
 /* 标题右上角的单号（仅部分客户版式有） */
-.doc-heading__no { position: absolute; top: 0; right: 0; font-size: 12px; }
-.doc-contact { margin: 2mm 0 0; font-size: 11px; }
+.doc-heading__no { position: absolute; top: 0; right: 0; font-size: calc(12px * var(--font-scale, 1)); }
+.doc-contact { margin: 2mm 0 0; font-size: calc(11px * var(--font-scale, 1)); }
 
 /* ===== 客户信息 ===== */
 .doc-meta { margin-top: 3mm; }
@@ -449,7 +449,7 @@ function signValue(label: string): string {
 .note-table .c { text-align: center; }
 /* 品名/备注是多行文本，保留换行 */
 .note-table .pre { white-space: pre-wrap; }
-.total-row td { font-size: 13px; }
+.total-row td { font-size: calc(13px * var(--font-scale, 1)); }
 
 /* ===== 签名栏（margin-top:auto 把它顶到页面底部，见 .print-sheet 的 flex 说明） ===== */
 .doc-signatures {
@@ -503,7 +503,8 @@ function signValue(label: string): string {
   width: 7.5mm;
 }
 .print-sheet--compact .doc-side-note__part {
-  font-size: calc(12px * var(--font-scale, 1));
+  /* 基线 11px：115% 缩放后约 12.6px，仍落在四联均分槽内。 */
+  font-size: calc(11px * var(--font-scale, 1));
   letter-spacing: 0.4px;
 }
 /* 五联槽位更矮：10px 才能让最长的「第二联收款依据（红）」落在均分高度内。 */

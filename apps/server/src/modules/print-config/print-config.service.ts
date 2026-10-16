@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { printDriverOrientationOf } from '@hb-oms/shared';
+import { printDriverOrientationOf, PRINT_FONT_SCALE_MAX, PRINT_FONT_SCALE_MIN } from '@hb-oms/shared';
 import type { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditDisplayName, auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { CreatePrintProfileDto, RuntimePrintProfileQueryDto, SetPrintDefaultDto, UpdatePrintProfileDto } from './dto/print-config.dto';
@@ -267,7 +267,7 @@ export class PrintConfigService {
     for (const side of ['top', 'right', 'bottom', 'left'] as const) this.finite(config.margins?.[side], `${side}边距`, 0, 50);
     this.finite(config.offset?.x, 'X偏移', -20, 20);
     this.finite(config.offset?.y, 'Y偏移', -20, 20);
-    this.finite(config.style?.fontScale, '字体缩放', 80, 120);
+    this.finite(config.style?.fontScale, '字体缩放', PRINT_FONT_SCALE_MIN, PRINT_FONT_SCALE_MAX);
     this.finite(config.style?.borderWidthPt, '线条粗细', 0.1, 3);
     if (!['auto', 'fixed'].includes(config.pagination?.strategy)) throw new BadRequestException('分页方式无效');
     this.finite(config.pagination?.rowsPerPage, '每页明细行数', 1, 50);

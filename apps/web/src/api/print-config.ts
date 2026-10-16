@@ -53,6 +53,7 @@ export interface PrintProfileConfig {
   };
   margins: { top: number; right: number; bottom: number; left: number };
   offset: { x: number; y: number };
+  /** fontScale：80–160，100 = 纸面组件默认字号（正文 12px） */
   style: { fontScale: number; borderWidthPt: number };
   pagination: { strategy: 'auto' | 'fixed'; rowsPerPage: number };
   backgroundImageUrl?: string;

@@ -117,6 +117,8 @@ const MIGRATIONS: string[] = [
   'migration-print-orientation-portrait.sql',
   // 撤下已随发布写入的更新日志 v1.2.1（所述打印修复未达预期）
   'migration-changelog-v1.2.1-remove.sql',
+  // 针式送货单默认字号 115%（复制为新发布版本；A4/A5 与入库单保持 100）
+  'migration-print-delivery-font-scale-115.sql',
 ];
 
 /**
