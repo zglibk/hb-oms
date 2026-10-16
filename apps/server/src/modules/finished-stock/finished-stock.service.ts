@@ -13,6 +13,7 @@ import {
   formatDimensionView,
   hasSocket,
   isValidSide,
+  productLevelModel,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -69,6 +70,14 @@ function prefixOf(bizType: string): string {
 /** 单据类型 → 方向：只有销售出库是出向，期初与生产入库都是入向 */
 function directionOf(bizType: string): number {
   return bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND ? STOCK_DIRECTION.OUT : STOCK_DIRECTION.IN;
+}
+
+/** 成品出入库产品选择器中由全部可选记录去重得到的下拉项。 */
+export interface StockGroupFilterOptions {
+  customerNames: string[];
+  productModels: string[];
+  surfaceTypes: string[];
+  colors: string[];
 }
 
 @Injectable()
@@ -489,33 +498,7 @@ export class FinishedStockService {
    */
   async findGroupOptions(query: QueryStockGroupOptionDto) {
     const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
-    const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
-    let where = ' WHERE o.status <> ?';
-    // 期初录入页传 onlyOpening=true：期初只能挂「期初补录」订单，
-    // 挂正常订单等于绕过装配闸门凭空加库存（服务端另有硬校验，见 buildOpeningItems）
-    if (query.onlyOpening) where += ' AND o.is_opening = 1';
-    if (query.keyword) {
-      where += ` AND (o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                      OR p.item_no LIKE ? OR p.material_code LIKE ?)`;
-      const kw = `%${query.keyword}%`;
-      params.push(kw, kw, kw, kw, kw);
-    }
-    params.push(limit);
-
-    const rows: any[] = await this.dataSource.query(
-      `SELECT p.id AS productId, p.order_id AS orderId, p.qty_pcs AS qtyPcs,
-              o.order_no AS orderNo, o.customer_name AS customerName,
-              o.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
-              p.rail_section AS railSection, p.dimension_raw AS dimensionRaw,
-              p.dimension_unit AS dimensionUnit, p.dimension_mm AS dimensionMm,
-              p.surface_type AS surfaceType, p.color AS color
-         FROM t_order_product p
-         JOIN t_order o ON o.id = p.order_id
-         ${where}
-        ORDER BY p.id DESC
-        LIMIT ?`,
-      params,
-    );
+    const rows = await this.loadGroupOptionCandidates(query, limit);
     if (!rows.length) return [];
 
     const productIds = rows.map((r) => Number(r.productId));
@@ -556,7 +539,7 @@ export class FinishedStockService {
         customerName: r.customerName ?? null,
         productionNo: r.productionNo ?? null,
         itemNo: r.itemNo ?? null,
-        productModel: snap?.productModel ?? null,
+        productModel: snap?.productModel ?? r.productModel ?? null,
         productName: snap?.productName ?? null,
         productType: r.productType ?? null,
         dimensionText: snap?.dimensionText ?? null,
@@ -567,6 +550,137 @@ export class FinishedStockService {
         sides,
       };
     });
+  }
+
+  /**
+   * 客户、产品型号、表面处理、颜色下拉项来自当前范围内的全部产品行，不能从最多
+   * 500 条的选择结果反推，否则较早订单中仍然有效的条件会从下拉框消失。
+   */
+  async findGroupFilterOptions(
+    query: QueryStockGroupOptionDto,
+  ): Promise<StockGroupFilterOptions> {
+    const rows = await this.loadGroupOptionCandidates({ onlyOpening: query.onlyOpening });
+    const distinct = (values: Array<unknown>) =>
+      [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    return {
+      customerNames: distinct(rows.map((row) => row.customerName)),
+      productModels: distinct(rows.map((row) => row.productModel)),
+      surfaceTypes: distinct(rows.map((row) => row.surfaceType)),
+      colors: distinct(rows.map((row) => row.color)),
+    };
+  }
+
+  /**
+   * 产品选择器的共同数据源。独立条件及关键词都在 LIMIT 前完成；产品型号由共享包
+   * 按产品行实时推导，不能拿某一个部件组的型号代替，因此在应用层精确过滤后再截断。
+   */
+  private async loadGroupOptionCandidates(
+    query: QueryStockGroupOptionDto,
+    limit?: number,
+  ): Promise<any[]> {
+    const params: Array<string | number> = [ORDER_STATUS.CANCELLED];
+    let where = ' WHERE o.status <> ?';
+    // 期初录入页传 onlyOpening=true：期初只能挂「期初补录」订单，
+    // 挂正常订单等于绕过装配闸门凭空加库存（服务端另有硬校验，见 buildOpeningItems）
+    if (query.onlyOpening) where += ' AND o.is_opening = 1';
+    const addLikeFilter = (column: string, value?: string) => {
+      const normalized = value?.trim();
+      if (!normalized) return;
+      where += ` AND ${column} LIKE ?`;
+      params.push(`%${normalized}%`);
+    };
+    const addExactFilter = (column: string, value?: string) => {
+      const normalized = value?.trim();
+      if (!normalized) return;
+      where += ` AND ${column} = ?`;
+      params.push(normalized);
+    };
+    addLikeFilter('o.order_no', query.orderNo);
+    addExactFilter('o.customer_name', query.customerName);
+    addLikeFilter('o.production_no', query.productionNo);
+    addExactFilter('p.surface_type', query.surfaceType);
+    addExactFilter('p.color', query.color);
+
+    const keyword = query.keyword?.trim();
+    // 关键词必须能命中最终展示的产品型号，而该型号由共享函数在应用层实时推导，
+    // 不能先在 SQL 中把候选行筛掉。需要搜索时把关联文本一并带回，推导型号后再匹配。
+    const keywordTextSelect = keyword
+      ? `, CONCAT_WS('|',
+          o.order_no, o.po_no, o.customer_name, o.production_no,
+          o.salesman, o.merchandiser, o.order_source, o.remark,
+          p.material_code, p.item_no, p.customer_drawing_no, p.product_name,
+          p.product_type, p.rail_section, p.dimension_raw, CAST(p.dimension_mm AS CHAR),
+          p.surface_type, p.color, p.sheet_material, p.product_requirement,
+          p.delivery_address, p.remark,
+          (SELECT GROUP_CONCAT(CONCAT_WS('|', g_kw.product_model, g_kw.group_type,
+                    g_kw.drawing_no, g_kw.drawing_version, g_kw.material_thickness, g_kw.remark)
+                    SEPARATOR '|')
+             FROM t_order_part_group g_kw WHERE g_kw.order_product_id = p.id),
+          (SELECT GROUP_CONCAT(CONCAT_WS('|', pt_kw.part_type, pt_kw.side,
+                    pt_kw.cycle_code, pt_kw.remark) SEPARATOR '|')
+             FROM t_order_part pt_kw WHERE pt_kw.product_id = p.id),
+          (SELECT GROUP_CONCAT(d_kw.dict_label SEPARATOR '|')
+             FROM t_dict d_kw
+            WHERE (d_kw.dict_type = 'surface_type' AND d_kw.dict_value = p.surface_type)
+               OR (d_kw.dict_type = 'product_type' AND FIND_IN_SET(d_kw.dict_value, p.product_type))
+               OR (d_kw.dict_type = 'rail_section' AND d_kw.dict_value = p.rail_section)
+               OR (d_kw.dict_type = 'order_source' AND d_kw.dict_value = o.order_source)
+               OR (d_kw.dict_type = 'part_group_type' AND EXISTS (
+                 SELECT 1 FROM t_order_part_group g_dict
+                  WHERE g_dict.order_product_id = p.id AND g_dict.group_type = d_kw.dict_value
+               ))
+               OR (d_kw.dict_type = 'part_type' AND EXISTS (
+                 SELECT 1 FROM t_order_part pt_dict
+                  WHERE pt_dict.product_id = p.id AND pt_dict.part_type = d_kw.dict_value
+               )))
+        ) AS keywordText`
+      : `, '' AS keywordText`;
+
+    // 产品型号和关键词都要在应用层过滤；有任一条件时不能提前 LIMIT。
+    const productModel = query.productModel?.trim();
+    const sqlLimit = limit && !productModel && !keyword ? ' LIMIT ?' : '';
+    if (sqlLimit) params.push(limit!);
+
+    const rows: any[] = await this.dataSource.query(
+      `SELECT p.id AS productId, p.order_id AS orderId, p.qty_pcs AS qtyPcs,
+              o.order_no AS orderNo, o.customer_name AS customerName,
+              o.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
+              p.rail_section AS railSection, p.is_split AS isSplit,
+              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
+                 FROM t_order_part_group g WHERE g.order_product_id = p.id) AS groupTypes,
+              p.dimension_raw AS dimensionRaw,
+              p.dimension_unit AS dimensionUnit, p.dimension_mm AS dimensionMm,
+              p.surface_type AS surfaceType, p.color AS color
+              ${keywordTextSelect}
+         FROM t_order_product p
+         JOIN t_order o ON o.id = p.order_id
+         ${where}
+        ORDER BY p.id DESC${sqlLimit}`,
+      params,
+    );
+    const withModel = rows.map((row) => ({
+      ...row,
+      productModel: productLevelModel(
+        row.itemNo ?? '',
+        row.productType ?? '',
+        Number(row.isSplit) || 0,
+        String(row.groupTypes ?? '').split(',').filter(Boolean),
+        row.railSection ?? null,
+      ),
+    }));
+    const modelFiltered = productModel
+      ? withModel.filter((row) => row.productModel === productModel)
+      : withModel;
+    const normalizedKeyword = keyword?.toLocaleLowerCase('zh-CN');
+    const filtered = normalizedKeyword
+      ? modelFiltered.filter((row) =>
+        `${row.keywordText ?? ''}|${row.productModel ?? ''}`
+          .toLocaleLowerCase('zh-CN')
+          .includes(normalizedKeyword),
+      )
+      : modelFiltered;
+    return limit ? filtered.slice(0, limit) : filtered;
   }
 
   /* ==================== 成品库存导入 / 导出 ==================== */

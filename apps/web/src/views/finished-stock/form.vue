@@ -103,21 +103,87 @@
     </el-card>
 
     <!-- 产品选择器：按边别展开成可选行（成品是装配产出的整套滑轨，锚订单产品行） -->
-    <el-dialog v-model="pickerVisible" title="选择订单产品" width="1040px" top="6vh" @open="loadOptions">
-      <div class="picker-bar">
-        <el-input
-          v-model="pickerKeyword" clearable size="small" style="width: 280px"
-          placeholder="订单号/客户/生产单号/型号/产品代码"
-          @clear="loadOptions" @keyup.enter="loadOptions"
-        />
-        <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
-        <span class="picker-tip">
-          {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
-        </span>
+    <el-dialog
+      v-model="pickerVisible"
+      title="选择订单产品"
+      width="min(1460px, 96vw)"
+      top="4vh"
+      @open="loadPickerData"
+    >
+      <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
+        <el-form-item label="订单号">
+          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadOptions" />
+        </el-form-item>
+        <el-form-item label="客户">
+          <el-select
+            v-model="pickerQuery.customerName"
+            clearable
+            filterable
+            :loading="filterOptionsLoading"
+            placeholder="全部"
+            @change="loadOptions"
+          >
+            <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="生产单号">
+          <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadOptions" />
+        </el-form-item>
+        <el-form-item label="产品型号">
+          <el-select-v2
+            v-model="pickerQuery.productModel"
+            clearable
+            filterable
+            :loading="filterOptionsLoading"
+            :options="productModelSelectOptions"
+            popper-class="stock-picker-model-popper"
+            placeholder="全部"
+            @change="loadOptions"
+          />
+        </el-form-item>
+        <el-form-item label="表面处理">
+          <el-select
+            v-model="pickerQuery.surfaceType"
+            clearable
+            :loading="filterOptionsLoading"
+            placeholder="全部"
+            @change="loadOptions"
+          >
+            <el-option
+              v-for="value in pickerFilterOptions.surfaceTypes"
+              :key="value"
+              :label="surfaceLabel(value)"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="colorEnabled" label="颜色">
+          <el-select
+            v-model="pickerQuery.color"
+            clearable
+            filterable
+            :loading="filterOptionsLoading"
+            placeholder="全部"
+            @change="loadOptions"
+          >
+            <el-option v-for="value in pickerFilterOptions.colors" :key="value" :label="value" :value="value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关键词" class="picker-keyword">
+          <el-input v-model="pickerQuery.keyword" clearable placeholder="请输入关键词" @keyup.enter="loadOptions" />
+        </el-form-item>
+        <el-form-item class="picker-actions">
+          <el-button type="primary" :icon="Search" @click="loadOptions">查询</el-button>
+          <el-button @click="resetPickerQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+      <div class="picker-tip">
+        {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
       </div>
-      <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="52vh"
+      <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="58vh"
         @selection-change="onPickChange">
         <el-table-column type="selection" width="42" :selectable="isSelectable" />
+        <el-table-column type="index" label="序号" width="56" align="center" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
@@ -150,7 +216,10 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <span class="picker-count">已选 {{ picked.length }} 行</span>
+        <span class="picker-count">
+          <span>查询到 {{ pickerRows.length }} 条符合条件的记录</span>
+          <span>已选 {{ picked.length }} 行</span>
+        </span>
         <el-button size="small" @click="pickerVisible = false">取消</el-button>
         <el-button size="small" type="primary" @click="confirmPick">添加到明细</el-button>
       </template>
@@ -165,9 +234,11 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { Back, Plus, Delete, Search, WarningFilled } from '@element-plus/icons-vue';
 import {
   getFinishedDocDetail,
+  getStockGroupFilterOptions,
   getStockGroupOptions,
   createFinishedDoc,
   updateFinishedDoc,
+  type StockGroupFilterOptions,
 } from '@/api/finished-stock';
 import {
   FINISHED_BIZ_TYPE,
@@ -298,24 +369,65 @@ async function refreshLimits() {
 /* ===== 选择器 ===== */
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
-const pickerKeyword = ref('');
+const filterOptionsLoading = ref(false);
+const pickerQuery = reactive({
+  orderNo: '',
+  customerName: '',
+  productionNo: '',
+  productModel: '',
+  surfaceType: '',
+  color: '',
+  keyword: '',
+});
+const pickerFilterOptions = ref<StockGroupFilterOptions>({
+  customerNames: [],
+  productModels: [],
+  surfaceTypes: [],
+  colors: [],
+});
+const productModelSelectOptions = computed(() =>
+  pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
+);
 const pickerRows = ref<ItemRow[]>([]);
 const picked = ref<ItemRow[]>([]);
 const pickerTableRef = ref<any>();
+let pickerRequestId = 0;
 
 function openPicker() {
   pickerVisible.value = true;
 }
 
+async function loadFilterOptions() {
+  filterOptionsLoading.value = true;
+  try {
+    pickerFilterOptions.value = await getStockGroupFilterOptions();
+  } finally {
+    filterOptionsLoading.value = false;
+  }
+}
+
+function loadPickerData() {
+  return Promise.all([loadFilterOptions(), loadOptions()]);
+}
+
 /** 选项按边别展开：含卡口的产品展开左右两行，其余一行 */
 async function loadOptions() {
+  const requestId = ++pickerRequestId;
   pickerLoading.value = true;
   try {
     const opts = await getStockGroupOptions({
-      keyword: pickerKeyword.value || undefined,
+      orderNo: pickerQuery.orderNo.trim() || undefined,
+      customerName: pickerQuery.customerName.trim() || undefined,
+      productionNo: pickerQuery.productionNo.trim() || undefined,
+      productModel: pickerQuery.productModel.trim() || undefined,
+      surfaceType: pickerQuery.surfaceType || undefined,
+      color: colorEnabled.value ? pickerQuery.color || undefined : undefined,
+      keyword: pickerQuery.keyword.trim() || undefined,
       bizType: form.bizType,
-      limit: 300,
+      limit: 500,
     });
+    // 连续切换下拉项时，只接纳最后一次请求，避免慢返回的旧条件覆盖新结果。
+    if (requestId !== pickerRequestId) return;
     pickerRows.value = opts.flatMap((o) =>
       o.sides.map((s) => ({
         orderProductId: o.orderProductId,
@@ -334,8 +446,21 @@ async function loadOptions() {
       })) as any,
     );
   } finally {
-    pickerLoading.value = false;
+    if (requestId === pickerRequestId) pickerLoading.value = false;
   }
+}
+
+function resetPickerQuery() {
+  Object.assign(pickerQuery, {
+    orderNo: '',
+    customerName: '',
+    productionNo: '',
+    productModel: '',
+    surfaceType: '',
+    color: '',
+    keyword: '',
+  });
+  loadOptions();
 }
 /** 已在明细中的 (产品行,边别) 不可重复选 */
 function isSelectable(row: ItemRow): boolean {
@@ -440,11 +565,64 @@ export default { name: 'FinishedStockForm' };
   .ml12 { margin-left: 12px; }
   .sec-sum { margin-left: auto; font-weight: 400; font-size: 13px; color: var(--el-text-color-secondary); }
 }
-.picker-bar {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  .picker-tip { color: var(--el-text-color-secondary); font-size: 12px; }
+.picker-filters {
+  display: grid;
+  /* 宽屏一行放下 7 个条件 + 操作区，单个表单项约为原四列布局的一半宽度。 */
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px 14px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+
+  :deep(.el-form-item) {
+    display: flex;
+    min-width: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+  :deep(.el-form-item__label) {
+    width: auto;
+    padding-right: 6px;
+  }
+  :deep(.el-form-item__content) {
+    flex: 1;
+    min-width: 0;
+  }
+  :deep(.el-input),
+  :deep(.el-select),
+  :deep(.el-select-v2) {
+    width: 100%;
+  }
+  .picker-keyword { grid-column: auto; }
+  .picker-actions {
+    grid-column: auto;
+    justify-self: end;
+    white-space: nowrap;
+    :deep(.el-form-item__content) { flex-wrap: nowrap; }
+  }
 }
-.picker-count { margin-right: auto; float: left; color: var(--el-text-color-secondary); font-size: 13px; line-height: 24px; }
+@media (max-width: 1100px) {
+  .picker-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.picker-tip { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
+:global(.stock-picker-model-popper) { min-width: 280px !important; }
+:global(.stock-picker-model-popper .el-select-dropdown),
+:global(.stock-picker-model-popper .el-vl__wrapper),
+:global(.stock-picker-model-popper .el-vl__window) { width: 100% !important; }
+.picker-count {
+  display: inline-flex;
+  gap: 18px;
+  margin-right: auto;
+  float: left;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 24px;
+}
 .lim-ok { color: var(--el-color-success); font-weight: 600; }
 .lim-zero { color: var(--el-color-danger); font-weight: 600; }
 .over-tip {

@@ -117,6 +117,14 @@ export interface StockGroupOption {
   sides: StockSideInfo[];
 }
 
+/** 选择器中由当前可选订单产品全量去重得到的下拉项 */
+export interface StockGroupFilterOptions {
+  customerNames: string[];
+  productModels: string[];
+  surfaceTypes: string[];
+  colors: string[];
+}
+
 export interface FinishedDocQuery {
   page?: number;
   pageSize?: number;
@@ -222,10 +230,20 @@ export const importStockBalance = (file: File, docDate: string, remark?: string)
  */
 export const getStockGroupOptions = (params: {
   keyword?: string;
+  orderNo?: string;
+  customerName?: string;
+  productionNo?: string;
+  productModel?: string;
+  surfaceType?: string;
+  color?: string;
   bizType?: string;
   limit?: number;
   onlyOpening?: boolean;
 }) => request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
+
+/** 产品选择器的去重下拉项；期初录入页可用 onlyOpening 收窄到期初补录订单 */
+export const getStockGroupFilterOptions = (params: { onlyOpening?: boolean } = {}) =>
+  request.get<any, StockGroupFilterOptions>('/api/finished-stock/group-filter-options', { params });
 
 export const createFinishedDoc = (data: FinishedDocPayload) =>
   request.post<any, { id: number; docNo: string }>('/api/finished-stock', data);

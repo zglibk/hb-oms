@@ -132,6 +132,16 @@ export class FinishedStockController {
     return this.service.findGroupOptions(query);
   }
 
+  /**
+   * 产品选择器的客户 / 产品型号 / 表面处理 / 颜色去重下拉项。
+   * 与 group-options 同源且同为跨页引用接口，必须注册在 `:id` 之前。
+   */
+  @Get('group-filter-options')
+  @RequireAnyPermissions('finished-stock', 'opening')
+  async groupFilterOptions(@Query() query: QueryStockGroupOptionDto) {
+    return this.service.findGroupFilterOptions(query);
+  }
+
   @Get(':id')
   @RequirePermissions('finished-stock')
   async detail(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {

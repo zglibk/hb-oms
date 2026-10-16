@@ -179,7 +179,21 @@ export class QueryBalanceDto {
 
 /** 可出入库的**产品行**选项（建单选行用；沿用旧接口路径 group-options） */
 export class QueryStockGroupOptionDto {
-  @IsOptional() @IsString() keyword?: string;
+  /** 全局关键词：叠加搜索订单、产品、部件组、追溯码及相关字典中文标签 */
+  @IsOptional() @IsString() @MaxLength(255) keyword?: string;
+
+  /** 以下独立条件彼此及与关键词之间均按 AND 叠加 */
+  @IsOptional() @IsString() @MaxLength(64) orderNo?: string;
+
+  @IsOptional() @IsString() @MaxLength(128) customerName?: string;
+
+  @IsOptional() @IsString() @MaxLength(64) productionNo?: string;
+
+  @IsOptional() @IsString() @MaxLength(128) productModel?: string;
+
+  @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
+
+  @IsOptional() @IsString() @MaxLength(64) color?: string;
 
   /** 用途：inbound 入库（附可入库量）/ sale_outbound 出库（附当前结存） */
   @IsOptional() @IsString() @MaxLength(32) bizType?: string;
