@@ -133,6 +133,9 @@ export const getPartGroupOptions = (params: {
 }) => request.get<any, PartGroupOption[]>('/api/outsource/part-group-options', { params });
 
 export const getPartGroupFilterOptions = (params: {
+  customerName?: string;
+  productModel?: string;
+  surfaceType?: string;
   hideReturned?: boolean;
   onlyReturned?: boolean;
 }) =>

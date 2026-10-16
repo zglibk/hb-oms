@@ -106,13 +106,13 @@
     <el-dialog
       v-model="pickerVisible"
       title="选择订单产品"
-      width="min(1460px, 96vw)"
+      width="min(1180px, 94vw)"
       top="4vh"
       @open="loadPickerData"
     >
       <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
         <el-form-item label="订单号">
-          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadOptions" />
+          <el-input v-model="pickerQuery.orderNo" clearable placeholder="请输入订单号" @keyup.enter="loadPickerData" />
         </el-form-item>
         <el-form-item label="客户">
           <el-select
@@ -121,13 +121,12 @@
             filterable
             :loading="filterOptionsLoading"
             placeholder="全部"
-            @change="loadOptions"
           >
             <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
           </el-select>
         </el-form-item>
         <el-form-item label="生产单号">
-          <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadOptions" />
+          <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadPickerData" />
         </el-form-item>
         <el-form-item label="产品型号">
           <el-select-v2
@@ -138,7 +137,6 @@
             :options="productModelSelectOptions"
             popper-class="stock-picker-model-popper"
             placeholder="全部"
-            @change="loadOptions"
           />
         </el-form-item>
         <el-form-item label="表面处理">
@@ -147,7 +145,6 @@
             clearable
             :loading="filterOptionsLoading"
             placeholder="全部"
-            @change="loadOptions"
           >
             <el-option
               v-for="value in pickerFilterOptions.surfaceTypes"
@@ -164,23 +161,23 @@
             filterable
             :loading="filterOptionsLoading"
             placeholder="全部"
-            @change="loadOptions"
           >
             <el-option v-for="value in pickerFilterOptions.colors" :key="value" :label="value" :value="value" />
           </el-select>
         </el-form-item>
         <el-form-item label="关键词" class="picker-keyword">
-          <el-input v-model="pickerQuery.keyword" clearable placeholder="请输入关键词" @keyup.enter="loadOptions" />
+          <el-input v-model="pickerQuery.keyword" clearable placeholder="请输入关键词" @keyup.enter="loadPickerData" />
         </el-form-item>
         <el-form-item class="picker-actions">
-          <el-button type="primary" :icon="Search" @click="loadOptions">查询</el-button>
+          <el-button type="primary" :icon="Search" @click="loadPickerData">查询</el-button>
           <el-button @click="resetPickerQuery">重置</el-button>
         </el-form-item>
       </el-form>
       <div class="picker-tip">
         {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
       </div>
-      <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="58vh"
+      <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading"
+        element-loading-text="正在查询并加载订单产品..." border stripe size="small" height="58vh"
         @selection-change="onPickChange">
         <el-table-column type="selection" width="42" :selectable="isSelectable" />
         <el-table-column type="index" label="序号" width="56" align="center" />
@@ -228,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { Back, Plus, Delete, Search, WarningFilled } from '@element-plus/icons-vue';
@@ -354,7 +351,7 @@ init();
 /** 编辑态回填额度/结存：选项接口按产品行返回，按 (产品行,边别) 对齐 */
 async function refreshLimits() {
   if (!form.items.length) return;
-  const opts = await getStockGroupOptions({ bizType: form.bizType, limit: 500 });
+  const opts = await getStockGroupOptions({ bizType: form.bizType });
   const map = new Map<string, number>();
   opts.forEach((o) => {
     o.sides.forEach((s) =>
@@ -370,7 +367,15 @@ async function refreshLimits() {
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
 const filterOptionsLoading = ref(false);
-const pickerQuery = reactive({
+const pickerQuery = reactive<{
+  orderNo: string;
+  customerName: string | undefined;
+  productionNo: string;
+  productModel: string | undefined;
+  surfaceType: string | undefined;
+  color: string | undefined;
+  keyword: string;
+}>({
   orderNo: '',
   customerName: '',
   productionNo: '',
@@ -392,17 +397,42 @@ const pickerRows = ref<ItemRow[]>([]);
 const picked = ref<ItemRow[]>([]);
 const pickerTableRef = ref<any>();
 let pickerRequestId = 0;
+let pickerFilterRequestId = 0;
+let suppressPickerAutoSearch = false;
+
+// 下拉框选中与点 × 清空都统一由模型变化驱动查询。同步监听让重置时可以暂时抑制，
+// 避免 Object.assign 改四个下拉字段时连续请求，重置完成后只查一次。
+watch(
+  () => [
+    pickerQuery.customerName,
+    pickerQuery.productModel,
+    pickerQuery.surfaceType,
+    pickerQuery.color,
+  ] as const,
+  () => {
+    if (!suppressPickerAutoSearch && pickerVisible.value) void loadPickerData();
+  },
+  { flush: 'sync' },
+);
 
 function openPicker() {
   pickerVisible.value = true;
 }
 
 async function loadFilterOptions() {
+  const requestId = ++pickerFilterRequestId;
   filterOptionsLoading.value = true;
   try {
-    pickerFilterOptions.value = await getStockGroupFilterOptions();
+    const rows = await getStockGroupFilterOptions({
+      customerName: pickerQuery.customerName?.trim() || undefined,
+      productModel: pickerQuery.productModel?.trim() || undefined,
+      surfaceType: pickerQuery.surfaceType || undefined,
+      color: colorEnabled.value ? pickerQuery.color || undefined : undefined,
+    });
+    if (requestId !== pickerFilterRequestId) return;
+    pickerFilterOptions.value = rows;
   } finally {
-    filterOptionsLoading.value = false;
+    if (requestId === pickerFilterRequestId) filterOptionsLoading.value = false;
   }
 }
 
@@ -416,15 +446,14 @@ async function loadOptions() {
   pickerLoading.value = true;
   try {
     const opts = await getStockGroupOptions({
-      orderNo: pickerQuery.orderNo.trim() || undefined,
-      customerName: pickerQuery.customerName.trim() || undefined,
-      productionNo: pickerQuery.productionNo.trim() || undefined,
-      productModel: pickerQuery.productModel.trim() || undefined,
+      orderNo: pickerQuery.orderNo?.trim() || undefined,
+      customerName: pickerQuery.customerName?.trim() || undefined,
+      productionNo: pickerQuery.productionNo?.trim() || undefined,
+      productModel: pickerQuery.productModel?.trim() || undefined,
       surfaceType: pickerQuery.surfaceType || undefined,
       color: colorEnabled.value ? pickerQuery.color || undefined : undefined,
-      keyword: pickerQuery.keyword.trim() || undefined,
+      keyword: pickerQuery.keyword?.trim() || undefined,
       bizType: form.bizType,
-      limit: 500,
     });
     // 连续切换下拉项时，只接纳最后一次请求，避免慢返回的旧条件覆盖新结果。
     if (requestId !== pickerRequestId) return;
@@ -445,12 +474,16 @@ async function loadOptions() {
         remark: '',
       })) as any,
     );
+    // 大批量行渲染会占用主线程；等本轮表格 DOM 更新完成后再关闭 Element Plus
+    // loading 遮罩，避免数据返回后渲染期间只看到界面卡住而没有加载反馈。
+    await nextTick();
   } finally {
     if (requestId === pickerRequestId) pickerLoading.value = false;
   }
 }
 
 function resetPickerQuery() {
+  suppressPickerAutoSearch = true;
   Object.assign(pickerQuery, {
     orderNo: '',
     customerName: '',
@@ -460,7 +493,8 @@ function resetPickerQuery() {
     color: '',
     keyword: '',
   });
-  loadOptions();
+  suppressPickerAutoSearch = false;
+  void loadPickerData();
 }
 /** 已在明细中的 (产品行,边别) 不可重复选 */
 function isSelectable(row: ItemRow): boolean {
@@ -567,8 +601,8 @@ export default { name: 'FinishedStockForm' };
 }
 .picker-filters {
   display: grid;
-  /* 宽屏一行放下 7 个条件 + 操作区，单个表单项约为原四列布局的一半宽度。 */
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* 宽屏每行最多五个条件；剩余条件与操作区自然换到下一行。 */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px 14px;
   align-items: center;
   padding: 12px 14px;
@@ -607,6 +641,11 @@ export default { name: 'FinishedStockForm' };
 @media (max-width: 1100px) {
   .picker-filters {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .picker-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .picker-tip { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 12px; }

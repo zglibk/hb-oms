@@ -497,7 +497,12 @@ export class FinishedStockService {
    * - 出库（sale_outbound）附当前结存，供选行时看清能发多少。
    */
   async findGroupOptions(query: QueryStockGroupOptionDto) {
-    const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
+    // 选择器没有分页：未显式传 limit 时必须返回完整结果。此前默认截断 200、页面再显式
+    // 传 500，会因卡口产品展开左右两行而出现“筛选后 532 行、清空后反而 527 行”的假象。
+    // limit 仅保留给批量导入等明确需要保护上限的内部调用。
+    const limit = query.limit == null
+      ? undefined
+      : Math.min(Math.max(query.limit, 1), 500);
     const rows = await this.loadGroupOptionCandidates(query, limit);
     if (!rows.length) return [];
 
@@ -559,15 +564,29 @@ export class FinishedStockService {
   async findGroupFilterOptions(
     query: QueryStockGroupOptionDto,
   ): Promise<StockGroupFilterOptions> {
-    const rows = await this.loadGroupOptionCandidates({ onlyOpening: query.onlyOpening });
+    const dropdownQuery = {
+      onlyOpening: query.onlyOpening,
+      customerName: query.customerName,
+      productModel: query.productModel,
+      surfaceType: query.surfaceType,
+      color: query.color,
+    };
+    // 各下拉项受其它下拉条件约束，但排除自身条件，既形成级联，又允许用户直接切换
+    // 当前字段。例如选 A 客户后型号只来自 A；客户下拉自身仍可切换到其它符合型号/表面条件的客户。
+    const [customerRows, modelRows, surfaceRows, colorRows] = await Promise.all([
+      this.loadGroupOptionCandidates({ ...dropdownQuery, customerName: undefined }),
+      this.loadGroupOptionCandidates({ ...dropdownQuery, productModel: undefined }),
+      this.loadGroupOptionCandidates({ ...dropdownQuery, surfaceType: undefined }),
+      this.loadGroupOptionCandidates({ ...dropdownQuery, color: undefined }),
+    ]);
     const distinct = (values: Array<unknown>) =>
       [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'zh-CN'));
     return {
-      customerNames: distinct(rows.map((row) => row.customerName)),
-      productModels: distinct(rows.map((row) => row.productModel)),
-      surfaceTypes: distinct(rows.map((row) => row.surfaceType)),
-      colors: distinct(rows.map((row) => row.color)),
+      customerNames: distinct(customerRows.map((row) => row.customerName)),
+      productModels: distinct(modelRows.map((row) => row.productModel)),
+      surfaceTypes: distinct(surfaceRows.map((row) => row.surfaceType)),
+      colors: distinct(colorRows.map((row) => row.color)),
     };
   }
 

@@ -241,8 +241,14 @@ export const getStockGroupOptions = (params: {
   onlyOpening?: boolean;
 }) => request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
 
-/** 产品选择器的去重下拉项；期初录入页可用 onlyOpening 收窄到期初补录订单 */
-export const getStockGroupFilterOptions = (params: { onlyOpening?: boolean } = {}) =>
+/** 产品选择器的级联去重下拉项；各字段由其它已选下拉条件收窄 */
+export const getStockGroupFilterOptions = (params: {
+  customerName?: string;
+  productModel?: string;
+  surfaceType?: string;
+  color?: string;
+  onlyOpening?: boolean;
+} = {}) =>
   request.get<any, StockGroupFilterOptions>('/api/finished-stock/group-filter-options', { params });
 
 export const createFinishedDoc = (data: FinishedDocPayload) =>

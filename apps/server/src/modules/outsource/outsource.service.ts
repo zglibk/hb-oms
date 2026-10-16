@@ -138,32 +138,51 @@ export class OutsourceService {
    * 不从最多 200 条的列表结果反推，避免旧记录中的选项缺失。
    */
   async findPartGroupFilterOptions(
-    query: QueryPartGroupVisibilityDto,
+    query: QueryPartGroupOptionDto,
   ): Promise<PartGroupFilterOptions> {
-    const { where, params } = this.buildPartGroupVisibilityFilter(query);
-    const fromSql = `
-      FROM t_order_part_group g
-      JOIN t_order_product p ON p.id = g.order_product_id
-      JOIN t_order o ON o.id = g.order_id
-      ${where}`;
+    const buildRange = (exclude: 'customerName' | 'productModel' | 'surfaceType') => {
+      const visibility = this.buildPartGroupVisibilityFilter(query);
+      const params = visibility.params;
+      let where = visibility.where;
+      const addExact = (column: string, value?: string) => {
+        const normalized = value?.trim();
+        if (!normalized) return;
+        where += ` AND ${column} = ?`;
+        params.push(normalized);
+      };
+      if (exclude !== 'customerName') addExact('o.customer_name', query.customerName);
+      if (exclude !== 'productModel') addExact('g.product_model', query.productModel);
+      if (exclude !== 'surfaceType') addExact('p.surface_type', query.surfaceType);
+      return {
+        fromSql: `
+          FROM t_order_part_group g
+          JOIN t_order_product p ON p.id = g.order_product_id
+          JOIN t_order o ON o.id = g.order_id
+          ${where}`,
+        params,
+      };
+    };
+    const customersRange = buildRange('customerName');
+    const modelsRange = buildRange('productModel');
+    const surfacesRange = buildRange('surfaceType');
     const [customers, models, surfaces]: any[][] = await Promise.all([
       this.dataSource.query(
-        `SELECT DISTINCT o.customer_name AS value ${fromSql}
+        `SELECT DISTINCT o.customer_name AS value ${customersRange.fromSql}
           AND o.customer_name IS NOT NULL AND TRIM(o.customer_name) <> ''
          ORDER BY o.customer_name`,
-        [...params],
+        customersRange.params,
       ),
       this.dataSource.query(
-        `SELECT DISTINCT g.product_model AS value ${fromSql}
+        `SELECT DISTINCT g.product_model AS value ${modelsRange.fromSql}
           AND g.product_model IS NOT NULL AND TRIM(g.product_model) <> ''
          ORDER BY g.product_model`,
-        [...params],
+        modelsRange.params,
       ),
       this.dataSource.query(
-        `SELECT DISTINCT p.surface_type AS value ${fromSql}
+        `SELECT DISTINCT p.surface_type AS value ${surfacesRange.fromSql}
           AND p.surface_type IS NOT NULL AND TRIM(p.surface_type) <> ''
          ORDER BY p.surface_type`,
-        [...params],
+        surfacesRange.params,
       ),
     ]);
     const valuesOf = (rows: any[]) => rows.map((row) => String(row.value));
