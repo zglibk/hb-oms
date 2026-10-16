@@ -111,7 +111,9 @@
         {{ s }}：<span class="sign-value">{{ signValue(s) }}</span>
       </div>
     </footer>
-    <div v-if="tpl.footerNote" class="doc-side-note">{{ tpl.footerNote }}</div>
+    <div v-if="footerNoteParts.length" class="doc-side-note" aria-hidden="true">
+      <span v-for="(part, i) in footerNoteParts" :key="`copy${i}`" class="doc-side-note__part">{{ part }}</span>
+    </div>
   </article>
 </template>
 
@@ -119,7 +121,7 @@
 import { computed } from 'vue';
 import type { DeliveryNote, DeliveryNoteRow } from '@/api/finished-stock';
 import { COMPANY_FULL_NAME } from '@/constants/company';
-import { deliveryTemplateOf, type DeliveryColumn } from '@/constants/delivery-note';
+import { deliveryTemplateOf, footerNotePartsOf, type DeliveryColumn } from '@/constants/delivery-note';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import type { PrintProfileConfig } from '@/api/print-config';
 import { printPaperBodyOf } from '@/utils/print-paper';
@@ -167,6 +169,7 @@ const sheetStyle = computed(() => {
 });
 
 const tpl = computed(() => deliveryTemplateOf(props.templateCode));
+const footerNoteParts = computed(() => footerNotePartsOf(tpl.value.footerNote));
 
 /**
  * 实际要印的列：剔除被业务字段开关停用的（§5.7——停用的字段在录入框/表格列/导出列
@@ -296,78 +299,72 @@ function signValue(label: string): string {
   line-height: 1.5;
 }
 
-/* 9.5×5.5 连续纸与 A5 都属于短纸面，压缩纵向留白以保证签名栏留在同一物理页。 */
+/* 9.5×5.5 连续纸与 A5 都属于短纸面：压缩纵向留白，但字号对齐 A4，针式实打才看得清。
+ * 行数变多由自动分页按实测行高拆页，不要再靠把字收到 9px 来塞进一张。 */
 .print-sheet--compact {
-  font-size: calc(11px * var(--font-scale, 1));
-  line-height: 1.3;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.35;
 }
 
 .print-sheet--compact .doc-heading__main h1 {
-  font-size: calc(18px * var(--font-scale, 1));
+  font-size: calc(20px * var(--font-scale, 1));
   letter-spacing: 1px;
 }
 
 .print-sheet--compact .doc-heading__main h2 {
-  margin-top: 0.6mm;
-  font-size: calc(15px * var(--font-scale, 1));
-  letter-spacing: 3px;
+  margin-top: 0.8mm;
+  font-size: calc(17px * var(--font-scale, 1));
+  letter-spacing: 4px;
 }
 
 .print-sheet--compact .doc-heading__no {
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .print-sheet--compact .doc-contact {
-  margin-top: 1.2mm;
-  font-size: calc(9px * var(--font-scale, 1));
+  margin-top: 1.4mm;
+  font-size: calc(11px * var(--font-scale, 1));
 }
 
 .print-sheet--compact .doc-meta {
-  margin-top: 2mm;
+  margin-top: 2.2mm;
 }
 
 .print-sheet--compact .doc-meta__row {
   column-gap: 3mm;
-  margin-bottom: 0.8mm;
+  margin-bottom: 1mm;
 }
 
 .print-sheet--compact .note-table {
-  margin-top: 1.5mm;
+  margin-top: 1.8mm;
+  /* 给右侧联次栏留出宽度，避免备注格顶到竖排文字。 */
+  width: calc(100% - 9mm);
 }
 
 .print-sheet--compact .note-table th,
 .print-sheet--compact .note-table td {
-  height: 7mm;
-  padding: 0.55mm 0.7mm;
-  line-height: 1.22;
+  height: auto;
+  min-height: 8mm;
+  padding: 0.7mm 0.8mm;
+  line-height: 1.25;
 }
 
 .print-sheet--compact .total-row td {
-  font-size: calc(11px * var(--font-scale, 1));
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
 .print-sheet--compact .doc-signatures {
   gap: 4mm;
-  padding-top: 3mm;
+  padding-top: 4mm;
+  font-size: calc(12px * var(--font-scale, 1));
 }
 
-/* 通用版列数最多，进一步收紧字号与内边距，备注内容不再逐字堆成超高行。 */
-.print-sheet--compact.print-sheet--generic,
-.print-sheet--compact.print-sheet--generic5 {
-  font-size: calc(10px * var(--font-scale, 1));
-}
-
+/* 通用版列数最多，单元格略收内边距，字号仍与正文一致。 */
 .print-sheet--compact.print-sheet--generic .note-table th,
 .print-sheet--compact.print-sheet--generic .note-table td,
 .print-sheet--compact.print-sheet--generic5 .note-table th,
 .print-sheet--compact.print-sheet--generic5 .note-table td {
-  padding: 0.45mm 0.5mm;
-  font-size: calc(9.5px * var(--font-scale, 1));
-}
-
-.print-sheet--compact.print-sheet--generic .doc-signatures,
-.print-sheet--compact.print-sheet--generic5 .doc-signatures {
-  font-size: calc(9.5px * var(--font-scale, 1));
+  padding: 0.55mm 0.6mm;
 }
 .print-sheet > :not(.doc-side-note) { position: relative; left: var(--offset-x, 0); top: var(--offset-y, 0); }
 
@@ -470,23 +467,49 @@ function signValue(label: string): string {
   text-align: center;
 }
 
+/*
+ * 联次说明：按联拆成多段，沿纸面高度均分竖排。
+ * 针式 9.5×5.5 进纸含左右履带孔，成品纸面居中后右缘只剩约 12mm 孔边；
+ * 整段文字再贴 right:2.5mm 会打进不可印区，只留下半个字。短纸面把栏位内收到表右、孔左。
+ */
 .doc-side-note {
   position: absolute;
-  top: calc(50% + var(--offset-y, 0mm));
+  top: calc(var(--margin-top, 7mm) + var(--offset-y, 0mm));
+  bottom: calc(var(--margin-bottom, 7mm) - var(--offset-y, 0mm));
   right: calc(2.5mm - var(--offset-x, 0mm));
-  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: center;
+  width: 5mm;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+}
+.doc-side-note__part {
   writing-mode: vertical-rl;
   text-orientation: upright;
   white-space: nowrap;
-  font-size: calc(9px * var(--font-scale, 1));
-  line-height: 1.1;
-  letter-spacing: 0;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1;
+  letter-spacing: 0.6px;
 }
 
-/* 五联文字最长：单独压紧字距，确保五段联次说明始终在同一竖列内。 */
-.print-sheet--generic5 .doc-side-note {
-  font-size: calc(8.5px * var(--font-scale, 1));
-  letter-spacing: -0.7px;
+.print-sheet--compact .doc-side-note {
+  top: calc(3mm + var(--offset-y, 0mm));
+  bottom: calc(3mm - var(--offset-y, 0mm));
+  /* 约 6mm 起算：躲开履带孔（12.7mm）与针式右不可印区，仍落在 218mm 成品纸内。 */
+  right: calc(6mm - var(--offset-x, 0mm));
+  width: 7.5mm;
+}
+.print-sheet--compact .doc-side-note__part {
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: 0.4px;
+}
+/* 五联槽位更矮：10px 才能让最长的「第二联收款依据（红）」落在均分高度内。 */
+.print-sheet--compact.print-sheet--generic5 .doc-side-note__part {
+  font-size: calc(10px * var(--font-scale, 1));
+  letter-spacing: 0;
 }
 
 /* ===== 打印：纸面自身的打印态（页面容器与 @page 由调用方管） ===== */

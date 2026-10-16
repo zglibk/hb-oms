@@ -303,3 +303,11 @@ export function deliveryTemplateOf(code: string | null | undefined): DeliveryTem
   const hit = DELIVERY_TEMPLATES.find((t) => t.code === String(code ?? '').trim());
   return hit ?? DELIVERY_TEMPLATES[0];
 }
+
+/**
+ * 把联次说明拆成逐联竖排。四联/五联用全角空格分隔，客户版用连续空格分隔。
+ * 拆开后按纸面高度均分，避免整段竖排贴到针式履带孔而被裁切。
+ */
+export function footerNotePartsOf(note: string | null | undefined): string[] {
+  return String(note ?? '').split(/[\s　]+/).filter(Boolean);
+}
