@@ -12,7 +12,7 @@
     <header class="doc-heading">
       <div class="doc-heading__main">
         <h1>{{ COMPANY_FULL_NAME }}</h1>
-        <h2>产品送货单</h2>
+        <h2>送货单</h2>
       </div>
       <!-- 耐斯克版在标题右上角另印一次单号，精工版没有这一栏（版式差异见模板注册表） -->
       <div v-if="tpl.showDocNoInTitle" class="doc-heading__no">送货单编号：{{ note.deliveryNo }}</div>
