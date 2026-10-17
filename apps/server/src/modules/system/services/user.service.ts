@@ -130,6 +130,21 @@ export class UserService {
     }
   }
 
+  /** 解除登录锁定属于账号安全操作，只允许内置管理员与超级管理员。 */
+  private assertCanUnlockAccount(operator: CurrentUserPayload) {
+    if (
+      operator.username === SUPER_ADMIN_USERNAME ||
+      operator.roleCodes?.includes(ADMIN_ROLE_CODE)
+    ) {
+      return;
+    }
+    throw new ForbiddenException('仅管理员或超级管理员可解除账号锁定');
+  }
+
+  private isLoginLocked(user: Pick<User, 'lockedUntil'>, now = Date.now()) {
+    return !!user.lockedUntil && user.lockedUntil.getTime() > now;
+  }
+
   async update(
     id: number,
     dto: UpdateUserDto,
@@ -186,6 +201,9 @@ export class UserService {
       ...auditOnUpdate(operator),
       password: hash,
       mustChangePwd: 1,
+      // 管理员已经为账号设置新密码时，一并清除旧密码造成的失败计数与登录锁定。
+      loginFailCount: 0,
+      lockedUntil: null,
       // 重置密码后撤销该用户全部历史会话（安全审查 P1）
       tokenInvalidBefore: new Date(),
     });
@@ -213,6 +231,26 @@ export class UserService {
     });
     this.authCache.invalidateUser(id); // 停用即刻生效（无需等 token 过期）
     return { id, status };
+  }
+
+  /**
+   * 解除连续输错密码造成的临时登录锁定。
+   * 权限守卫负责 user:update；这里再硬性限定管理员层级与可维护目标，防 API 直调越权。
+   */
+  async unlock(id: number, operator: CurrentUserPayload) {
+    this.assertCanUnlockAccount(operator);
+    const user = await this.userRepo.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('用户不存在');
+    await this.assertCanManagePrivilegedAccount(user, operator);
+    if (!this.isLoginLocked(user)) {
+      throw new BadRequestException('账号当前未处于登录锁定状态');
+    }
+    await this.userRepo.update(id, {
+      ...auditOnUpdate(operator),
+      loginFailCount: 0,
+      lockedUntil: null,
+    });
+    return { id, unlocked: true };
   }
 
   /** 批量删除用户（连带清理其角色绑定）。不可删除 admin 与当前登录账号 */
@@ -264,8 +302,19 @@ export class UserService {
     }
     if (query.deptId != null)
       qb.andWhere('u.dept_id = :d', { d: Number(query.deptId) });
-    if (query.status != null)
+    const now = new Date();
+    if (query.accountState === 'locked') {
+      qb.andWhere('u.status = 1').andWhere('u.locked_until > :now', { now });
+    } else if (query.accountState === 'enabled') {
+      qb
+        .andWhere('u.status = 1')
+        .andWhere('(u.locked_until IS NULL OR u.locked_until <= :now)', { now });
+    } else if (query.accountState === 'disabled') {
+      qb.andWhere('u.status = 0');
+    } else if (query.status != null) {
+      // 保留旧 status 查询参数兼容；新页面统一改用 accountState。
       qb.andWhere('u.status = :s', { s: Number(query.status) });
+    }
     qb.orderBy('u.id', 'ASC')
       .skip((page - 1) * pageSize)
       .take(pageSize);
@@ -282,6 +331,11 @@ export class UserService {
       : [];
     const depts = await this.deptRepo.find();
 
+    const viewerCanUnlock = Boolean(
+      viewer.username === SUPER_ADMIN_USERNAME ||
+      viewer.roleCodes?.includes(ADMIN_ROLE_CODE),
+    );
+    const nowMs = Date.now();
     const list = users.map((u) => {
       const myRoleIds = userRoles
         .filter((ur) => ur.userId === u.id)
@@ -293,6 +347,8 @@ export class UserService {
           ? 'manager'
           : null;
       const dept = depts.find((d) => d.id === u.deptId);
+      const canManage =
+        viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null;
       return {
         id: u.id,
         username: u.username,
@@ -302,11 +358,14 @@ export class UserService {
         deptName: dept?.deptName ?? null,
         phone: u.phone,
         status: u.status,
+        isLocked: this.isLoginLocked(u, nowMs),
+        lockedUntil: u.lockedUntil,
         lastLoginAt: u.lastLoginAt,
         roleIds: myRoles.map((r) => r.id),
         roleNames: myRoles.map((r) => r.roleName),
         adminLevel,
-        canManage: viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null,
+        canManage,
+        canUnlock: viewerCanUnlock && canManage,
         // 审计四件套：列表页悬浮图标展示，手工挑字段的地方最容易漏
         creatorName: u.creatorName,
         createdAt: u.createdAt,
@@ -330,6 +389,11 @@ export class UserService {
       : roles.some((r) => r.roleCode === ADMIN_ROLE_CODE)
         ? 'manager'
         : null;
+    const canManage = viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null;
+    const viewerCanUnlock = Boolean(
+      viewer.username === SUPER_ADMIN_USERNAME ||
+      viewer.roleCodes?.includes(ADMIN_ROLE_CODE),
+    );
     return {
       id: user.id,
       username: user.username,
@@ -338,10 +402,13 @@ export class UserService {
       deptId: user.deptId,
       phone: user.phone,
       status: user.status,
+      isLocked: this.isLoginLocked(user),
+      lockedUntil: user.lockedUntil,
       remark: user.remark,
       roleIds,
       adminLevel,
-      canManage: viewer.username === SUPER_ADMIN_USERNAME || adminLevel == null,
+      canManage,
+      canUnlock: viewerCanUnlock && canManage,
       creatorName: user.creatorName,
       createdAt: user.createdAt,
       updaterName: user.updaterName,

@@ -5,9 +5,10 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="4">
             <el-form-item label="状态">
-              <el-select v-model="query.status" clearable placeholder="全部" @change="runKeywordSearch">
-                <el-option label="启用" :value="1" />
-                <el-option label="停用" :value="0" />
+              <el-select v-model="query.accountState" clearable placeholder="全部" @change="runKeywordSearch">
+                <el-option label="正常启用" value="enabled" />
+                <el-option label="登录锁定" value="locked" />
+                <el-option label="停用" value="disabled" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -103,10 +104,17 @@
             </color-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-              {{ row.status === 1 ? '启用' : '停用' }}
+            <el-tooltip
+              v-if="isRowLocked(row)"
+              :content="`密码连续输错，登录已临时锁定；预计 ${formatDateTime(row.lockedUntil)} 自动解除`"
+              placement="top"
+            >
+              <el-tag type="danger" size="small">登录锁定</el-tag>
+            </el-tooltip>
+            <el-tag v-else :type="row.status === 1 ? 'success' : 'info'" size="small">
+              {{ row.status === 1 ? '正常启用' : '停用' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -116,6 +124,20 @@
               <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:update'" link type="primary" class="btn-edit" :icon="Edit" @click="openEdit(row)">编辑</el-button>
               <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:assign_role'" link type="primary" class="btn-view" :icon="Avatar" @click="openAssign(row)">角色</el-button>
               <el-button size="small" :disabled="row.canManage === false" v-permission.disable="'user:reset_pwd'" link type="primary" class="btn-warning" :icon="Key" @click="onResetPwd(row)">重置密码</el-button>
+              <el-button
+                size="small"
+                :disabled="!isRowLocked(row) || row.canUnlock !== true"
+                :loading="unlockingIds.has(row.id)"
+                :title="unlockTitle(row)"
+                v-permission.disable="'user:update'"
+                link
+                type="primary"
+                class="btn-submit"
+                :icon="Unlock"
+                @click="onUnlock(row)"
+              >
+                解除锁定
+              </el-button>
               <el-button size="small"
                 :disabled="row.canManage === false || row.username === SUPER_ADMIN_USERNAME"
                 v-permission.disable="'user:update'"
@@ -210,15 +232,24 @@
 // 不显式命名会导致缓存互相顶替、onActivated 打在错误实例上（刷新失效）。
 defineOptions({ name: 'SystemUserList' });
 
-import { computed, ref, reactive, onMounted, onActivated } from 'vue';
-import { Plus, Delete, Edit, Avatar, Key, CircleClose, Open } from '@element-plus/icons-vue';
+import {
+  computed,
+  ref,
+  reactive,
+  onMounted,
+  onActivated,
+  onDeactivated,
+  onBeforeUnmount,
+} from 'vue';
+import { Plus, Delete, Edit, Avatar, Key, CircleClose, Open, Unlock } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import ColorTag from '@/components/ColorTag.vue';
 import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
+import { formatDateTime } from '@/utils/date';
 import {
   getUserList, getUserDetail, createUser, updateUser,
-  assignUserRoles, resetUserPassword, toggleUserStatus, deleteUsers,
+  assignUserRoles, resetUserPassword, toggleUserStatus, unlockUser, deleteUsers,
   getRoleList, getDeptTree,
 } from '@/api/system';
 
@@ -228,6 +259,9 @@ const total = ref(0);
 const selection = ref<any[]>([]);
 const query = reactive<any>({ page: 1, pageSize: 10 });
 const roles = ref<any[]>([]);
+const lockNow = ref(Date.now());
+const unlockingIds = ref(new Set<number>());
+let lockExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 /** 超级管理员角色不出现在普通账号的选择器中；服务端另有同口径硬校验 */
 const ordinaryRoles = computed(() =>
   roles.value.filter((r) => r.roleCode !== SUPER_ADMIN_ROLE_CODE),
@@ -261,13 +295,14 @@ async function load() {
     const res: any = await getUserList(query);
     list.value = res.list;
     total.value = res.total;
+    scheduleLockExpiryRefresh();
   } finally {
     loading.value = false;
   }
 }
 function reload() { query.page = 1; load(); }
 const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
-function resetQuery() { query.keyword = undefined; query.status = undefined; query.deptId = undefined; runKeywordSearch(); }
+function resetQuery() { query.keyword = undefined; query.accountState = undefined; query.deptId = undefined; runKeywordSearch(); }
 
 async function loadMeta() {
   roles.value = await getRoleList();
@@ -325,6 +360,7 @@ async function onAssignSave() {
 }
 
 async function onResetPwd(row: any) {
+  const wasLocked = isRowLocked(row);
   const { value } = await ElMessageBox.prompt(
     `为「${row.realName}」设置新密码（≥6位）`, '重置密码',
     {
@@ -333,7 +369,56 @@ async function onResetPwd(row: any) {
     },
   );
   await resetUserPassword(row.id, value);
-  ElMessage.success('密码已重置');
+  ElMessage.success(wasLocked ? '密码已重置，账号锁定已解除' : '密码已重置');
+  void load();
+}
+function unlockTitle(row: any) {
+  if (!isRowLocked(row)) return '账号当前未锁定';
+  if (row.canUnlock !== true) return '仅管理员或超级管理员可解除；管理员不能维护管理员或超级管理员账号';
+  return '清除登录失败计数并允许账号立即重新登录';
+}
+async function onUnlock(row: any) {
+  if (!isRowLocked(row) || unlockingIds.value.has(row.id)) return;
+  await ElMessageBox.confirm(
+    `确认解除「${row.realName}」的登录锁定？解除后可立即重新尝试登录。`,
+    '解除账号锁定',
+    { type: 'warning' },
+  );
+  unlockingIds.value.add(row.id);
+  try {
+    await unlockUser(row.id);
+    ElMessage.success('账号锁定已解除');
+  } finally {
+    unlockingIds.value.delete(row.id);
+    await load();
+  }
+}
+
+function isRowLocked(row: any): boolean {
+  if (row.status !== 1 || !row.isLocked || !row.lockedUntil) return false;
+  return new Date(row.lockedUntil).getTime() > lockNow.value;
+}
+
+function clearLockExpiryTimer() {
+  if (lockExpiryTimer) clearTimeout(lockExpiryTimer);
+  lockExpiryTimer = null;
+}
+
+/** 到最近一条锁定的失效时刻立即刷新，避免状态一直停留在“登录锁定”。 */
+function scheduleLockExpiryRefresh() {
+  clearLockExpiryTimer();
+  lockNow.value = Date.now();
+  const nextExpiry = list.value
+    .filter((row) => row.status === 1 && row.isLocked && row.lockedUntil)
+    .map((row) => new Date(row.lockedUntil).getTime())
+    .filter((value) => Number.isFinite(value) && value > lockNow.value)
+    .sort((a, b) => a - b)[0];
+  if (!nextExpiry) return;
+  lockExpiryTimer = setTimeout(() => {
+    lockNow.value = Date.now();
+    if (query.accountState === 'locked') void load();
+    else scheduleLockExpiryRefresh();
+  }, Math.max(50, nextExpiry - lockNow.value + 50));
 }
 async function onToggle(row: any) {
   const next = row.status === 1 ? 0 : 1;
@@ -364,4 +449,6 @@ async function batchDelete() {
 onMounted(loadMeta);
 // 每次激活页面时重新拉取用户列表，保证角色名称等始终最新
 onActivated(load);
+onDeactivated(clearLockExpiryTimer);
+onBeforeUnmount(clearLockExpiryTimer);
 </script>

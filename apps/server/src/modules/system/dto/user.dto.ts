@@ -75,4 +75,8 @@ export class QueryUserDto {
   @IsOptional() @IsString() keyword?: string;
   @IsOptional() deptId?: number;
   @IsOptional() status?: number;
+  /** 用户管理页的有效账号状态；locked 只认尚未到期的登录锁定。 */
+  @IsOptional()
+  @IsIn(['enabled', 'disabled', 'locked'])
+  accountState?: 'enabled' | 'disabled' | 'locked';
 }

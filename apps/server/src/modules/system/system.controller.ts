@@ -139,6 +139,16 @@ export class SystemController {
     return this.userService.toggleStatus(id, status, user);
   }
 
+  @Post('user/:id/unlock')
+  @RequirePermissions('user:update')
+  @OperationLog('系统管理', '解除账号锁定')
+  unlockUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.userService.unlock(id, user);
+  }
+
   @Delete('user')
   @RequirePermissions('user:delete')
   @OperationLog('系统管理', '批量删除用户')

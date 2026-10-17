@@ -14,6 +14,8 @@ export const resetUserPassword = (id: number, password: string) =>
   request.post(`/api/system/user/${id}/reset-password`, { password });
 export const toggleUserStatus = (id: number, status: number) =>
   request.post(`/api/system/user/${id}/status/${status}`);
+export const unlockUser = (id: number) =>
+  request.post(`/api/system/user/${id}/unlock`);
 export const deleteUsers = (ids: number[]) =>
   request.delete('/api/system/user', { data: { ids } });
 
@@ -290,6 +292,12 @@ export interface SystemConfig {
   dimensionViewUnit: string;
   /** 送货单全局默认模板编码（客户资料未单独绑定模板时才用它） */
   deliveryTemplateDefault: string;
+  /** 自动滚动速度（px/秒），五张列表独立配置。 */
+  homeOwedScrollSpeed: number;
+  homeOutsourceScrollSpeed: number;
+  screenOverdueScrollSpeed: number;
+  screenOutsourceScrollSpeed: number;
+  changelogScrollSpeed: number;
   /*
    * 业务记录修改主管角色（角色编码逗号分隔）：只许创建人与这些角色修改 / 删除，
    * 管理员与超级管理员均不例外，主管受其角色数据范围约束
@@ -333,6 +341,12 @@ export interface FeatureFlags {
    * 版式定义在 constants/delivery-note.ts；取到未知编码时打印页回落通用模板。
    */
   deliveryTemplateDefault: string;
+  /** 首页两张表、数据大屏两张表、系统更新日志弹窗的自动滚动速度（px/秒）。 */
+  homeOwedScrollSpeed: number;
+  homeOutsourceScrollSpeed: number;
+  screenOverdueScrollSpeed: number;
+  screenOutsourceScrollSpeed: number;
+  changelogScrollSpeed: number;
 }
 
 /** 公开接口返回的脱敏配置（不含银行账号/税号/联系电话/公司地址） */
