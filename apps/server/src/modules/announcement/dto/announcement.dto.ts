@@ -4,6 +4,7 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -17,7 +18,7 @@ import {
   ANNOUNCEMENT_REPLY_SCOPE,
   ANNOUNCEMENT_STATUS,
 } from '@hb-oms/shared';
-import { toBoolean } from '../../../common/utils/transform.util';
+import { EmptyToUndefined, toBoolean } from '../../../common/utils/transform.util';
 
 const LEVELS = Object.values(ANNOUNCEMENT_LEVEL);
 const SCOPES = Object.values(ANNOUNCEMENT_REPLY_SCOPE);
@@ -68,16 +69,29 @@ export class PublishAnnouncementDto {
 
 export class QueryAnnouncementAdminDto {
   @IsOptional()
+  @EmptyToUndefined()
   @IsString()
   keyword?: string;
 
   @IsOptional()
+  @EmptyToUndefined()
   @IsIn(STATUSES)
   status?: string;
 
   @IsOptional()
+  @EmptyToUndefined()
   @IsIn(LEVELS)
   level?: string;
+
+  @IsOptional()
+  @EmptyToUndefined()
+  @IsDateString({}, { message: '发布时间起始日期格式不正确' })
+  publishDateFrom?: string;
+
+  @IsOptional()
+  @EmptyToUndefined()
+  @IsDateString({}, { message: '发布时间结束日期格式不正确' })
+  publishDateTo?: string;
 
   @IsOptional()
   @Transform(toBoolean)

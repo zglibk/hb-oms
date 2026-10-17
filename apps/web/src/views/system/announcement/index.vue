@@ -15,6 +15,17 @@
             <el-option v-for="item in ANNOUNCEMENT_LEVEL_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="发布时间">
+          <el-date-picker
+            v-model="publishDateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            style="width: 250px"
+          />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" :icon="Search" @click="search">查询</el-button>
           <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
@@ -107,7 +118,14 @@ const router = useRouter();
 const loading = ref(false);
 const list = ref<AnnouncementItem[]>([]);
 const total = ref(0);
-const query = reactive({ keyword: '', status: '', level: '', page: 1, pageSize: 20 });
+const query = reactive<{
+  keyword: string;
+  status: '' | NonNullable<AnnouncementItem['status']>;
+  level: '' | AnnouncementItem['level'];
+  page: number;
+  pageSize: number;
+}>({ keyword: '', status: '', level: '', page: 1, pageSize: 20 });
+const publishDateRange = ref<[string, string] | []>([]);
 const formVisible = ref(false);
 const editId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
@@ -138,13 +156,25 @@ function resetForm() {
 async function load() {
   loading.value = true;
   try {
-    const result = await getAnnouncementAdminList({ ...query });
+    const result = await getAnnouncementAdminList({
+      keyword: query.keyword.trim() || undefined,
+      status: query.status || undefined,
+      level: query.level || undefined,
+      publishDateFrom: publishDateRange.value[0] || undefined,
+      publishDateTo: publishDateRange.value[1] || undefined,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
     list.value = result.list;
     total.value = result.total;
   } finally { loading.value = false; }
 }
 function search() { query.page = 1; void load(); }
-function resetQuery() { Object.assign(query, { keyword: '', status: '', level: '', page: 1 }); void load(); }
+function resetQuery() {
+  Object.assign(query, { keyword: '', status: '', level: '', page: 1 });
+  publishDateRange.value = [];
+  void load();
+}
 function openCreate() { editId.value = null; resetForm(); formVisible.value = true; }
 function openEdit(row: AnnouncementItem) {
   editId.value = row.id;

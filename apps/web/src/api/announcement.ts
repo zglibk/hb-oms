@@ -59,6 +59,17 @@ export interface SaveAnnouncementPayload {
   expireAt?: string | null;
 }
 
+export interface AnnouncementAdminQuery {
+  keyword?: string;
+  status?: 'draft' | 'published' | 'withdrawn';
+  level?: 'normal' | 'important' | 'urgent';
+  requiresReply?: boolean;
+  publishDateFrom?: string;
+  publishDateTo?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 export function getAnnouncementPending() {
   return request.get<any, { list: AnnouncementItem[]; unreadCount: number }>('/api/announcement/pending', {
     __silent: true,
@@ -108,7 +119,7 @@ export function createAnnouncementReply(id: number, data: { scope: string; conte
   return request.post<any, AnnouncementReply>(`/api/announcement/${id}/replies`, data);
 }
 
-export function getAnnouncementAdminList(params: Record<string, unknown>) {
+export function getAnnouncementAdminList(params: AnnouncementAdminQuery) {
   return request.get<any, { list: AnnouncementItem[]; total: number }>('/api/announcement/admin', { params });
 }
 

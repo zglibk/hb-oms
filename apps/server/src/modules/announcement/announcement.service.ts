@@ -178,8 +178,25 @@ export class AnnouncementService {
     if (query.keyword?.trim()) {
       qb.andWhere('(a.title LIKE :kw OR a.summary LIKE :kw)', { kw: `%${query.keyword.trim()}%` });
     }
+    if (
+      query.publishDateFrom &&
+      query.publishDateTo &&
+      query.publishDateFrom > query.publishDateTo
+    ) {
+      throw new BadRequestException('发布时间起始日期不能晚于结束日期');
+    }
     if (query.status) qb.andWhere('a.status = :status', { status: query.status });
     if (query.level) qb.andWhere('a.level = :level', { level: query.level });
+    if (query.publishDateFrom) {
+      qb.andWhere('a.publish_at >= :publishDateFrom', {
+        publishDateFrom: `${query.publishDateFrom} 00:00:00`,
+      });
+    }
+    if (query.publishDateTo) {
+      qb.andWhere('a.publish_at <= :publishDateTo', {
+        publishDateTo: `${query.publishDateTo} 23:59:59`,
+      });
+    }
     if (typeof query.requiresReply === 'boolean') {
       qb.andWhere('a.requires_reply = :rr', { rr: query.requiresReply ? 1 : 0 });
     }
