@@ -553,6 +553,10 @@ export class FinishedStockService {
         qtyPcs: Number(r.qtyPcs) || 0,
         socket,
         sides,
+        // 只给本地选择器使用，不参与建单 payload；产品级型号由快照服务补进索引。
+        searchText: query.includeSearchText
+          ? `${r.keywordText ?? ''}|${snap?.productModel ?? r.productModel ?? ''}`
+          : undefined,
       };
     });
   }
@@ -637,37 +641,29 @@ export class FinishedStockService {
     const keyword = query.keyword?.trim();
     // 关键词必须能命中最终展示的产品型号，而该型号由共享函数在应用层实时推导，
     // 不能先在 SQL 中把候选行筛掉。需要搜索时把关联文本一并带回，推导型号后再匹配。
-    const keywordTextSelect = keyword
+    const needKeywordText = Boolean(keyword || query.includeSearchText);
+    const keywordTextSelect = needKeywordText
       ? `, CONCAT_WS('|',
           o.order_no, o.po_no, o.customer_name, o.production_no,
-          o.salesman, o.merchandiser, o.order_source, o.remark,
-          p.material_code, p.item_no, p.customer_drawing_no, p.product_name,
+          p.material_code, p.item_no, p.product_name,
           p.product_type, p.rail_section, p.dimension_raw, CAST(p.dimension_mm AS CHAR),
-          p.surface_type, p.color, p.sheet_material, p.product_requirement,
-          p.delivery_address, p.remark,
-          (SELECT GROUP_CONCAT(CONCAT_WS('|', g_kw.product_model, g_kw.group_type,
-                    g_kw.drawing_no, g_kw.drawing_version, g_kw.material_thickness, g_kw.remark)
-                    SEPARATOR '|')
-             FROM t_order_part_group g_kw WHERE g_kw.order_product_id = p.id),
-          (SELECT GROUP_CONCAT(CONCAT_WS('|', pt_kw.part_type, pt_kw.side,
-                    pt_kw.cycle_code, pt_kw.remark) SEPARATOR '|')
-             FROM t_order_part pt_kw WHERE pt_kw.product_id = p.id),
-          (SELECT GROUP_CONCAT(d_kw.dict_label SEPARATOR '|')
-             FROM t_dict d_kw
-            WHERE (d_kw.dict_type = 'surface_type' AND d_kw.dict_value = p.surface_type)
-               OR (d_kw.dict_type = 'product_type' AND FIND_IN_SET(d_kw.dict_value, p.product_type))
-               OR (d_kw.dict_type = 'rail_section' AND d_kw.dict_value = p.rail_section)
-               OR (d_kw.dict_type = 'order_source' AND d_kw.dict_value = o.order_source)
-               OR (d_kw.dict_type = 'part_group_type' AND EXISTS (
-                 SELECT 1 FROM t_order_part_group g_dict
-                  WHERE g_dict.order_product_id = p.id AND g_dict.group_type = d_kw.dict_value
-               ))
-               OR (d_kw.dict_type = 'part_type' AND EXISTS (
-                 SELECT 1 FROM t_order_part pt_dict
-                  WHERE pt_dict.product_id = p.id AND pt_dict.part_type = d_kw.dict_value
-               )))
+          p.surface_type, p.color, p.sheet_material,
+          group_summary.groupSearchText, part_summary.partSearchText
         ) AS keywordText`
       : `, '' AS keywordText`;
+    const partSummaryJoin = needKeywordText
+      ? `LEFT JOIN (
+           SELECT product_id,
+                  GROUP_CONCAT(DISTINCT part_type) AS partTypes,
+                  GROUP_CONCAT(CONCAT_WS('|', part_type, side, cycle_code, remark) SEPARATOR '|') AS partSearchText
+             FROM t_order_part
+            GROUP BY product_id
+         ) part_summary ON part_summary.product_id = p.id`
+      : '';
+    const groupSearchTextSelect = needKeywordText
+      ? `, GROUP_CONCAT(CONCAT_WS('|', product_model, group_type, drawing_no,
+           drawing_version, material_thickness, remark) SEPARATOR '|') AS groupSearchText`
+      : '';
 
     // 产品型号和关键词都要在应用层过滤；有任一条件时不能提前 LIMIT。
     const productModel = query.productModel?.trim();
@@ -679,18 +675,32 @@ export class FinishedStockService {
               o.order_no AS orderNo, o.customer_name AS customerName,
               o.production_no AS productionNo, p.item_no AS itemNo, p.product_type AS productType,
               p.rail_section AS railSection, p.is_split AS isSplit,
-              (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
-                 FROM t_order_part_group g WHERE g.order_product_id = p.id) AS groupTypes,
+              group_summary.groupTypes AS groupTypes,
+              ${needKeywordText ? 'part_summary.partTypes AS partTypes,' : "'' AS partTypes,"}
               p.dimension_raw AS dimensionRaw,
               p.dimension_unit AS dimensionUnit, p.dimension_mm AS dimensionMm,
               p.surface_type AS surfaceType, p.color AS color
               ${keywordTextSelect}
          FROM t_order_product p
          JOIN t_order o ON o.id = p.order_id
+         LEFT JOIN (
+           SELECT order_product_id,
+                  GROUP_CONCAT(group_type ORDER BY sort, id) AS groupTypes
+                  ${groupSearchTextSelect}
+             FROM t_order_part_group
+            GROUP BY order_product_id
+         ) group_summary ON group_summary.order_product_id = p.id
+         ${partSummaryJoin}
          ${where}
         ORDER BY p.id DESC${sqlLimit}`,
       params,
     );
+    const dict = needKeywordText
+      ? await loadDictLabels(this.dataSource, [
+        'surface_type', 'product_type', 'rail_section', 'part_group_type', 'part_type',
+      ])
+      : new Map<string, string>();
+    const label = dictLabeler(dict);
     const withModel = rows.map((row) => ({
       ...row,
       productModel: productLevelModel(
@@ -700,6 +710,16 @@ export class FinishedStockService {
         String(row.groupTypes ?? '').split(',').filter(Boolean),
         row.railSection ?? null,
       ),
+      keywordText: needKeywordText
+        ? [
+          row.keywordText,
+          label('surface_type', row.surfaceType),
+          ...String(row.productType ?? '').split(',').map((value) => label('product_type', value.trim())),
+          label('rail_section', row.railSection),
+          ...String(row.groupTypes ?? '').split(',').map((value) => label('part_group_type', value.trim())),
+          ...String(row.partTypes ?? '').split(',').map((value) => label('part_type', value.trim())),
+        ].filter(Boolean).join('|')
+        : '',
     }));
     const modelFiltered = productModel
       ? withModel.filter((row) => row.productModel === productModel)

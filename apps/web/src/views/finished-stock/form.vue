@@ -108,7 +108,7 @@
       title="选择订单产品"
       width="min(1180px, 94vw)"
       top="4vh"
-      @open="loadPickerData"
+      @open="initializePicker"
     >
       <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
         <el-form-item label="客户">
@@ -116,7 +116,7 @@
             v-model="pickerQuery.customerName"
             clearable
             filterable
-            :loading="filterOptionsLoading"
+            :loading="pickerLoading"
             placeholder="全部"
           >
             <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
@@ -133,7 +133,7 @@
             v-model="pickerQuery.productModel"
             clearable
             filterable
-            :loading="filterOptionsLoading"
+            :loading="pickerLoading"
             :options="productModelSelectOptions"
             popper-class="stock-picker-model-popper"
             placeholder="全部"
@@ -143,7 +143,7 @@
           <el-select
             v-model="pickerQuery.surfaceType"
             clearable
-            :loading="filterOptionsLoading"
+            :loading="pickerLoading"
             placeholder="全部"
           >
             <el-option
@@ -159,7 +159,7 @@
             v-model="pickerQuery.color"
             clearable
             filterable
-            :loading="filterOptionsLoading"
+            :loading="pickerLoading"
             placeholder="全部"
           >
             <el-option v-for="value in pickerFilterOptions.colors" :key="value" :label="value" :value="value" />
@@ -176,11 +176,11 @@
       <div class="picker-tip">
         {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
       </div>
-      <el-table ref="pickerTableRef" :data="pickerRows" v-loading="pickerLoading"
-        element-loading-text="正在查询并加载订单产品..." border stripe size="small" height="58vh"
+      <el-table ref="pickerTableRef" :data="pickerPageRows" :row-key="pickerRowKey" v-loading="pickerLoading"
+        element-loading-text="正在加载全部订单产品..." border stripe size="small" height="58vh"
         @selection-change="onPickChange">
-        <el-table-column type="selection" width="42" :selectable="isSelectable" />
-        <el-table-column type="index" label="序号" width="56" align="center" />
+        <el-table-column type="selection" width="42" :selectable="isSelectable" reserve-selection />
+        <el-table-column type="index" label="序号" width="56" align="center" :index="pickerRowIndex" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
@@ -212,6 +212,13 @@
           </template>
         </el-table-column>
       </el-table>
+      <app-pagination
+        v-if="pickerRows.length > pickerPageSize"
+        :total="pickerRows.length"
+        v-model:page="pickerPage"
+        v-model:size="pickerPageSize"
+        :page-sizes="[20, 50, 100]"
+      />
       <template #footer>
         <span class="picker-count">
           <span>查询到 {{ pickerRows.length }} 条符合条件的记录</span>
@@ -231,7 +238,6 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { Back, Plus, Delete, Search, WarningFilled } from '@element-plus/icons-vue';
 import {
   getFinishedDocDetail,
-  getStockGroupFilterOptions,
   getStockGroupOptions,
   createFinishedDoc,
   updateFinishedDoc,
@@ -246,6 +252,11 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import {
+  distinctPickerValues,
+  pickerTextEquals,
+  pickerTextIncludes,
+} from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
 
 const route = useRoute();
@@ -271,6 +282,11 @@ interface ItemRow {
   limit: number;
   quantity: number;
   remark: string;
+}
+
+interface PickerRow extends ItemRow {
+  qtyPcs: number;
+  searchText: string;
 }
 
 const form = reactive({
@@ -366,8 +382,7 @@ async function refreshLimits() {
 /* ===== 选择器 ===== */
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
-const filterOptionsLoading = ref(false);
-const pickerQuery = reactive<{
+interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
   productionNo: string;
@@ -375,7 +390,8 @@ const pickerQuery = reactive<{
   surfaceType: string | undefined;
   color: string | undefined;
   keyword: string;
-}>({
+}
+const pickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
@@ -384,24 +400,61 @@ const pickerQuery = reactive<{
   color: '',
   keyword: '',
 });
-const pickerFilterOptions = ref<StockGroupFilterOptions>({
-  customerNames: [],
-  productModels: [],
-  surfaceTypes: [],
-  colors: [],
+/** 文本框仍在点「查询」/回车后生效；下拉变化由 watcher 立即同步到这里。 */
+const appliedPickerQuery = reactive<PickerQuery>({
+  orderNo: '',
+  customerName: '',
+  productionNo: '',
+  productModel: '',
+  surfaceType: '',
+  color: '',
+  keyword: '',
+});
+/** 对话框本次打开时取得的完整候选快照；筛选期间不再请求服务端。 */
+const pickerSourceRows = ref<PickerRow[]>([]);
+const pickerFilterOptions = computed<StockGroupFilterOptions>(() => {
+  const all = pickerSourceRows.value;
+  const customerRows = all.filter((row) =>
+    pickerTextEquals(row.customerName, pickerQuery.customerName),
+  );
+  const modelRows = customerRows.filter((row) =>
+    pickerTextEquals(row.productModel, pickerQuery.productModel),
+  );
+  const surfaceRows = modelRows.filter((row) =>
+    pickerTextEquals(row.surfaceType, pickerQuery.surfaceType),
+  );
+  return {
+    customerNames: distinctPickerValues(all, (row) => row.customerName),
+    productModels: distinctPickerValues(customerRows, (row) => row.productModel),
+    surfaceTypes: distinctPickerValues(modelRows, (row) => row.surfaceType),
+    colors: distinctPickerValues(surfaceRows, (row) => row.color),
+  };
 });
 const productModelSelectOptions = computed(() =>
   pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
 );
-const pickerRows = ref<ItemRow[]>([]);
-const picked = ref<ItemRow[]>([]);
+const pickerRows = computed(() => pickerSourceRows.value.filter((row) => (
+  pickerTextIncludes(row.orderNo, appliedPickerQuery.orderNo)
+  && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
+  && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
+  && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
+  && (!colorEnabled.value || pickerTextEquals(row.color, appliedPickerQuery.color))
+  && pickerTextIncludes(row.searchText, appliedPickerQuery.keyword)
+)));
+const pickerPage = ref(1);
+const pickerPageSize = ref(50);
+const pickerPageRows = computed(() => {
+  const start = (pickerPage.value - 1) * pickerPageSize.value;
+  return pickerRows.value.slice(start, start + pickerPageSize.value);
+});
+const picked = ref<PickerRow[]>([]);
 const pickerTableRef = ref<any>();
-let pickerRequestId = 0;
-let pickerFilterRequestId = 0;
+let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
 // 下拉条件按「客户 → 产品型号 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
-// 下级，避免下级残留条件继续锁住结果集；抑制标记确保每次操作最终只发出一组查询。
+// 下级，避免下级残留条件继续锁住结果集；抑制标记确保一次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
   () => {
@@ -450,45 +503,44 @@ function openPicker() {
   pickerVisible.value = true;
 }
 
-async function loadFilterOptions() {
-  const requestId = ++pickerFilterRequestId;
-  filterOptionsLoading.value = true;
-  try {
-    const rows = await getStockGroupFilterOptions({
-      customerName: pickerQuery.customerName?.trim() || undefined,
-      productModel: pickerQuery.productModel?.trim() || undefined,
-      surfaceType: pickerQuery.surfaceType || undefined,
-      color: colorEnabled.value ? pickerQuery.color || undefined : undefined,
-    });
-    if (requestId !== pickerFilterRequestId) return;
-    pickerFilterOptions.value = rows;
-  } finally {
-    if (requestId === pickerFilterRequestId) filterOptionsLoading.value = false;
-  }
-}
-
 function loadPickerData() {
-  return Promise.all([loadFilterOptions(), loadOptions()]);
+  Object.assign(appliedPickerQuery, {
+    orderNo: pickerQuery.orderNo?.trim() ?? '',
+    customerName: pickerQuery.customerName?.trim() ?? '',
+    productionNo: pickerQuery.productionNo?.trim() ?? '',
+    productModel: pickerQuery.productModel?.trim() ?? '',
+    surfaceType: pickerQuery.surfaceType ?? '',
+    color: colorEnabled.value ? pickerQuery.color ?? '' : '',
+    keyword: pickerQuery.keyword?.trim() ?? '',
+  });
+  pickerPage.value = 1;
+  picked.value = [];
+  pickerTableRef.value?.clearSelection?.();
 }
 
-/** 选项按边别展开：含卡口的产品展开左右两行，其余一行 */
-async function loadOptions() {
-  const requestId = ++pickerRequestId;
+function pickerRowKey(row: PickerRow): string {
+  return `${row.orderProductId}#${row.side ?? ''}`;
+}
+function pickerRowIndex(index: number): number {
+  return (pickerPage.value - 1) * pickerPageSize.value + index + 1;
+}
+
+/**
+ * 每次打开对话框只请求一次完整候选集；含卡口的产品在内存中展开左右两行。
+ * 再次打开会重新取数，避免长期沿用旧的可入库量 / 当前结存。
+ */
+async function initializePicker() {
+  const requestId = ++pickerInitRequestId;
   pickerLoading.value = true;
+  pickerSourceRows.value = [];
+  loadPickerData();
   try {
     const opts = await getStockGroupOptions({
-      orderNo: pickerQuery.orderNo?.trim() || undefined,
-      customerName: pickerQuery.customerName?.trim() || undefined,
-      productionNo: pickerQuery.productionNo?.trim() || undefined,
-      productModel: pickerQuery.productModel?.trim() || undefined,
-      surfaceType: pickerQuery.surfaceType || undefined,
-      color: colorEnabled.value ? pickerQuery.color || undefined : undefined,
-      keyword: pickerQuery.keyword?.trim() || undefined,
       bizType: form.bizType,
+      includeSearchText: true,
     });
-    // 连续切换下拉项时，只接纳最后一次请求，避免慢返回的旧条件覆盖新结果。
-    if (requestId !== pickerRequestId) return;
-    pickerRows.value = opts.flatMap((o) =>
+    if (requestId !== pickerInitRequestId) return;
+    pickerSourceRows.value = opts.flatMap((o) =>
       o.sides.map((s) => ({
         orderProductId: o.orderProductId,
         side: s.side,
@@ -503,13 +555,23 @@ async function loadOptions() {
         limit: isInbound.value ? s.quota : s.stockQty,
         quantity: 0,
         remark: '',
-      })) as any,
+        searchText: o.searchText ?? [
+          o.orderNo,
+          o.customerName,
+          o.productionNo,
+          o.itemNo,
+          o.productName,
+          o.productModel,
+          o.dimensionText,
+          o.surfaceType,
+          o.color,
+        ].join('|'),
+      })),
     );
-    // 大批量行渲染会占用主线程；等本轮表格 DOM 更新完成后再关闭 Element Plus
-    // loading 遮罩，避免数据返回后渲染期间只看到界面卡住而没有加载反馈。
+    // 等本页最多 50 行完成渲染后再撤加载层，避免全量数据赋值时的短暂卡白。
     await nextTick();
   } finally {
-    if (requestId === pickerRequestId) pickerLoading.value = false;
+    if (requestId === pickerInitRequestId) pickerLoading.value = false;
   }
 }
 
@@ -534,7 +596,7 @@ function isSelectable(row: ItemRow): boolean {
   );
 }
 function onPickChange(rows: ItemRow[]) {
-  picked.value = rows;
+  picked.value = rows as PickerRow[];
 }
 function confirmPick() {
   picked.value.forEach((o) => {

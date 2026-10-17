@@ -305,8 +305,7 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品名称" label-width="80px">
-                <!-- 新增订单时失焦自动补「滑轨」后缀（已含「轨」字不补，规则见共享包 rail-name.ts）；编辑存量订单不改原写法 -->
-                <el-input v-model="p.productName" @change="if (!editId) p.productName = nameWithRail(p);" />
+                <el-input v-model="p.productName" />
               </el-form-item>
             </el-col>
             <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
@@ -533,8 +532,6 @@ import {
   sanitizeItemCode,
   stripItemCodeInput,
   ITEM_CODE_STRIP_MESSAGE,
-  withRailSuffix,
-  railNameSuffixOf,
   parseProductTypes,
   partTypeLabel,
   sideLabel,
@@ -565,17 +562,6 @@ const upperFmt = (v: string) => (v ?? '').toUpperCase();
  * 其它写法一律不动：「45#无锁力」、客户料号「DS3832A-22Z-DM」、纯数字料号「785140753」、单个数字等。
  * 输入框失焦时补一次，保存 payload 再兜一次（没失焦直接点保存的情况）。
  */
-/**
- * 新增订单时产品名称补「滑轨」：整品补「滑轨」，**分体行补它的出货形态**（外中轨/内轨），
- * 否则分体两行名字一模一样（规则见共享包 rail-name.ts，与入库单/送货单同一实现）。
- */
-function nameWithRail(p: ProductRow): string {
-  return withRailSuffix(
-    p.productName,
-    railNameSuffixOf(p.isSplit, p.partGroups.map((g) => g.groupType), p.railSection),
-  );
-}
-
 /**
  * 产品代码不许有中文（2026-09-25 使用方要求）：打字时当场清掉、并提示说明文字该去产品名称。
  * el-input 在输入法组字期间不回写 v-model，所以这里拿到的已是上屏后的字，不会打断拼音输入。
@@ -1436,8 +1422,8 @@ async function onSave() {
       materialCode: p.materialCode || undefined,
       itemNo: withWidthHash(p.itemNo) || undefined,
       customerDrawingNo: p.customerDrawingNo || undefined,
-      // 新增订单：保存时再补一次「滑轨」后缀（没失焦直接点保存的情况）；编辑存量订单保留原写法
-      productName: (editId.value ? p.productName : nameWithRail(p)) || undefined,
+      // 产品名称按用户输入原样保存，不自动追加「滑轨」或分体部件形态
+      productName: p.productName || undefined,
       productType: p._types.join(','),
       railSection: p.railSection,
       productRequirement: p.productRequirement || undefined,

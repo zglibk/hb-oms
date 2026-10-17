@@ -178,7 +178,7 @@
       title="选择回厂的部件组"
       width="min(1180px, 94vw)"
       top="4vh"
-      @open="loadPickerData"
+      @open="initializePicker"
     >
       <el-form :model="pickerQuery" size="small" class="picker-filters" @submit.prevent>
         <el-form-item label="客户">
@@ -186,7 +186,7 @@
             v-model="pickerQuery.customerName"
             clearable
             filterable
-            :loading="filterOptionsLoading"
+            :loading="optionsLoading"
             placeholder="全部"
           >
             <el-option v-for="name in pickerFilterOptions.customerNames" :key="name" :label="name" :value="name" />
@@ -203,14 +203,14 @@
             v-model="pickerQuery.productModel"
             clearable
             filterable
-            :loading="filterOptionsLoading"
+            :loading="optionsLoading"
             :options="productModelSelectOptions"
             popper-class="picker-model-popper"
             placeholder="全部"
           />
         </el-form-item>
         <el-form-item label="表面处理">
-          <el-select v-model="pickerQuery.surfaceType" clearable :loading="filterOptionsLoading" placeholder="全部">
+          <el-select v-model="pickerQuery.surfaceType" clearable :loading="optionsLoading" placeholder="全部">
             <el-option
               v-for="value in pickerFilterOptions.surfaceTypes"
               :key="value"
@@ -233,8 +233,8 @@
         </el-form-item>
       </el-form>
       <div class="picker-bar">
-        <!-- 两个互不重叠的列表：默认只列未回齐的（2026-09-26：回完了还被重复登记是实测的高发错误）；
-             勾上则**只**列已回齐的，供返工、补货再登记。不做「全部」：新近未回的组会占满条数上限，已回齐的被挤没 -->
+        <!-- 两个互不重叠的本地结果集：默认只列未回齐的（2026-09-26：回完了还被重复登记是实测的高发错误）；
+             勾上则只列已回齐的，供返工、补货再登记。 -->
         <el-checkbox v-model="showReturned" @change="loadPickerData">只看已回齐</el-checkbox>
         <span class="picker-tip">
           {{ showReturned ? '当前只列出已回齐的部件组（返工、补货再登记用）；取消勾选回到待回厂列表。' : '只列出需要表面处理（非「无」）且尚未回齐的部件组；分批回厂可重复选。' }}
@@ -242,17 +242,18 @@
       </div>
       <el-table
         ref="pickerTableRef"
-        :data="options"
+        :data="optionPageRows"
+        row-key="orderPartGroupId"
         v-loading="optionsLoading"
-        element-loading-text="正在查询并加载部件组..."
+        element-loading-text="正在加载全部部件组..."
         border
         stripe
         size="small"
         height="46vh"
         @selection-change="onPickChange"
       >
-        <el-table-column type="selection" width="46" />
-        <el-table-column type="index" label="序号" width="56" align="center" />
+        <el-table-column type="selection" width="46" reserve-selection />
+        <el-table-column type="index" label="序号" width="56" align="center" :index="pickerRowIndex" />
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="96" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
@@ -272,6 +273,13 @@
           </template>
         </el-table-column>
       </el-table>
+      <app-pagination
+        v-if="options.length > pickerPageSize"
+        :total="options.length"
+        v-model:page="pickerPage"
+        v-model:size="pickerPageSize"
+        :page-sizes="[20, 50, 100]"
+      />
       <template #footer>
         <span class="picker-count">
           <span>查询到 {{ options.length }} 条符合条件的记录</span>
@@ -293,7 +301,6 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
 import {
   createOutsourceParts,
-  getPartGroupFilterOptions,
   getPartGroupOptions,
   type PartGroupFilterOptions,
   type PartGroupOption,
@@ -302,6 +309,11 @@ import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import {
+  distinctPickerValues,
+  pickerTextEquals,
+  pickerTextIncludes,
+} from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
 import {
   ENTRY_MODE_OPTIONS,
@@ -430,14 +442,24 @@ function onDetailEditorKeyup(event: KeyboardEvent) {
 
 /* ===== 部件组选择器 ===== */
 const pickerVisible = ref(false);
-const pickerQuery = reactive<{
+interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
   productionNo: string;
   productModel: string | undefined;
   surfaceType: string | undefined;
   keyword: string;
-}>({
+}
+const pickerQuery = reactive<PickerQuery>({
+  orderNo: '',
+  customerName: '',
+  productionNo: '',
+  productModel: '',
+  surfaceType: '',
+  keyword: '',
+});
+/** 文本条件点「查询」/回车后生效；级联下拉变化由 watcher 立即同步。 */
+const appliedPickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
@@ -446,26 +468,53 @@ const pickerQuery = reactive<{
   keyword: '',
 });
 const pickerTableRef = ref<any>();
-const options = ref<PartGroupOption[]>([]);
+/** 对话框本次打开时取得的全部需外发部件组；待回厂/已回齐都从此快照切换。 */
+const optionSource = ref<PartGroupOption[]>([]);
 const optionsLoading = ref(false);
-const filterOptionsLoading = ref(false);
-const pickerFilterOptions = ref<PartGroupFilterOptions>({
-  customerNames: [],
-  productModels: [],
-  surfaceTypes: [],
+const picked = ref<PartGroupOption[]>([]);
+/** 选择器是否切到「只看已回齐」列表（默认否，每次进页面都重置——同「按数量」模式，不记忆） */
+const showReturned = ref(false);
+const visibleScope = computed(() => optionSource.value.filter((row) => (
+  showReturned.value
+    ? row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs
+    : row.returnedQty < row.qtyPcs
+)));
+const pickerFilterOptions = computed<PartGroupFilterOptions>(() => {
+  const all = visibleScope.value;
+  const customerRows = all.filter((row) =>
+    pickerTextEquals(row.customerName, pickerQuery.customerName),
+  );
+  const modelRows = customerRows.filter((row) =>
+    pickerTextEquals(row.productModel, pickerQuery.productModel),
+  );
+  return {
+    customerNames: distinctPickerValues(all, (row) => row.customerName),
+    productModels: distinctPickerValues(customerRows, (row) => row.productModel),
+    surfaceTypes: distinctPickerValues(modelRows, (row) => row.surfaceType),
+  };
 });
 const productModelSelectOptions = computed(() =>
   pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
 );
-const picked = ref<PartGroupOption[]>([]);
-/** 选择器是否切到「只看已回齐」列表（默认否，每次进页面都重置——同「按数量」模式，不记忆） */
-const showReturned = ref(false);
-let pickerRequestId = 0;
-let pickerFilterRequestId = 0;
+const options = computed(() => visibleScope.value.filter((row) => (
+  pickerTextIncludes(row.orderNo, appliedPickerQuery.orderNo)
+  && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
+  && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
+  && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
+  && pickerTextIncludes(row.searchText, appliedPickerQuery.keyword)
+)));
+const pickerPage = ref(1);
+const pickerPageSize = ref(50);
+const optionPageRows = computed(() => {
+  const start = (pickerPage.value - 1) * pickerPageSize.value;
+  return options.value.slice(start, start + pickerPageSize.value);
+});
+let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
 // 与成品出入库选择器保持一致，按「客户 → 产品型号 → 表面处理」逐级收窄；上级变化时
-// 清空其下级条件，避免不可见的残留条件锁住结果集。每次操作最终只发出一组查询。
+// 清空其下级条件，避免不可见的残留条件锁住结果集。每次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
   () => {
@@ -500,48 +549,54 @@ watch(
 function openPicker() {
   pickerVisible.value = true;
 }
-async function loadFilterOptions() {
-  const requestId = ++pickerFilterRequestId;
-  filterOptionsLoading.value = true;
-  try {
-    const rows = await getPartGroupFilterOptions({
-      customerName: pickerQuery.customerName?.trim() || undefined,
-      productModel: pickerQuery.productModel?.trim() || undefined,
-      surfaceType: pickerQuery.surfaceType || undefined,
-      hideReturned: !showReturned.value,
-      onlyReturned: showReturned.value,
-    });
-    if (requestId !== pickerFilterRequestId) return;
-    pickerFilterOptions.value = rows;
-  } finally {
-    if (requestId === pickerFilterRequestId) filterOptionsLoading.value = false;
-  }
-}
 function loadPickerData() {
-  return Promise.all([loadFilterOptions(), loadOptions()]);
+  Object.assign(appliedPickerQuery, {
+    orderNo: pickerQuery.orderNo?.trim() ?? '',
+    customerName: pickerQuery.customerName?.trim() ?? '',
+    productionNo: pickerQuery.productionNo?.trim() ?? '',
+    productModel: pickerQuery.productModel?.trim() ?? '',
+    surfaceType: pickerQuery.surfaceType ?? '',
+    keyword: pickerQuery.keyword?.trim() ?? '',
+  });
+  pickerPage.value = 1;
+  picked.value = [];
+  pickerTableRef.value?.clearSelection?.();
 }
-async function loadOptions() {
-  const requestId = ++pickerRequestId;
+function pickerRowIndex(index: number): number {
+  return (pickerPage.value - 1) * pickerPageSize.value + index + 1;
+}
+
+/** 每次打开只取一次完整快照；再次打开再刷新累计回厂数和新增订单。 */
+async function initializePicker() {
+  const requestId = ++pickerInitRequestId;
   optionsLoading.value = true;
+  optionSource.value = [];
+  loadPickerData();
   try {
     const rows = await getPartGroupOptions({
-      orderNo: pickerQuery.orderNo?.trim() || undefined,
-      customerName: pickerQuery.customerName?.trim() || undefined,
-      productionNo: pickerQuery.productionNo?.trim() || undefined,
-      productModel: pickerQuery.productModel?.trim() || undefined,
-      surfaceType: pickerQuery.surfaceType || undefined,
-      keyword: pickerQuery.keyword?.trim() || undefined,
-      hideReturned: !showReturned.value,
-      onlyReturned: showReturned.value,
+      all: true,
+      includeSearchText: true,
     });
-    // 连续切换或清空下拉项时，只接纳最后一次请求，避免慢返回的旧条件覆盖新结果。
-    if (requestId !== pickerRequestId) return;
-    options.value = rows;
-    // 保持 Element Plus loading 遮罩到大批量行完成本轮 DOM 更新，避免数据返回后
-    // 表格渲染期间失去加载反馈。
+    if (requestId !== pickerInitRequestId) return;
+    optionSource.value = rows.map((row) => ({
+      ...row,
+      searchText: row.searchText ?? [
+        row.orderNo,
+        row.customerName,
+        row.productionNo,
+        row.productModel,
+        row.dimensionText,
+        row.cycleCode,
+        row.surfaceType,
+        row.color,
+        row.drawingNo,
+        row.materialThickness,
+      ].join('|'),
+    }));
+    // 全量快照留在内存中，本页最多渲染 50 行；渲染稳定后再撤加载层。
     await nextTick();
   } finally {
-    if (requestId === pickerRequestId) optionsLoading.value = false;
+    if (requestId === pickerInitRequestId) optionsLoading.value = false;
   }
 }
 function resetPickerQuery() {

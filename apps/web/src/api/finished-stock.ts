@@ -115,6 +115,8 @@ export interface StockGroupOption {
   qtyPcs: number;
   socket: boolean;
   sides: StockSideInfo[];
+  /** 选择器本地全局搜索索引；仅展示候选时使用，不提交到业务单据。 */
+  searchText?: string;
 }
 
 /** 选择器中由当前可选订单产品全量去重得到的下拉项 */
@@ -239,6 +241,8 @@ export const getStockGroupOptions = (params: {
   bizType?: string;
   limit?: number;
   onlyOpening?: boolean;
+  /** 返回本地筛选所需的完整搜索文本；普通额度查询无需携带。 */
+  includeSearchText?: boolean;
 }) => request.get<any, StockGroupOption[]>('/api/finished-stock/group-options', { params });
 
 /** 产品选择器的级联去重下拉项；各字段只由它之前的上级下拉条件收窄 */

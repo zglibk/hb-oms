@@ -21,6 +21,7 @@ import { CurrentUserPayload } from '../../common/decorators/current-user.decorat
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
+import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
 /** 可外发部件组行（供录入表单的选择器） */
 export interface PartGroupOption {
@@ -47,6 +48,8 @@ export interface PartGroupOption {
   materialThickness: string | null;
   /** 单重（kg/支）：自部件信息带出，回厂折算默认值 */
   unitWeight: number;
+  /** 选择器本地全局搜索索引；不写入回厂记录。 */
+  searchText?: string;
 }
 
 /** 部件组选择器的去重下拉项 */
@@ -207,7 +210,7 @@ export class OutsourceService {
    * 保存前的超量提醒见 findReturnProgress。
    */
   async findPartGroupOptions(query: QueryPartGroupOptionDto): Promise<PartGroupOption[]> {
-    const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
+    const limit = query.all ? undefined : Math.min(Math.max(query.limit ?? 200, 1), 500);
     const visibility = this.buildPartGroupVisibilityFilter(query);
     const params = visibility.params;
     let where = visibility.where;
@@ -267,7 +270,19 @@ export class OutsourceService {
       )`;
       params.push(kw, kw, kw);
     }
-    params.push(limit);
+    const searchTextSelect = query.includeSearchText
+      ? `, CONCAT_WS('|',
+          o.order_no, o.po_no, o.customer_name, o.production_no,
+          p.material_code, p.item_no, p.product_name,
+          p.product_type, p.rail_section, p.dimension_raw, CAST(p.dimension_mm AS CHAR),
+          p.surface_type, p.color, p.sheet_material,
+          g.product_model, g.group_type, g.drawing_no, g.drawing_version,
+          g.material_thickness, g.remark,
+          pt_summary.partSearchText
+        ) AS searchText`
+      : `, '' AS searchText`;
+    const sqlLimit = limit == null ? '' : ' LIMIT ?';
+    if (limit != null) params.push(limit);
 
     const rows: any[] = await this.dataSource.query(
       `SELECT g.id                 AS orderPartGroupId,
@@ -286,27 +301,47 @@ export class OutsourceService {
               p.color              AS color,
               p.order_qty          AS orderQty,
               p.unit               AS unit,
+              p.product_type       AS productType,
+              p.rail_section       AS railSection,
               g.qty_pcs            AS qtyPcs,
               g.group_type         AS groupType,
               p.item_no            AS itemNo,
               m.unit_weight        AS productUnitWeight,
-              (SELECT MIN(pt.cycle_code) FROM t_order_part pt
-                WHERE pt.part_group_id = g.id AND pt.cycle_code IS NOT NULL AND pt.cycle_code <> '')
-                                   AS cycleCode,
-              COALESCE((SELECT SUM(op.return_qty) FROM t_outsource_part op
-                         WHERE op.order_part_group_id = g.id), 0)
-                                   AS returnedQty
+              pt_summary.cycleCode AS cycleCode,
+              pt_summary.partTypes AS partTypes,
+              COALESCE(return_summary.returnedQty, 0) AS returnedQty
+              ${searchTextSelect}
          FROM t_order_part_group g
          JOIN t_order_product p ON p.id = g.order_product_id
          JOIN t_order o         ON o.id = g.order_id
          LEFT JOIN t_material m ON m.id = p.material_id
+         LEFT JOIN (
+           SELECT part_group_id,
+                  MIN(NULLIF(cycle_code, '')) AS cycleCode,
+                  GROUP_CONCAT(DISTINCT part_type) AS partTypes,
+                  GROUP_CONCAT(CONCAT_WS('|', part_type, side, cycle_code, remark) SEPARATOR '|') AS partSearchText
+             FROM t_order_part
+            GROUP BY part_group_id
+         ) pt_summary ON pt_summary.part_group_id = g.id
+         LEFT JOIN (
+           SELECT order_part_group_id, SUM(return_qty) AS returnedQty
+             FROM t_outsource_part
+            GROUP BY order_part_group_id
+         ) return_summary ON return_summary.order_part_group_id = g.id
          ${where}
-        ORDER BY g.id DESC
-        LIMIT ?`,
+        ORDER BY g.id DESC${sqlLimit}`,
       params,
     );
 
-    const partWeight = await this.loadPartUnitWeights(rows);
+    const [partWeight, dict] = await Promise.all([
+      this.loadPartUnitWeights(rows),
+      query.includeSearchText
+        ? loadDictLabels(this.dataSource, [
+          'surface_type', 'product_type', 'rail_section', 'part_group_type', 'part_type',
+        ])
+        : Promise.resolve(new Map<string, string>()),
+    ]);
+    const label = dictLabeler(dict);
 
     return rows.map((r) => ({
       orderPartGroupId: Number(r.orderPartGroupId),
@@ -331,6 +366,16 @@ export class OutsourceService {
       unitWeight:
         partWeight.get(`${r.itemNo ?? ''}|${partGroupParts(r.groupType)[0] ?? ''}`) ??
         (Number(r.productUnitWeight) || 0),
+      searchText: query.includeSearchText
+        ? [
+          r.searchText,
+          label('surface_type', r.surfaceType),
+          ...String(r.productType ?? '').split(',').map((value) => label('product_type', value.trim())),
+          label('rail_section', r.railSection),
+          label('part_group_type', r.groupType),
+          ...String(r.partTypes ?? '').split(',').map((value) => label('part_type', value.trim())),
+        ].filter(Boolean).join('|')
+        : undefined,
     }));
   }
 

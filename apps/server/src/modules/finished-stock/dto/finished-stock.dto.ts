@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -209,4 +210,7 @@ export class QueryStockGroupOptionDto {
   @IsOptional() @Transform(toBoolean) onlyOpening?: boolean;
 
   @IsOptional() @Type(() => Number) @IsInt() limit?: number;
+
+  /** 选择器首次全量加载时返回隐藏搜索索引；普通额度查询无需计算。 */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() includeSearchText?: boolean;
 }

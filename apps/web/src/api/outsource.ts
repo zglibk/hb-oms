@@ -62,6 +62,8 @@ export interface PartGroupOption {
   materialThickness: string | null;
   /** 单重（kg/支）：回厂折算默认值 */
   unitWeight: number;
+  /** 选择器本地全局搜索索引；仅展示候选时使用，不提交到回厂记录。 */
+  searchText?: string;
 }
 
 /** 选择器中由可选记录全量去重得到的下拉项 */
@@ -130,6 +132,10 @@ export const getPartGroupOptions = (params: {
   /** 只列已回齐的部件组（与 hideReturned 互斥） */
   onlyReturned?: boolean;
   limit?: number;
+  /** 忽略默认保护上限，供打开选择器时一次取得完整候选快照。 */
+  all?: boolean;
+  /** 返回本地筛选所需的完整搜索文本。 */
+  includeSearchText?: boolean;
 }) => request.get<any, PartGroupOption[]>('/api/outsource/part-group-options', { params });
 
 export const getPartGroupFilterOptions = (params: {

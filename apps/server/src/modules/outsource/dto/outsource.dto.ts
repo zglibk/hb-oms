@@ -162,6 +162,12 @@ export class QueryPartGroupOptionDto extends QueryPartGroupVisibilityDto {
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() limit?: number;
+
+  /** 选择器打开时一次获取完整候选快照；普通调用仍保留默认条数保护。 */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() all?: boolean;
+
+  /** 返回前端本地全局搜索所需的隐藏搜索索引。 */
+  @IsOptional() @Transform(toBoolean) @IsBoolean() includeSearchText?: boolean;
 }
 
 /** 部件组回厂进度（保存前超量复核用） */
