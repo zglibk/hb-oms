@@ -119,6 +119,10 @@ const MIGRATIONS: string[] = [
   'migration-changelog-v1.2.1-remove.sql',
   // 针式送货单默认字号 115%（复制为新发布版本；A4/A5 与入库单保持 100）
   'migration-print-delivery-font-scale-115.sql',
+  // 即时通知公告：正文、按人接收/首次查看、不可变追加回复
+  'migration-announcement.sql',
+  // 自动滚动速度：默认统一 22px/s，首页 / 数据大屏 / 更新日志可分别配置
+  'migration-auto-scroll-speed.sql',
 ];
 
 /**
@@ -127,6 +131,8 @@ const MIGRATIONS: string[] = [
  * 但会悄悄回到"两处都有生产单号"的分叉状态，故在此显式盯住。
  */
 const forbiddenColumns = [
+  't_system_config.home_scroll_speed', // 细分后旧的首页合并速度已改名
+  't_system_config.screen_scroll_speed', // 细分后旧的大屏合并速度已改名
   't_order_product.production_no', // 已上移 t_order.production_no
   't_order_product.assembly_workshop', // 已下沉 t_assembly_batch.workshop
   // 外发三张旧表（发坯单头/明细/回货流水）已于 2026-08-10 整体删除，
@@ -176,6 +182,9 @@ const expectedColumns = [
   't_equipment_info.machine_no',
   't_department.leader',
   't_changelog.version',
+  't_announcement.activated_at',
+  't_announcement_recipient.view_role_names',
+  't_announcement_reply.role_names',
   't_system_config.system_name',
   't_material.unit_weight',
   't_process_info.dimension',
@@ -276,6 +285,11 @@ const expectedColumns = [
   // 送货单打印：客户绑定模板 + 全局默认模板
   't_customer.delivery_template',
   't_system_config.delivery_template_default',
+  't_system_config.home_owed_scroll_speed',
+  't_system_config.home_outsource_scroll_speed',
+  't_system_config.screen_overdue_scroll_speed',
+  't_system_config.screen_outsource_scroll_speed',
+  't_system_config.changelog_scroll_speed',
   // 业务记录修改主管角色（只许创建人与这些角色修改）
   't_system_config.order_edit_roles',
   't_system_config.outsource_edit_roles',

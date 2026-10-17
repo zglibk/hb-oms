@@ -154,6 +154,56 @@ export class SystemConfig {
   })
   deliveryTemplateDefault: string;
 
+  /** 首页逾期/临近交期待办列表自动滚动速度（px/秒）。 */
+  @Column({
+    name: 'home_owed_scroll_speed',
+    type: 'tinyint',
+    unsigned: true,
+    default: 22,
+    comment: '首页交期待办列表滚动速度（px/秒），允许 5~60，默认 22',
+  })
+  homeOwedScrollSpeed: number;
+
+  /** 首页近期外发回厂列表自动滚动速度（px/秒）。 */
+  @Column({
+    name: 'home_outsource_scroll_speed',
+    type: 'tinyint',
+    unsigned: true,
+    default: 22,
+    comment: '首页近期外发回厂列表滚动速度（px/秒），允许 5~60，默认 22',
+  })
+  homeOutsourceScrollSpeed: number;
+
+  /** 数据可视化大屏逾期未发货列表自动滚动速度（px/秒）。 */
+  @Column({
+    name: 'screen_overdue_scroll_speed',
+    type: 'tinyint',
+    unsigned: true,
+    default: 22,
+    comment: '数据大屏逾期未发货列表滚动速度（px/秒），允许 5~60，默认 22',
+  })
+  screenOverdueScrollSpeed: number;
+
+  /** 数据可视化大屏近期外发回厂列表自动滚动速度（px/秒）。 */
+  @Column({
+    name: 'screen_outsource_scroll_speed',
+    type: 'tinyint',
+    unsigned: true,
+    default: 22,
+    comment: '数据大屏近期外发回厂列表滚动速度（px/秒），允许 5~60，默认 22',
+  })
+  screenOutsourceScrollSpeed: number;
+
+  /** 首页系统更新日志弹窗正文自动滚动速度（px/秒）。 */
+  @Column({
+    name: 'changelog_scroll_speed',
+    type: 'tinyint',
+    unsigned: true,
+    default: 22,
+    comment: '系统更新日志弹窗自动滚动速度（px/秒），允许 5~60，默认 22',
+  })
+  changelogScrollSpeed: number;
+
   /*
    * 业务记录修改主管角色（角色编码逗号分隔，2026-09-26 使用方要求——防止自己建的数据被别人改掉）：
    * 订单 / 外发回厂记录 / 装配批次 / 成品出入库单只允许创建人与对应模块的主管角色修改、删除，

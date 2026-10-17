@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { getFeatureFlags, type FeatureFlags } from '@/api/system';
+import { AUTO_SCROLL_SPEED_DEFAULT } from '@hb-oms/shared';
 
 /**
  * 业务字段开关（系统配置 → 业务字段）。
@@ -34,6 +35,11 @@ const DEFAULTS: FeatureFlags = {
   dimensionViewUnit: 'mm',
   // 送货单默认模板：客户资料未单独绑定模板时用它（版式见 constants/delivery-note.ts）
   deliveryTemplateDefault: 'generic',
+  homeOwedScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  homeOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  screenOverdueScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  screenOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  changelogScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
 };
 
 type FeatureState = FeatureFlags & {

@@ -52,7 +52,7 @@ export class OperationLogInterceptor implements NestInterceptor {
       method: request.method,
       url: request.originalUrl,
       ip: extractClientIp(request),
-      params: serializeLogParams(request),
+      params: serializeLogParams(request, meta.redactBodyFields),
       bizType,
       bizId,
     };

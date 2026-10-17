@@ -20,6 +20,8 @@ export interface ScreenOutsourceRow {
 }
 
 export interface ScreenData {
+  /** 两张自动滚动列表各自的速度（px/秒）；免登录电视入口也随数据返回。 */
+  scrollSpeeds: { overdue: number; outsource: number };
   range: { from: string; to: string; bucket: 'day' | 'month' };
   generatedAt: string;
   cards: {

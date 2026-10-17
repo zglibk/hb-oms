@@ -1,5 +1,7 @@
 <template>
   <el-container class="app-layout" :class="{ 'app-layout--mobile': isMobile }">
+    <!-- 全局通知中心与即时待办弹窗：放在路由内容之前初始化，确保优先于首页更新日志弹窗。 -->
+    <AnnouncementHub />
     <!-- 手机端点击遮罩关闭侧边栏 -->
     <button
       v-if="isMobile && !collapsed"
@@ -71,6 +73,22 @@
           <Breadcrumb />
         </div>
         <div class="header-right">
+          <el-badge
+            :value="announcementBadge"
+            :hidden="announcementStore.unreadCount === 0"
+            class="announcement-bell"
+          >
+            <el-button
+              text
+              class="doc-btn announcement-bell__button"
+              aria-label="打开通知公告中心"
+              data-tour="announcement-center"
+              @click="announcementStore.openCenter()"
+            >
+              <el-icon><Bell /></el-icon>
+              <span class="mobile-hidden">通知公告</span>
+            </el-button>
+          </el-badge>
           <!-- 数据可视化大屏：新标签全屏打开（大屏是顶层路由、不挂 Layout）；无权限置灰（§二） -->
           <el-button
             v-permission="'stat:screen'"
@@ -260,6 +278,7 @@ const CACHED_PAGES = [
   'SystemMaterialList',
   'SystemConfigPage',
   'SystemChangelog',
+  'SystemAnnouncement',
   'HomeDashboard',
 ];
 
@@ -270,6 +289,7 @@ import { useUserStore } from '@/stores/user';
 import { useTagsStore } from '@/stores/tags';
 import { useThemeStore } from '@/stores/theme';
 import { useFeatureStore } from '@/stores/feature';
+import { useAnnouncementStore } from '@/stores/announcement';
 import { useResponsive } from '@/composables/useResponsive';
 import { useTour } from '@/composables/useTour';
 import { usePermissionSync } from '@/composables/usePermissionSync';
@@ -278,6 +298,7 @@ import SidebarItem from './SidebarItem.vue';
 import ThemePicker from '@/components/ThemePicker.vue';
 import Breadcrumb from '@/components/Breadcrumb.vue';
 import TagsBar from '@/components/TagsBar.vue';
+import AnnouncementHub from '@/components/announcement/AnnouncementHub.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -285,6 +306,8 @@ const userStore = useUserStore();
 const tagsStore = useTagsStore();
 const themeStore = useThemeStore();
 const featureStore = useFeatureStore();
+const announcementStore = useAnnouncementStore();
+const announcementBadge = computed(() => announcementStore.unreadCount > 99 ? '99+' : announcementStore.unreadCount);
 const { isMobile } = useResponsive();
 
 /** 手机端默认收起侧边栏；桌面端默认展开 */
@@ -414,6 +437,7 @@ const { tourOpen, startTour, finishTour, shouldAutoStart } = useTour();
  */
 const TOUR_STEP_DEFS: Array<{
   path?: string;
+  target?: string;
   title: string;
   description: string;
 }> = [
@@ -430,6 +454,12 @@ const TOUR_STEP_DEFS: Array<{
     description:
       '登录后的落地页：进行中订单数、总成品欠数、总发货欠数、逾期订单四张卡，'
       + '下面三张列表——逾期未发货、7 天内临近交期（只统计进行中的订单），以及近期外发回厂。',
+  },
+  {
+    target: '[data-tour="announcement-center"]',
+    title: '即时通知公告',
+    description:
+      '新通告会即时提醒。点顶栏铃铛查看未读、待回复和历史通告；要求回复的通告需提交首次回复后才会清除 New。',
   },
   {
     path: '/order',
@@ -508,7 +538,8 @@ const tourSteps = computed(() => {
   if (!tourOpen.value) return [];
   const steps = TOUR_STEP_DEFS.filter(
     (def) =>
-      !def.path || document.querySelector(`[data-tour-path="${def.path}"]`),
+      (!def.path || document.querySelector(`[data-tour-path="${def.path}"]`))
+      && (!def.target || document.querySelector(def.target)),
   ).map((def) => ({
     title: def.title,
     description: def.description,
@@ -517,7 +548,9 @@ const tourSteps = computed(() => {
           document.querySelector(
             `[data-tour-path="${def.path}"]`,
           ) as HTMLElement
-      : undefined,
+      : def.target
+        ? () => document.querySelector(def.target!) as HTMLElement
+        : undefined,
   }));
   // 收尾：指向头像，告诉用户手册和重看入口在哪
   steps.push({
@@ -770,6 +803,15 @@ function openManual() {
     align-items: center;
     height: 100%;
     gap: 0.25rem;
+  }
+  .announcement-bell {
+    display: inline-flex;
+    align-items: center;
+    :deep(.el-badge__content) {
+      top: 8px;
+      right: 8px;
+      border: 2px solid var(--el-bg-color);
+    }
   }
   .theme-picker {
     margin-right: 0.25rem;

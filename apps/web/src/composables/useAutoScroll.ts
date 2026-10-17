@@ -1,8 +1,9 @@
-import { onActivated, onBeforeUnmount, onDeactivated, ref } from 'vue';
+import { onActivated, onBeforeUnmount, onDeactivated, ref, unref, type MaybeRef } from 'vue';
+import { AUTO_SCROLL_SPEED_DEFAULT, normalizeAutoScrollSpeed } from '@hb-oms/shared';
 
 interface AutoScrollOptions {
-  /** 滚动速度（px/秒），车间大屏远看时 20~30 比较跟得上 */
-  speed?: number;
+  /** 滚动速度（px/秒）；可传响应式配置，运行中修改会立即生效 */
+  speed?: MaybeRef<number>;
   /** 到顶 / 到底后的停顿时长（ms），给人看清首尾行的时间 */
   holdMs?: number;
 }
@@ -27,10 +28,15 @@ export function useAutoScroll(
   resolveEl: () => HTMLElement | null | undefined,
   options: AutoScrollOptions = {},
 ) {
-  const speed = options.speed ?? 26;
   const holdMs = options.holdMs ?? 1400;
+  const speedOf = () => normalizeAutoScrollSpeed(unref(options.speed ?? AUTO_SCROLL_SPEED_DEFAULT));
 
   const paused = ref(false);
+  const motionQuery = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+  let reduceMotion = motionQuery?.matches ?? false;
+  let shouldRun = false;
   let raf = 0;
   let prevTs = 0;
   let holdUntil = 0;
@@ -67,7 +73,7 @@ export function useAutoScroll(
     }
 
     // dt 上限兜住标签页切回来的一次巨大时间差，否则会瞬间冲到底
-    pos = Math.min(max, pos + speed * Math.min(dt, 0.1));
+    pos = Math.min(max, pos + speedOf() * Math.min(dt, 0.1));
     el.scrollTop = pos;
 
     if (pos >= max) {
@@ -77,16 +83,40 @@ export function useAutoScroll(
   }
 
   function start() {
-    if (raf) return;
+    shouldRun = true;
+    if (raf || reduceMotion) return;
     prevTs = 0;
     needSync = true;
     raf = requestAnimationFrame(tick);
   }
 
-  function stop() {
+  function stopRaf() {
     if (!raf) return;
     cancelAnimationFrame(raf);
     raf = 0;
+  }
+
+  function stop() {
+    shouldRun = false;
+    stopRaf();
+  }
+
+  function onMotionPreferenceChange(event: MediaQueryListEvent) {
+    reduceMotion = event.matches;
+    if (reduceMotion) stopRaf();
+    else if (shouldRun) start();
+  }
+
+  function addMotionPreferenceListener() {
+    if (!motionQuery) return;
+    if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotionPreferenceChange);
+    else motionQuery.addListener(onMotionPreferenceChange);
+  }
+
+  function removeMotionPreferenceListener() {
+    if (!motionQuery) return;
+    if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotionPreferenceChange);
+    else motionQuery.removeListener(onMotionPreferenceChange);
   }
 
   function pause() {
@@ -110,9 +140,13 @@ export function useAutoScroll(
   }
 
   // keep-alive 下切走就停，省掉看不见的列表白跑动画
+  addMotionPreferenceListener();
   onDeactivated(stop);
   onActivated(start);
-  onBeforeUnmount(stop);
+  onBeforeUnmount(() => {
+    stop();
+    removeMotionPreferenceListener();
+  });
 
   return { paused, start, stop, pause, resume, reset };
 }

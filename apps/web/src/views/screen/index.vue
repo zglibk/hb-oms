@@ -195,6 +195,7 @@ import { getPublicScreenData, getScreenData, ScreenKeyError, type ScreenData } f
 import { tokenStore } from '@/utils/request';
 import { useUserStore } from '@/stores/user';
 import { useAutoScroll } from '@/composables/useAutoScroll';
+import { AUTO_SCROLL_SPEED_DEFAULT } from '@hb-oms/shared';
 
 /** 逻辑高度基准：所有字号 / 卡片高度按 1080 高的屏设计 */
 const BASE_H = 1080;
@@ -362,6 +363,10 @@ function useJwt(): boolean {
 
 /* ---------------- 数据 ---------------- */
 const empty: ScreenData = {
+  scrollSpeeds: {
+    overdue: AUTO_SCROLL_SPEED_DEFAULT,
+    outsource: AUTO_SCROLL_SPEED_DEFAULT,
+  },
   range: { from: '', to: '', bucket: 'day' },
   generatedAt: '',
   cards: { activeOrders: 0, productionOwed: 0, deliveryOwed: 0, overdueOrders: 0, stockQty: 0, rangeOutbound: 0 },
@@ -375,6 +380,8 @@ const empty: ScreenData = {
   summary: { dullStockPcs: 0, partBalanceItems: 0, newOrders: 0 },
 };
 const data = reactive<ScreenData>({ ...empty });
+const overdueScrollSpeed = computed(() => data.scrollSpeeds.overdue);
+const outsourceScrollSpeed = computed(() => data.scrollSpeeds.outsource);
 const updatedText = computed(() => (data.generatedAt ? new Date(data.generatedAt).toTimeString().slice(0, 8) : '—'));
 
 let loading = false;
@@ -522,10 +529,14 @@ const workshopOption = computed<EChartsOption>(() => ({
 /* ---------------- 滚动列表 ---------------- */
 const overdueRef = ref<HTMLElement>();
 const outsourceRef = ref<HTMLElement>();
-const overdueScroll = useAutoScroll(() => overdueRef.value, { speed: 22, holdMs: 2000 });
-const outsourceScroll = useAutoScroll(() => outsourceRef.value, { speed: 22, holdMs: 2000 });
-const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
+const overdueScroll = useAutoScroll(() => overdueRef.value, {
+  speed: overdueScrollSpeed,
+  holdMs: 2000,
+});
+const outsourceScroll = useAutoScroll(() => outsourceRef.value, {
+  speed: outsourceScrollSpeed,
+  holdMs: 2000,
+});
 /* ---------------- 生命周期 ---------------- */
 let clockTimer: ReturnType<typeof setInterval> | undefined;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
@@ -546,10 +557,8 @@ onMounted(() => {
   }, REFRESH_MS);
   document.addEventListener('visibilitychange', onVisible);
   document.addEventListener('fullscreenchange', onFullscreenChange);
-  if (!reduceMotion) {
-    overdueScroll.start();
-    outsourceScroll.start();
-  }
+  overdueScroll.start();
+  outsourceScroll.start();
   load();
 });
 

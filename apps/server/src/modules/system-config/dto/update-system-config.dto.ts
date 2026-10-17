@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -62,6 +63,42 @@ export class UpdateSystemConfigDto {
   @IsString({ message: '送货单默认模板必须为字符串' })
   @MaxLength(32, { message: '送货单默认模板编码不能超过32字符' })
   deliveryTemplateDefault?: string;
+
+  /** 自动滚动速度统一按 px/秒配置，范围过大会影响可读性。 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: '首页交期待办滚动速度必须为整数' })
+  @Min(5, { message: '首页交期待办滚动速度不能小于 5' })
+  @Max(60, { message: '首页交期待办滚动速度不能大于 60' })
+  homeOwedScrollSpeed?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: '首页外发回厂滚动速度必须为整数' })
+  @Min(5, { message: '首页外发回厂滚动速度不能小于 5' })
+  @Max(60, { message: '首页外发回厂滚动速度不能大于 60' })
+  homeOutsourceScrollSpeed?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: '大屏逾期列表滚动速度必须为整数' })
+  @Min(5, { message: '大屏逾期列表滚动速度不能小于 5' })
+  @Max(60, { message: '大屏逾期列表滚动速度不能大于 60' })
+  screenOverdueScrollSpeed?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: '大屏外发回厂滚动速度必须为整数' })
+  @Min(5, { message: '大屏外发回厂滚动速度不能小于 5' })
+  @Max(60, { message: '大屏外发回厂滚动速度不能大于 60' })
+  screenOutsourceScrollSpeed?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: '更新日志滚动速度必须为整数' })
+  @Min(5, { message: '更新日志滚动速度不能小于 5' })
+  @Max(60, { message: '更新日志滚动速度不能大于 60' })
+  changelogScrollSpeed?: number;
 
   /*
    * 四个模块的修改主管角色：角色编码逗号分隔（空串 = 只有创建人能改）

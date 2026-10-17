@@ -11,6 +11,7 @@ import {
 } from '@/api/auth';
 import { tokenStore } from '@/utils/request';
 import { clearDictCache } from '@/composables/useDict';
+import { useAnnouncementStore } from '@/stores/announcement';
 
 interface UserState {
   userInfo: UserInfo | null;
@@ -38,6 +39,7 @@ export const useUserStore = defineStore('user', {
 
   actions: {
     async login(params: LoginParams) {
+      useAnnouncementStore().resetSession();
       const res = await loginApi(params);
       tokenStore.set(res.accessToken, res.refreshToken);
       this.userInfo = res.userInfo;
@@ -107,6 +109,7 @@ export const useUserStore = defineStore('user', {
     },
 
     reset() {
+      useAnnouncementStore().resetSession();
       tokenStore.clear();
       this.userInfo = null;
       this.roles = [];

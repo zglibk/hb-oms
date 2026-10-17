@@ -254,14 +254,23 @@ export const PERMISSIONS: PermSeed[] = [
   // 注：log:delete 仅授予 admin 角色（db-init 中 admin 绑定全部权限；其他角色不应拥有）
   { perm_code: 'log:delete', perm_name: '删除日志', perm_type: 2, parent_code: 'system:log', sort: 1 },
 
+  // 通知公告：面向全员的业务通告，与版本更新日志分离；管理端仅管理员/超级管理员可操作
+  { perm_code: 'system:announcement', perm_name: '通知公告', perm_type: 1, parent_code: 'system', menu_path: '/system/announcement', component: 'system/announcement/index', icon: 'Bell', sort: 7 },
+  { perm_code: 'announcement:create', perm_name: '新建通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 1 },
+  { perm_code: 'announcement:update', perm_name: '修改通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 2 },
+  { perm_code: 'announcement:delete', perm_name: '删除通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 3 },
+  { perm_code: 'announcement:publish', perm_name: '发布通知公告', perm_type: 2, parent_code: 'system:announcement', sort: 4 },
+  { perm_code: 'announcement:withdraw', perm_name: '撤回通知公告', perm_type: 2, parent_code: 'system:announcement', sort: 5 },
+  { perm_code: 'announcement:export', perm_name: '导出通知公告回复', perm_type: 2, parent_code: 'system:announcement', sort: 6 },
+
   // 更新日志（移植自 hb-mes）
-  { perm_code: 'system:changelog', perm_name: '更新日志', perm_type: 1, parent_code: 'system', menu_path: '/system/changelog', component: 'system/changelog/index', icon: 'Memo', sort: 7 },
+  { perm_code: 'system:changelog', perm_name: '更新日志', perm_type: 1, parent_code: 'system', menu_path: '/system/changelog', component: 'system/changelog/index', icon: 'Memo', sort: 8 },
   { perm_code: 'changelog:create', perm_name: '新增版本', perm_type: 2, parent_code: 'system:changelog', sort: 1 },
   { perm_code: 'changelog:update', perm_name: '修改版本', perm_type: 2, parent_code: 'system:changelog', sort: 2 },
   { perm_code: 'changelog:delete', perm_name: '删除版本', perm_type: 2, parent_code: 'system:changelog', sort: 3 },
 
   // 系统配置（移植自 hb-mes，不含审批管理——OMS 无审核流）
-  { perm_code: 'system:config', perm_name: '系统配置', perm_type: 1, parent_code: 'system', menu_path: '/system/config', component: 'system/config/index', icon: 'Tools', sort: 8 },
+  { perm_code: 'system:config', perm_name: '系统配置', perm_type: 1, parent_code: 'system', menu_path: '/system/config', component: 'system/config/index', icon: 'Tools', sort: 9 },
   { perm_code: 'config:update', perm_name: '修改配置', perm_type: 2, parent_code: 'system:config', sort: 1 },
   // 注：system:danger（清理业务测试数据）仅授予 admin
   { perm_code: 'system:danger', perm_name: '危险操作', perm_type: 2, parent_code: 'system:config', sort: 2 },

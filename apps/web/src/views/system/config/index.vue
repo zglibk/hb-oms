@@ -288,6 +288,112 @@
           </div>
         </el-tab-pane>
 
+        <!-- 自动滚动：每张列表独立设置，默认统一沿用数据大屏原速度 22px/s -->
+        <el-tab-pane label="滚动速度" name="scroll">
+          <el-form :model="form" label-width="150px" class="config-form" v-loading="loading">
+            <el-card shadow="never" class="cfg-section">
+              <div class="section-title">自动滚动速度</div>
+              <p class="section-desc">
+                单位为 px/秒，数值越小滚动越慢。各项默认均为 <strong>{{ AUTO_SCROLL_SPEED_DEFAULT }}</strong>，可按实际屏幕和阅读距离分别调整；
+                鼠标移入暂停、到底停顿后回到顶部的行为不变。
+              </p>
+
+              <el-form-item label="首页交期待办">
+                <div class="unit-line">
+                  <el-input-number
+                    v-model="form.homeOwedScrollSpeed"
+                    :min="AUTO_SCROLL_SPEED_MIN"
+                    :max="AUTO_SCROLL_SPEED_MAX"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                    style="width: 150px"
+                  />
+                  <span>px/秒</span>
+                </div>
+                <div class="switch-hint switch-hint--block">影响首页“逾期未发货 / 临近交期”双页签列表。</div>
+              </el-form-item>
+
+              <el-form-item label="首页外发回厂">
+                <div class="unit-line">
+                  <el-input-number
+                    v-model="form.homeOutsourceScrollSpeed"
+                    :min="AUTO_SCROLL_SPEED_MIN"
+                    :max="AUTO_SCROLL_SPEED_MAX"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                    style="width: 150px"
+                  />
+                  <span>px/秒</span>
+                </div>
+                <div class="switch-hint switch-hint--block">影响首页“近期外发回厂”列表。</div>
+              </el-form-item>
+
+              <el-form-item label="大屏逾期列表">
+                <div class="unit-line">
+                  <el-input-number
+                    v-model="form.screenOverdueScrollSpeed"
+                    :min="AUTO_SCROLL_SPEED_MIN"
+                    :max="AUTO_SCROLL_SPEED_MAX"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                    style="width: 150px"
+                  />
+                  <span>px/秒</span>
+                </div>
+                <div class="switch-hint switch-hint--block">影响数据可视化大屏“逾期未发货”列表，电视免登录入口同样生效。</div>
+              </el-form-item>
+
+              <el-form-item label="大屏外发回厂">
+                <div class="unit-line">
+                  <el-input-number
+                    v-model="form.screenOutsourceScrollSpeed"
+                    :min="AUTO_SCROLL_SPEED_MIN"
+                    :max="AUTO_SCROLL_SPEED_MAX"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                    style="width: 150px"
+                  />
+                  <span>px/秒</span>
+                </div>
+                <div class="switch-hint switch-hint--block">影响数据可视化大屏“近期外发回厂”列表，电视免登录入口同样生效。</div>
+              </el-form-item>
+
+              <el-form-item label="系统更新日志">
+                <div class="unit-line">
+                  <el-input-number
+                    v-model="form.changelogScrollSpeed"
+                    :min="AUTO_SCROLL_SPEED_MIN"
+                    :max="AUTO_SCROLL_SPEED_MAX"
+                    :step="1"
+                    :precision="0"
+                    controls-position="right"
+                    style="width: 150px"
+                  />
+                  <span>px/秒</span>
+                </div>
+                <div class="switch-hint switch-hint--block">影响首页“系统已更新”弹窗内的长内容滚动。</div>
+              </el-form-item>
+            </el-card>
+
+            <el-form-item>
+              <el-button size="small" v-permission="'config:update'" type="primary" :loading="saving" @click="onSave">保存</el-button>
+              <el-button
+                size="small"
+                :disabled="saving"
+                @click="resetScrollSpeeds"
+              >恢复默认</el-button>
+            </el-form-item>
+          </el-form>
+
+          <div class="config-audit">
+            保存后本人当前会话立即生效；其他已登录用户刷新页面后生效，数据大屏最迟在下一次自动刷新时生效。
+          </div>
+        </el-tab-pane>
+
         <!-- 数据权限：业务记录只许创建人与这里选的主管角色修改（管理员与超级管理员均不例外，主管受数据范围约束） -->
         <el-tab-pane label="数据权限" name="dataPerm">
           <el-form :model="form" label-width="130px" class="config-form" v-loading="loading">
@@ -423,12 +529,17 @@ import { useFeatureStore } from '@/stores/feature';
 import { normalizeUploadUrl } from '@/utils/upload-url';
 import InlineImageCropper from '@/components/InlineImageCropper.vue';
 import ScreenKeyTab from './ScreenKeyTab.vue';
+import {
+  AUTO_SCROLL_SPEED_DEFAULT,
+  AUTO_SCROLL_SPEED_MAX,
+  AUTO_SCROLL_SPEED_MIN,
+} from '@hb-oms/shared';
 
 const loading = ref(false);
 const saving = ref(false);
 const route = useRoute();
 const router = useRouter();
-const validTabs = ['company', 'loginBg', 'fields', 'dataPerm', 'screen', 'danger'] as const;
+const validTabs = ['company', 'loginBg', 'fields', 'scroll', 'dataPerm', 'screen', 'danger'] as const;
 type TabName = (typeof validTabs)[number];
 const initialTab = validTabs.includes(route.query.tab as TabName)
   ? (route.query.tab as TabName)
@@ -448,6 +559,14 @@ const cleanupConfirm = ref('');
 const cleaning = ref(false);
 const cleanupResult = ref<CleanupResult | null>(null);
 const cleanupError = ref('');
+
+function resetScrollSpeeds() {
+  form.homeOwedScrollSpeed = AUTO_SCROLL_SPEED_DEFAULT;
+  form.homeOutsourceScrollSpeed = AUTO_SCROLL_SPEED_DEFAULT;
+  form.screenOverdueScrollSpeed = AUTO_SCROLL_SPEED_DEFAULT;
+  form.screenOutsourceScrollSpeed = AUTO_SCROLL_SPEED_DEFAULT;
+  form.changelogScrollSpeed = AUTO_SCROLL_SPEED_DEFAULT;
+}
 
 async function onCleanup() {
   if (cleanupConfirm.value !== '清理') {
@@ -506,6 +625,11 @@ const form = reactive<SystemConfig>({
    * 服务器当前值读进来、保存时原样回传，因此不会把打印模板页设的值重置掉。
    */
   deliveryTemplateDefault: 'generic',
+  homeOwedScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  homeOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  screenOverdueScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  screenOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+  changelogScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
   orderEditRoles: 'BUS_MGR',
   outsourceEditRoles: 'PLN_MGR',
   assemblyEditRoles: 'PLN_MGR,PROD_MGR',

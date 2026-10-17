@@ -21,8 +21,12 @@ export class ScreenController {
 
   @Get('data')
   @RequirePermissions('stat:screen')
-  data(@Query() q: QueryScreenDto) {
-    return this.service.load(q.from, q.to);
+  async data(@Query() q: QueryScreenDto) {
+    const [data, scrollSpeeds] = await Promise.all([
+      this.service.load(q.from, q.to),
+      this.config.getScreenScrollSpeeds(),
+    ]);
+    return { ...data, scrollSpeeds };
   }
 
   /**
@@ -36,6 +40,10 @@ export class ScreenController {
     if (!(await this.config.verifyScreenKey(key))) {
       throw new UnauthorizedException('大屏访问码无效或已停用，请联系管理员');
     }
-    return this.service.load(q.from, q.to);
+    const [data, scrollSpeeds] = await Promise.all([
+      this.service.load(q.from, q.to),
+      this.config.getScreenScrollSpeeds(),
+    ]);
+    return { ...data, scrollSpeeds };
   }
 }

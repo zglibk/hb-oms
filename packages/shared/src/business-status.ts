@@ -229,3 +229,40 @@ export const ENABLE_STATUS_OPTIONS: StatusOption[] = [
   { label: '启用', value: ENABLE_STATUS.ENABLED, type: 'success' },
   { label: '停用', value: ENABLE_STATUS.DISABLED, type: 'info' },
 ];
+
+/* ===================== 通知公告 ===================== */
+
+/** 通知公告生命周期：发布态同时涵盖定时待发布、有效中与已失效。 */
+export const ANNOUNCEMENT_STATUS = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  WITHDRAWN: 'withdrawn',
+} as const;
+
+export const ANNOUNCEMENT_STATUS_OPTIONS: Array<{ label: string; value: string; type: string }> = [
+  { label: '草稿', value: ANNOUNCEMENT_STATUS.DRAFT, type: 'info' },
+  { label: '已发布', value: ANNOUNCEMENT_STATUS.PUBLISHED, type: 'success' },
+  { label: '已撤回', value: ANNOUNCEMENT_STATUS.WITHDRAWN, type: 'danger' },
+];
+
+export const ANNOUNCEMENT_LEVEL = {
+  NORMAL: 'normal',
+  IMPORTANT: 'important',
+  URGENT: 'urgent',
+} as const;
+
+export const ANNOUNCEMENT_LEVEL_OPTIONS: Array<{ label: string; value: string; type: string }> = [
+  { label: '普通', value: ANNOUNCEMENT_LEVEL.NORMAL, type: 'info' },
+  { label: '重要', value: ANNOUNCEMENT_LEVEL.IMPORTANT, type: 'warning' },
+  { label: '紧急', value: ANNOUNCEMENT_LEVEL.URGENT, type: 'danger' },
+];
+
+export const ANNOUNCEMENT_REPLY_SCOPE = {
+  PUBLIC: 'public',
+  PRIVATE: 'private',
+} as const;
+
+export const ANNOUNCEMENT_REPLY_SCOPE_OPTIONS: Array<{ label: string; value: string; type: string }> = [
+  { label: '公开', value: ANNOUNCEMENT_REPLY_SCOPE.PUBLIC, type: 'success' },
+  { label: '非公开', value: ANNOUNCEMENT_REPLY_SCOPE.PRIVATE, type: 'info' },
+];

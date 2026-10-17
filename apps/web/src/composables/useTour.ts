@@ -17,10 +17,11 @@ import { ref } from 'vue';
 //                   老用户还会去期初页找那个页签，得让他们知道换地方了。
 // v6（2026-08-14）：工艺管理新增「生产BOM」，引导补上开单信息与BOM的分工。
 // v7（2026-10-13）：送货单/入库单改为针式连续纸，并新增纸型档案、套打设计器、发布回退与校准页。
+// v8（2026-10-17）：新增即时通知公告中心、待回复规则与首页公告页签。
 // 2026-08-12：键名前缀 hb_mes_ → hb_oms_（与 MES 生产同源，localStorage 键统一改前缀防冲突）。
 //             版本号不动；旧键值一次性迁移，老用户不因改名重看。迁移是安全的：
 //             MES 的 tour key 停在 _v1，`hb_mes_tour_done_v5` 只可能是 OMS 自己写的。
-const TOUR_DONE_KEY = 'hb_oms_tour_done_v7';
+const TOUR_DONE_KEY = 'hb_oms_tour_done_v8';
 const LEGACY_TOUR_DONE_KEY = 'hb_mes_tour_done_v5';
 
 const tourOpen = ref(false);

@@ -68,6 +68,12 @@ const constantRoutes: RouteRecordRaw[] = [
         meta: { title: '个人中心' },
       },
       {
+        path: 'announcement/:id',
+        name: 'AnnouncementDetail',
+        component: () => import('@/views/announcement/detail.vue'),
+        meta: { title: '通知公告详情', activeMenu: '/home' },
+      },
+      {
         path: 'redirect/:path(.*)',
         name: 'Redirect',
         component: () => import('@/views/redirect/index.vue'),

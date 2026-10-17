@@ -254,31 +254,54 @@
         </el-card>
       </el-col>
 
-      <!-- 右：近期外发回厂。
+      <!-- 右：近期外发回厂 / 通知公告双页签。
            2026-08-10 外发取消发坯单、不再登记计划回厂时间后，「超期未回齐」失去判定
            基准（没有计划日、也没有"还在外面没回"的记录），这张卡改为展示最近几条回厂
            流水，位置与布局不变。 -->
       <el-col :xs="24" :lg="12">
-        <el-card shadow="never" class="list-card" :class="{ 'is-empty': !hasOutsource }">
+        <el-card
+          shadow="never"
+          class="list-card"
+          :class="{ 'is-empty': homeTab === 'outsource' ? !hasOutsource : !announcementStore.homeList.length }"
+        >
           <template #header>
             <div class="list-card__head">
-              <span class="list-card__title">
-                <el-icon :class="hasOutsource ? 'is-primary' : 'is-muted'"><Van /></el-icon>
-                近期外发回厂
-                <el-tag
-                  size="small" round effect="plain"
-                  :type="counts.recentOutsource ? 'primary' : 'info'"
-                >{{ counts.recentOutsource }}</el-tag>
-              </span>
-              <el-button v-permission="'outsource'" link type="primary" @click="go('/outsource')">查看外发</el-button>
+              <el-tabs v-model="homeTab" class="lc-tabs">
+                <el-tab-pane name="outsource">
+                  <template #label>
+                    <span class="lc-tab">
+                      <el-icon :class="hasOutsource ? 'is-primary' : 'is-muted'"><Van /></el-icon>
+                      近期外发回厂
+                      <el-tag size="small" round effect="plain" :type="counts.recentOutsource ? 'primary' : 'info'">{{ counts.recentOutsource }}</el-tag>
+                    </span>
+                  </template>
+                </el-tab-pane>
+                <el-tab-pane name="announcement">
+                  <template #label>
+                    <span class="lc-tab home-notice-tab">
+                      <el-icon :class="announcementStore.unreadCount ? 'is-danger' : 'is-muted'"><Bell /></el-icon>
+                      通知公告
+                      <span v-if="announcementStore.unreadCount" class="home-notice-badge">{{ announcementBadge }}</span>
+                    </span>
+                  </template>
+                </el-tab-pane>
+              </el-tabs>
+              <el-button
+                v-if="homeTab === 'outsource'"
+                v-permission="'outsource'"
+                link type="primary"
+                @click="go('/outsource')"
+              >查看外发</el-button>
+              <el-button v-else link type="primary" @click="announcementStore.openCenter()">更多</el-button>
             </div>
           </template>
-          <div v-if="!hasOutsource" class="list-empty">
-            <el-icon><CircleCheck /></el-icon>
-            <span>暂无外发回厂记录</span>
-          </div>
-          <template v-else>
+          <template v-if="homeTab === 'outsource'">
+            <div v-if="!hasOutsource" class="list-empty">
+              <el-icon><CircleCheck /></el-icon>
+              <span>暂无外发回厂记录</span>
+            </div>
             <el-table
+              v-else
               ref="outsourceTableRef"
               class="home-detail-table"
               :data="summary.recentOutsource"
@@ -322,8 +345,27 @@
                 <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
               </el-table-column>
             </el-table>
-            <div v-if="summary.recentOutsource.length >= summary.topLimit" class="list-card__more">
+            <div v-if="hasOutsource && summary.recentOutsource.length >= summary.topLimit" class="list-card__more">
               共 {{ counts.recentOutsource }} 条，仅显示最近 {{ summary.topLimit }} 条
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="!announcementStore.homeList.length" class="list-empty">
+              <el-icon><CircleCheck /></el-icon>
+              <span>暂无通知公告</span>
+            </div>
+            <div v-else class="home-notice-list" :style="{ maxHeight: `${listMaxHeight}px` }">
+              <button
+                v-for="item in announcementStore.homeList"
+                :key="item.id"
+                type="button"
+                class="home-notice-row"
+                @click="go(`/announcement/${item.id}`)"
+              >
+                <AnnouncementLevel :level="item.level" />
+                <span class="home-notice-row__title" :title="item.title">{{ item.title }}</span>
+                <span v-if="item.isUnread" class="home-notice-new">New</span>
+              </button>
             </div>
           </template>
         </el-card>
@@ -340,15 +382,17 @@ import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } f
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
-  Tickets, Tools, Van, Warning, Clock, CircleCheck, Switch, Calendar, DArrowLeft,
+  Tickets, Tools, Van, Warning, Clock, CircleCheck, Switch, Calendar, DArrowLeft, Bell,
   Sunrise, Sunny, Moon, MoonNight, CoffeeCup,
 } from '@element-plus/icons-vue';
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
+import { useAnnouncementStore } from '@/stores/announcement';
 import { DIMENSION_UNIT } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useAutoScroll } from '@/composables/useAutoScroll';
 import { useDimensionView } from '@/composables/useDimensionView';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 
 import { getCalendarBrief } from '@/utils/calendar-info';
 import { welcomeTip, type TipData } from './welcome-tips';
@@ -358,10 +402,14 @@ import WelcomeRailArt from './WelcomeRailArt.vue';
 import WelcomeFireworks from './WelcomeFireworks.vue';
 import ChangelogNoticeDialog from './ChangelogNoticeDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
 import { ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_CODE } from '@hb-oms/shared';
 
 const router = useRouter();
 const userStore = useUserStore();
+const announcementStore = useAnnouncementStore();
+const { homeOwedScrollSpeed, homeOutsourceScrollSpeed } = useFeatureFlags();
+const announcementBadge = computed(() => announcementStore.unreadCount > 99 ? '99+' : announcementStore.unreadCount);
 const loading = ref(false);
 
 /**
@@ -402,6 +450,7 @@ const canLedger = computed(() => userStore.hasPermission('ledger'));
 /** 看板数据权限：无此权限则整块汇总不请求也不渲染 */
 const canDashboard = computed(() => userStore.hasPermission('stat:dashboard'));
 const hasOutsource = computed(() => summary.value.recentOutsource.length > 0);
+const homeTab = ref<'outsource' | 'announcement'>('outsource');
 
 /* ===== 逾期 / 临近交期 页签 ===== */
 const owedTab = ref<'overdue' | 'upcoming'>('overdue');
@@ -500,8 +549,10 @@ function scrollWrapOf(table: any): HTMLElement | null {
   );
 }
 
-const owedScroll = useAutoScroll(() => scrollWrapOf(owedTableRef.value));
-const outsourceScroll = useAutoScroll(() => scrollWrapOf(outsourceTableRef.value));
+const owedScroll = useAutoScroll(() => scrollWrapOf(owedTableRef.value), { speed: homeOwedScrollSpeed });
+const outsourceScroll = useAutoScroll(() => scrollWrapOf(outsourceTableRef.value), {
+  speed: homeOutsourceScrollSpeed,
+});
 onMounted(() => {
   owedScroll.start();
   outsourceScroll.start();
@@ -512,6 +563,10 @@ onMounted(() => {
 /** 换页签等于换了一份数据：滚动归零；底部说明可能随条数出现/消失，也要重算可见行。 */
 watch(owedTab, () => {
   owedScroll.reset();
+  void nextTick(scheduleListHeightUpdate);
+});
+watch(homeTab, () => {
+  outsourceScroll.reset();
   void nextTick(scheduleListHeightUpdate);
 });
 
@@ -677,7 +732,7 @@ function go(path: string) {
   router.push(path);
 }
 
-/** 首页三张滚动列表统一下钻到产品级台账，并自动展开该行的业务流水。 */
+/** 首页交期待办与近期外发回厂表格统一下钻到产品级台账；通知公告走独立详情页。 */
 function openProductDetail(row: { orderProductId?: number | null }) {
   if (!canLedger.value) {
     ElMessage.warning('暂无订单跟踪台账查看权限，请联系管理员授权');
@@ -1204,6 +1259,56 @@ export default { name: 'HomeDashboard' };
   .is-danger { color: var(--el-color-danger); }
   .is-warning { color: var(--el-color-warning); }
   .is-muted { color: var(--el-text-color-secondary); }
+}
+.home-notice-tab { position: relative; }
+.home-notice-badge {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+/* 通告页签刻意用无表头、无网格线的自定义列表，且不接入自动滚动。 */
+.home-notice-list {
+  overflow-y: auto;
+}
+.home-notice-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  text-align: left;
+  cursor: pointer;
+  &:hover { background: var(--el-color-primary-light-9); }
+  &__title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.home-notice-new {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--el-color-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
 }
 
 /* 空列表横幅：一行图标 + 文案，替代只有表头的空表格 */

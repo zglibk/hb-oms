@@ -19,6 +19,11 @@ export function useFeatureFlags(): {
   inchToMm: ComputedRef<number>;
   dimensionViewUnit: ComputedRef<'mm' | 'inch'>;
   deliveryTemplateDefault: ComputedRef<string>;
+  homeOwedScrollSpeed: ComputedRef<number>;
+  homeOutsourceScrollSpeed: ComputedRef<number>;
+  screenOverdueScrollSpeed: ComputedRef<number>;
+  screenOutsourceScrollSpeed: ComputedRef<number>;
+  changelogScrollSpeed: ComputedRef<number>;
 } {
   const store = useFeatureStore();
   return {
@@ -45,5 +50,11 @@ export function useFeatureFlags(): {
      * 优先级 客户绑定 → 本默认值 → 通用模板（deliveryTemplateOf 取不到即回落）。
      */
     deliveryTemplateDefault: computed(() => store.deliveryTemplateDefault),
+    /** 自动滚动速度均为 px/秒；保存系统配置后响应式更新。 */
+    homeOwedScrollSpeed: computed(() => store.homeOwedScrollSpeed),
+    homeOutsourceScrollSpeed: computed(() => store.homeOutsourceScrollSpeed),
+    screenOverdueScrollSpeed: computed(() => store.screenOverdueScrollSpeed),
+    screenOutsourceScrollSpeed: computed(() => store.screenOutsourceScrollSpeed),
+    changelogScrollSpeed: computed(() => store.changelogScrollSpeed),
   };
 }

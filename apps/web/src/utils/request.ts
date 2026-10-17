@@ -66,6 +66,17 @@ export const tokenStore = {
   },
 };
 
+/** 401 发生在请求层，动态加载 store 以避开 request → announcement API → request 循环依赖。 */
+async function clearExpiredSession() {
+  tokenStore.clear();
+  try {
+    const { useAnnouncementStore } = await import('@/stores/announcement');
+    useAnnouncementStore().resetSession();
+  } catch {
+    // 页面随即回登录页；即使 Pinia 尚未初始化也不能阻断身份清理。
+  }
+}
+
 // baseURL 留空走相对路径，开发由 Vite proxy、生产由 Nginx 路由（文档 1.8.5）
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '',
@@ -117,7 +128,7 @@ service.interceptors.response.use(
       if (refresh && !config.url?.includes('/auth/refresh')) {
         return handleRefresh(config);
       }
-      tokenStore.clear();
+      await clearExpiredSession();
       ElMessage.error('登录已失效，请重新登录');
       // 必须带 BASE_URL：生产部署在 /oms/admin/ 子路径，裸 '/login' 会跳到主站 hb-mes 登录页
       window.location.href = `${import.meta.env.BASE_URL}login`;
@@ -202,7 +213,7 @@ async function handleRefresh(config: AxiosRequestConfig & { __isRetry?: boolean 
     // 关键：先拒绝所有排队请求，再跳转登录。跳转是异步的，若不主动
     // settle，排队请求的 await 会永久挂起、loading 卡死。
     flushPendingFailure(e);
-    tokenStore.clear();
+    await clearExpiredSession();
     // 必须带 BASE_URL：生产部署在 /oms/admin/ 子路径，裸 '/login' 会跳到主站 hb-mes 登录页
     window.location.href = `${import.meta.env.BASE_URL}login`;
     return Promise.reject(e);

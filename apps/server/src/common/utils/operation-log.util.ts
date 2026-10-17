@@ -17,6 +17,7 @@ export function extractBizFromRequest(req: Request): {
     { pattern: /\/api\/system\/menu\/(\d+)/, type: 'menu' },
     { pattern: /\/api\/system\/dict\/(\d+)/, type: 'dict' },
     { pattern: /\/api\/system\/dept\/(\d+)/, type: 'dept' },
+    { pattern: /\/api\/announcement\/(\d+)/, type: 'announcement' },
   ];
 
   for (const { pattern, type } of rules) {
@@ -54,14 +55,22 @@ export function buildLogDescription(
   return bizId != null ? `${action} (#${bizId})` : action;
 }
 
-/** 序列化请求参数（脱敏 + multipart 摘要） */
-export function serializeLogParams(req: Request): string {
-  const SENSITIVE_KEYS = ['password', 'newPassword', 'oldPassword'];
+function redactValue(value: unknown, sensitiveKeys: Set<string>): unknown {
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, sensitiveKeys));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      sensitiveKeys.has(key) ? '***' : redactValue(item, sensitiveKeys),
+    ]),
+  );
+}
+
+/** 序列化请求参数（递归脱敏 + multipart 摘要） */
+export function serializeLogParams(req: Request, redactBodyFields: string[] = []): string {
+  const sensitiveKeys = new Set(['password', 'newPassword', 'oldPassword', ...redactBodyFields]);
   try {
-    const body: Record<string, unknown> = { ...(req.body || {}) };
-    for (const k of SENSITIVE_KEYS) {
-      if (k in body) body[k] = '***';
-    }
+    const body = redactValue(req.body || {}, sensitiveKeys) as Record<string, unknown>;
 
     const file = (req as any).file as Express.Multer.File | undefined;
     if (file) {

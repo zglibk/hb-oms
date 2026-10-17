@@ -2,7 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { DIMENSION_UNIT, INCH_TO_MM } from '@hb-oms/shared';
+import {
+  AUTO_SCROLL_SPEED_DEFAULT,
+  DIMENSION_UNIT,
+  INCH_TO_MM,
+  normalizeAutoScrollSpeed,
+} from '@hb-oms/shared';
 import { SystemConfig } from './entities/system-config.entity';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
 import { normalizeUploadUrl } from '../../common/utils/upload-url.util';
@@ -43,6 +48,11 @@ export class SystemConfigService {
         customerDrawingNoEnabled: 1,
         dullStockColorEnabled: 1,
         productRequirementEnabled: 1,
+        homeOwedScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+        homeOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+        screenOverdueScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+        screenOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+        changelogScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
       });
       row = await this.repo.save(row);
     }
@@ -71,6 +81,11 @@ export class SystemConfigService {
     inchToMm: number;
     dimensionViewUnit: 'mm' | 'inch';
     deliveryTemplateDefault: string;
+    homeOwedScrollSpeed: number;
+    homeOutsourceScrollSpeed: number;
+    screenOverdueScrollSpeed: number;
+    screenOutsourceScrollSpeed: number;
+    changelogScrollSpeed: number;
   }> {
     const row = await this.get();
     // 系数落库前已被 DTO 校验，但旧行/脏数据可能是 0 或 NULL，这里兜一次缺省值：
@@ -86,6 +101,20 @@ export class SystemConfigService {
       dimensionViewUnit: row.dimensionViewUnit === DIMENSION_UNIT.INCH ? 'inch' : 'mm',
       // 送货单默认模板：空/NULL 回落通用模板（版式在前端注册表，此处不校验值域）
       deliveryTemplateDefault: String(row.deliveryTemplateDefault ?? '').trim() || 'generic',
+      homeOwedScrollSpeed: normalizeAutoScrollSpeed(row.homeOwedScrollSpeed),
+      homeOutsourceScrollSpeed: normalizeAutoScrollSpeed(row.homeOutsourceScrollSpeed),
+      screenOverdueScrollSpeed: normalizeAutoScrollSpeed(row.screenOverdueScrollSpeed),
+      screenOutsourceScrollSpeed: normalizeAutoScrollSpeed(row.screenOutsourceScrollSpeed),
+      changelogScrollSpeed: normalizeAutoScrollSpeed(row.changelogScrollSpeed),
+    };
+  }
+
+  /** 数据大屏免登录入口也要读取速度，因此由服务端随大屏数据返回。 */
+  async getScreenScrollSpeeds(): Promise<{ overdue: number; outsource: number }> {
+    const row = await this.get();
+    return {
+      overdue: normalizeAutoScrollSpeed(row.screenOverdueScrollSpeed),
+      outsource: normalizeAutoScrollSpeed(row.screenOutsourceScrollSpeed),
     };
   }
 

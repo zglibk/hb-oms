@@ -55,10 +55,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Promotion } from '@element-plus/icons-vue';
 import { getUnseenChangelog, markChangelogSeen, type ChangelogItem } from '@/api/changelog';
 import { useAutoScroll } from '@/composables/useAutoScroll';
+import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useTour } from '@/composables/useTour';
 import { formatDate } from '@/utils/date';
 
@@ -67,8 +68,12 @@ const items = ref<ChangelogItem[]>([]);
 let latestId = 0;
 
 const scrollRef = ref<HTMLElement>();
-/** 比首页待办卡（26px/s）更慢：这里是逐条阅读的长句，不是扫一眼的列表行 */
-const scroller = useAutoScroll(() => scrollRef.value, { speed: 16, holdMs: 2500 });
+const { changelogScrollSpeed } = useFeatureFlags();
+/** 速度由系统配置独立控制，保存后当前会话即可响应式生效。 */
+const scroller = useAutoScroll(() => scrollRef.value, {
+  speed: changelogScrollSpeed,
+  holdMs: 2500,
+});
 
 /** 同一版本可能维护成多条记录（不同分类/标题），按记录逐段展示 */
 const groups = computed(() =>
@@ -82,16 +87,15 @@ const groups = computed(() =>
 );
 const versions = computed(() => [...new Set(items.value.map((r) => r.version))]);
 
-const reduceMotion =
-  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-
 function onOpened() {
   scroller.reset();
-  if (!reduceMotion) scroller.start();
+  scroller.start();
 }
 
 function onClosed() {
   scroller.stop();
+  delete document.body.dataset.changelogModal;
+  window.dispatchEvent(new CustomEvent('hb-oms-changelog-modal', { detail: { open: false } }));
   if (latestId > 0) markChangelogSeen(latestId).catch(() => {});
 }
 
@@ -101,15 +105,50 @@ const { tourOpen, shouldAutoStart } = useTour();
  * 引导由布局层在挂载后延时自动启动（首页先于布局挂载，此刻 tourOpen 可能还是 false），
  * 故按「引导还没看过」判断要不要等；引导关闭时 finishTour 已写入已看标记。
  */
+function showWhenGlobalModalFree() {
+  if (document.body.dataset.announcementChecking === '1') return;
+  if (document.body.dataset.announcementModal === '1') return;
+  cleanupAnnouncementWait();
+  visible.value = true;
+  document.body.dataset.changelogModal = '1';
+  window.dispatchEvent(new CustomEvent('hb-oms-changelog-modal', { detail: { open: true } }));
+}
+
+let readyHandler: (() => void) | null = null;
+let modalHandler: ((event: Event) => void) | null = null;
+let waitTimer: number | null = null;
+function cleanupAnnouncementWait() {
+  if (readyHandler) window.removeEventListener('hb-oms-announcement-ready', readyHandler);
+  if (modalHandler) window.removeEventListener('hb-oms-announcement-modal', modalHandler);
+  readyHandler = null;
+  modalHandler = null;
+  if (waitTimer != null) window.clearTimeout(waitTimer);
+  waitTimer = null;
+}
+
+function waitForAnnouncement() {
+  const tryShow = () => showWhenGlobalModalFree();
+  cleanupAnnouncementWait();
+  readyHandler = tryShow;
+  modalHandler = (event: Event) => {
+    if (!(event as CustomEvent).detail?.open) {
+      showWhenGlobalModalFree();
+    }
+  };
+  window.addEventListener('hb-oms-announcement-ready', readyHandler, { once: true });
+  window.addEventListener('hb-oms-announcement-modal', modalHandler);
+  waitTimer = window.setTimeout(tryShow, 1500);
+}
+
 function showAfterTour() {
   if (!tourOpen.value && !shouldAutoStart()) {
-    visible.value = true;
+    waitForAnnouncement();
     return;
   }
   const stop = watch(tourOpen, (open) => {
     if (open || shouldAutoStart()) return;
     stop();
-    visible.value = true;
+    waitForAnnouncement();
   });
 }
 
@@ -123,6 +162,10 @@ onMounted(async () => {
   } catch {
     // 弹窗只是告知，取不到就算了，不打扰用户
   }
+});
+onBeforeUnmount(() => {
+  cleanupAnnouncementWait();
+  delete document.body.dataset.changelogModal;
 });
 </script>
 
