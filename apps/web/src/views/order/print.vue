@@ -61,19 +61,20 @@
           </div>
         </div>
 
-        <!-- ==================== 主表格（一产品行一行） ==================== -->
+        <!-- ==================== 主表格（卡口产品按左右拆行） ==================== -->
         <table class="task-table">
           <!-- 客户图号可在「系统配置 → 业务字段」全局停用：col / th / td / 总计行的
                colspan **四处必须同条件**，漏一处整张表的列宽与合并就会错位。
-               停用时把它的 10% 让给内容最多的「产品要求描述」列，总宽保持 100% -->
+               停用时把它的 9% 让给内容最多的「产品要求描述」列，总宽保持 100% -->
           <colgroup>
             <col style="width: 8%" />
-            <col style="width: 12%" />
-            <col v-if="customerDrawingNoEnabled" style="width: 10%" />
-            <col :style="{ width: customerDrawingNoEnabled ? '21%' : '31%' }" />
+            <col style="width: 11%" />
+            <col v-if="customerDrawingNoEnabled" style="width: 9%" />
+            <col :style="{ width: customerDrawingNoEnabled ? '18%' : '27%' }" />
             <col style="width: 7.5%" />
             <col style="width: 6%" />
             <col style="width: 8.5%" />
+            <col style="width: 5%" />
             <col style="width: 10%" />
             <col style="width: 8%" />
             <col style="width: 9%" />
@@ -87,6 +88,7 @@
               <th>尺寸<br />(mm)</th>
               <th>颜色</th>
               <th>数量/支</th>
+              <th>边别</th>
               <th>图号</th>
               <th>分类</th>
               <th>备注</th>
@@ -102,6 +104,7 @@
               <td v-if="spans.dimension[i]" :rowspan="spans.dimension[i]" class="c">{{ r.dimension || '—' }}</td>
               <td v-if="spans.color[i]" :rowspan="spans.color[i]" class="c">{{ r.color || '—' }}</td>
               <td class="c num">{{ r.qtyPcs }}</td>
+              <td class="c">{{ r.side || '—' }}</td>
               <td v-if="spans.drawing[i]" :rowspan="spans.drawing[i]" class="c pre">{{ r.drawing || '—' }}</td>
               <td class="c">{{ r.category }}</td>
               <td>{{ r.remark }}</td>
@@ -110,7 +113,7 @@
               <!-- 合并「数量」之前的所有列：停用客户图号时少一列，故 6 → 5 -->
               <td :colspan="customerDrawingNoEnabled ? 6 : 5" class="c"><b>总计</b></td>
               <td class="c num"><b>{{ totalQty }}</b></td>
-              <td colspan="3"></td>
+              <td colspan="4"></td>
             </tr>
           </tbody>
         </table>
@@ -162,6 +165,9 @@ import {
   splitParts,
   splitSuffix,
   sanitizeItemCode,
+  hasSocket,
+  expandPartRows,
+  sideLabel,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 
@@ -233,13 +239,20 @@ interface TaskRow {
   dimension: string;
   color: string;
   qtyPcs: number;
+  side: string;
   drawing: string;
   category: string;
   remark: string;
 }
 
-/** 产品行 → 任务单行 */
-function toRow(p: OrderProductItem): TaskRow {
+/**
+ * 产品行 → 任务单行。
+ *
+ * 产品类型含「卡口」时，按共享包的部件展开口径拆成左、右两行；同一边别会在
+ * 外/中/内轨等多个部件上重复出现，因此这里只取每个边别的第一条数量，不能把
+ * 互补部件累加，否则三节轨会被算成三倍。奇数支仍沿用共享规则「左边多一支」。
+ */
+function toRows(p: OrderProductItem): TaskRow[] {
   const groupTypes = (p.partGroups ?? []).map((g) => g.groupType);
   // 图号 = 组级生产图号(+版本)按组序去重并列；纸质单上版本号另起一行
   const drawings = [...new Set(
@@ -249,7 +262,7 @@ function toRow(p: OrderProductItem): TaskRow {
         : ''))
       .filter(Boolean),
   )];
-  return {
+  const base: Omit<TaskRow, 'qtyPcs' | 'side'> = {
     // 存量产品代码可能夹着中文说明（「45#无锁力」），单据上只印代码部分
     itemNo: [sanitizeItemCode(p.itemNo), formatProductTypes(p.productType ?? '')].filter(Boolean).join(' '),
     partCode: [p.productName, p.materialCode].filter(Boolean).join('-'),
@@ -258,15 +271,30 @@ function toRow(p: OrderProductItem): TaskRow {
     dimension: formatDimension(p.dimensionRaw, p.dimensionUnit, p.dimensionMm) ?? '',
     // 纸质单「颜色」格常填的是表面处理（如封漆）：color 为空时回落表面处理中文
     color: p.color || surfaceLabel(p.surfaceType),
-    qtyPcs: p.qtyPcs,
     drawing: drawings.join('\n'),
     // 分类：分体行按组构成推导形态（外中轨/内轨…），整品行标「整品」
     category: p.isSplit ? splitSuffix(splitParts(groupTypes, p.railSection)) : '整品',
     remark: p.remark ?? '',
   };
+
+  if (!hasSocket(p.productType)) {
+    return [{ ...base, qtyPcs: p.qtyPcs, side: '' }];
+  }
+
+  const sideQty = new Map<string, number>();
+  expandPartRows('whole', p.railSection, true, p.qtyPcs).forEach((row) => {
+    if (row.side && row.qty > 0 && !sideQty.has(row.side)) {
+      sideQty.set(row.side, row.qty);
+    }
+  });
+  return [...sideQty.entries()].map(([side, qtyPcs]) => ({
+    ...base,
+    qtyPcs,
+    side: sideLabel(side),
+  }));
 }
 
-const taskRows = computed<TaskRow[]>(() => (order.value?.products ?? []).map(toRow));
+const taskRows = computed<TaskRow[]>(() => (order.value?.products ?? []).flatMap(toRows));
 
 const totalQty = computed(() => taskRows.value.reduce((s, r) => s + (r.qtyPcs || 0), 0));
 
