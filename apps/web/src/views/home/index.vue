@@ -312,19 +312,19 @@
               @mouseenter="outsourceScroll.pause()"
               @mouseleave="outsourceScroll.resume()"
             >
-              <el-table-column label="回厂日期" width="78">
+              <el-table-column label="回厂日期" width="96">
                 <template #default="{ row }">{{ row.backDate || '—' }}</template>
               </el-table-column>
-              <el-table-column label="生产单号" min-width="72" show-overflow-tooltip>
+              <el-table-column label="生产单号" width="116" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
               </el-table-column>
-              <el-table-column label="加工商" prop="processorName" width="64" show-overflow-tooltip>
+              <el-table-column label="加工商" prop="processorName" width="96" show-overflow-tooltip>
                 <template #default="{ row }">
                   <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
-              <el-table-column label="产品名称" prop="productName" min-width="110" show-overflow-tooltip />
+              <el-table-column label="产品名称" prop="productName" min-width="132" show-overflow-tooltip />
               <el-table-column :label="outDimLabel" width="92" align="center">
                 <template #header>
                   <el-tooltip content="点击切换本表 mm / 寸" placement="top">
@@ -335,13 +335,13 @@
                 </template>
                 <template #default="{ row }">{{ outDimText(row.dimensionMm) }}</template>
               </el-table-column>
-              <el-table-column label="表面处理" width="72" align="center">
+              <el-table-column label="表面处理" width="88" align="center">
                 <template #default="{ row }">
                   <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
                   <span v-else>—</span>
                 </template>
               </el-table-column>
-              <el-table-column label="数量(支)" width="68" align="center">
+              <el-table-column label="数量(支)" width="76" align="center">
                 <template #default="{ row }"><b>{{ row.returnQty }}</b></template>
               </el-table-column>
             </el-table>
