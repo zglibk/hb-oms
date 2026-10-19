@@ -527,7 +527,7 @@ export class OrderService {
           groupId = saved.id;
         }
 
-        // 部件行：蓝图展开（二节轨无中轨；卡口左右分列），客户端仅微调追溯码/备注。
+        // 部件行：蓝图展开（二节轨无中轨；卡口仅外轨/内轨分左右，中轨不分边），客户端仅微调追溯码/备注。
         // 客户端没传微调时沿用该组原有部件行的追溯码/备注——编辑页从不回传它们，重展开不能把周期码洗掉
         const blueprint = expandPartRows(g.groupType, p.railSection, socket, groupQty);
         if (!blueprint.length) {

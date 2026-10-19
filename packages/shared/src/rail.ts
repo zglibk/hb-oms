@@ -9,7 +9,7 @@ export const PART_TYPE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: '内轨', value: 'inner' },
 ];
 
-/** 边别：仅产品类型组合含「卡口」时使用；非卡口一律空串 ''（台账唯一键兜底） */
+/** 边别：产品级仅含「卡口」时使用；部件级卡口中轨为通用结构、边别仍为空串 */
 export const SIDE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: '左', value: 'left' },
   { label: '右', value: 'right' },
@@ -75,11 +75,30 @@ export function partGroupParts(v: string | null | undefined): string[] {
 }
 
 /**
+ * 数量按边别展开的唯一口径：
+ * - 不分边别 → 一行空边别、数量保持全量；
+ * - 分边别 → 左/右两行，奇数支左边多 1 支，左右合计守恒。
+ *
+ * 产品级（装配/成品/生产任务单）只要含卡口就传 true；部件级只有卡口外轨、内轨
+ * 传 true，中轨是左右通用结构、传 false。
+ */
+export function expandSideQtyRows(
+  splitSides: boolean,
+  qtyPcs: number,
+): Array<{ side: string; qty: number }> {
+  if (!splitSides) return [{ side: '', qty: qtyPcs }];
+  const left = Math.ceil(qtyPcs / 2);
+  return [
+    { side: 'left', qty: left },
+    { side: 'right', qty: qtyPcs - left },
+  ];
+}
+
+/**
  * 部件行展开蓝图（订单部件组保存时自动展开，设计文档 §4.2）：
  * - 二节轨（two_section）无中轨，组内 middle 部件自动剔除；
- * - 含卡口（socket）左右分列 ×2，每边数量 = 组支数一半（卡口左右各1支为1套）；
- * - 返回 [{ partType, side, qty }]；qty 由 groupQtyPcs 推导，非卡口整行全量。
- * 卡口奇数支数时左边多 1 支（Math.ceil / Math.floor），保证合计守恒。
+ * - 含卡口（socket）时仅外轨、内轨左右分列，中轨保持一行且边别为空；
+ * - 返回 [{ partType, side, qty }]；中轨及非卡口部件数量均为组支数全量。
  */
 export function expandPartRows(
   groupType: string | null | undefined,
@@ -90,15 +109,12 @@ export function expandPartRows(
   const base = partGroupParts(groupType).filter(
     (pt) => railSection !== 'two_section' || pt !== 'middle',
   );
-  if (!socket) {
-    return base.map((pt) => ({ partType: pt, side: '', qty: groupQtyPcs }));
-  }
-  const left = Math.ceil(groupQtyPcs / 2);
-  const right = groupQtyPcs - left;
-  return base.flatMap((pt) => [
-    { partType: pt, side: 'left', qty: left },
-    { partType: pt, side: 'right', qty: right },
-  ]);
+  return base.flatMap((pt) =>
+    expandSideQtyRows(socket && pt !== 'middle', groupQtyPcs).map((row) => ({
+      partType: pt,
+      ...row,
+    })),
+  );
 }
 
 /* ===== 分体出货（t_order_product.is_split，2026-08-12）=====

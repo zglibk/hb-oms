@@ -53,7 +53,10 @@ export function formatProductTypes(values: string[] | string | null | undefined)
     .join('');
 }
 
-/** 组合中是否含「卡口」——含卡口即触发全部卡口规则（左右分列、2支=1套、库存分边别） */
+/**
+ * 组合中是否含「卡口」——含卡口即触发卡口规则：产品级按左右分列、2支=1套、
+ * 成品库存分边别；部件级仅外轨/内轨分左右，中轨为通用结构。
+ */
 export function hasSocket(values: string[] | string | null | undefined): boolean {
   const arr = Array.isArray(values) ? values : parseProductTypes(values);
   return arr.includes('socket');

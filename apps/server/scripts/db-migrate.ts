@@ -123,6 +123,8 @@ const MIGRATIONS: string[] = [
   'migration-announcement.sql',
   // 自动滚动速度：默认统一 22px/s，首页 / 数据大屏 / 更新日志可分别配置
   'migration-auto-scroll-speed.sql',
+  // 卡口部件边别订正：仅外轨/内轨分左右，中轨合并为不分边的一行
+  'migration-socket-middle-common.sql',
 ];
 
 /**

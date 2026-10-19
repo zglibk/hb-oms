@@ -8,7 +8,7 @@ import { tokenStore } from '@/utils/request';
 import { registerDynamicRoutes } from './dynamic';
 import { ElMessage } from 'element-plus';
 
-/** 静态路由（无需权限） */
+/** 静态路由（是否免登录/需功能权限由各自 meta 声明） */
 const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -27,7 +27,8 @@ const constantRoutes: RouteRecordRaw[] = [
     path: '/order/print',
     name: 'OrderPrint',
     component: () => import('@/views/order/print.vue'),
-    meta: { title: '生产任务单' },
+    // 顶层打印页没有菜单路由兜底，必须在这里同时卡住订单查看与导出权限。
+    meta: { title: '生产任务单', permissions: ['order', 'order:export'] },
   },
   {
     // 数据可视化大屏：顶层路由不挂 Layout（全屏画布），且免登录可达——

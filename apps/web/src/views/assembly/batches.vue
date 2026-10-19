@@ -225,7 +225,7 @@ import {
   type AssemblyBatchRow,
   type AssemblyBatchesResult,
 } from '@/api/assembly';
-import { ASSEMBLY_STATUS, SIDE_OPTIONS, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
+import { ASSEMBLY_STATUS, SIDE_OPTIONS, expandSideQtyRows, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
@@ -288,15 +288,13 @@ function resetDraft() {
 }
 
 /**
- * 该边别的应排产量：非卡口 = 产品订单数；含卡口左右各半，
- * **奇数支左边多一支**（Math.ceil / 减法），与共享包 expandPartRows 同口径，保证合计守恒。
+ * 该边别的应排产量：非卡口 = 产品订单数；含卡口按产品级边别数量展开。
+ * 部件级中轨是否分边不影响这里，装配对象仍是左/右成品。
  */
 function sideTarget(side: string): number {
   const p = data.value?.product;
   if (!p) return 0;
-  if (!socket.value) return p.qtyPcs;
-  const left = Math.ceil(p.qtyPcs / 2);
-  return side === 'right' ? p.qtyPcs - left : left;
+  return expandSideQtyRows(socket.value, p.qtyPcs).find((row) => row.side === side)?.qty ?? 0;
 }
 
 /** 默认数量 = 该边别未排产量（不足则 1），减少计划员手工输入 */

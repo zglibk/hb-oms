@@ -324,7 +324,7 @@ CREATE TABLE IF NOT EXISTS t_order_part (
   product_id    INT          NOT NULL COMMENT '冗余产品行ID',
   part_group_id INT          NOT NULL COMMENT '所属部件组',
   part_type     VARCHAR(32)  NOT NULL COMMENT '部件：outer外轨 middle中轨 inner内轨',
-  side          VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：left左 right右；仅含卡口组合使用，其余空串',
+  side          VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：卡口外轨/内轨为left左/right右；中轨及非卡口为空串',
   cycle_code    VARCHAR(64)  NULL COMMENT '产品周期（追溯码）：客户要求压印的追溯日期码，非必填',
   qty           INT          NOT NULL COMMENT '需求数量（支）',
   remark        VARCHAR(255) NULL COMMENT '备注',

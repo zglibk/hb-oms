@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,6 +12,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { ORDER_STATUS } from '@hb-oms/shared';
 import type { Request, Response } from 'express';
 import { OrderService } from './order.service';
 import { OrderLedgerService } from './order-ledger.service';
@@ -125,7 +127,7 @@ export class OrderController {
    * 但仍须在**任何** `:id/:sub` 通配之前，故置于 detail 上方保持醒目。
    */
   @Get(':id/task-order-pdf')
-  @RequirePermissions('order:export')
+  @RequirePermissions('order', 'order:export')
   @SkipTransform()
   async exportTaskOrderPdf(
     @Param('id', ParseIntPipe) id: number,
@@ -133,6 +135,9 @@ export class OrderController {
     @Res() res: Response,
   ) {
     const order = await this.service.findOne(id); // 不存在直接 404，省得白起浏览器
+    if (order.status === ORDER_STATUS.CANCELLED) {
+      throw new BadRequestException('订单已作废，不能导出生产任务单');
+    }
     const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const buf = await this.pdfService.renderPrintPage(this.printPageUrl(id), token);
     const filename = `生产任务单-${order.productionNo || order.orderNo}.pdf`;

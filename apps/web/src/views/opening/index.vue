@@ -182,6 +182,7 @@ import {
   RAIL_SECTION_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   sideLabel,
+  expandSideQtyRows,
   normalizeProductTypes,
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
@@ -255,9 +256,8 @@ function isSelectable(row: GroupRow) {
 function confirmPick() {
   picked.value.forEach((o) => {
     if (groupRows.value.some((r) => r.orderProductId === o.orderProductId && r.side === o.side)) return;
-    // 默认按订单数带出（含卡口左右各半，奇数支左边多一支，与 expandPartRows 同口径），
-    // 期初多半就是整个产品已完成
-    const def = o.side === 'right' ? Math.floor(o.qtyPcs / 2) : o.side ? Math.ceil(o.qtyPcs / 2) : o.qtyPcs;
+    // 默认按产品级边别数量带出；部件级中轨是否分边不影响成品期初的左/右口径
+    const def = expandSideQtyRows(!!o.side, o.qtyPcs).find((row) => row.side === o.side)?.qty ?? o.qtyPcs;
     groupRows.value.push({ ...o, quantity: def || 1, remark: '' });
   });
   picked.value = [];

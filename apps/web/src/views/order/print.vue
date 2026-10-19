@@ -1,5 +1,7 @@
 <template>
   <main class="print-preview-page">
+    <!-- PdfService 会等待该标记再截 PDF；必须等订单、字典和业务字段配置全部加载完成。 -->
+    <span v-if="printReady" data-print-ready="true" hidden></span>
     <header class="preview-toolbar no-print">
       <el-button size="small" :icon="ArrowLeft" @click="goBack">返回列表</el-button>
       <div class="preview-toolbar__title">
@@ -8,8 +10,8 @@
       </div>
       <div>
         <el-button size="small" :icon="Printer" :disabled="loading || !order" @click="onPrint">打印</el-button>
-        <!-- 与列表入口按钮同权限：直接输 URL 进来的无权用户不该看到可点的按钮
-             （后端接口另有 order:export 守卫，这里只是别让人点了才 403） -->
+        <!-- 与列表入口按钮同权限：路由与后端接口均要求 order + order:export，
+             按钮指令只是让权限反馈在当前页面也保持一致。 -->
         <el-button
           size="small" type="primary" :icon="Download" v-permission.disable="'order:export'"
           :loading="downloading" :disabled="loading || !order" @click="onDownloadPdf"
@@ -166,8 +168,9 @@ import {
   splitSuffix,
   sanitizeItemCode,
   hasSocket,
-  expandPartRows,
+  expandSideQtyRows,
   sideLabel,
+  ORDER_STATUS_VALUE,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 
@@ -202,6 +205,8 @@ const loading = ref(true);
 const order = ref<OrderItem | null>(null);
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 const originalTitle = document.title;
+/** 服务端 PDF 只能在全部页面依赖加载完成且订单有效时开始渲染。 */
+const printReady = computed(() => !loading.value && !!order.value);
 
 /**
  * yyyy-MM-dd → { y, m, d }（去前导零）。
@@ -248,9 +253,9 @@ interface TaskRow {
 /**
  * 产品行 → 任务单行。
  *
- * 产品类型含「卡口」时，按共享包的部件展开口径拆成左、右两行；同一边别会在
- * 外/中/内轨等多个部件上重复出现，因此这里只取每个边别的第一条数量，不能把
- * 互补部件累加，否则三节轨会被算成三倍。奇数支仍沿用共享规则「左边多一支」。
+ * 产品类型含「卡口」时，按产品级边别口径拆成左、右两行；这与部件蓝图刻意解耦：
+ * 卡口中轨是左右通用结构、订单部件行不分边，但成品任务单仍须按安装侧打印左/右两行。
+ * 奇数支沿用共享规则「左边多一支」，两行合计始终等于产品支数。
  */
 function toRows(p: OrderProductItem): TaskRow[] {
   const groupTypes = (p.partGroups ?? []).map((g) => g.groupType);
@@ -281,17 +286,13 @@ function toRows(p: OrderProductItem): TaskRow[] {
     return [{ ...base, qtyPcs: p.qtyPcs, side: '' }];
   }
 
-  const sideQty = new Map<string, number>();
-  expandPartRows('whole', p.railSection, true, p.qtyPcs).forEach((row) => {
-    if (row.side && row.qty > 0 && !sideQty.has(row.side)) {
-      sideQty.set(row.side, row.qty);
-    }
-  });
-  return [...sideQty.entries()].map(([side, qtyPcs]) => ({
-    ...base,
-    qtyPcs,
-    side: sideLabel(side),
-  }));
+  return expandSideQtyRows(true, p.qtyPcs)
+    .filter((row) => row.qty > 0)
+    .map(({ side, qty: qtyPcs }) => ({
+      ...base,
+      qtyPcs,
+      side: sideLabel(side),
+    }));
 }
 
 const taskRows = computed<TaskRow[]>(() => (order.value?.products ?? []).flatMap(toRows));
@@ -347,6 +348,11 @@ async function init() {
       // 已加载过则直接跳过，不重复请求
       featureStore.loaded ? Promise.resolve() : featureStore.load(),
     ]);
+    if (res.status === ORDER_STATUS_VALUE.CANCELLED) {
+      order.value = null;
+      ElMessage.error('订单已作废，不能导出生产任务单');
+      return;
+    }
     order.value = res;
     surfaceDict.value = (dict as any[]).map((r) => ({ label: r.dictLabel, value: r.dictValue }));
     // 打印/另存 PDF 的默认文件名取自 document.title

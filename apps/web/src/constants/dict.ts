@@ -110,6 +110,7 @@ export {
   partGroupSuffix,
   partGroupParts,
   defaultGroupTypes,
+  expandSideQtyRows,
   expandPartRows,
   // 分体出货（形态由部件组构成推导；仅三节轨可开。分体行同样走装配与闸门）
   splitParts,
