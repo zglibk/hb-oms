@@ -100,9 +100,6 @@
           <el-table-column type="index" label="#" width="46" align="center" />
           <el-table-column label="生产单号" prop="productionNo" width="120" fixed="left" show-overflow-tooltip />
           <el-table-column label="产品型号" prop="productModel" min-width="140" show-overflow-tooltip />
-          <el-table-column label="边别" width="72" align="center">
-            <template #default="{ row }"><color-tag :seed="row.side || 'whole'">{{ sideText(row.side) }}</color-tag></template>
-          </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="80" align="center" show-overflow-tooltip />
           <el-table-column label="订单数量" width="88" align="center">
             <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
@@ -128,6 +125,9 @@
           </el-table-column>
           <el-table-column v-if="colorEnabled" label="颜色" width="90" align="center">
             <template #default="{ row }"><el-input v-model="row.color" data-detail-editor /></template>
+          </el-table-column>
+          <el-table-column label="边别" width="72" align="center">
+            <template #default="{ row }"><color-tag :seed="row.side || 'whole'">{{ sideText(row.side) }}</color-tag></template>
           </el-table-column>
           <!-- 数量列排在重量之前：它才是入账依据；必填校验在保存时统一做 -->
           <el-table-column width="125" align="center" class-name="col-focus" label-class-name="col-focus">
