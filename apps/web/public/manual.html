@@ -124,7 +124,7 @@
     <a class="toc-item toc-sub" data-key="订单 填写顺序 四级 产品 部件组" onclick="jump('ch1-1')">1.1 填写顺序：四级结构</a>
     <a class="toc-item toc-sub" data-key="订单 关键字段 PO 生产单号 客户图号 单位" onclick="jump('ch1-2')">1.2 关键字段怎么填</a>
     <a class="toc-item toc-sub" data-key="部件组 拆分 整品 外轨 中轨 内轨 外中轨 节数 按第一行填充 批量 分体 分体出货 拆开下单" onclick="jump('ch1-3')">1.3 部件组怎么拆</a>
-    <a class="toc-item toc-sub" data-key="订单列表 编辑 完结 重开 删除 复制 模板 相同订单 重复下单 同PO 生产任务单 打印 卡口 左右 边别" onclick="jump('ch1-4')">1.4 订单列表常用操作</a>
+    <a class="toc-item toc-sub" data-key="订单列表 详情 编辑 完结 重开 删除 复制 模板 相同订单 重复下单 同PO 生产任务单 打印 卡口 左右 边别" onclick="jump('ch1-4')">1.4 订单列表常用操作</a>
 
     <a class="toc-item" data-key="外发 回厂 电镀 表面处理 第二步" onclick="jump('ch2')">第2章 第二步：外发件回厂（可选）</a>
     <a class="toc-item toc-sub" data-key="要不要外发 表面处理 无 镀锌" onclick="jump('ch2-1')">2.1 什么时候要外发</a>
@@ -363,6 +363,7 @@
         <tbody>
           <tr><td>编辑</td><td>自己建的订单（或你是主管角色）</td><td><strong>只有订单创建人和主管角色（默认业务经理）能改</strong>，别人建的订单「编辑」按钮是灰的，管理员和超级管理员也一样。已登记过外发回厂/装配批次/出入库单的订单只能「<strong>更正</strong>」录错的信息，见下面「更正已走下游流程的订单」</td></tr>
           <tr><td>复制</td><td>任何订单（含已作废）</td><td>拿历史订单当模板建新单，见下面「复制历史订单建新单」</td></tr>
+          <tr><td>详情</td><td>有订单管理查看权限</td><td>点操作列的「<strong>更多 → 详情</strong>」进入与新增/编辑相同的完整订单页，可查看订单头、全部产品与部件/边别、订单备注和图文订单要求；页面所有录入元素均为只读，不显示保存按钮，查看不需要修改权限</td></tr>
           <tr><td>完结</td><td>进行中的订单</td><td>表示不再跟踪。<strong>完结不锁单据</strong>，已完结订单照样可以继续出入库</td></tr>
           <tr><td>重开</td><td>已完结的订单</td><td>客户追加提货时用</td></tr>
           <tr><td>删除</td><td>自己建的、未被下游单据引用的订单</td><td><strong>连同产品行、部件组、部件明细一起删掉，不可恢复</strong>。和编辑一样只有创建人和主管角色能删，谁删的系统有记录</td></tr>

@@ -4,19 +4,27 @@
       <div class="form-header">
         <div class="form-title">
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
-          <span class="title-text">{{ editId ? '编辑订单' : '新增订单' }}</span>
+          <span class="title-text">{{ viewMode ? '订单详情' : editId ? '编辑订单' : '新增订单' }}</span>
           <span v-if="orderNo" class="title-sub">{{ orderNo }}</span>
           <span v-else-if="copyHint" class="title-sub title-sub--copy">{{ copyHint }}</span>
         </div>
         <div>
-          <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
+          <el-button size="small" @click="goBack">{{ viewMode ? '返回列表' : '取消' }}</el-button>
+          <el-button v-if="!viewMode" size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
         </div>
       </div>
 
+      <el-alert
+        v-if="viewMode"
+        type="info"
+        :closable="false"
+        show-icon
+        class="ref-alert"
+        title="当前为只读查看模式，订单信息不可修改"
+      />
       <!-- 无修改权（不是创建人、也不在订单修改主管角色里）：只读 -->
       <el-alert
-        v-if="editGuard && !editGuard.canEdit"
+        v-else-if="editGuard && !editGuard.canEdit"
         type="error"
         :closable="false"
         show-icon
@@ -36,7 +44,16 @@
         已被引用的产品行不能删除，轨道节数、卡口、分体出货不能修改；有外发回厂记录的部件组不能删除或改组类型。
       </el-alert>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small" class="order-form">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        :inert="viewMode"
+        label-width="90px"
+        size="small"
+        class="order-form"
+        :class="{ 'order-form--readonly': viewMode }"
+      >
         <div class="section-title">订单信息</div>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="8">
@@ -480,8 +497,8 @@
         <audit-info v-if="editId" :row="auditRow" />
 
         <div class="form-footer">
-          <el-button size="small" @click="goBack">取消</el-button>
-          <el-button size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
+          <el-button size="small" @click="goBack">{{ viewMode ? '返回列表' : '取消' }}</el-button>
+          <el-button v-if="!viewMode" size="small" type="primary" :loading="saving" :disabled="guardBlocked" @click="onSave">保存</el-button>
         </div>
       </el-form>
     </el-card>
@@ -587,6 +604,8 @@ function withWidthHash(v: string | null | undefined): string {
 const route = useRoute();
 const router = useRouter();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
+/** 列表「更多 → 详情」复用完整订单录入页，仅切换为不可交互的只读模式。 */
+const viewMode = computed(() => route.query.mode === 'view');
 /**
  * 复制来源订单 id（列表「复制」进入）：按详情回显业务内容做模板，走新建保存、单号重新采番。
  * 不继承：PO#（新客户订单文件必然是新号）、下单日期（重置今天）、交期（新单交期几乎必然
@@ -1552,6 +1571,23 @@ export default { name: 'OrderForm' };
   .ml12 { margin-left: 12px; }
 }
 .order-form { max-width: 1280px; }
+.order-form--readonly {
+  :deep(.el-input__wrapper),
+  :deep(.el-select__wrapper),
+  :deep(.el-textarea__inner),
+  :deep(.el-date-editor.el-input__wrapper),
+  :deep(.el-input-number) {
+    background: var(--el-fill-color-light);
+    box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  }
+
+  :deep(.el-button),
+  :deep(.el-switch),
+  :deep(.el-radio-group),
+  :deep(.el-upload) {
+    opacity: 0.62;
+  }
+}
 
 /* 订单备注（富文本）版块：标题条与 .section-title 同视觉语言，但带折叠按钮 */
 .req-block { margin-top: 8px; }

@@ -211,6 +211,10 @@
                 size="small" v-permission.disable="'order:create'" link type="primary" :icon="CopyDocument"
                 @click="openCopy(row)"
               >复制</el-button>
+              <el-button
+                size="small" v-permission="'order'" link type="primary" :icon="View"
+                @click="openDetail(row)"
+              >详情</el-button>
               <!-- 生产任务单打印页（A4，可导出 PDF）；已作废订单不该再下发生产，禁用 -->
               <el-button
                 size="small" v-permission.disable="'order:export'" link type="primary" :icon="Printer"
@@ -247,7 +251,7 @@
 import { computed, onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft, Download, Printer, CopyDocument } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Search, CircleCheck, RefreshLeft, Download, Printer, CopyDocument, View } from '@element-plus/icons-vue';
 import {
   getOrderList,
   finishOrder,
@@ -417,6 +421,10 @@ function openEdit(row: OrderItem) {
 /** 复制历史订单为新建模板：表单按 copyFrom 回显内容后走新建保存（保存时重新采番） */
 function openCopy(row: OrderItem) {
   router.push({ name: 'OrderForm', query: { copyFrom: row.id } });
+}
+
+function openDetail(row: OrderItem) {
+  router.push({ name: 'OrderForm', query: { id: row.id, mode: 'view' } });
 }
 
 /**
