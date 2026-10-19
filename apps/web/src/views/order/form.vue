@@ -48,7 +48,6 @@
         ref="formRef"
         :model="form"
         :rules="rules"
-        :inert="viewMode"
         label-width="90px"
         size="small"
         class="order-form"
@@ -65,6 +64,7 @@
                 allow-create
                 default-first-option
                 :filter-method="filterCustomers"
+                :disabled="viewMode"
                 placeholder="选择或输入客户；可按名称/代码搜索"
                 popper-class="customer-2col-popper"
                 style="width: 100%"
@@ -80,13 +80,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="PO#" prop="poNo">
-              <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号，没有可留空" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
+              <el-input v-model="form.poNo" placeholder="客户订单文件上的订单编号，没有可留空" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" :disabled="viewMode" />
             </el-form-item>
           </el-col>
           <!-- 生产单号与 PO# 一对一，都是订单级；不再挂在产品行上 -->
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="生产单号" prop="productionNo">
-              <el-input v-model="form.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" />
+              <el-input v-model="form.productionNo" placeholder="如 GLI46212-A" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" :disabled="viewMode" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
@@ -97,6 +97,7 @@
                 value-format="YYYY-MM-DD"
                 placeholder="请选择客户下单日"
                 :disabled-date="disableFutureOrderDate"
+                :disabled="viewMode"
                 style="width: 100%"
                 @change="onOrderDateChange"
               />
@@ -110,6 +111,7 @@
                 filterable
                 allow-create
                 default-first-option
+                :disabled="viewMode"
                 placeholder="选择或直接输入"
                 style="width: 100%"
               >
@@ -125,6 +127,7 @@
                 filterable
                 allow-create
                 default-first-option
+                :disabled="viewMode"
                 placeholder="选择或直接输入"
                 style="width: 100%"
               >
@@ -134,14 +137,14 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="订单来源">
-              <el-select v-model="form.orderSource" clearable placeholder="选择来源" style="width: 100%">
+              <el-select v-model="form.orderSource" clearable placeholder="选择来源" style="width: 100%" :disabled="viewMode">
                 <el-option v-for="o in ORDER_SOURCE" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="期初补录">
-              <el-switch v-model="isOpeningOrder" :active-value="1" :inactive-value="0" />
+              <el-switch v-model="isOpeningOrder" :active-value="1" :inactive-value="0" :disabled="viewMode" />
               <el-tooltip
                 content="1. 打开：用于补录未完结的历史订单（新系统正式启用时）；补录后再到「期初录入」按部件组录入已完成入库数量。2. 保持关闭：正常新订单"
                 placement="top"
@@ -152,7 +155,7 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="8">
             <el-form-item label="备注">
-              <el-input v-model="form.remark" placeholder="一句话摘要，列表可见" />
+              <el-input v-model="form.remark" placeholder="一句话摘要，列表可见" :disabled="viewMode" />
             </el-form-item>
           </el-col>
           <el-col :xs="24">
@@ -161,15 +164,16 @@
                 :show-file-list="false"
                 :auto-upload="false"
                 multiple
+                :disabled="viewMode"
                 :on-change="onAttachmentPick"
               >
-                <el-button size="small" :icon="Upload" :loading="uploading">上传附件</el-button>
+                <el-button size="small" :icon="Upload" :loading="uploading" :disabled="viewMode">上传附件</el-button>
               </el-upload>
               <div v-if="attachments.length" class="attach-list">
                 <el-tag
                   v-for="(a, i) in attachments"
                   :key="a"
-                  closable
+                  :closable="!viewMode"
                   size="small"
                   @close="attachments.splice(i, 1)"
                   @click="openAttachment(a)"
@@ -188,18 +192,19 @@
               link
               size="small"
               type="info"
+              class="req-label__toggle"
               :icon="reqCollapsed ? ArrowDown : ArrowUp"
               @click="reqCollapsed = !reqCollapsed"
             >{{ reqCollapsed ? '展开' : '收起' }}</el-button>
           </div>
-          <div v-show="!reqCollapsed">
+          <div v-show="!reqCollapsed" :inert="viewMode">
             <rich-editor ref="richEditorRef" v-model="form.otherReq" />
           </div>
         </div>
 
         <div class="section-title">
           产品明细
-          <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="addProduct">添加产品行</el-button>
+          <el-button size="small" type="primary" plain :icon="Plus" class="ml12" :disabled="viewMode" @click="addProduct">添加产品行</el-button>
         </div>
 
         <el-card v-for="(p, pi) in form.products" :key="p._key" shadow="never" class="product-card">
@@ -213,8 +218,8 @@
               </span>
               <span class="pc-meta">支数口径：<b>{{ pcsOf(p) }}</b> 支</span>
               <div>
-                <el-button size="small" link type="primary" :icon="CopyDocument" @click="copyProduct(pi)">复制</el-button>
-                <el-button size="small" link type="danger" :icon="Delete" :disabled="form.products.length <= 1 || productLocked(p)" @click="removeProduct(pi)">删除</el-button>
+                <el-button size="small" link type="primary" :icon="CopyDocument" :disabled="viewMode" @click="copyProduct(pi)">复制</el-button>
+                <el-button size="small" link type="danger" :icon="Delete" :disabled="viewMode || form.products.length <= 1 || productLocked(p)" @click="removeProduct(pi)">删除</el-button>
               </div>
             </div>
           </template>
@@ -224,7 +229,7 @@
           <el-row :gutter="12">
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="是否新单" label-width="80px">
-                <el-switch v-model="p.isNewOrder" :active-value="1" :inactive-value="0" />
+                <el-switch v-model="p.isNewOrder" :active-value="1" :inactive-value="0" :disabled="viewMode" />
               </el-form-item>
             </el-col>
             <!-- 出口国家与开关同组、不带自己的标签：它只是「是否出口」的补充项。
@@ -235,6 +240,7 @@
                   <!-- 勾上出口就开始预热国旗图，等用户点开下拉时大旗已在缓存里 -->
                   <el-switch
                     v-model="p.isExport" :active-value="1" :inactive-value="0"
+                    :disabled="viewMode"
                     @change="preloadCountryFlags()"
                   />
                   <!-- 用虚拟滚动版（el-select-v2）：国家有 250 个，普通 el-select 首次
@@ -244,7 +250,7 @@
                     v-model="p.exportCountry"
                     :options="COUNTRY_OPTIONS"
                     :props="COUNTRY_FIELD_PROPS"
-                    :disabled="!p.isExport"
+                    :disabled="viewMode || !p.isExport"
                     filterable
                     clearable
                     placeholder="出口国家"
@@ -272,7 +278,7 @@
                 <!-- 仅三节轨可开；已开着的异常数据不锁死（否则用户关不掉），见 :disabled 条件 -->
                 <el-switch
                   v-model="p.isSplit" :active-value="1" :inactive-value="0"
-                  :disabled="(!canSplitShipping(p.railSection) && !p.isSplit) || productLocked(p)"
+                  :disabled="viewMode || (!canSplitShipping(p.railSection) && !p.isSplit) || productLocked(p)"
                 />
                 <el-tooltip
                   placement="top"
@@ -296,7 +302,7 @@
             <!-- 订单类型只有两个互斥取值，用单选比下拉少一次点开 -->
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="订单类型" label-width="80px">
-                <el-radio-group v-model="p.orderType">
+                <el-radio-group v-model="p.orderType" :disabled="viewMode">
                   <el-radio v-for="o in ORDER_TYPE" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
                 </el-radio-group>
               </el-form-item>
@@ -315,6 +321,7 @@
                 <el-input
                   :model-value="p.itemNo"
                   placeholder="输入产品代码"
+                  :disabled="viewMode"
                   @update:model-value="(v: string) => onItemNoInput(p, v)"
                   @change="p.itemNo = withWidthHash(sanitizeItemCode(p.itemNo))"
                 />
@@ -322,7 +329,7 @@
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品名称" label-width="80px">
-                <el-input v-model="p.productName" />
+                <el-input v-model="p.productName" :disabled="viewMode" />
               </el-form-item>
             </el-col>
             <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
@@ -333,13 +340,14 @@
                 <el-input
                   v-model="p.customerDrawingNo" placeholder="客户来图图号"
                   :spellcheck="false" :formatter="upperFmt" :parser="upperFmt"
+                  :disabled="viewMode"
                 />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品类型" label-width="80px">
                 <!-- 被引用的产品行不能增减「卡口」：它决定装配与出入库按左右分边记账 -->
-                <el-select v-model="p._types" multiple placeholder="可多选（如 普通+自锁）" style="width: 100%">
+                <el-select v-model="p._types" multiple placeholder="可多选（如 普通+自锁）" style="width: 100%" :disabled="viewMode">
                   <el-option
                     v-for="o in productTypeDict" :key="o.value" :label="o.label" :value="o.value"
                     :disabled="o.value === 'socket' && productLocked(p)"
@@ -350,7 +358,7 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="轨道节数" label-width="80px">
                 <!-- 改节数要同步部件组：二节轨无中轨，留着中轨组保存必被服务端拒 -->
-                <el-select v-model="p.railSection" style="width: 100%" :disabled="productLocked(p)" @change="onRailSectionChange(p)">
+                <el-select v-model="p.railSection" style="width: 100%" :disabled="viewMode || productLocked(p)" @change="onRailSectionChange(p)">
                   <el-option v-for="o in RAIL_SECTION_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
@@ -360,14 +368,14 @@
                  p.productRequirement 仍随表单原样回传，不洗掉历史值 -->
             <el-col v-if="productRequirementEnabled" :xs="24" :sm="12" :md="6">
               <el-form-item label="产品要求描述" label-width="98px">
-                <el-input v-model="p.productRequirement" maxlength="255" placeholder="客户对该产品的特殊要求（选填）" />
+                <el-input v-model="p.productRequirement" maxlength="255" placeholder="客户对该产品的特殊要求（选填）" :disabled="viewMode" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="规格" label-width="80px">
-                <el-input v-model="p.dimensionRaw" placeholder="数值" @change="syncDimension(p)">
+                <el-input v-model="p.dimensionRaw" placeholder="数值" :disabled="viewMode" @change="syncDimension(p)">
                   <template #append>
-                    <el-select v-model="p.dimensionUnit" style="width: 76px" @change="syncDimension(p)">
+                    <el-select v-model="p.dimensionUnit" style="width: 76px" :disabled="viewMode" @change="syncDimension(p)">
                       <el-option v-for="o in DIMENSION_UNIT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                     </el-select>
                   </template>
@@ -377,7 +385,7 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="表面处理" label-width="80px">
                 <!-- 改成需外发时，组合型组（外中轨/整品）要按部件拆开，否则外发回厂记不清 -->
-                <el-select v-model="p.surfaceType" style="width: 100%" @change="maybeSplitCombinedGroups(p)">
+                <el-select v-model="p.surfaceType" style="width: 100%" :disabled="viewMode" @change="maybeSplitCombinedGroups(p)">
                   <!-- 已有外发回厂记录的产品不能改回「无」，否则台账外发欠数失去口径 -->
                   <el-option
                     v-for="o in surfaceDict" :key="o.value" :label="o.label" :value="o.value"
@@ -390,20 +398,20 @@
                  停用时只是不显示输入框，p.color 仍随表单原样回传，不洗掉历史值 -->
             <el-col v-if="colorEnabled" :xs="24" :sm="12" :md="6">
               <el-form-item label="颜色" label-width="80px">
-                <el-input v-model="p.color" />
+                <el-input v-model="p.color" :disabled="viewMode" />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="数量" label-width="80px">
-                <el-input-number v-model="p.orderQty" :min="1" :controls="false" style="width: calc(100% - 80px)" />
-                <el-select v-model="p.unit" style="width: 76px; margin-left: 4px">
+                <el-input-number v-model="p.orderQty" :min="1" :controls="false" style="width: calc(100% - 80px)" :disabled="viewMode" />
+                <el-select v-model="p.unit" style="width: 76px; margin-left: 4px" :disabled="viewMode">
                   <el-option v-for="o in UNIT_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="材质" label-width="80px">
-                <el-input v-model="p.sheetMaterial" placeholder="如 Q235" :formatter="upperFmt" :parser="upperFmt" />
+                <el-input v-model="p.sheetMaterial" placeholder="如 Q235" :formatter="upperFmt" :parser="upperFmt" :disabled="viewMode" />
               </el-form-item>
             </el-col>
             <!-- 装配车间已移除：订单环节不安排车间，车间在「装配管理」新建批次时录入 -->
@@ -420,13 +428,14 @@
                   value-format="YYYY-MM-DD"
                   placeholder="请选择预计交货日"
                   :disabled-date="disableDeliveryBeforeOrderDate"
+                  :disabled="viewMode"
                   style="width: 100%"
                 />
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="交货地址" label-width="80px">
-                <el-input v-model="p.deliveryAddress" />
+                <el-input v-model="p.deliveryAddress" :disabled="viewMode" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -437,13 +446,13 @@
             <span v-if="p.isSplit" class="split-hint">分体出货：留下的组就是这行实际出货的部件，请删掉不需要的部件行</span>
             <el-button
               size="small" link type="primary" :icon="Plus"
-              :disabled="!canAddGroup(p)" @click="addGroup(p)"
+              :disabled="viewMode || !canAddGroup(p)" @click="addGroup(p)"
             >添加部件组</el-button>
             <!-- 部件组已按节数一次性铺开，几组之间通常只有组类型不同（同一张生产图、
                  同版本、同支数），故提供"以第一行为模板灌满其余行" -->
             <el-button
               size="small" link type="primary" :icon="CopyDocument"
-              :disabled="!canFillFromFirst(p)"
+              :disabled="viewMode || !canFillFromFirst(p)"
               title="把第一行的图号/版本/料厚/支数/备注填到其余各组，组类型不变"
               @click="fillFromFirst(p)"
             >按第一行填充</el-button>
@@ -465,7 +474,7 @@
                 <td>
                   <!-- 需外发时选了组合型组会被自动拆成单部件组（见 maybeSplitCombinedGroups） -->
                   <el-select
-                    v-model="g.groupType" style="width: 100%" :disabled="groupLocked(g)"
+                    v-model="g.groupType" style="width: 100%" :disabled="viewMode || groupLocked(g)"
                     :title="groupLocked(g) ? `已有 ${g._refs} 条外发回厂记录，不能改组类型` : undefined"
                     @change="maybeSplitCombinedGroups(p)"
                   >
@@ -479,14 +488,14 @@
                   </el-select>
                 </td>
                 <td>
-                  <el-input v-model="g.drawingNo" placeholder="输入后自动带出工艺" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" @change="onDrawingChange(p, g)" />
+                  <el-input v-model="g.drawingNo" placeholder="输入后自动带出工艺" :spellcheck="false" :formatter="upperFmt" :parser="upperFmt" :disabled="viewMode" @change="onDrawingChange(p, g)" />
                 </td>
-                <td><el-input v-model="g.drawingVersion" placeholder="如 1.1" @change="g.drawingVersion = normalizeVersion(g.drawingVersion) ?? ''" /></td>
-                <td><el-input v-model="g.materialThickness" :placeholder="thicknessPlaceholder(g.groupType)" /></td>
-                <td><el-input-number v-model="g.qtyPcs" :min="1" :controls="false" :placeholder="String(pcsOf(p))" style="width: 100%" /></td>
+                <td><el-input v-model="g.drawingVersion" placeholder="如 1.1" :disabled="viewMode" @change="g.drawingVersion = normalizeVersion(g.drawingVersion) ?? ''" /></td>
+                <td><el-input v-model="g.materialThickness" :placeholder="thicknessPlaceholder(g.groupType)" :disabled="viewMode" /></td>
+                <td><el-input-number v-model="g.qtyPcs" :min="1" :controls="false" :placeholder="String(pcsOf(p))" style="width: 100%" :disabled="viewMode" /></td>
                 <td class="gg-parts">{{ partsPreview(p, g) }}</td>
                 <td>
-                  <el-button size="small" link type="danger" :icon="Delete" :disabled="p.partGroups.length <= 1 || groupLocked(g)" @click="p.partGroups.splice(gi, 1)" />
+                  <el-button size="small" link type="danger" :icon="Delete" :disabled="viewMode || p.partGroups.length <= 1 || groupLocked(g)" @click="p.partGroups.splice(gi, 1)" />
                 </td>
               </tr>
             </tbody>
@@ -1587,6 +1596,9 @@ export default { name: 'OrderForm' };
   :deep(.el-upload) {
     opacity: 0.62;
   }
+
+  /* 订单备注的折叠仅影响内容展示，不修改数据；详情页仍应可正常展开查看。 */
+  :deep(.req-label__toggle) { opacity: 1; }
 }
 
 /* 订单备注（富文本）版块：标题条与 .section-title 同视觉语言，但带折叠按钮 */
