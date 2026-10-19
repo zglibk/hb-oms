@@ -16,6 +16,8 @@ export interface ScreenOutsourceRow {
   processorName: string | null;
   productName: string | null;
   productionNo: string | null;
+  side: string;
+  legacyUnassigned: boolean;
   returnQty: number;
 }
 

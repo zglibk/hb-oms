@@ -29,7 +29,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <!-- 按所属部件组累计判定：该部件累计回厂还没到订单需求，即还有货在外面 -->
+          <!-- 卡口外轨、内轨按边别累计判定；中轨、非卡口与历史未分边流水按部件组累计判定。 -->
           <el-checkbox v-model="query.onlyUnreturned" @change="runKeywordSearch">只看未回齐</el-checkbox>
         </el-form-item>
         <el-form-item>
@@ -68,6 +68,13 @@
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="110" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="边别" width="82" align="center">
+          <template #default="{ row }">
+            <color-tag :seed="row.side || 'whole'">
+              {{ row.legacyUnassigned ? '历史未分边' : sideText(row.side) }}
+            </color-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="规格" width="70" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
@@ -124,11 +131,12 @@
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
 
-    <!-- 编辑单条：锚点与订单侧快照不可改，只改加工商/日期/表面处理/数量口径/备注 -->
+    <!-- 编辑单条：锚点、边别与订单侧快照不可改，只改加工商/日期/表面处理/数量口径/备注 -->
     <el-dialog v-model="editVisible" title="编辑回厂记录" width="560px">
       <el-descriptions v-if="editRow" :column="2" border size="small" class="ed-snap">
         <el-descriptions-item label="生产单号">{{ editRow.productionNo || editRow.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品型号">{{ editRow.productModel || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="边别">{{ editRow.legacyUnassigned ? '历史未分边' : sideText(editRow.side) }}</el-descriptions-item>
         <el-descriptions-item label="规格">{{ editRow.dimensionText || '—' }}</el-descriptions-item>
         <el-descriptions-item label="订单数量">{{ editRow.orderQty }} {{ unitLabel(editRow.unit) }}</el-descriptions-item>
         <el-descriptions-item label="生产图号">{{ editRow.drawingNo || '—' }}</el-descriptions-item>
@@ -217,7 +225,7 @@ import {
   type OutsourcePartRow,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
-import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
+import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight, sideLabel } from '@/constants/dict';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
@@ -380,11 +388,16 @@ async function onEditSave() {
       return;
     }
   }
-  // 改数量后累计回厂超出组需求时确认一次（排除本条旧数量；只提醒不拦截，见 confirmOverReturn）
+  // 改数量后累计回厂超出部件/边别需求时确认一次（排除本条旧数量；只提醒不拦截，见 confirmOverReturn）
   if (editForm.returnQty > editRow.value.returnQty) {
     const r = editRow.value;
     const overOk = await confirmOverReturn(
-      [{ orderPartGroupId: r.orderPartGroupId, returnQty: editForm.returnQty, label: `${r.productionNo || r.orderNo || ''} ${r.productModel || ''}`.trim() }],
+      [{
+        orderPartGroupId: r.orderPartGroupId,
+        side: r.side,
+        returnQty: editForm.returnQty,
+        label: `${r.productionNo || r.orderNo || ''} ${r.productModel || ''} ${r.legacyUnassigned ? '历史未分边' : sideText(r.side)}`.trim(),
+      }],
       r.id,
     );
     if (!overOk) return;
@@ -435,6 +448,9 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 }
 function unitLabel(v: string | null): string {
   return UNIT_OPTIONS.find((o: any) => o.value === v)?.label ?? (v ?? '');
+}
+function sideText(side: string): string {
+  return sideLabel(side) || '通用';
 }
 </script>
 

@@ -40,7 +40,7 @@ export class OutsourceController {
     return this.service.findList(query, user);
   }
 
-  /** 可外发部件组选项（录入表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
+  /** 可外发部件/边别选项（录入表单选择器）；注册在 :id 之前，避免被参数路由拦截 */
   @Get('part-group-options')
   @RequirePermissions('outsource')
   async partGroupOptions(@Query() query: QueryPartGroupOptionDto) {
@@ -55,7 +55,7 @@ export class OutsourceController {
   }
 
   /**
-   * 部件组回厂进度：保存前复核「累计回厂是否超过组支数」（登记页与编辑弹窗共用）。
+   * 部件/边别回厂进度：保存前复核「累计回厂是否超过需求支数」（登记页与编辑弹窗共用）。
    * 保存时现查而不用选择器打开时带回的数——两人同时登记同一批货时，那份数已经过期。
    */
   @Get('return-progress')
@@ -70,7 +70,7 @@ export class OutsourceController {
     return this.service.findOne(id);
   }
 
-  /** 登记回厂：一次可录多行（多个部件组共用加工商与回厂日期） */
+  /** 登记回厂：一次可录多行（多个部件/边别共用加工商与回厂日期） */
   @Post()
   @RequirePermissions('outsource:create')
   @OperationLog('外发管理', '登记外发件回厂')

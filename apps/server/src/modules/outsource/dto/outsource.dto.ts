@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -30,6 +31,9 @@ export class CreateOutsourcePartItemDto {
   @Type(() => Number)
   @IsInt({ message: '每行必须选择订单部件组' })
   orderPartGroupId: number;
+
+  /** 卡口外轨、内轨必须指定 left / right；中轨及非卡口部件组为空串。 */
+  @IsOptional() @IsIn(['left', 'right', ''], { message: '边别只能为左、右或通用' }) side?: string;
 
   /** 回厂重量（kg） */
   @Type(() => Number)
@@ -177,6 +181,9 @@ export class QueryReturnProgressDto {
   @MaxLength(4000, { message: '一次查询的部件组过多' })
   @IsString({ message: '请指定部件组' })
   groupIds: string;
+
+  /** 与 groupIds 同位置对应的边别；为空表示通用部件组。 */
+  @IsOptional() @IsString() @MaxLength(4000) sides?: string;
 
   /** 编辑时排除正在改的那条记录（它的旧数量不该算进「已回厂」） */
   @IsOptional() @Type(() => Number) @IsInt() excludeId?: number;

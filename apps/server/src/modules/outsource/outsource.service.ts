@@ -5,8 +5,10 @@ import {
   ORDER_STATUS,
   SURFACE_NONE,
   formatDimension,
+  hasSocket,
   needsOutsource,
   partGroupParts,
+  partGroupSideQtyRows,
 } from '@hb-oms/shared';
 import { OutsourcePart } from './entities/outsource-part.entity';
 import {
@@ -36,10 +38,17 @@ export interface PartGroupOption {
   cycleCode: string | null;
   surfaceType: string;
   color: string | null;
-  /** 组需求支数（订单口径，参考用——回厂数不与它做校验） */
+  /** 当前部件/边别需求支数（订单口径，参考用——回厂数不与它做硬校验） */
   qtyPcs: number;
-  /** 该组累计已回厂支数（全部回厂记录合计） */
+  /** 当前部件/边别累计已回厂支数 */
   returnedQty: number;
+  /** 归属部件组的总需求支数与累计已回厂支数（供历史未分边提示和筛选使用） */
+  groupQtyPcs: number;
+  groupReturnedQty: number;
+  /** 卡口外轨/内轨下无法归属左右的历史回厂数量；仅边别行返回。 */
+  legacyReturnedQty: number;
+  /** 卡口外轨/内轨为 left / right，中轨及非卡口部件组为空串。 */
+  side: string;
   /** 订单数量与单位（展示用） */
   orderQty: number;
   unit: string | null;
@@ -77,6 +86,56 @@ export class OutsourceService {
     private readonly ownership: RecordOwnershipService,
   ) {}
 
+  private returnSideKey(orderPartGroupId: number, side: string) {
+    return `${orderPartGroupId}|${side}`;
+  }
+
+  /** 按部件组 + 边别汇总回厂数量；空边别保留历史未分边流水。 */
+  private async loadReturnedBySide(
+    groupIds: number[],
+    excludeId?: number,
+  ): Promise<Map<string, number>> {
+    const ids = [...new Set(groupIds.filter((id) => Number.isInteger(id) && id > 0))];
+    const result = new Map<string, number>();
+    if (!ids.length) return result;
+    const excludeSql = excludeId ? ' AND id <> ?' : '';
+    const params: Array<number | number[]> = [ids];
+    if (excludeId) params.push(excludeId);
+    const rows: any[] = await this.dataSource.query(
+      `SELECT order_part_group_id AS orderPartGroupId, side, SUM(return_qty) AS returnedQty
+         FROM t_outsource_part
+        WHERE order_part_group_id IN (?)${excludeSql}
+        GROUP BY order_part_group_id, side`,
+      params,
+    );
+    rows.forEach((row) => {
+      result.set(
+        this.returnSideKey(Number(row.orderPartGroupId), row.side ?? ''),
+        Number(row.returnedQty) || 0,
+      );
+    });
+    return result;
+  }
+
+  /** 判断回厂流水所属组是否为需要区分左/右的卡口外轨、内轨。 */
+  private async loadSideCapableGroupIds(groupIds: number[]): Promise<Set<number>> {
+    const ids = [...new Set(groupIds.filter((id) => Number.isInteger(id) && id > 0))];
+    const result = new Set<number>();
+    if (!ids.length) return result;
+    const rows: any[] = await this.dataSource.query(
+      `SELECT g.id AS orderPartGroupId, g.group_type AS groupType, p.product_type AS productType
+         FROM t_order_part_group g
+         JOIN t_order_product p ON p.id = g.order_product_id
+        WHERE g.id IN (?)`,
+      [ids],
+    );
+    rows.forEach((row) => {
+      const sides = partGroupSideQtyRows(row.groupType, hasSocket(row.productType), 1);
+      if (sides.some((item) => item.side)) result.add(Number(row.orderPartGroupId));
+    });
+    return result;
+  }
+
   /* ==================== 查询 ==================== */
 
   async findList(query: QueryOutsourcePartDto, user?: CurrentUserPayload) {
@@ -97,11 +156,20 @@ export class OutsourceService {
       );
     }
     if (query.onlyUnreturned) {
-      // 按所属部件组累计判定（同 part-group-options 的 hideReturned 口径），不看单条记录
+      // 卡口外轨/内轨按同边别累计判定；中轨、非卡口及历史未分边流水按组累计判定。
       qb.andWhere(
-        `(SELECT COALESCE(SUM(x.return_qty), 0) FROM t_outsource_part x
-           WHERE x.order_part_group_id = r.order_part_group_id)
-         < (SELECT g.qty_pcs FROM t_order_part_group g WHERE g.id = r.order_part_group_id)`,
+        `(
+          (r.side <> '' AND
+            (SELECT COALESCE(SUM(x.return_qty), 0) FROM t_outsource_part x
+              WHERE x.order_part_group_id = r.order_part_group_id AND x.side = r.side)
+            < COALESCE((SELECT MAX(pt.qty) FROM t_order_part pt
+              WHERE pt.part_group_id = r.order_part_group_id AND pt.side = r.side), 0))
+          OR
+          (r.side = '' AND
+            (SELECT COALESCE(SUM(x.return_qty), 0) FROM t_outsource_part x
+              WHERE x.order_part_group_id = r.order_part_group_id)
+            < (SELECT g.qty_pcs FROM t_order_part_group g WHERE g.id = r.order_part_group_id))
+        )`,
       );
     }
     // 回厂日期倒序：最近回来的排最前，符合「看今天回了什么」的使用习惯
@@ -112,7 +180,11 @@ export class OutsourceService {
     const [rows, total] = await qb.getManyAndCount();
     // 每行带 canModify：前端据此禁用编辑 / 删除（服务端 update / remove 另有硬校验）
     const modifiable = user ? await this.ownership.canModifyMany('outsource', rows, user) : rows.map(() => false);
-    const list = rows.map((r, i) => Object.assign(r, { canModify: modifiable[i] }));
+    const sideCapableGroupIds = await this.loadSideCapableGroupIds(rows.map((row) => row.orderPartGroupId));
+    const list = rows.map((r, i) => Object.assign(r, {
+      canModify: modifiable[i],
+      legacyUnassigned: r.side === '' && sideCapableGroupIds.has(r.orderPartGroupId),
+    }));
     return { list, total, page, pageSize };
   }
 
@@ -128,10 +200,14 @@ export class OutsourceService {
     let where = ' WHERE o.status <> ? AND p.surface_type <> ?';
     const returnedSql = `COALESCE((SELECT SUM(op2.return_qty) FROM t_outsource_part op2
                                WHERE op2.order_part_group_id = g.id), 0)`;
+    // 卡口外轨、内轨需要在返回到前端后再按 left/right 判定；此处不能用组总数把
+    // 「左边超量、右边未回」误当成整组已回齐。
+    const sideCapableSql = `(FIND_IN_SET('socket', COALESCE(p.product_type, '')) > 0
+      AND g.group_type IN ('outer', 'inner'))`;
     if (query.onlyReturned) {
-      where += ` AND g.qty_pcs > 0 AND ${returnedSql} >= g.qty_pcs`;
+      where += ` AND (${sideCapableSql} OR (g.qty_pcs > 0 AND ${returnedSql} >= g.qty_pcs))`;
     } else if (query.hideReturned) {
-      where += ` AND ${returnedSql} < g.qty_pcs`;
+      where += ` AND (${sideCapableSql} OR ${returnedSql} < g.qty_pcs)`;
     }
     return { where, params };
   }
@@ -333,40 +409,24 @@ export class OutsourceService {
       params,
     );
 
-    const [partWeight, dict] = await Promise.all([
+    const [partWeight, dict, returnedBySide] = await Promise.all([
       this.loadPartUnitWeights(rows),
       query.includeSearchText
         ? loadDictLabels(this.dataSource, [
           'surface_type', 'product_type', 'rail_section', 'part_group_type', 'part_type',
         ])
         : Promise.resolve(new Map<string, string>()),
+      this.loadReturnedBySide(rows.map((row) => Number(row.orderPartGroupId))),
     ]);
     const label = dictLabeler(dict);
 
-    return rows.map((r) => ({
-      orderPartGroupId: Number(r.orderPartGroupId),
-      orderId: Number(r.orderId),
-      orderProductId: Number(r.orderProductId),
-      orderNo: r.orderNo ?? null,
-      customerName: r.customerName ?? null,
-      productionNo: r.productionNo ?? null,
-      productModel: r.productModel ?? null,
-      dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
-      cycleCode: r.cycleCode ?? null,
-      surfaceType: r.surfaceType ?? SURFACE_NONE,
-      color: r.color ?? null,
-      qtyPcs: Number(r.qtyPcs) || 0,
-      returnedQty: Number(r.returnedQty) || 0,
-      orderQty: Number(r.orderQty) || 0,
-      unit: r.unit ?? null,
-      drawingNo: r.drawingNo ?? null,
-      materialThickness: r.materialThickness ?? null,
-      // 优先按「组对应的部件」取单重，取不到再回落产品级——回厂过的是部件，
-      // 外轨和内轨的单重本就不同，拿产品级一个值折算数量会系统性偏差
-      unitWeight:
-        partWeight.get(`${r.itemNo ?? ''}|${partGroupParts(r.groupType)[0] ?? ''}`) ??
-        (Number(r.productUnitWeight) || 0),
-      searchText: query.includeSearchText
+    return rows.flatMap((r) => {
+      const orderPartGroupId = Number(r.orderPartGroupId);
+      const groupQtyPcs = Number(r.qtyPcs) || 0;
+      const groupReturnedQty = Number(r.returnedQty) || 0;
+      const legacyReturnedQty = returnedBySide.get(this.returnSideKey(orderPartGroupId, '')) ?? 0;
+      const sideRows = partGroupSideQtyRows(r.groupType, hasSocket(r.productType), groupQtyPcs);
+      const searchText = query.includeSearchText
         ? [
           r.searchText,
           label('surface_type', r.surfaceType),
@@ -375,8 +435,48 @@ export class OutsourceService {
           label('part_group_type', r.groupType),
           ...String(r.partTypes ?? '').split(',').map((value) => label('part_type', value.trim())),
         ].filter(Boolean).join('|')
-        : undefined,
-    }));
+        : undefined;
+      return sideRows.map(({ side, qty }) => {
+        const returnedQty = side
+          ? (returnedBySide.get(this.returnSideKey(orderPartGroupId, side)) ?? 0)
+          : groupReturnedQty;
+        const option: PartGroupOption = {
+          orderPartGroupId,
+          orderId: Number(r.orderId),
+          orderProductId: Number(r.orderProductId),
+          orderNo: r.orderNo ?? null,
+          customerName: r.customerName ?? null,
+          productionNo: r.productionNo ?? null,
+          productModel: r.productModel ?? null,
+          dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
+          cycleCode: r.cycleCode ?? null,
+          surfaceType: r.surfaceType ?? SURFACE_NONE,
+          color: r.color ?? null,
+          side,
+          qtyPcs: qty,
+          returnedQty,
+          groupQtyPcs,
+          groupReturnedQty,
+          legacyReturnedQty: side ? legacyReturnedQty : 0,
+          orderQty: Number(r.orderQty) || 0,
+          unit: r.unit ?? null,
+          drawingNo: r.drawingNo ?? null,
+          materialThickness: r.materialThickness ?? null,
+          // 优先按「组对应的部件」取单重，取不到再回落产品级——回厂过的是部件，
+          // 外轨和内轨的单重本就不同，拿产品级一个值折算数量会系统性偏差。
+          unitWeight:
+            partWeight.get(`${r.itemNo ?? ''}|${partGroupParts(r.groupType)[0] ?? ''}`) ??
+            (Number(r.productUnitWeight) || 0),
+          searchText,
+        };
+        const returned = side
+          ? option.legacyReturnedQty === 0 && option.returnedQty >= option.qtyPcs
+          : option.returnedQty >= option.qtyPcs;
+        if (query.onlyReturned && !returned) return null;
+        if (query.hideReturned && returned) return null;
+        return option;
+      }).filter((option): option is PartGroupOption => option !== null);
+    });
   }
 
   /**
@@ -429,35 +529,53 @@ export class OutsourceService {
    * 展示快照一律服务端从订单侧读取，不采信客户端传值。
    */
   /**
-   * 部件组回厂进度：组支数 + 累计已回厂（可排除正在编辑的那条）。
+   * 部件/边别回厂进度：卡口外轨、内轨按 left/right 分别统计；中轨及非卡口按组统计。
    *
    * 供前端保存前做**超量提醒**（累计将超过组支数时弹框确认，可继续）——
    * 刻意不在 create/update 里硬拦：返工回厂、客户加量先做后补单都会合理地超出，
    * 硬拦会逼人先去改订单或者干脆不录；拦住「重复登记 / 多打一个 0」靠当场确认就够了。
    */
   async findReturnProgress(query: QueryReturnProgressDto) {
-    const ids = [
-      ...new Set(
-        String(query.groupIds ?? '')
-          .split(',')
-          .map((v) => Number(v))
-          .filter((v) => Number.isInteger(v) && v > 0),
-      ),
-    ].slice(0, 500);
+    const rawIds = String(query.groupIds ?? '').split(',');
+    const rawSides = String(query.sides ?? '').split(',');
+    const requested = rawIds
+      .map((value, index) => ({
+        orderPartGroupId: Number(value),
+        side: rawSides[index] === 'left' || rawSides[index] === 'right' ? rawSides[index] : '',
+      }))
+      .filter((item) => Number.isInteger(item.orderPartGroupId) && item.orderPartGroupId > 0)
+      .filter((item, index, items) => items.findIndex((other) =>
+        other.orderPartGroupId === item.orderPartGroupId && other.side === item.side,
+      ) === index)
+      .slice(0, 500);
+    const ids = [...new Set(requested.map((item) => item.orderPartGroupId))];
     if (!ids.length) return [];
-    const rows: any[] = await this.dataSource.query(
-      `SELECT g.id AS orderPartGroupId, g.qty_pcs AS qtyPcs,
-              COALESCE((SELECT SUM(op.return_qty) FROM t_outsource_part op
-                         WHERE op.order_part_group_id = g.id AND op.id <> ?), 0) AS returnedQty
-         FROM t_order_part_group g
-        WHERE g.id IN (?)`,
-      [query.excludeId ?? 0, ids],
-    );
-    return rows.map((r) => ({
-      orderPartGroupId: Number(r.orderPartGroupId),
-      qtyPcs: Number(r.qtyPcs) || 0,
-      returnedQty: Number(r.returnedQty) || 0,
-    }));
+    const [snapshots, returnedBySide] = await Promise.all([
+      this.partGroupSnapshot.load(null, ids),
+      this.loadReturnedBySide(ids, query.excludeId),
+    ]);
+    return requested.flatMap((item) => {
+      const snap = snapshots.get(item.orderPartGroupId);
+      if (!snap) return [];
+      const sideRows = partGroupSideQtyRows(
+        snap.groupType,
+        hasSocket(snap.productType),
+        snap.qtyPcs,
+      );
+      const target = sideRows.find((row) => row.side === item.side);
+      if (!target) return [];
+      const returnedQty = item.side
+        ? (returnedBySide.get(this.returnSideKey(item.orderPartGroupId, item.side)) ?? 0)
+        : [...returnedBySide.entries()]
+          .filter(([key]) => key.startsWith(`${item.orderPartGroupId}|`))
+          .reduce((sum, [, qty]) => sum + qty, 0);
+      return [{
+        orderPartGroupId: item.orderPartGroupId,
+        side: item.side,
+        qtyPcs: target.qty,
+        returnedQty,
+      }];
+    });
   }
 
   async create(dto: CreateOutsourcePartDto, user: CurrentUserPayload) {
@@ -478,11 +596,23 @@ export class OutsourceService {
           `第 ${i + 1} 行：产品「${snap.productModel ?? ''}」表面处理为「无」，不需要外发`,
         );
       }
+      const side = it.side === 'left' || it.side === 'right' ? it.side : '';
+      const allowedSides = partGroupSideQtyRows(
+        snap.groupType,
+        hasSocket(snap.productType),
+        snap.qtyPcs,
+      );
+      if (!allowedSides.some((row) => row.side === side)) {
+        throw new BadRequestException(
+          `第 ${i + 1} 行：部件组边别不符合产品结构，请重新选择回厂部件`,
+        );
+      }
       return this.partRepo.create({
         ...audit,
         orderId: snap.orderId,
         orderProductId: snap.orderProductId,
         orderPartGroupId: it.orderPartGroupId,
+        side,
         orderNo: snap.orderNo,
         customerName: snap.customerName,
         productionNo: snap.productionNo,

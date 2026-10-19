@@ -109,6 +109,7 @@ export {
   partGroupLabel,
   partGroupSuffix,
   partGroupParts,
+  partGroupSideQtyRows,
   defaultGroupTypes,
   expandSideQtyRows,
   expandPartRows,

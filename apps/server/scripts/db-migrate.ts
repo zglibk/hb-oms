@@ -125,6 +125,8 @@ const MIGRATIONS: string[] = [
   'migration-auto-scroll-speed.sql',
   // 卡口部件边别订正：仅外轨/内轨分左右，中轨合并为不分边的一行
   'migration-socket-middle-common.sql',
+  // 外发回厂记录按卡口外轨/内轨边别登记；存量记录保留为空串，不擅自拆分
+  'migration-outsource-side.sql',
 ];
 
 /**
@@ -201,6 +203,7 @@ const expectedColumns = [
   't_production_bom_item.unit_consumption',
   // M3 外发——2026-08-10 收敛为「外发件回厂记录」单表（发坯单三表已删）
   't_outsource_part.order_part_group_id',
+  't_outsource_part.side',
   't_outsource_part.processor_name',
   't_outsource_part.back_date',
   't_outsource_part.return_qty',

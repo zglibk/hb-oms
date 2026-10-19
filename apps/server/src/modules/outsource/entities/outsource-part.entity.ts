@@ -12,10 +12,10 @@ import {
  *
  * **一行 = 一次回厂**。2026-08-10 外发模块经两轮简化到此形态：
  * 先取消「发出」环节，再取消发坯单本身——使用部门只需要记下
- * 「哪个部件组、发给谁做的表面处理、什么时候回厂、回了多少」。
+ * 「哪个部件组/边别、发给谁做的表面处理、什么时候回厂、回了多少」。
  *
  * 由此本表**没有状态列**（记录存在即已回厂）、**没有单据号**
- * （与装配批次同属轻量记账行，§5.4 不采番）；同一部件组可有多行
+ * （与装配批次同属轻量记账行，§5.4 不采番）；同一部件组/边别可有多行
  * （分批回厂），不做唯一约束。
  *
  * 锚点是订单部件组；其余订单侧字段为展示快照，订单后续修改不回写
@@ -23,6 +23,7 @@ import {
  * 服务层统一 Number() 处理。
  */
 @Entity('t_outsource_part')
+@Index('idx_part_group_side', ['orderPartGroupId', 'side'])
 export class OutsourcePart {
   @PrimaryGeneratedColumn()
   id: number;
@@ -37,6 +38,14 @@ export class OutsourcePart {
   @Index('idx_part_group')
   @Column({ name: 'order_part_group_id', type: 'int', comment: '锚点：订单部件组（跟踪/台账粒度）' })
   orderPartGroupId: number;
+
+  @Column({
+    type: 'varchar',
+    length: 16,
+    default: '',
+    comment: '边别：卡口外轨/内轨为left左/right右；中轨及非卡口为空串；存量未分边记录也为空串',
+  })
+  side: string;
 
   @Column({ name: 'order_no', type: 'varchar', length: 32, nullable: true, comment: '订单号快照' })
   orderNo: string | null;

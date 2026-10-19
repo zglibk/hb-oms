@@ -12,6 +12,7 @@ import {
   formatProductModel,
   hasSocket,
   needsOutsource,
+  partGroupSideQtyRows,
   productLevelModel,
   UNIT_OPTIONS,
   sanitizeItemCode,
@@ -96,6 +97,17 @@ export interface LedgerPartGroup {
   returnedQty: number;
   /** 该组外发欠数 = 组支数 − 已回货；不需要表面处理时为 null（不适用） */
   outsourceOwed: number | null;
+  /** 卡口外轨、内轨按左右展示进度；中轨及非卡口部件组为一条通用进度。 */
+  sideProgress: LedgerPartSideProgress[];
+}
+
+export interface LedgerPartSideProgress {
+  side: string;
+  qtyPcs: number;
+  returnedQty: number;
+  /** 历史未分边流水无法归到左/右，欠数显示待核而非猜测。 */
+  outsourceOwed: number | null;
+  legacyUnassigned?: boolean;
 }
 
 export interface LedgerRow {
@@ -518,7 +530,25 @@ export class OrderLedgerService {
       productIds,
     );
 
-    const byProduct = new Map<number, Array<Omit<LedgerPartGroup, 'outsourceOwed'>>>();
+    const groupIds = rows.map((row) => Number(row.groupId)).filter((id) => id > 0);
+    const returnSideRows: any[] = groupIds.length
+      ? await this.dataSource.query(
+        `SELECT order_part_group_id AS groupId, side, SUM(return_qty) AS returnedQty
+           FROM t_outsource_part
+          WHERE order_part_group_id IN (${groupIds.map(() => '?').join(',')})
+          GROUP BY order_part_group_id, side`,
+        groupIds,
+      )
+      : [];
+    const returnedBySide = new Map<string, number>();
+    returnSideRows.forEach((row) => {
+      returnedBySide.set(
+        `${Number(row.groupId)}|${row.side ?? ''}`,
+        Number(row.returnedQty) || 0,
+      );
+    });
+
+    const byProduct = new Map<number, Array<Omit<LedgerPartGroup, 'outsourceOwed' | 'sideProgress'>>>();
     rows.forEach((r) => {
       const pid = Number(r.pid);
       const arr = byProduct.get(pid) ?? [];
@@ -541,6 +571,36 @@ export class OrderLedgerService {
       r.partGroups = groups.map((g) => ({
         ...g,
         outsourceOwed: outsourced ? g.qtyPcs - g.returnedQty : null,
+        sideProgress: (() => {
+          const targets = partGroupSideQtyRows(g.groupType, r.socket, g.qtyPcs);
+          const hasSides = targets.some((target) => target.side);
+          const legacyReturnedQty = returnedBySide.get(`${g.orderPartGroupId}|`) ?? 0;
+          const progress: LedgerPartSideProgress[] = targets.map((target) => {
+            const returnedQty = target.side
+              ? (returnedBySide.get(`${g.orderPartGroupId}|${target.side}`) ?? 0)
+              : g.returnedQty;
+            return {
+              side: target.side,
+              qtyPcs: target.qty,
+              returnedQty,
+              outsourceOwed: !outsourced
+                ? null
+                : target.side && legacyReturnedQty > 0
+                  ? null
+                  : target.qty - returnedQty,
+            };
+          });
+          if (hasSides && legacyReturnedQty > 0) {
+            progress.push({
+              side: '',
+              qtyPcs: 0,
+              returnedQty: legacyReturnedQty,
+              outsourceOwed: null,
+              legacyUnassigned: true,
+            });
+          }
+          return progress;
+        })(),
       }));
       // 应外发量 = Σ组支数（一个三节轨产品要送出去的是三个部件，不是一套产品）
       r.outsourceOwed = outsourced
@@ -583,13 +643,14 @@ export class OrderLedgerService {
         [orderProductId, FINISHED_DOC_STATUS.CONFIRMED],
       ),
       this.dataSource.query(
-        `SELECT op.id, op.back_date AS backDate, op.processor_name AS processorName,
+        `SELECT op.id, op.side AS side, op.back_date AS backDate, op.processor_name AS processorName,
                 op.surface_type AS surfaceType, op.color AS color,
                 op.return_weight AS returnWeight, op.unit_weight AS unitWeight,
                 op.return_qty AS returnQty, op.remark, op.creator_name AS creatorName,
-                g.group_type AS groupType
+                g.group_type AS groupType, p.product_type AS productType
            FROM t_outsource_part op
            JOIN t_order_part_group g ON g.id = op.order_part_group_id
+           JOIN t_order_product p ON p.id = g.order_product_id
           WHERE g.order_product_id = ?
           ORDER BY op.back_date ASC, op.id ASC`,
         [orderProductId],
@@ -622,6 +683,9 @@ export class OrderLedgerService {
         id: Number(r.id),
         // 外发锚部件组，故流水要标明是哪个部件回的厂
         groupType: r.groupType ?? null,
+        side: r.side ?? '',
+        legacyUnassigned:
+          !r.side && partGroupSideQtyRows(r.groupType, hasSocket(r.productType), 1).some((item) => item.side),
         backDate: this.dateText(r.backDate),
         processorName: r.processorName ?? null,
         surfaceType: r.surfaceType ?? null,

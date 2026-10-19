@@ -325,6 +325,9 @@
                 </template>
               </el-table-column>
               <el-table-column label="产品名称" prop="productName" min-width="132" show-overflow-tooltip />
+              <el-table-column label="边别" width="76" align="center">
+                <template #default="{ row }">{{ outsourceSideText(row) }}</template>
+              </el-table-column>
               <el-table-column :label="outDimLabel" width="92" align="center">
                 <template #header>
                   <el-tooltip content="点击切换本表 mm / 寸" placement="top">
@@ -388,7 +391,7 @@ import {
 import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { useAnnouncementStore } from '@/stores/announcement';
-import { DIMENSION_UNIT } from '@/constants/dict';
+import { DIMENSION_UNIT, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useAutoScroll } from '@/composables/useAutoScroll';
 import { useDimensionView } from '@/composables/useDimensionView';
@@ -748,6 +751,9 @@ function openProductDetail(row: { orderProductId?: number | null }) {
 /** 有权限时用手型提示可下钻；无权限仍保留点击反馈，明确告知授权要求。 */
 function detailRowClassName() {
   return canLedger.value ? 'is-detail-clickable' : 'is-detail-locked';
+}
+function outsourceSideText(row: { side: string; legacyUnassigned: boolean }): string {
+  return row.legacyUnassigned ? '历史未分边' : (sideLabel(row.side) || '通用');
 }
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';

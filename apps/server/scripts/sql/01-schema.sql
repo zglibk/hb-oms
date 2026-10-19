@@ -463,6 +463,7 @@ CREATE TABLE IF NOT EXISTS t_outsource_part (
   order_id            INT           NOT NULL COMMENT '冗余订单ID（订单下游引用探测按此列）',
   order_product_id    INT           NOT NULL COMMENT '冗余订单产品行ID',
   order_part_group_id INT           NOT NULL COMMENT '锚点：订单部件组（跟踪/台账粒度）',
+  side                VARCHAR(16)   NOT NULL DEFAULT '' COMMENT '边别：卡口外轨/内轨为left左/right右；中轨及非卡口为空串；存量未分边记录也为空串',
   order_no            VARCHAR(32)   NULL COMMENT '订单号快照',
   customer_name       VARCHAR(128)  NULL COMMENT '客户名称快照',
   production_no       VARCHAR(64)   NULL COMMENT '生产单号快照（自订单 t_order.production_no）',
@@ -489,6 +490,7 @@ CREATE TABLE IF NOT EXISTS t_outsource_part (
   updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_order (order_id),
   KEY idx_part_group (order_part_group_id),
+  KEY idx_part_group_side (order_part_group_id, side),
   KEY idx_processor (processor_name),
   KEY idx_back_date (back_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外发件回厂记录（一行=一次回厂；无单据号、无状态）';

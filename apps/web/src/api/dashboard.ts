@@ -38,6 +38,8 @@ export interface DashboardOutsourceRow {
   id: number;
   /** 关联订单产品行：首页点击后用它精确打开台账详情。 */
   orderProductId: number | null;
+  side: string;
+  legacyUnassigned: boolean;
   backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;

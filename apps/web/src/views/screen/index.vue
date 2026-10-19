@@ -158,7 +158,7 @@
               >
                 <div v-for="r in data.recentOutsource" :key="r.id" class="sv__list-row">
                   <span>{{ (r.backDate || '').slice(5) }}</span>
-                  <span :title="r.productName || ''">{{ r.productName || '—' }}</span>
+                  <span :title="r.productName || ''">{{ r.productName || '—' }}{{ outsourceSideSuffix(r) }}</span>
                   <span>{{ r.processorName || '—' }}</span>
                   <span>{{ shortNum(r.returnQty) }}</span>
                 </div>
@@ -192,6 +192,7 @@ import ScreenPanel from './ScreenPanel.vue';
 import ScreenFlow from './ScreenFlow.vue';
 import { SCREEN, axisStyle, shortNum, tooltipStyle } from './theme';
 import { getPublicScreenData, getScreenData, ScreenKeyError, type ScreenData } from '@/api/screen';
+import { sideLabel } from '@/constants/dict';
 import { tokenStore } from '@/utils/request';
 import { useUserStore } from '@/stores/user';
 import { useAutoScroll } from '@/composables/useAutoScroll';
@@ -379,6 +380,9 @@ const empty: ScreenData = {
   recentOutsource: [],
   summary: { dullStockPcs: 0, partBalanceItems: 0, newOrders: 0 },
 };
+function outsourceSideSuffix(row: { side: string; legacyUnassigned: boolean }): string {
+  return row.legacyUnassigned ? ' · 历史未分边' : ` · ${sideLabel(row.side) || '通用'}`;
+}
 const data = reactive<ScreenData>({ ...empty });
 const overdueScrollSpeed = computed(() => data.scrollSpeeds.overdue);
 const outsourceScrollSpeed = computed(() => data.scrollSpeeds.outsource);

@@ -20,6 +20,17 @@ export interface LedgerPartGroup {
   returnedQty: number;
   /** 该组外发欠数 = 组支数 − 已回货；不需要表面处理时为 null（不适用，界面显示 —） */
   outsourceOwed: number | null;
+  /** 卡口外轨、内轨按左/右拆分；中轨及非卡口部件组为通用一行。 */
+  sideProgress: LedgerPartSideProgress[];
+}
+
+export interface LedgerPartSideProgress {
+  side: string;
+  qtyPcs: number;
+  returnedQty: number;
+  /** 历史未分边流水无法准确分配到左、右，欠数显示待核。 */
+  outsourceOwed: number | null;
+  legacyUnassigned?: boolean;
 }
 
 /** 订单跟踪台账行（按**订单产品行**一行，四数实时聚合） */
@@ -152,6 +163,8 @@ export interface LedgerOutsourceRow {
   id: number;
   /** 外发仍锚**部件组**，故流水要标明是哪个部件回的厂 */
   groupType: string | null;
+  side: string;
+  legacyUnassigned?: boolean;
   /** 实际回厂日期 */
   backDate: string | null;
   processorName: string | null;

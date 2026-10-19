@@ -119,6 +119,7 @@
                     <th>数量</th>
                     <th>支数</th>
                     <th>表面处理</th>
+                    <th>部件/边别</th>
                     <th>图号/版本</th>
                     <th>料厚</th>
                     <th>交期</th>
@@ -138,6 +139,7 @@
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.orderQty }} {{ unitLabel(p.unit) }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.qtyPcs }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ dictLabel(surfaceDict, p.surfaceType) }}</td>
+                      <td>{{ partSideText(g) }}</td>
                       <td>{{ g.drawingNo || '—' }}<template v-if="g.drawingVersion"> / {{ g.drawingVersion }}</template></td>
                       <td class="eg-center">{{ g.materialThickness || '—' }}</td>
                       <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.deliveryDate || '—' }}</td>
@@ -269,6 +271,8 @@ import {
   ORDER_MERCHANDISER_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   RAIL_SECTION_OPTIONS,
+  partTypeLabel,
+  sideLabel,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
@@ -438,6 +442,11 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 }
 function productLabel(p: OrderProductItem): string {
   return formatProductModel(p.itemNo ?? '', p.productType, 'whole');
+}
+function partSideText(group: { parts?: Array<{ partType: string; side: string; qty: number }> }): string {
+  const rows = group.parts ?? [];
+  if (!rows.length) return '—';
+  return rows.map((part) => `${partTypeLabel(part.partType)}${sideLabel(part.side) || '通用'}×${part.qty}`).join(' / ');
 }
 function dimensionText(p: OrderProductItem): string {
   if (p.dimensionMm == null) return '—';

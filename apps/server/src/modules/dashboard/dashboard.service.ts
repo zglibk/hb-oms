@@ -3,6 +3,8 @@ import { DataSource } from 'typeorm';
 import {
   FINISHED_DOC_STATUS,
   ORDER_STATUS,
+  hasSocket,
+  partGroupSideQtyRows,
   productLevelModel,
   railNameSuffixOf,
   withRailSuffix,
@@ -81,6 +83,10 @@ export interface DashboardOutsourceRow {
   id: number;
   /** 关联订单产品行：首页点击后用它精确打开台账详情。 */
   orderProductId: number | null;
+  /** 卡口外轨、内轨为 left / right；中轨、非卡口为空串。 */
+  side: string;
+  /** 存量卡口外轨、内轨流水无边别来源，展示为「历史未分边」。 */
+  legacyUnassigned: boolean;
   backDate: string | null;
   processorName: string | null;
   surfaceType: string | null;
@@ -299,16 +305,18 @@ export class DashboardService {
     const rows: any[] = await this.dataSource.query(
       // 规格取订单产品行的 dimension_mm 而非本表的 dimension_text 快照：
       // 后者是「350mm」这类展示串，切「寸」视图需要数值才能换算（见接口注释）
-      `SELECT op.id AS id, op.order_product_id AS orderProductId,
+      `SELECT op.id AS id, op.order_product_id AS orderProductId, op.side AS side,
               op.back_date AS backDate, op.processor_name AS processorName,
               op.surface_type AS surfaceType, op.color AS color,
               op.product_model AS productModel, op.production_no AS productionNo,
               op.order_no AS orderNo, op.return_qty AS returnQty,
               p.dimension_mm AS dimensionMm, p.product_name AS productName,
-              p.is_split AS isSplit, p.rail_section AS railSection,
+              p.is_split AS isSplit, p.rail_section AS railSection, p.product_type AS productType,
+              g.group_type AS groupType,
               (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
                  FROM t_order_part_group g WHERE g.order_product_id = p.id) AS groupTypes
          FROM t_outsource_part op
+         LEFT JOIN t_order_part_group g ON g.id = op.order_part_group_id
          LEFT JOIN t_order_product p ON p.id = op.order_product_id
         ORDER BY op.back_date DESC, op.id DESC
         LIMIT ?`,
@@ -317,6 +325,9 @@ export class DashboardService {
     return rows.map((r) => ({
       id: Number(r.id),
       orderProductId: r.orderProductId == null ? null : Number(r.orderProductId),
+      side: r.side ?? '',
+      legacyUnassigned:
+        !r.side && partGroupSideQtyRows(r.groupType, hasSocket(r.productType), 1).some((item) => item.side),
       backDate: this.dateText(r.backDate),
       processorName: r.processorName ?? null,
       surfaceType: r.surfaceType ?? null,

@@ -95,6 +95,20 @@ export function expandSideQtyRows(
 }
 
 /**
+ * 部件组在外发等「按组登记」场景下的边别拆分口径：仅卡口外轨、内轨拆左/右；
+ * 中轨及包含多个部件的组合组保持通用一行，避免把不同结构的部件混成一笔边别记录。
+ */
+export function partGroupSideQtyRows(
+  groupType: string | null | undefined,
+  socket: boolean,
+  qtyPcs: number,
+): Array<{ side: string; qty: number }> {
+  const parts = partGroupParts(groupType);
+  const splitSides = socket && parts.length === 1 && (parts[0] === 'outer' || parts[0] === 'inner');
+  return expandSideQtyRows(splitSides, qtyPcs);
+}
+
+/**
  * 部件行展开蓝图（订单部件组保存时自动展开，设计文档 §4.2）：
  * - 二节轨（two_section）无中轨，组内 middle 部件自动剔除；
  * - 含卡口（socket）时仅外轨、内轨左右分列，中轨保持一行且边别为空；

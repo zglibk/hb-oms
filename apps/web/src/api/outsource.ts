@@ -10,6 +10,10 @@ export interface OutsourcePartRow {
   orderId: number;
   orderProductId: number;
   orderPartGroupId: number;
+  /** 卡口外轨、内轨为 left / right；中轨、非卡口为空串。 */
+  side: string;
+  /** 历史卡口外轨、内轨流水无边别来源，不能擅自拆分。 */
+  legacyUnassigned?: boolean;
   /** ===== 订单侧快照（只读展示） ===== */
   orderNo: string | null;
   customerName: string | null;
@@ -52,10 +56,14 @@ export interface PartGroupOption {
   cycleCode: string | null;
   surfaceType: string;
   color: string | null;
-  /** 组需求支数（参考用） */
+  /** 当前部件/边别需求支数（参考用） */
   qtyPcs: number;
-  /** 该组累计已回厂支数 */
+  /** 当前部件/边别累计已回厂支数 */
   returnedQty: number;
+  groupQtyPcs: number;
+  groupReturnedQty: number;
+  legacyReturnedQty: number;
+  side: string;
   orderQty: number;
   unit: string | null;
   drawingNo: string | null;
@@ -81,13 +89,14 @@ export interface OutsourceQuery {
   surfaceType?: string;
   dateFrom?: string;
   dateTo?: string;
-  /** 只看未回齐：所属部件组累计回厂 < 组支数 */
+  /** 只看未回齐：卡口外轨、内轨按边别；其余按部件组累计。 */
   onlyUnreturned?: boolean;
 }
 
 /** 登记回厂：一次可录多行（共用加工商与回厂日期） */
 export interface OutsourcePartItemPayload {
   orderPartGroupId: number;
+  side?: string;
   returnWeight: number;
   unitWeight: number;
   returnQty: number;
@@ -147,15 +156,20 @@ export const getPartGroupFilterOptions = (params: {
 }) =>
   request.get<any, PartGroupFilterOptions>('/api/outsource/part-group-filter-options', { params });
 
-/** 部件组回厂进度：保存前复核是否超出组支数（excludeId = 编辑中的记录，不计其旧数量） */
+/** 部件/边别回厂进度：保存前复核是否超出需求（excludeId = 编辑中的记录，不计其旧数量） */
 export interface ReturnProgress {
   orderPartGroupId: number;
+  side: string;
   qtyPcs: number;
   returnedQty: number;
 }
-export const getReturnProgress = (groupIds: number[], excludeId?: number) =>
+export const getReturnProgress = (rows: Array<{ orderPartGroupId: number; side: string }>, excludeId?: number) =>
   request.get<any, ReturnProgress[]>('/api/outsource/return-progress', {
-    params: { groupIds: groupIds.join(','), excludeId },
+    params: {
+      groupIds: rows.map((row) => row.orderPartGroupId).join(','),
+      sides: rows.map((row) => row.side).join(','),
+      excludeId,
+    },
   });
 
 export const createOutsourceParts = (data: OutsourcePartPayload) =>

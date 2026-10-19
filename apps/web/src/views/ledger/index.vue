@@ -115,12 +115,12 @@
         <el-table-column type="expand" width="36" fixed="left">
           <template #default="{ row }">
             <div v-loading="detailLoadingId === row.orderProductId" class="lg-detail">
-              <!-- 部件组明细：工艺属性（生产图号/版本/料厚）与外发回厂进度仍在组级 -->
+              <!-- 部件组明细：工艺属性在组级；卡口外轨、内轨的回厂进度继续拆到左/右。 -->
               <div class="lg-detail__sec">
-                <div class="lg-detail__title">部件组明细（工艺属性与外发回厂在组级）</div>
+                <div class="lg-detail__title">部件组明细（工艺属性与外发回厂进度）</div>
                 <table v-if="row.partGroups?.length" class="lg-grid">
                   <thead>
-                    <tr><th>部件组</th><th>组型号</th><th>生产图号</th><th>版本</th><th>料厚</th><th>组支数</th><th>外发已回货(支)</th><th>外发欠数(支)</th></tr>
+                    <tr><th>部件组</th><th>组型号</th><th>生产图号</th><th>版本</th><th>料厚</th><th>边别 / 应回(支)</th><th>已回货(支)</th><th>外发欠数(支)</th></tr>
                   </thead>
                   <tbody>
                     <tr v-for="g in row.partGroups" :key="g.orderPartGroupId">
@@ -129,14 +129,22 @@
                       <td>{{ g.drawingNo || '—' }}</td>
                       <td class="lg-c">{{ g.drawingVersion || '—' }}</td>
                       <td class="lg-c">{{ g.materialThickness || '—' }}</td>
-                      <td class="lg-c">{{ g.qtyPcs }}</td>
                       <td class="lg-c">
-                        <span :class="{ 'num-ok': g.returnedQty > 0 }">{{ g.returnedQty }}</span>
+                        <div v-for="item in g.sideProgress" :key="`${item.side}|${item.legacyUnassigned ? 'legacy' : ''}`">
+                          {{ sideProgressText(item) }}{{ item.legacyUnassigned ? '' : ` / ${item.qtyPcs}` }}
+                        </div>
                       </td>
-                      <!-- 主行的外发欠数是这一列的合计；哪个部件还没回来，看这里 -->
                       <td class="lg-c">
-                        <span v-if="g.outsourceOwed == null" class="num-na">—</span>
-                        <span v-else :class="owedClass(g.outsourceOwed)">{{ g.outsourceOwed }}</span>
+                        <div v-for="item in g.sideProgress" :key="`${item.side}|${item.legacyUnassigned ? 'legacy' : ''}`">
+                          <span :class="{ 'num-ok': item.returnedQty > 0 }">{{ item.returnedQty }}</span>
+                        </div>
+                      </td>
+                      <!-- 主行的外发欠数仍是各部件组总数；本列指出卡口外/内轨具体哪边未回。 -->
+                      <td class="lg-c">
+                        <div v-for="item in g.sideProgress" :key="`${item.side}|${item.legacyUnassigned ? 'legacy' : ''}`">
+                          <span v-if="item.legacyUnassigned || item.outsourceOwed == null" class="num-na">{{ item.legacyUnassigned ? '待核' : '—' }}</span>
+                          <span v-else :class="owedClass(item.outsourceOwed)">{{ item.outsourceOwed }}</span>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -176,14 +184,15 @@
                 </div>
 
                 <div class="lg-detail__sec">
-                  <div class="lg-detail__title">外发回厂流水（逐笔；外发仍锚部件组）</div>
+                  <div class="lg-detail__title">外发回厂流水（逐笔；卡口外轨、内轨按左/右）</div>
                   <table v-if="detailCache[row.orderProductId].outsource.length" class="lg-grid">
                     <thead>
-                      <tr><th>部件组</th><th>回厂日期</th><th>加工商</th><th>{{ colorEnabled ? '表面处理/颜色' : '表面处理' }}</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
+                      <tr><th>部件组</th><th>边别</th><th>回厂日期</th><th>加工商</th><th>{{ colorEnabled ? '表面处理/颜色' : '表面处理' }}</th><th>重量(kg)</th><th>单重</th><th>数量(支)</th><th>登记人</th><th>备注</th></tr>
                     </thead>
                     <tbody>
                       <tr v-for="(o, i) in detailCache[row.orderProductId].outsource" :key="i">
                         <td class="lg-c">{{ partGroupLabel(o.groupType) || '—' }}</td>
+                        <td class="lg-c"><color-tag :seed="o.side || 'whole'">{{ outsourceSideText(o) }}</color-tag></td>
                         <td class="lg-c">{{ o.backDate || '—' }}</td>
                         <td class="lg-memo" :title="o.processorName || ''">
                           <color-tag v-if="o.processorName" :seed="o.processorName">{{ o.processorName }}</color-tag>
@@ -636,6 +645,12 @@ function dictLabels(opts: Array<{ label: string; value: string }>, vs: string[] 
 function groupTypesText(row: LedgerRow): string {
   const vs = (row.partGroups ?? []).map((g) => partGroupLabel(g.groupType) || '').filter(Boolean);
   return vs.length ? vs.join('/') : '—';
+}
+function sideProgressText(item: { side: string; legacyUnassigned?: boolean }): string {
+  return item.legacyUnassigned ? '历史未分边' : (sideLabel(item.side) || '通用');
+}
+function outsourceSideText(row: { side: string; legacyUnassigned?: boolean }): string {
+  return row.legacyUnassigned ? '历史未分边' : (sideLabel(row.side) || '通用');
 }
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';

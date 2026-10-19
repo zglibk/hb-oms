@@ -75,7 +75,7 @@
         <div class="section-title">
           <span class="section-title__left">
             回厂明细
-            <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加部件组</el-button>
+            <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加回厂部件</el-button>
           </span>
           <span class="sec-sum">
             合计 <b>{{ totalQty }}</b> 支 ／ <b>{{ totalWeight }}</b> kg
@@ -83,8 +83,8 @@
         </div>
 
         <div v-if="!form.items.length" class="detail-empty">
-          <p class="detail-empty__text">还没有回厂明细，请先选择本次回来的部件组</p>
-          <el-button type="primary" :icon="Plus" @click="openPicker">添加部件组</el-button>
+          <p class="detail-empty__text">还没有回厂明细，请先选择本次回来的部件/边别</p>
+          <el-button type="primary" :icon="Plus" @click="openPicker">添加回厂部件</el-button>
         </div>
         <el-table
           v-else
@@ -100,6 +100,9 @@
           <el-table-column type="index" label="#" width="46" align="center" />
           <el-table-column label="生产单号" prop="productionNo" width="120" fixed="left" show-overflow-tooltip />
           <el-table-column label="产品型号" prop="productModel" min-width="140" show-overflow-tooltip />
+          <el-table-column label="边别" width="72" align="center">
+            <template #default="{ row }"><color-tag :seed="row.side || 'whole'">{{ sideText(row.side) }}</color-tag></template>
+          </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="80" align="center" show-overflow-tooltip />
           <el-table-column label="订单数量" width="88" align="center">
             <template #default="{ row }">{{ row.orderQty }} {{ unitLabel(row.unit) }}</template>
@@ -172,10 +175,10 @@
       </el-form>
     </el-card>
 
-    <!-- 可外发部件组选择器 -->
+    <!-- 可外发部件/边别选择器 -->
     <el-dialog
       v-model="pickerVisible"
-      title="选择回厂的部件组"
+      title="选择回厂部件"
       width="min(1180px, 94vw)"
       top="4vh"
       @open="initializePicker"
@@ -237,15 +240,15 @@
              勾上则只列已回齐的，供返工、补货再登记。 -->
         <el-checkbox v-model="showReturned" @change="loadPickerData">只看已回齐</el-checkbox>
         <span class="picker-tip">
-          {{ showReturned ? '当前只列出已回齐的部件组（返工、补货再登记用）；取消勾选回到待回厂列表。' : '只列出需要表面处理（非「无」）且尚未回齐的部件组；分批回厂可重复选。' }}
+          {{ showReturned ? '当前只列出已回齐的部件/边别（返工、补货再登记用）；取消勾选回到待回厂列表。' : '只列出需要表面处理（非「无」）且尚未回齐的部件/边别；分批回厂可重复选。' }}
         </span>
       </div>
       <el-table
         ref="pickerTableRef"
         :data="optionPageRows"
-        row-key="orderPartGroupId"
+        :row-key="pickerRowKey"
         v-loading="optionsLoading"
-        element-loading-text="正在加载全部部件组..."
+        element-loading-text="正在加载全部回厂部件..."
         border
         stripe
         size="small"
@@ -258,6 +261,12 @@
         <el-table-column label="客户" prop="customerName" width="96" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="120" show-overflow-tooltip />
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
+        <el-table-column label="边别" width="72" align="center">
+          <template #default="{ row }">
+            <color-tag :seed="row.side || 'whole'">{{ sideText(row.side) }}</color-tag>
+            <div v-if="row.legacyReturnedQty > 0" class="legacy-side-tip">含历史未分边 {{ row.legacyReturnedQty }} 支</div>
+          </template>
+        </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="90" align="center" />
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">
@@ -265,11 +274,11 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="组需求(支)" prop="qtyPcs" width="100" align="center" />
+        <el-table-column label="需求(支)" prop="qtyPcs" width="88" align="center" />
         <el-table-column label="已回厂(支)" width="120" align="center">
           <template #default="{ row }">
             {{ row.returnedQty }}
-            <el-tag v-if="row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs" size="small" type="success" disable-transitions>已回齐</el-tag>
+            <el-tag v-if="optionReturned(row)" size="small" type="success" disable-transitions>已回齐</el-tag>
           </template>
         </el-table-column>
       </el-table>
@@ -306,7 +315,7 @@ import {
   type PartGroupOption,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
-import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight } from '@/constants/dict';
+import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import {
@@ -335,6 +344,7 @@ const saving = ref(false);
 
 interface ItemRow {
   orderPartGroupId: number;
+  side: string;
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
@@ -468,16 +478,19 @@ const appliedPickerQuery = reactive<PickerQuery>({
   keyword: '',
 });
 const pickerTableRef = ref<any>();
-/** 对话框本次打开时取得的全部需外发部件组；待回厂/已回齐都从此快照切换。 */
+/** 对话框本次打开时取得的全部需外发部件/边别；待回厂/已回齐都从此快照切换。 */
 const optionSource = ref<PartGroupOption[]>([]);
 const optionsLoading = ref(false);
 const picked = ref<PartGroupOption[]>([]);
 /** 选择器是否切到「只看已回齐」列表（默认否，每次进页面都重置——同「按数量」模式，不记忆） */
 const showReturned = ref(false);
+/** 历史未分边流水无法判断左、右哪边已回，故保守地继续显示为待核，不擅自隐藏。 */
+function optionReturned(row: PartGroupOption): boolean {
+  if (row.side) return row.legacyReturnedQty === 0 && row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs;
+  return row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs;
+}
 const visibleScope = computed(() => optionSource.value.filter((row) => (
-  showReturned.value
-    ? row.qtyPcs > 0 && row.returnedQty >= row.qtyPcs
-    : row.returnedQty < row.qtyPcs
+  showReturned.value ? optionReturned(row) : !optionReturned(row)
 )));
 const pickerFilterOptions = computed<PartGroupFilterOptions>(() => {
   const all = visibleScope.value;
@@ -591,6 +604,7 @@ async function initializePicker() {
         row.color,
         row.drawingNo,
         row.materialThickness,
+        sideText(row.side),
       ].join('|'),
     }));
     // 全量快照留在内存中，本页最多渲染 50 行；渲染稳定后再撤加载层。
@@ -616,10 +630,15 @@ function resetPickerQuery() {
 function onPickChange(rows: PartGroupOption[]) {
   picked.value = rows;
 }
+function pickerRowKey(row: PartGroupOption) {
+  return `${row.orderPartGroupId}|${row.side}`;
+}
 function confirmPick() {
   picked.value.forEach((o) => {
+    if (form.items.some((item) => item.orderPartGroupId === o.orderPartGroupId && item.side === o.side)) return;
     form.items.push({
       orderPartGroupId: o.orderPartGroupId,
+      side: o.side,
       orderNo: o.orderNo,
       customerName: o.customerName,
       productionNo: o.productionNo,
@@ -651,6 +670,9 @@ function dictLabel(opts: Array<{ label: string; value: string }>, v: string | nu
 }
 function unitLabel(v: string | null): string {
   return UNIT_OPTIONS.find((o: any) => o.value === v)?.label ?? (v ?? '');
+}
+function sideText(side: string): string {
+  return sideLabel(side) || '通用';
 }
 
 /**
@@ -695,12 +717,13 @@ async function onSave() {
     return;
   }
   if (!(await confirmQtyConsistent())) return;
-  // 累计回厂超出组需求时确认一次（只提醒不拦截，见 confirmOverReturn）
+  // 累计回厂超出部件/边别需求时确认一次（只提醒不拦截，见 confirmOverReturn）
   const overOk = await confirmOverReturn(
     form.items.map((it, i) => ({
       orderPartGroupId: it.orderPartGroupId,
+      side: it.side,
       returnQty: it.returnQty,
-      label: `第 ${i + 1} 行 ${it.productionNo || it.orderNo || ''} ${it.productModel || ''}`.trim(),
+      label: `第 ${i + 1} 行 ${it.productionNo || it.orderNo || ''} ${it.productModel || ''}${sideText(it.side)}`.trim(),
     })),
   );
   if (!overOk) return;
@@ -711,6 +734,7 @@ async function onSave() {
       backDate: form.backDate,
       items: form.items.map((it) => ({
         orderPartGroupId: it.orderPartGroupId,
+        side: it.side,
         returnWeight: it.returnWeight || 0,
         unitWeight: it.unitWeight || 0,
         returnQty: it.returnQty,
@@ -914,6 +938,13 @@ function goBack() {
 .picker-tip {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+.legacy-side-tip {
+  margin-top: 3px;
+  color: var(--el-color-warning);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 .picker-count {
   display: inline-flex;
