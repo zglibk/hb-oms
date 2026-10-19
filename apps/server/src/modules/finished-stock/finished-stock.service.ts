@@ -10,6 +10,7 @@ import {
   ORDER_STATUS,
   SIDE_OPTIONS,
   STOCK_DIRECTION,
+  expandSideQtyRows,
   formatDimensionView,
   hasSocket,
   isValidSide,
@@ -36,7 +37,11 @@ import {
   sumByUnit,
 } from './delivery-note.util';
 import { InboundNoteSourceRow, buildInboundRows } from './inbound-note.util';
-import { syncOrderFinishState } from '../order/order-owed.util';
+import {
+  OUTBOUND_FAMILY_PARAMS,
+  OUTBOUND_FAMILY_SQL,
+  syncOrderFinishState,
+} from '../order/order-owed.util';
 // 仅取类型：期初入参形状定义在 opening 模块，此处 import type 编译后即擦除，无运行时耦合
 import type { OpeningFinishedDto } from '../opening/dto/opening.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
@@ -517,14 +522,26 @@ export class FinishedStockService {
         keys.push({ orderProductId: Number(r.productId), side }),
       );
     });
-    const quota = await loadInboundQuota(this.dataSource.manager, keys);
-    const balances = await this.loadBalanceMap(this.dataSource.manager, keys);
+    const [quota, balances, outbound] = await Promise.all([
+      loadInboundQuota(this.dataSource.manager, keys),
+      this.loadBalanceMap(this.dataSource.manager, keys),
+      this.loadOutboundMap(this.dataSource.manager, keys),
+    ]);
 
     return rows.map((r) => {
       const pid = Number(r.productId);
       const socket = hasSocket(r.productType);
+      const snap = snaps.get(pid);
+      // 成品按产品行记录总支数；卡口产品的订单应发数按左右展开后，
+      // 才能与出库明细的 (产品行, 边别) 锚点一一对应。
+      const orderedQtyBySide = new Map(
+        expandSideQtyRows(socket, snap?.qtyPcs ?? (Number(r.qtyPcs) || 0))
+          .map((row) => [row.side, row.qty] as [string, number]),
+      );
       const sides = (socket ? ['left', 'right'] : ['']).map((side) => {
         const q = quota.get(quotaKey(pid, side));
+        const orderedQty = orderedQtyBySide.get(side) ?? 0;
+        const outboundQty = outbound.get(quotaKey(pid, side)) ?? 0;
         return {
           side,
           sideLabel: sideLabel(side),
@@ -534,9 +551,14 @@ export class FinishedStockService {
           quota: q?.quota ?? 0,
           /** 当前结存（出库时的硬上限） */
           stockQty: balances.get(quotaKey(pid, side))?.quantity ?? 0,
+          /** 订单应发数（支，卡口已按左/右边别拆分） */
+          orderedQty,
+          /** 累计销售出库数（支，已确认销售出库与对应红字冲销自然抵扣） */
+          outboundQty,
+          /** 发货欠数（支），允许为负数以如实反映超发 */
+          deliveryOwed: orderedQty - outboundQty,
         };
       });
-      const snap = snaps.get(pid);
       return {
         orderProductId: pid,
         orderId: Number(r.orderId),
@@ -1149,7 +1171,7 @@ export class FinishedStockService {
           ...auditOnCreate(user),
         }),
       );
-      await this.writeItems(mgr, doc.id, dto.items);
+      await this.writeItems(mgr, doc.id, dto.items, dto.bizType);
       return { id: doc.id, docNo };
     });
   }
@@ -1292,7 +1314,7 @@ export class FinishedStockService {
         ...auditOnUpdate(user),
       });
       await mgr.getRepository(FinishedItem).delete({ docId: id });
-      await this.writeItems(mgr, id, dto.items);
+      await this.writeItems(mgr, id, dto.items, dto.bizType);
       return { id };
     });
   }
@@ -1609,15 +1631,64 @@ export class FinishedStockService {
     return map;
   }
 
+  /**
+   * 按 (订单产品行, 边别) 取累计销售出库数。
+   *
+   * 必须复用订单台账的 OUTBOUND_FAMILY_SQL：已确认销售出库记正数，
+   * 冲销该销售出库的红字单按相反 direction 自然抵扣，避免选择器的
+   * 发货欠数与订单跟踪台账分叉。
+   */
+  private async loadOutboundMap(
+    mgr: EntityManager,
+    keys: Array<{ orderProductId: number; side: string }>,
+  ) {
+    const map = new Map<string, number>();
+    const ids = [...new Set(keys.map((k) => k.orderProductId))].filter((v) => v > 0);
+    if (!ids.length) return map;
+    const rows: any[] = await mgr.query(
+      `SELECT fi.order_product_id AS pid, fi.side AS side,
+              SUM(-fd.direction * fi.quantity) AS qty
+         FROM t_finished_item fi
+         JOIN t_finished_doc  fd ON fd.id = fi.doc_id
+         LEFT JOIN t_finished_doc fo ON fo.id = fd.origin_doc_id
+        WHERE fi.order_product_id IN (${ids.map(() => '?').join(',')})
+          AND fd.status = ?
+          AND ${OUTBOUND_FAMILY_SQL}
+        GROUP BY fi.order_product_id, fi.side`,
+      [...ids, FINISHED_DOC_STATUS.CONFIRMED, ...OUTBOUND_FAMILY_PARAMS],
+    );
+    rows.forEach((r) =>
+      map.set(quotaKey(Number(r.pid), r.side ?? ''), Number(r.qty) || 0),
+    );
+    return map;
+  }
+
   /* ==================== 内部：明细落库 ==================== */
 
   private async writeItems(
     mgr: EntityManager,
     docId: number,
     items: CreateFinishedDocDto['items'],
+    bizType: string,
   ) {
     const productIds = items.map((it) => it.orderProductId);
     const snapshots = await this.productSnapshot.load(mgr, productIds);
+
+    // 一张销售出库单就是一次实际送货、对应一张客户送货单；客户抬头、地址和
+    // 纸型都只能有一个。以订单快照为准，不能信任客户端传入的展示字段。
+    if (bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND) {
+      const customerNames = new Set(
+        items
+          .map((it) => snapshots.get(it.orderProductId))
+          .filter((snap): snap is ProductSnapshot => Boolean(snap))
+          .map((snap) => String(snap.customerName ?? '').trim()),
+      );
+      if (customerNames.size > 1) {
+        throw new BadRequestException(
+          `一张销售出库单只能选择同一客户的产品；当前包含 ${[...customerNames].join('、')}`,
+        );
+      }
+    }
 
     const seen = new Set<string>();
     const rows = items.map((it, i) => {

@@ -198,6 +198,7 @@
                 v-if="row.bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND"
                 size="small" v-permission.disable="'finished-stock:print'" link type="primary" :icon="Printer"
                 :disabled="row.status === FINISHED_DOC_STATUS_VALUE.CANCELLED"
+                title="只打印本张销售出库单中已选择的本次发货明细"
                 @click="openDeliveryNote(row)"
               >送货单</el-button>
               <!-- 入库单：交仓库收货签字的内部凭证，只有生产入库单才是车间的入库动作

@@ -43,6 +43,15 @@
           </el-col>
         </el-row>
 
+        <el-alert
+          v-if="isSaleOutbound"
+          class="outbound-guide"
+          type="info"
+          :closable="false"
+          show-icon
+          title="销售出库单就是本次实际送货：可按订单号筛选，只勾选本次发货的产品；“本次发货数”需逐行填写，不会自动带出当前结存。保存后送货单只打印本单明细，剩余数量请下次新建销售出库单继续发货。卡口产品按左、右分别填写。"
+        />
+
         <div class="section-title">
           出入库明细
           <el-button size="small" type="primary" plain :icon="Plus" class="ml12" @click="openPicker">添加产品</el-button>
@@ -79,9 +88,28 @@
               <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="数量(支)" width="130" align="center">
+          <el-table-column v-if="isSaleOutbound" label="订单应发(支)" width="110" align="center">
+            <template #default="{ row }">{{ row.orderedQty }}</template>
+          </el-table-column>
+          <el-table-column v-if="isSaleOutbound" label="累计出库(支)" width="110" align="center">
+            <template #default="{ row }">{{ row.outboundQty }}</template>
+          </el-table-column>
+          <el-table-column v-if="isSaleOutbound" label="发货欠数(支)" width="110" align="center">
             <template #default="{ row }">
-              <el-input-number v-model="row.quantity" :min="1" :precision="0" :step="1" :controls="false" style="width: 100%" />
+              <span :class="row.deliveryOwed > 0 ? 'lim-ok' : 'lim-zero'">{{ row.deliveryOwed }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="isSaleOutbound ? '本次发货(支)' : '数量(支)'" :width="isSaleOutbound ? 190 : 130" align="center">
+            <template #default="{ row }">
+              <div v-if="isSaleOutbound" class="shipment-qty">
+                <el-input-number v-model="row.quantity" :min="1" :precision="0" :step="1" :controls="false" style="width: 100%" />
+                <span class="shipment-qty__reference" :class="shipmentQtyReferenceClass(row)">
+                  {{ shipmentQtyReferenceText(row) }} · 库存 {{ row.limit }} 支
+                  <template v-if="row.quantity && row.quantity > row.limit"> · 超库存，无法确认</template>
+                  <template v-else-if="row.quantity && row.quantity > row.deliveryOwed"> · 超待发，请核对</template>
+                </span>
+              </div>
+              <el-input-number v-else v-model="row.quantity" :min="1" :precision="0" :step="1" :controls="false" style="width: 100%" />
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="120">
@@ -98,6 +126,11 @@
           <el-icon><WarningFilled /></el-icon>
           以下行超过{{ limitLabel }}，确认时会被后端拒绝：
           {{ overRows.map((r) => `${r.productModel}${r.side ? ` ${sideLabel(r.side)}边` : ''}（${r.quantity} > ${r.limit}）`).join('；') }}
+        </div>
+        <div v-if="overOrderRows.length" class="over-tip">
+          <el-icon><WarningFilled /></el-icon>
+          以下行本次发货数超过订单待发数，请核对；该提醒不拦截合理超发，库存充足时仍可保存并确认：
+          {{ overOrderRows.map((r) => `${r.productModel}${r.side ? ` ${sideLabel(r.side)}边` : ''}（${r.quantity} > ${r.deliveryOwed}）`).join('；') }}
         </div>
       </el-form>
     </el-card>
@@ -174,7 +207,9 @@
         </el-form-item>
       </el-form>
       <div class="picker-tip">
-        {{ isInbound ? '「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录' : '「当前结存」为出库上限' }}
+        <template v-if="isInbound">「可入库量」= 已完成装配 − 已入库，为 0 说明装配还没录</template>
+        <template v-else>请只勾选本次实际发货的产品；加入明细后必须逐行填写“本次发货数”，不会自动按当前结存带出。</template>
+        <span v-if="isSaleOutbound && selectedCustomerName" class="picker-customer-tip">本单已选择客户：{{ selectedCustomerName }}；只能继续选择该客户产品。</span>
       </div>
       <el-table ref="pickerTableRef" :data="pickerPageRows" :row-key="pickerRowKey" v-loading="pickerLoading"
         element-loading-text="正在加载全部订单产品..." border stripe size="small" height="58vh"
@@ -205,7 +240,14 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
+        <el-table-column v-if="!isSaleOutbound" label="订单数" prop="qtyPcs" width="80" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="订单应发(支)" prop="orderedQty" width="105" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="累计出库(支)" prop="outboundQty" width="105" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="发货欠数(支)" width="105" align="center">
+          <template #default="{ row }">
+            <span :class="row.deliveryOwed > 0 ? 'lim-ok' : 'lim-zero'">{{ row.deliveryOwed }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="limitLabel" width="110" align="center">
           <template #default="{ row }">
             <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
@@ -280,7 +322,14 @@ interface ItemRow {
   color: string | null;
   /** 入库=可入库量，出库=当前结存 */
   limit: number;
-  quantity: number;
+  /** 订单应发数（支；卡口已按左/右边别拆分） */
+  orderedQty: number;
+  /** 已确认销售出库数（支，红字冲销已抵扣） */
+  outboundQty: number;
+  /** 发货欠数（支；可为负数） */
+  deliveryOwed: number;
+  /** 新选明细先留空，必须由用户填本次数量；编辑态回填既有数量。 */
+  quantity?: number;
   remark: string;
 }
 
@@ -323,10 +372,33 @@ const rules: FormRules = {
 const isInbound = computed(
   () => form.bizType === FINISHED_BIZ_TYPE.INBOUND || form.bizType === FINISHED_BIZ_TYPE.OPENING_BALANCE,
 );
+const isSaleOutbound = computed(() => form.bizType === FINISHED_BIZ_TYPE.SALE_OUTBOUND);
 const bizLabel = computed(() => labelOf(FINISHED_BIZ_TYPE_OPTIONS, form.bizType));
 const limitLabel = computed(() => (isInbound.value ? '可入库量' : '当前结存'));
 const totalQty = computed(() => form.items.reduce((s, it) => s + (it.quantity || 0), 0));
 const overRows = computed(() => form.items.filter((it) => (it.quantity || 0) > it.limit));
+const overOrderRows = computed(() =>
+  isSaleOutbound.value
+    ? form.items.filter((it) => (it.quantity || 0) > it.deliveryOwed)
+    : [],
+);
+const selectedCustomerName = computed(() =>
+  isSaleOutbound.value ? String(form.items[0]?.customerName ?? '').trim() : '',
+);
+
+/** 销售出库填数时把最需要核对的待发量、结存和异常状态紧贴输入框展示。 */
+function shipmentQtyReferenceText(row: ItemRow) {
+  if (row.deliveryOwed > 0) return `待发 ${row.deliveryOwed} 支`;
+  if (row.deliveryOwed === 0) return '待发 0 支（已发齐）';
+  return `已超发 ${Math.abs(row.deliveryOwed)} 支`;
+}
+
+function shipmentQtyReferenceClass(row: ItemRow) {
+  if (!row.quantity) return '';
+  if (row.quantity > row.limit) return 'is-danger';
+  if (row.quantity > row.deliveryOwed) return 'is-warning';
+  return 'is-ok';
+}
 
 /** 草稿只许制单人与出入库主管角色编辑：无权时为提示文案（顶部只读提示 + 禁用保存），有权为空串 */
 const notOwnerTip = ref('');
@@ -354,6 +426,9 @@ async function init() {
       surfaceType: it.surfaceType,
       color: it.color,
       limit: 0,
+      orderedQty: 0,
+      outboundQty: 0,
+      deliveryOwed: 0,
       quantity: it.quantity,
       remark: it.remark ?? '',
     }));
@@ -368,14 +443,28 @@ init();
 async function refreshLimits() {
   if (!form.items.length) return;
   const opts = await getStockGroupOptions({ bizType: form.bizType });
-  const map = new Map<string, number>();
+  const map = new Map<string, {
+    limit: number;
+    orderedQty: number;
+    outboundQty: number;
+    deliveryOwed: number;
+  }>();
   opts.forEach((o) => {
     o.sides.forEach((s) =>
-      map.set(`${o.orderProductId}#${s.side}`, isInbound.value ? s.quota : s.stockQty),
+      map.set(`${o.orderProductId}#${s.side}`, {
+        limit: isInbound.value ? s.quota : s.stockQty,
+        orderedQty: s.orderedQty,
+        outboundQty: s.outboundQty,
+        deliveryOwed: s.deliveryOwed,
+      }),
     );
   });
   form.items.forEach((it) => {
-    it.limit = map.get(`${it.orderProductId}#${it.side}`) ?? 0;
+    const current = map.get(`${it.orderProductId}#${it.side}`);
+    it.limit = current?.limit ?? 0;
+    it.orderedQty = current?.orderedQty ?? 0;
+    it.outboundQty = current?.outboundQty ?? 0;
+    it.deliveryOwed = current?.deliveryOwed ?? 0;
   });
 }
 
@@ -553,7 +642,10 @@ async function initializePicker() {
         color: o.color,
         qtyPcs: o.qtyPcs,
         limit: isInbound.value ? s.quota : s.stockQty,
-        quantity: 0,
+        orderedQty: s.orderedQty,
+        outboundQty: s.outboundQty,
+        deliveryOwed: s.deliveryOwed,
+        quantity: undefined,
         remark: '',
         searchText: o.searchText ?? [
           o.orderNo,
@@ -589,11 +681,14 @@ function resetPickerQuery() {
   suppressPickerAutoSearch = false;
   void loadPickerData();
 }
-/** 已在明细中的 (产品行,边别) 不可重复选 */
+/** 已在明细中的 (产品行,边别) 不可重复选；销售出库一张单只能服务同一客户。 */
 function isSelectable(row: ItemRow): boolean {
-  return !form.items.some(
-    (it) => it.orderProductId === row.orderProductId && it.side === row.side,
-  );
+  if (form.items.some((it) => it.orderProductId === row.orderProductId && it.side === row.side)) {
+    return false;
+  }
+  return !isSaleOutbound.value
+    || !selectedCustomerName.value
+    || String(row.customerName ?? '').trim() === selectedCustomerName.value;
 }
 function onPickChange(rows: ItemRow[]) {
   picked.value = rows as PickerRow[];
@@ -601,6 +696,14 @@ function onPickChange(rows: ItemRow[]) {
 function confirmPick() {
   picked.value.forEach((o) => {
     if (form.items.some((it) => it.orderProductId === o.orderProductId && it.side === o.side)) return;
+    if (
+      isSaleOutbound.value
+      && selectedCustomerName.value
+      && String(o.customerName ?? '').trim() !== selectedCustomerName.value
+    ) {
+      ElMessage.warning(`一张销售出库单只能选择客户「${selectedCustomerName.value}」的产品`);
+      return;
+    }
     form.items.push({
       orderProductId: o.orderProductId,
       side: o.side,
@@ -612,8 +715,12 @@ function confirmPick() {
       surfaceType: o.surfaceType,
       color: o.color,
       limit: o.limit,
-      // 默认按上限带出，额度为 0 时给 1 让用户自己改（后端仍会拦）
-      quantity: o.limit > 0 ? o.limit : 1,
+      orderedQty: o.orderedQty,
+      outboundQty: o.outboundQty,
+      deliveryOwed: o.deliveryOwed,
+      // 只带出本次要发的产品，不擅自把当前结存当作本次发货数。
+      // 保持空值，保存时强制填写；库存硬校验仍在确认时由服务端执行。
+      quantity: undefined,
       remark: '',
     });
   });
@@ -638,6 +745,9 @@ async function onSave() {
     ElMessage.warning(`第 ${bad + 1} 行数量必须大于 0`);
     return;
   }
+  if (overOrderRows.value.length) {
+    ElMessage.warning('本次发货数超过订单待发数，请核对；库存充足时仍会按您填写的数量保存');
+  }
   const payload = {
     bizType: form.bizType,
     docDate: form.docDate,
@@ -646,7 +756,7 @@ async function onSave() {
     items: form.items.map((it, i) => ({
       orderProductId: it.orderProductId,
       side: it.side,
-      quantity: it.quantity,
+      quantity: it.quantity!,
       remark: it.remark || undefined,
       sort: i,
     })),
@@ -692,6 +802,7 @@ export default { name: 'FinishedStockForm' };
   .ml12 { margin-left: 12px; }
   .sec-sum { margin-left: auto; font-weight: 400; font-size: 13px; color: var(--el-text-color-secondary); }
 }
+.outbound-guide { margin-top: 14px; }
 .picker-filters {
   display: grid;
   /* 宽屏每行最多五个条件；剩余条件与操作区自然换到下一行。 */
@@ -742,6 +853,7 @@ export default { name: 'FinishedStockForm' };
   }
 }
 .picker-tip { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
+.picker-customer-tip { margin-left: 12px; color: var(--el-color-primary); font-weight: 600; }
 :global(.stock-picker-model-popper) { min-width: 280px !important; }
 :global(.stock-picker-model-popper .el-select-dropdown),
 :global(.stock-picker-model-popper .el-vl__wrapper),
@@ -757,6 +869,20 @@ export default { name: 'FinishedStockForm' };
 }
 .lim-ok { color: var(--el-color-success); font-weight: 600; }
 .lim-zero { color: var(--el-color-danger); font-weight: 600; }
+.shipment-qty {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+.shipment-qty__reference {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  &.is-ok { color: var(--el-color-success); }
+  &.is-warning { color: var(--el-color-warning); font-weight: 600; }
+  &.is-danger { color: var(--el-color-danger); font-weight: 600; }
+}
 .over-tip {
   display: flex; align-items: center; gap: 6px; margin-top: 10px;
   color: var(--el-color-warning); font-size: 12px;

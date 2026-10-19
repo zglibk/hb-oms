@@ -1054,14 +1054,20 @@
 </tr>
 </tbody></table></div>
 <ul>
-<li><strong>唯一键</strong>：<code>(order_product_id, side, batch_no, attr_key)</code>，锚点列 <code>NOT NULL DEFAULT 0</code>（规避 MySQL 唯一键多 NULL 不去重）。余额行一律挂订单产品行，由「产品行 + 边别 + 批次」唯一；<code>attr_key</code> <strong>恒为空串</strong>——它原用于区分「不挂订单的纯属性期初行」，该形态已于 2026-08-11 下线（改由呆滞品管理承载，§4.9），列保留仅因它仍是唯一键的组成部分。
-该逻辑唯一<strong>下沉到数据库唯一键</strong>而非仅靠应用层判重——并发下应用层「先查再插」挡不住重复行。</li>
-<li>出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，<strong>禁止直接改 balance</strong>。</li>
-<li><strong>装配入库闸门</strong>：<code>biz_type=&#39;inbound&#39;</code> 入库单<strong>确认时</strong>，按每条明细的 order_product_id + side 校验 <code>本次入库量 ≤ 可入库量(§4.4)</code>；超额则拒绝（<code>BadRequestException</code> 中文提示，含产品、可入库量、本次量）。<code>biz_type=&#39;opening_balance&#39;</code>（期初）与 <code>reversal</code>（红字）<strong>豁免</strong>该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，<code>Σ已入库量</code> 按 direction 自然回落，可入库量随之回补。<blockquote>
+<li><p><strong>唯一键</strong>：<code>(order_product_id, side, batch_no, attr_key)</code>，锚点列 <code>NOT NULL DEFAULT 0</code>（规避 MySQL 唯一键多 NULL 不去重）。余额行一律挂订单产品行，由「产品行 + 边别 + 批次」唯一；<code>attr_key</code> <strong>恒为空串</strong>——它原用于区分「不挂订单的纯属性期初行」，该形态已于 2026-08-11 下线（改由呆滞品管理承载，§4.9），列保留仅因它仍是唯一键的组成部分。
+该逻辑唯一<strong>下沉到数据库唯一键</strong>而非仅靠应用层判重——并发下应用层「先查再插」挡不住重复行。</p>
+</li>
+<li><p>出库扣减校验：结存不足拒绝确认；余额变动只经单据确认/红字冲销驱动，<strong>禁止直接改 balance</strong>。</p>
+</li>
+<li><p><strong>装配入库闸门</strong>：<code>biz_type=&#39;inbound&#39;</code> 入库单<strong>确认时</strong>，按每条明细的 order_product_id + side 校验 <code>本次入库量 ≤ 可入库量(§4.4)</code>；超额则拒绝（<code>BadRequestException</code> 中文提示，含产品、可入库量、本次量）。<code>biz_type=&#39;opening_balance&#39;</code>（期初）与 <code>reversal</code>（红字）<strong>豁免</strong>该闸门——期初是存量补录、红字是对已确认单的抵扣，均无装配过程。红字冲销入库后，<code>Σ已入库量</code> 按 direction 自然回落，可入库量随之回补。</p>
+<blockquote>
 <p>⚠️ 期初豁免闸门是<strong>有意为之</strong>，但也意味着「在正常订单上录期初」会绕过装配闸门凭空增加库存与完成数。故<strong>期初只能挂 <code>is_opening=1</code> 的期初补录订单</strong>：期初页的产品选择器按此过滤（<code>onlyOpening</code>），服务端建单时再逐行硬校验一次，两层都拦。正常订单的成品必须走「装配 → 成品入库」。</p>
 </blockquote>
 </li>
-<li><strong>建单产品选择器</strong>：生产入库与销售出库共用「选择订单产品」弹窗；每次打开时一次取得当前业务类型的完整候选快照（含可入库量 / 当前结存与隐藏搜索索引），之后订单号、客户、生产单号、产品型号、表面处理、颜色及关键词都在浏览器内存中即时组合过滤，不再逐条件请求服务端；关闭后重新打开才刷新额度、结存与新增订单。完整快照保留在内存，表格默认按本地 50 行分页渲染且跨页保留勾选，翻页不请求服务端。关键词作为最后一个 AND 条件全局搜索订单、产品、部件组、追溯码和相关字典中文标签；隐藏索引不携带销售员、跟单员、交货地址等无关信息；客户、产品型号、表面处理、颜色级联选项从完整快照去重生成。</li>
+<li><p><strong>建单产品选择器</strong>：生产入库与销售出库共用「选择订单产品」弹窗；每次打开时一次取得当前业务类型的完整候选快照（含可入库量 / 当前结存与隐藏搜索索引），之后订单号、客户、生产单号、产品型号、表面处理、颜色及关键词都在浏览器内存中即时组合过滤，不再逐条件请求服务端；关闭后重新打开才刷新额度、结存与新增订单。完整快照保留在内存，表格默认按本地 50 行分页渲染且跨页保留勾选，翻页不请求服务端。关键词作为最后一个 AND 条件全局搜索订单、产品、部件组、追溯码和相关字典中文标签；隐藏索引不携带销售员、跟单员、交货地址等无关信息；客户、产品型号、表面处理、颜色级联选项从完整快照去重生成。</p>
+</li>
+<li><p><strong>销售出库与送货单</strong>：一张销售出库单 = 一次实际送货 = 一张客户送货单。建单时可按订单号等条件筛选，只勾选本次实际发货的部分产品并逐行填写本次数量；数量不得默认按当前结存带出，未发部分在下一张销售出库单继续办理。选择器与已选明细按「订单产品行 + 边别」同时展示订单应发数、累计销售出库数、发货欠数和当前结存；在已选明细的本次发货输入框下直接展示「待发 / 库存」，填写后即时标示超待发（核对提醒）或超库存（无法确认），避免横向对照表格。超出订单待发数只提示核对，库存不足仍在确认时硬性拒绝。含卡口产品内部按左/右分别扣减，送货单按订单产品行合并并按订单单位换算展示。一张销售出库单只能包含同一客户的产品，前后端均校验；打印直接且仅取该出库单内的本次发货明细，不提供打印时临时勾选，保证纸面、库存与台账一致。</p>
+</li>
 </ul>
 <h3 id="46-部件台账tpartbalance属性锚定独立参考台账">4.6 部件台账：<code>t_part_balance</code>（属性锚定，独立参考台账）<a class="anchor" href="#46-部件台账tpartbalance属性锚定独立参考台账" aria-hidden="true">#</a></h3>
 <div class="table-wrap"><table><thead><tr>
@@ -1510,6 +1516,11 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 <td>finished-stock</td>
 <td><code>GET /finished-stock/:id/delivery-note-pdf?profileId=&amp;version=&amp;templateCode=</code>、<code>GET /finished-stock/:id/inbound-note-pdf?profileId=&amp;version=</code></td>
 <td>服务端渲染与屏幕相同的已发布纸型和版本；等待明确打印就绪标记后生成 PDF</td>
+</tr>
+<tr>
+<td>finished-stock</td>
+<td><code>GET /finished-stock/group-options</code> 的 <code>sides</code></td>
+<td>除可入库量 / 当前结存外，销售出库选择器同时返回该边别的订单应发数、累计销售出库数、发货欠数；累计口径复用 <code>OUTBOUND_FAMILY_SQL</code>，已确认销售出库与其红字冲销自然抵扣</td>
 </tr>
 <tr>
 <td>print-config</td>

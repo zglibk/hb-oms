@@ -381,6 +381,8 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
   > ⚠️ 期初豁免闸门是**有意为之**，但也意味着「在正常订单上录期初」会绕过装配闸门凭空增加库存与完成数。故**期初只能挂 `is_opening=1` 的期初补录订单**：期初页的产品选择器按此过滤（`onlyOpening`），服务端建单时再逐行硬校验一次，两层都拦。正常订单的成品必须走「装配 → 成品入库」。
 - **建单产品选择器**：生产入库与销售出库共用「选择订单产品」弹窗；每次打开时一次取得当前业务类型的完整候选快照（含可入库量 / 当前结存与隐藏搜索索引），之后订单号、客户、生产单号、产品型号、表面处理、颜色及关键词都在浏览器内存中即时组合过滤，不再逐条件请求服务端；关闭后重新打开才刷新额度、结存与新增订单。完整快照保留在内存，表格默认按本地 50 行分页渲染且跨页保留勾选，翻页不请求服务端。关键词作为最后一个 AND 条件全局搜索订单、产品、部件组、追溯码和相关字典中文标签；隐藏索引不携带销售员、跟单员、交货地址等无关信息；客户、产品型号、表面处理、颜色级联选项从完整快照去重生成。
 
+- **销售出库与送货单**：一张销售出库单 = 一次实际送货 = 一张客户送货单。建单时可按订单号等条件筛选，只勾选本次实际发货的部分产品并逐行填写本次数量；数量不得默认按当前结存带出，未发部分在下一张销售出库单继续办理。选择器与已选明细按「订单产品行 + 边别」同时展示订单应发数、累计销售出库数、发货欠数和当前结存；在已选明细的本次发货输入框下直接展示「待发 / 库存」，填写后即时标示超待发（核对提醒）或超库存（无法确认），避免横向对照表格。超出订单待发数只提示核对，库存不足仍在确认时硬性拒绝。含卡口产品内部按左/右分别扣减，送货单按订单产品行合并并按订单单位换算展示。一张销售出库单只能包含同一客户的产品，前后端均校验；打印直接且仅取该出库单内的本次发货明细，不提供打印时临时勾选，保证纸面、库存与台账一致。
+
 ### 4.6 部件台账：`t_part_balance`（属性锚定，独立参考台账）
 
 | 字段 | 类型 | 说明 |
@@ -599,6 +601,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | finished-stock | `GET /finished-stock/balance`、`GET /finished-stock/group-options` | 成品库存（只读结存查询）；group-options 未传 limit 时返回当前业务类型的完整产品候选，按边别展开并附「可入库量」（入库）/「当前结存」（出库），`includeSearchText=true` 时附本地搜索索引 |
 | finished-stock | `GET /finished-stock/group-filter-options` | 保留兼容的服务端去重下拉接口；当前建单选择器改从首次取得的完整候选快照本地生成级联选项 |
 | finished-stock | `GET /finished-stock/:id/delivery-note-pdf?profileId=&version=&templateCode=`、`GET /finished-stock/:id/inbound-note-pdf?profileId=&version=` | 服务端渲染与屏幕相同的已发布纸型和版本；等待明确打印就绪标记后生成 PDF |
+| finished-stock | `GET /finished-stock/group-options` 的 `sides` | 除可入库量 / 当前结存外，销售出库选择器同时返回该边别的订单应发数、累计销售出库数、发货欠数；累计口径复用 `OUTBOUND_FAMILY_SQL`，已确认销售出库与其红字冲销自然抵扣 |
 | print-config | `/system/print-config/profiles` CRUD、`publish`、`versions`、`rollback`、`defaults`、`runtime` | 针式纸型草稿/发布/回退、全局默认与打印页运行时解析；查看复用 `system:print-template`，修改复用 `config:update` |
 | opening | `POST /opening/finished`、`POST /opening/part` | 成品期初（内部走 finished-stock 通道）/ 部件期初 |
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |

@@ -94,6 +94,12 @@ export interface StockSideInfo {
   quota: number;
   /** 当前结存（出库硬上限） */
   stockQty: number;
+  /** 订单应发数（支；卡口产品已按左/右边别拆分） */
+  orderedQty: number;
+  /** 累计销售出库数（支；已确认销售出库与对应红字冲销自然抵扣） */
+  outboundQty: number;
+  /** 发货欠数（支；允许为负数以反映超发） */
+  deliveryOwed: number;
 }
 
 /** 可出入库的**产品行**选项（2026-08-10 由部件组升级——入库对象是装配产出的整套滑轨） */
