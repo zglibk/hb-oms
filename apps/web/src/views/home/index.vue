@@ -619,7 +619,12 @@ const riskChartOption = computed<EChartsOption>(() => {
   return {
     animationDuration: 500,
     tooltip: hasData
-      ? { trigger: 'item', formatter: '{b}<br/>{c} 个订单（{d}%）' }
+      ? {
+          trigger: 'item',
+          appendTo: 'body',
+          confine: false,
+          formatter: '{b}<br/>{c} 个订单（{d}%）',
+        }
       : { show: false },
     series: [{
       type: 'pie',
