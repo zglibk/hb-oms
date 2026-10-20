@@ -1,6 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { QueryDeliveryRiskDto } from './dto/query-delivery-risk.dto';
 
 @Controller('dashboard')
 export class DashboardController {
@@ -20,5 +21,12 @@ export class DashboardController {
   @RequirePermissions('stat:dashboard')
   async summary() {
     return this.service.summary();
+  }
+
+  /** 首页交付风险分布；与汇总接口共用看板查看权限。 */
+  @Get('delivery-risk')
+  @RequirePermissions('stat:dashboard')
+  async deliveryRisk(@Query() query: QueryDeliveryRiskDto) {
+    return this.service.deliveryRisk(query.days);
   }
 }

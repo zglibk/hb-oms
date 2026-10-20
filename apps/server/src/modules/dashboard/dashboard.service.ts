@@ -106,6 +106,13 @@ export interface DashboardOutsourceRow {
   returnQty: number;
 }
 
+interface DeliveryRiskCounts {
+  overdue: number;
+  upcoming: number;
+  normal: number;
+  total: number;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly dataSource: DataSource) {}
@@ -179,6 +186,87 @@ export class DashboardService {
       topLimit: TOP_LIMIT,
       upcomingDays: UPCOMING_DAYS,
     };
+  }
+
+  /**
+   * 首页「交付风险分布」。
+   *
+   * - 粒度固定为订单：三类互斥且相加等于中心订单数；
+   * - 同一订单只要有一个仍欠货的产品逾期，整单优先归入「逾期未发货」；
+   * - 无逾期、但有产品在未来 7 天内到期且欠货，归入「临近交期」；
+   * - 其余进行中订单归入「正常推进」；
+   * - 近 N 天按下单日期取数，「较上期」对比紧邻的前一个等长下单日期窗口。
+   */
+  async deliveryRisk(days: number) {
+    const safeDays = [30, 60, 90].includes(days) ? days : 30;
+    const [current, previous] = await Promise.all([
+      this.loadDeliveryRiskWindow(safeDays, false),
+      this.loadDeliveryRiskWindow(safeDays, true),
+    ]);
+
+    const item = (key: keyof Omit<DeliveryRiskCounts, 'total'>) => {
+      const count = current[key];
+      const previousCount = previous[key];
+      return {
+        count,
+        rate: current.total ? this.roundPercent(count / current.total) : 0,
+        changeRate: previousCount
+          ? this.roundPercent((count - previousCount) / previousCount)
+          : count > 0 ? 100 : 0,
+      };
+    };
+
+    return {
+      days: safeDays,
+      total: current.total,
+      overdue: item('overdue'),
+      upcoming: item('upcoming'),
+      normal: item('normal'),
+    };
+  }
+
+  private async loadDeliveryRiskWindow(days: number, previous: boolean): Promise<DeliveryRiskCounts> {
+    // 当前期：[今天-(N-1), 今天]；上期：[今天-(2N-1), 今天-N]，均为 N 个自然日。
+    const dateSql = previous
+      ? `AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         AND o.order_date <  DATE_SUB(CURDATE(), INTERVAL ? DAY)`
+      : `AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         AND o.order_date <= CURDATE()`;
+    const dateParams = previous ? [days * 2 - 1, days - 1] : [days - 1];
+
+    const rows: any[] = await this.dataSource.query(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN risk.hasOverdue = 1 THEN 1 ELSE 0 END) AS overdue,
+              SUM(CASE WHEN risk.hasOverdue = 0 AND risk.hasUpcoming = 1 THEN 1 ELSE 0 END) AS upcoming,
+              SUM(CASE WHEN risk.hasOverdue = 0 AND risk.hasUpcoming = 0 THEN 1 ELSE 0 END) AS normal
+         FROM (
+              SELECT o.id,
+                     MAX(CASE WHEN p.delivery_date IS NOT NULL
+                                   AND p.delivery_date < CURDATE()
+                                   AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
+                              THEN 1 ELSE 0 END) AS hasOverdue,
+                     MAX(CASE WHEN p.delivery_date IS NOT NULL
+                                   AND p.delivery_date >= CURDATE()
+                                   AND p.delivery_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
+                                   AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
+                              THEN 1 ELSE 0 END) AS hasUpcoming
+                ${this.activeGroupsFrom}
+                ${dateSql}
+               GROUP BY o.id
+              ) risk`,
+      [UPCOMING_DAYS, ...this.activeGroupsParams, ...dateParams],
+    );
+    const row = rows?.[0] ?? {};
+    return {
+      overdue: Number(row.overdue) || 0,
+      upcoming: Number(row.upcoming) || 0,
+      normal: Number(row.normal) || 0,
+      total: Number(row.total) || 0,
+    };
+  }
+
+  private roundPercent(value: number): number {
+    return Math.round(value * 1000) / 10;
   }
 
   /**

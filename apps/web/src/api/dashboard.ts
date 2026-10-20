@@ -74,6 +74,26 @@ export interface DashboardSummary {
   upcomingDays: number;
 }
 
+export interface DeliveryRiskMetric {
+  count: number;
+  /** 占当前观察窗口订单数的百分比。 */
+  rate: number;
+  /** 相比紧邻的上一等长下单日期窗口，百分比变化。 */
+  changeRate: number;
+}
+
+export interface DeliveryRiskSummary {
+  days: 30 | 60 | 90;
+  total: number;
+  overdue: DeliveryRiskMetric;
+  upcoming: DeliveryRiskMetric;
+  normal: DeliveryRiskMetric;
+}
+
 /** 首页看板汇总（登录即可访问，不挂权限点） */
 export const getDashboardSummary = () =>
   request.get<any, DashboardSummary>('/api/dashboard/summary');
+
+/** 首页交付风险分布（按下单日期取最近 30/60/90 天的进行中订单）。 */
+export const getDeliveryRisk = (days: 30 | 60 | 90) =>
+  request.get<any, DeliveryRiskSummary>('/api/dashboard/delivery-risk', { params: { days } });

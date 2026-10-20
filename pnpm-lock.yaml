@@ -156,6 +156,9 @@ importers:
       '@kjgl77/datav-vue3':
         specifier: ^1.7.4
         version: 1.7.4(vue@3.5.40)
+      '@tabler/icons-vue':
+        specifier: ^3.49.0
+        version: 3.49.0(vue@3.5.40)
       '@wangeditor/editor':
         specifier: ^5.1.23
         version: 5.1.23
@@ -1460,6 +1463,19 @@ packages:
 
   /@sxzz/popperjs-es@2.11.8:
     resolution: {integrity: sha512-wOwESXvvED3S8xBmcPWHs2dUuzrE4XiZeFu7e1hROIJkm02a49N120pmOXxY33sBb6hArItm5W5tcg1cBtV+HQ==}
+    dev: false
+
+  /@tabler/icons-vue@3.49.0(vue@3.5.40):
+    resolution: {integrity: sha512-p/g2/aVsUTdGaLwgV+X/E3vc+j8XkXWV2NgXAVT31/6sMf/CFAI3uvJ1r6YCi/UT8U2ctaF5fXUWr18bNVVr7g==}
+    peerDependencies:
+      vue: '>=3.0.1'
+    dependencies:
+      '@tabler/icons': 3.49.0
+      vue: 3.5.40(typescript@5.9.3)
+    dev: false
+
+  /@tabler/icons@3.49.0:
+    resolution: {integrity: sha512-l+GnSkFETx0U26icxv1VUFnxxiTqXfCcVRiRAnyMwibupM2S2L/hSaZ9gmSgz01rkrsH/93NvLsxykqdanc6lw==}
     dev: false
 
   /@tokenizer/inflate@0.2.7:

@@ -158,6 +158,99 @@
       </app-stat-card>
     </div>
 
+    <!-- 中段双卡：常用功能占 2/3，交付风险占 1/3，原有上下区域不改。 -->
+    <el-row :gutter="16" class="overview-row" v-if="canDashboard">
+      <el-col :xs="24" :lg="16">
+        <el-card shadow="never" class="overview-card quick-card">
+          <div class="overview-card__head">
+            <span class="overview-card__title">
+              <IconLayoutGridFilled class="overview-card__title-icon" aria-hidden="true" />
+              常用功能
+            </span>
+          </div>
+          <div class="quick-grid">
+            <button
+              v-for="action in quickActions"
+              :key="action.label"
+              type="button"
+              class="quick-action"
+              :class="`is-${action.tone}`"
+              :disabled="!canUseQuickAction(action)"
+              @click="openQuickAction(action)"
+            >
+              <span
+                v-if="!canUseQuickAction(action)"
+                class="quick-action__denied"
+                aria-hidden="true"
+              ></span>
+              <span class="quick-action__icon">
+                <component :is="action.icon" :size="32" :stroke-width="2.1" aria-hidden="true" />
+              </span>
+              <span class="quick-action__label">{{ action.label }}</span>
+            </button>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :lg="8">
+        <el-card v-loading="riskLoading" shadow="never" class="overview-card risk-card">
+          <div class="overview-card__head">
+            <span class="overview-card__title">
+              <IconChartPieFilled class="overview-card__title-icon" aria-hidden="true" />
+              交付风险分布
+            </span>
+            <el-select
+              v-model="riskDays"
+              class="risk-period"
+              size="small"
+              aria-label="交付风险统计周期"
+              @change="loadRisk"
+            >
+              <el-option v-for="item in riskDayOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </div>
+
+          <div class="risk-content">
+            <div class="risk-chart-wrap">
+              <AppChart :option="riskChartOption" height="160px" />
+              <div class="risk-chart-center" aria-hidden="true">
+                <strong>{{ formatCount(deliveryRisk.total) }}</strong>
+                <span>进行中订单</span>
+              </div>
+            </div>
+            <div class="risk-legend" aria-label="交付风险分类明细">
+              <div v-for="item in riskItems" :key="item.key" class="risk-legend__row">
+                <span class="risk-legend__dot" :style="{ backgroundColor: item.color }"></span>
+                <span class="risk-legend__label">{{ item.label }}</span>
+                <strong>{{ formatCount(item.metric.count) }}</strong>
+                <span class="risk-legend__rate">{{ formatPercent(item.metric.rate) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="risk-footer">
+            <div v-for="item in riskItems" :key="item.key" class="risk-metric" :class="`is-${item.key}`">
+              <span class="risk-metric__icon">
+                <component :is="item.icon" :size="15" :stroke-width="2.25" aria-hidden="true" />
+              </span>
+              <div class="risk-metric__body">
+                <div class="risk-metric__value">
+                  <strong>{{ formatCount(item.metric.count) }}</strong>
+                  <span :class="trendClass(item.key, item.metric.changeRate)">
+                    <component :is="trendIcon(item.metric.changeRate)" :size="10" :stroke-width="3" aria-hidden="true" />
+                    {{ formatTrend(item.metric.changeRate) }}
+                  </span>
+                </div>
+                <div class="risk-metric__label">
+                  <span>{{ item.shortLabel }}</span>
+                  <small>较上期</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-row :gutter="16" class="list-row" v-if="canDashboard">
       <!-- 左：逾期未发货 / 临近交期 合并成一张页签卡。
@@ -381,17 +474,45 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   Tickets, Tools, Van, Warning, Clock, CircleCheck, Switch, Calendar, DArrowLeft, Bell,
   Sunrise, Sunny, Moon, MoonNight, CoffeeCup,
 } from '@element-plus/icons-vue';
-import { getDashboardSummary, type DashboardSummary } from '@/api/dashboard';
+import {
+  IconAlertCircle,
+  IconAdjustments,
+  IconArrowDown,
+  IconArrowUp,
+  IconBellRinging,
+  IconChartBar,
+  IconChartPieFilled,
+  IconCircleCheck,
+  IconBuildingWarehouse,
+  IconClipboardText,
+  IconClock,
+  IconExternalLink,
+  IconHome,
+  IconLayoutGridFilled,
+  IconMinus,
+  IconNotes,
+  IconPackages,
+  IconSettings,
+  IconUpload,
+  IconUserCog,
+} from '@tabler/icons-vue';
+import type { EChartsOption } from 'echarts';
+import {
+  getDashboardSummary,
+  getDeliveryRisk,
+  type DashboardSummary,
+  type DeliveryRiskSummary,
+} from '@/api/dashboard';
 import { useUserStore } from '@/stores/user';
 import { useAnnouncementStore } from '@/stores/announcement';
-import { DIMENSION_UNIT, sideLabel } from '@/constants/dict';
+import { DIMENSION_UNIT, FINISHED_BIZ_TYPE, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useAutoScroll } from '@/composables/useAutoScroll';
 import { useDimensionView } from '@/composables/useDimensionView';
@@ -400,6 +521,7 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { getCalendarBrief } from '@/utils/calendar-info';
 import { welcomeTip, type TipData } from './welcome-tips';
 import AppStatCard from '@/components/AppStatCard.vue';
+import AppChart from '@/components/AppChart.vue';
 import SevenSegNumber from '@/components/SevenSegNumber.vue';
 import WelcomeRailArt from './WelcomeRailArt.vue';
 import WelcomeFireworks from './WelcomeFireworks.vue';
@@ -414,6 +536,132 @@ const announcementStore = useAnnouncementStore();
 const { homeOwedScrollSpeed, homeOutsourceScrollSpeed } = useFeatureFlags();
 const announcementBadge = computed(() => announcementStore.unreadCount > 99 ? '99+' : announcementStore.unreadCount);
 const loading = ref(false);
+
+type QuickTone = 'green' | 'blue' | 'orange' | 'violet' | 'red';
+interface QuickAction {
+  label: string;
+  icon: Component;
+  tone: QuickTone;
+  path: string;
+  query?: Record<string, string>;
+  permissions: string[];
+}
+
+/** 2×6 常用入口；无权限保留置灰，符合全局按钮权限约定。 */
+const quickActions: QuickAction[] = [
+  { label: '订单管理', icon: IconNotes, tone: 'green', path: '/order', permissions: ['order'] },
+  { label: '外发登记', icon: IconExternalLink, tone: 'blue', path: '/outsource/form', permissions: ['outsource', 'outsource:create'] },
+  { label: '装配批次', icon: IconSettings, tone: 'orange', path: '/assembly', permissions: ['assembly'] },
+  {
+    label: '生产入库', icon: IconHome, tone: 'violet', path: '/finished-stock/form',
+    query: { bizType: FINISHED_BIZ_TYPE.INBOUND }, permissions: ['finished-stock', 'finished-stock:create'],
+  },
+  {
+    label: '销售出库', icon: IconUpload, tone: 'red', path: '/finished-stock/form',
+    query: { bizType: FINISHED_BIZ_TYPE.SALE_OUTBOUND }, permissions: ['finished-stock', 'finished-stock:create'],
+  },
+  { label: '订单台账', icon: IconClipboardText, tone: 'blue', path: '/ledger', permissions: ['ledger'] },
+  { label: '产品汇总', icon: IconChartBar, tone: 'green', path: '/analysis/product-summary', permissions: ['product-summary'] },
+  { label: '呆滞品', icon: IconPackages, tone: 'violet', path: '/dull-stock', permissions: ['dull-stock'] },
+  { label: '成品库存', icon: IconBuildingWarehouse, tone: 'orange', path: '/stock-balance', permissions: ['stock-balance'] },
+  { label: '用户管理', icon: IconUserCog, tone: 'blue', path: '/system/user', permissions: ['system:user'] },
+  { label: '通知公告', icon: IconBellRinging, tone: 'red', path: '/system/announcement', permissions: ['system:announcement'] },
+  { label: '系统配置', icon: IconAdjustments, tone: 'green', path: '/system/config', permissions: ['system:config'] },
+];
+
+function canUseQuickAction(action: QuickAction): boolean {
+  return action.permissions.every((code) => userStore.hasPermission(code));
+}
+
+function openQuickAction(action: QuickAction) {
+  if (!canUseQuickAction(action)) return;
+  router.push({ path: action.path, query: action.query });
+}
+
+type RiskDays = 30 | 60 | 90;
+type RiskKey = 'overdue' | 'upcoming' | 'normal';
+const riskDays = ref<RiskDays>(30);
+const riskDayOptions: Array<{ label: string; value: RiskDays }> = [
+  { label: '近30天', value: 30 },
+  { label: '近60天', value: 60 },
+  { label: '近90天', value: 90 },
+];
+const riskLoading = ref(false);
+const deliveryRisk = ref<DeliveryRiskSummary>({
+  days: 30,
+  total: 0,
+  overdue: { count: 0, rate: 0, changeRate: 0 },
+  upcoming: { count: 0, rate: 0, changeRate: 0 },
+  normal: { count: 0, rate: 0, changeRate: 0 },
+});
+const riskItems = computed(() => [
+  {
+    key: 'overdue' as const, label: '逾期未发货', shortLabel: '逾期未发货', color: '#ff5a60',
+    icon: IconAlertCircle, metric: deliveryRisk.value.overdue,
+  },
+  {
+    key: 'upcoming' as const, label: `临近交期（${summary.value.upcomingDays}天）`,
+    shortLabel: `临近交期（${summary.value.upcomingDays}天）`,
+    color: '#ff9f2f', icon: IconClock, metric: deliveryRisk.value.upcoming,
+  },
+  {
+    key: 'normal' as const, label: '正常推进', shortLabel: '正常推进', color: '#16b88f', chartColor: '#43cdb0',
+    icon: IconCircleCheck, metric: deliveryRisk.value.normal,
+  },
+]);
+const riskChartOption = computed<EChartsOption>(() => {
+  const values = riskItems.value.map((item) => ({
+    value: item.metric.count,
+    name: item.label,
+    itemStyle: { color: 'chartColor' in item ? item.chartColor : item.color },
+  }));
+  const hasData = deliveryRisk.value.total > 0;
+  return {
+    animationDuration: 500,
+    tooltip: hasData
+      ? { trigger: 'item', formatter: '{b}<br/>{c} 个订单（{d}%）' }
+      : { show: false },
+    series: [{
+      type: 'pie',
+      radius: ['52.5%', '83%'],
+      center: ['50%', '52%'],
+      startAngle: 90,
+      clockwise: true,
+      silent: !hasData,
+      avoidLabelOverlap: false,
+      label: { show: false },
+      labelLine: { show: false },
+      itemStyle: { borderColor: '#fff', borderWidth: hasData ? 1.5 : 0 },
+      data: hasData ? values : [{ value: 1, name: '暂无数据', itemStyle: { color: '#edf1f5' } }],
+    }],
+  };
+});
+
+const countFormatter = new Intl.NumberFormat('zh-CN');
+function formatCount(value: number): string { return countFormatter.format(value); }
+function formatPercent(value: number): string { return `${value.toFixed(1)}%`; }
+function formatTrend(value: number): string { return `${Math.abs(value).toFixed(1)}%`; }
+function trendIcon(value: number): Component {
+  return value > 0 ? IconArrowUp : value < 0 ? IconArrowDown : IconMinus;
+}
+function trendClass(key: RiskKey, value: number): string {
+  if (value === 0) return 'is-neutral';
+  const favorable = key === 'normal' ? value > 0 : value < 0;
+  return favorable ? 'is-good' : 'is-bad';
+}
+
+let riskRequestSeq = 0;
+async function loadRisk() {
+  if (!canDashboard.value) return;
+  const seq = ++riskRequestSeq;
+  riskLoading.value = true;
+  try {
+    const result = await getDeliveryRisk(riskDays.value);
+    if (seq === riskRequestSeq) deliveryRisk.value = result;
+  } finally {
+    if (seq === riskRequestSeq) riskLoading.value = false;
+  }
+}
 
 /**
  * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
@@ -708,7 +956,8 @@ async function load() {
   if (!canDashboard.value) return; // 无权限：不请求，避免整页 403 提示
   loading.value = true;
   try {
-    summary.value = await getDashboardSummary();
+    const [dashboard] = await Promise.all([getDashboardSummary(), loadRisk()]);
+    summary.value = dashboard;
     summaryLoaded.value = true;
     pickDefaultTab();
     // 刷新后行数变了，滚动位置要回到第一行
@@ -1171,6 +1420,421 @@ export default { name: 'HomeDashboard' };
   gap: 16px;
   flex-wrap: wrap;
   margin: 0;
+}
+
+/* 中间双卡：左侧 2×6 快捷入口占 2/3，右侧圆环风险分布占 1/3。 */
+.overview-row {
+  margin-bottom: 0;
+  row-gap: var(--hb-page-padding);
+
+  > :deep(.el-col) {
+    display: flex;
+  }
+}
+
+.overview-card {
+  display: flex;
+  width: 100%;
+  height: 268px;
+  flex-direction: column;
+  border-color: #e5eaf1;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 3%);
+
+  :deep(.el-card__body) {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 14px 10px;
+    box-sizing: border-box;
+  }
+
+  &__head {
+    display: flex;
+    min-height: 24px;
+    flex: 0 0 24px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transform: translateY(2px);
+    color: #101a33;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1;
+
+    &-icon {
+      display: block;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      color: var(--el-color-primary);
+    }
+  }
+}
+
+.quick-card :deep(.el-card__body) {
+  padding-right: 16px;
+  padding-left: 16px;
+}
+
+.quick-grid {
+  display: grid;
+  min-height: 0;
+  height: 186px;
+  flex: 0 0 186px;
+  margin-top: 24px;
+  grid-template-columns: repeat(6, 85px);
+  grid-template-rows: repeat(2, 85px);
+  justify-content: space-between;
+  column-gap: 12px;
+  row-gap: 16px;
+}
+
+.quick-action {
+  --quick-color: var(--el-color-primary);
+  --quick-bg: var(--el-color-primary-light-9);
+  position: relative;
+  display: flex;
+  width: 85px;
+  height: 85px;
+  min-width: 0;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--quick-bg);
+  color: #14203a;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--quick-color) 24%, transparent);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--quick-color) 12%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--quick-color);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+
+  &__icon {
+    display: flex;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    color: var(--quick-color);
+
+    svg {
+      display: block;
+      width: 32px !important;
+      height: 32px !important;
+      aspect-ratio: 1;
+      flex: none;
+    }
+  }
+
+  &__denied {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f04444;
+    border-radius: 50%;
+    background: #fff;
+    box-sizing: border-box;
+    box-shadow: 0 1px 3px rgb(240 68 68 / 18%);
+
+    &::after {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 2px;
+      border-radius: 1px;
+      background: #f04444;
+      content: '';
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  &__label {
+    overflow: hidden;
+    max-width: 100%;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &.is-green { --quick-color: #09ad83; --quick-bg: #eaf8f4; }
+  &.is-blue { --quick-color: #1877ed; --quick-bg: #edf5ff; }
+  &.is-orange { --quick-color: #ff8a0a; --quick-bg: #fff5e9; }
+  &.is-violet { --quick-color: #6552ea; --quick-bg: #f2f0ff; }
+  &.is-red { --quick-color: #ff515b; --quick-bg: #fff0f1; }
+}
+
+.risk-period {
+  width: 108px;
+  transform: translateY(5px);
+
+  :deep(.el-select__wrapper) {
+    min-height: 30px;
+    padding: 2px 9px;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px #dfe6ef inset;
+    font-size: 12px;
+
+    .el-select__suffix { color: #53617a; }
+  }
+}
+
+.risk-card :deep(.el-card__body) {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.risk-content {
+  display: grid;
+  height: 160px;
+  margin-top: 3px;
+  grid-template-columns: minmax(160px, 0.95fr) minmax(220px, 1.05fr);
+  align-items: center;
+  gap: 2px;
+}
+
+.risk-chart-wrap {
+  position: relative;
+  min-width: 0;
+  height: 160px;
+  transform: translateX(-3px);
+}
+
+.risk-chart-center {
+  position: absolute;
+  inset: 52% auto auto 50%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  line-height: 1.1;
+
+  strong {
+    color: #18233d;
+    font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 21px;
+  }
+
+  span {
+    margin-top: 4px;
+    color: #273550;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+.risk-legend {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 22px;
+  padding-right: 2px;
+
+  &__row {
+    display: grid;
+    grid-template-columns: 9px minmax(108px, 1fr) 42px 44px;
+    align-items: center;
+    gap: 7px;
+    color: #263550;
+    font-size: 12px;
+    line-height: 17px;
+  }
+
+  &__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+  }
+
+  &__label { white-space: nowrap; }
+  strong {
+    color: #17233f;
+    font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+  }
+  &__rate {
+    color: #7d8ba3;
+    font-size: 12px;
+    text-align: right;
+  }
+}
+
+.risk-footer {
+  display: grid;
+  height: 55px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid #e8edf3;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  box-sizing: border-box;
+  transform: translateY(1px);
+}
+
+.risk-metric {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border-right: 1px solid #e8edf3;
+
+  &:last-child { border-right: 0; }
+
+  &__icon {
+    display: flex;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+
+    svg {
+      display: block;
+      width: 15px;
+      height: 15px;
+      aspect-ratio: 1;
+      flex: none;
+    }
+  }
+
+  &__body { min-width: 0; flex: 1; }
+  &__value,
+  &__label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+  }
+  &__value {
+    strong {
+      font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      line-height: 17px;
+    }
+    span {
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+      font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 14px;
+
+      svg {
+        width: 10px;
+        height: 10px;
+        margin-right: 1px;
+        flex: none;
+      }
+    }
+  }
+  &__label {
+    margin-top: 1px;
+    color: #6f7e96;
+    font-size: 10px;
+    line-height: 13px;
+    white-space: nowrap;
+    small { font-size: 10px; }
+  }
+
+  &.is-overdue {
+    .risk-metric__icon { background: #fff0f1; color: #ff5a60; }
+    .risk-metric__value strong { color: #ff5a60; }
+  }
+  &.is-upcoming {
+    .risk-metric__icon { background: #fff5e9; color: #ff9f2f; }
+    .risk-metric__value strong { color: #f58a14; }
+  }
+  &.is-normal {
+    .risk-metric__icon { background: #eaf8f4; color: #16b88f; }
+    .risk-metric__value strong { color: #12a982; }
+  }
+}
+
+.is-good { color: #12a982; }
+.is-bad { color: #ff515b; }
+.is-neutral { color: var(--el-text-color-secondary); }
+
+@media (max-width: 1360px) and (min-width: 1200px) {
+  .risk-content { grid-template-columns: 128px minmax(0, 1fr); }
+  .risk-chart-wrap { transform: translateX(-5px); }
+  .risk-legend { gap: 18px; }
+  .risk-legend__row { grid-template-columns: 8px minmax(0, 1fr) 30px 36px; gap: 4px; }
+  .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
+  .risk-metric { padding: 0 5px; gap: 5px; }
+  .risk-metric__icon { width: 26px; height: 26px; flex-basis: 26px; }
+  .risk-metric__label small { display: none; }
+}
+
+@media (min-width: 1361px) {
+  .risk-content { grid-template-columns: 145px minmax(0, 1fr); }
+  .risk-legend { gap: 20px; }
+  .risk-legend__row { grid-template-columns: 9px minmax(0, 1fr) 34px 40px; gap: 5px; }
+  .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
+  .risk-metric { padding: 0 6px; gap: 5px; }
+  .risk-metric__icon { width: 26px; height: 26px; flex-basis: 26px; }
+  .risk-metric__label small { display: none; }
+}
+
+@media (max-width: 768px) {
+  .overview-card { height: auto; min-height: 286px; }
+  .quick-card :deep(.el-card__body) { height: auto; }
+  .quick-grid { grid-template-columns: repeat(2, 92px); grid-template-rows: repeat(6, 92px); height: auto; justify-content: space-around; }
+  .quick-action { width: 92px; height: 92px; }
+  .quick-card { min-height: 704px; }
+  .risk-card { min-height: 464px; }
+  .risk-card :deep(.el-card__body) { height: auto; }
+  .risk-content {
+    height: auto;
+    grid-template-columns: 1fr;
+  }
+  .risk-legend { padding: 0 12px 10px; }
+  .risk-footer { height: auto; padding-top: 10px; grid-template-columns: 1fr; }
+  .risk-metric { padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--el-border-color-lighter); }
+  .risk-metric:last-child { border-bottom: 0; }
 }
 /* 「规格」列表头即单位开关：保持表头原样式，只加切换图标与悬停反馈 */
 .dim-toggle {

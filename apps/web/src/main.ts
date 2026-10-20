@@ -16,6 +16,8 @@ import AuditInfo from './components/AuditInfo.vue';
 import HintTip from './components/HintTip.vue';
 // 统计卡数字回退字体（无本机 Bahnschrift 时仍能显示相近的轻字宽无衬线）
 import '@fontsource/barlow-semi-condensed/300.css';
+import '@fontsource/barlow-semi-condensed/600.css';
+import '@fontsource/barlow-semi-condensed/700.css';
 import './styles/index.scss';
 import './styles/responsive.scss';
 import { applyCachedTitle } from './utils/document-meta';

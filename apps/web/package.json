@@ -16,6 +16,7 @@
     "@fontsource/orbitron": "^5.3.0",
     "@hb-oms/shared": "workspace:*",
     "@kjgl77/datav-vue3": "^1.7.4",
+    "@tabler/icons-vue": "^3.49.0",
     "@wangeditor/editor": "^5.1.23",
     "@wangeditor/editor-for-vue": "^5.1.12",
     "axios": "^1.7.2",

@@ -239,6 +239,14 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="14">
           <el-col :span="12">
+            <el-form-item label="建档日期" prop="filingDate">
+              <el-date-picker
+                v-model="form.filingDate" type="date" value-format="YYYY-MM-DD"
+                placeholder="请选择建档日期" style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="产品代码" prop="itemNo">
               <el-input v-model="form.itemNo" placeholder="如 53#" />
             </el-form-item>
@@ -318,14 +326,6 @@
                 :disabled="hasFlow"
                 @change="(v: any) => onUnitCheck(o.value, v)"
               >{{ o.label }}</el-checkbox>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="建档日期" prop="filingDate">
-              <el-date-picker
-                v-model="form.filingDate" type="date" value-format="YYYY-MM-DD"
-                placeholder="请选择建档日期" style="width: 100%"
-              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
