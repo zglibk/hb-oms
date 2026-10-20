@@ -52,6 +52,8 @@ export interface PartGroupOption {
   customerName: string | null;
   productionNo: string | null;
   productModel: string | null;
+  /** 订单产品类型组合串（如 standard,self_lock） */
+  productType: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
   surfaceType: string;
@@ -78,6 +80,8 @@ export interface PartGroupOption {
 export interface PartGroupFilterOptions {
   customerNames: string[];
   productModels: string[];
+  /** 单值产品类型；组合类型拆开去重，筛选时按包含匹配 */
+  productTypes: string[];
   surfaceTypes: string[];
 }
 
@@ -135,6 +139,7 @@ export const getPartGroupOptions = (params: {
   customerName?: string;
   productionNo?: string;
   productModel?: string;
+  productType?: string;
   surfaceType?: string;
   /** 隐藏已回齐（累计回厂 ≥ 组支数）的部件组 */
   hideReturned?: boolean;
@@ -150,6 +155,7 @@ export const getPartGroupOptions = (params: {
 export const getPartGroupFilterOptions = (params: {
   customerName?: string;
   productModel?: string;
+  productType?: string;
   surfaceType?: string;
   hideReturned?: boolean;
   onlyReturned?: boolean;

@@ -47,7 +47,7 @@ export class OutsourceController {
     return this.service.findPartGroupOptions(query);
   }
 
-  /** 选择器下拉条件：按当前待回厂 / 已回齐口径从全量记录中去重，不受列表条数上限影响 */
+  /** 选择器级联条件：含组合产品类型拆分，按当前待回厂 / 已回齐口径从全量记录中去重 */
   @Get('part-group-filter-options')
   @RequirePermissions('outsource')
   async partGroupFilterOptions(@Query() query: QueryPartGroupOptionDto) {

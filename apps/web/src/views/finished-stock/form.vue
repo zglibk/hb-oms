@@ -172,6 +172,22 @@
             placeholder="全部"
           />
         </el-form-item>
+        <el-form-item label="产品类型">
+          <el-select
+            v-model="pickerQuery.productType"
+            clearable
+            filterable
+            :loading="pickerLoading"
+            placeholder="全部"
+          >
+            <el-option
+              v-for="value in pickerFilterOptions.productTypes"
+              :key="value"
+              :label="productTypeLabel(value)"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="表面处理">
           <el-select
             v-model="pickerQuery.surfaceType"
@@ -291,6 +307,7 @@ import {
   labelOf,
   tagTypeOf,
   sideLabel,
+  parseProductTypes,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -334,6 +351,7 @@ interface ItemRow {
 }
 
 interface PickerRow extends ItemRow {
+  productType: string | null;
   qtyPcs: number;
   searchText: string;
 }
@@ -352,11 +370,17 @@ loadDict('assembly_workshop').then((rows: any[]) => {
   workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
-/** 表面处理字典：明细与选货表都要出中文（英文码等于没显示）；取不到回原值 */
+/** 产品类型 / 表面处理字典：筛选项和明细都要显示中文；取不到时回原值 */
+const productTypeDict = ref<Array<{ label: string; value: string }>>([]);
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
-loadDict('surface_type').then((rows: any[]) => {
-  surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+Promise.all([loadDict('product_type'), loadDict('surface_type')]).then(([pt, sf]) => {
+  productTypeDict.value = pt.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
+  surfaceDict.value = sf.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
 });
+function productTypeLabel(v: string | null | undefined): string {
+  if (!v) return '—';
+  return productTypeDict.value.find((o) => o.value === v)?.label ?? v;
+}
 function surfaceLabel(v: string | null | undefined): string {
   if (!v) return '—';
   return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
@@ -476,6 +500,7 @@ interface PickerQuery {
   customerName: string | undefined;
   productionNo: string;
   productModel: string | undefined;
+  productType: string | undefined;
   surfaceType: string | undefined;
   color: string | undefined;
   keyword: string;
@@ -485,6 +510,7 @@ const pickerQuery = reactive<PickerQuery>({
   customerName: '',
   productionNo: '',
   productModel: '',
+  productType: '',
   surfaceType: '',
   color: '',
   keyword: '',
@@ -495,6 +521,7 @@ const appliedPickerQuery = reactive<PickerQuery>({
   customerName: '',
   productionNo: '',
   productModel: '',
+  productType: '',
   surfaceType: '',
   color: '',
   keyword: '',
@@ -509,16 +536,32 @@ const pickerFilterOptions = computed<StockGroupFilterOptions>(() => {
   const modelRows = customerRows.filter((row) =>
     pickerTextEquals(row.productModel, pickerQuery.productModel),
   );
-  const surfaceRows = modelRows.filter((row) =>
+  const productTypeRows = modelRows.filter((row) =>
+    pickerProductTypeIncludes(row.productType, pickerQuery.productType),
+  );
+  const surfaceRows = productTypeRows.filter((row) =>
     pickerTextEquals(row.surfaceType, pickerQuery.surfaceType),
   );
   return {
     customerNames: distinctPickerValues(all, (row) => row.customerName),
     productModels: distinctPickerValues(customerRows, (row) => row.productModel),
-    surfaceTypes: distinctPickerValues(modelRows, (row) => row.surfaceType),
+    productTypes: distinctProductTypes(modelRows),
+    surfaceTypes: distinctPickerValues(productTypeRows, (row) => row.surfaceType),
     colors: distinctPickerValues(surfaceRows, (row) => row.color),
   };
 });
+function pickerProductTypeIncludes(combined: string | null | undefined, selected: string | undefined): boolean {
+  if (!selected) return true;
+  return parseProductTypes(combined).includes(selected);
+}
+function distinctProductTypes(rows: PickerRow[]): string[] {
+  const values = new Set(rows.flatMap((row) => parseProductTypes(row.productType)));
+  const order = new Map(productTypeDict.value.map((option, index) => [option.value, index]));
+  return [...values].sort((a, b) => {
+    const orderDiff = (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER);
+    return orderDiff || productTypeLabel(a).localeCompare(productTypeLabel(b), 'zh-CN');
+  });
+}
 const productModelSelectOptions = computed(() =>
   pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
 );
@@ -527,6 +570,7 @@ const pickerRows = computed(() => pickerSourceRows.value.filter((row) => (
   && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
   && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
   && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerProductTypeIncludes(row.productType, appliedPickerQuery.productType)
   && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
   && (!colorEnabled.value || pickerTextEquals(row.color, appliedPickerQuery.color))
   && pickerTextIncludes(row.searchText, appliedPickerQuery.keyword)
@@ -542,7 +586,7 @@ const pickerTableRef = ref<any>();
 let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 下拉条件按「客户 → 产品型号 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
+// 下拉条件按「客户 → 产品型号 → 产品类型 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
 // 下级，避免下级残留条件继续锁住结果集；抑制标记确保一次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
@@ -550,6 +594,7 @@ watch(
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
     pickerQuery.productModel = '';
+    pickerQuery.productType = '';
     pickerQuery.surfaceType = '';
     pickerQuery.color = '';
     suppressPickerAutoSearch = false;
@@ -559,6 +604,19 @@ watch(
 );
 watch(
   () => pickerQuery.productModel,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.productType = '';
+    pickerQuery.surfaceType = '';
+    pickerQuery.color = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.productType,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
@@ -598,6 +656,7 @@ function loadPickerData() {
     customerName: pickerQuery.customerName?.trim() ?? '',
     productionNo: pickerQuery.productionNo?.trim() ?? '',
     productModel: pickerQuery.productModel?.trim() ?? '',
+    productType: pickerQuery.productType ?? '',
     surfaceType: pickerQuery.surfaceType ?? '',
     color: colorEnabled.value ? pickerQuery.color ?? '' : '',
     keyword: pickerQuery.keyword?.trim() ?? '',
@@ -637,6 +696,7 @@ async function initializePicker() {
         customerName: o.customerName,
         productionNo: o.productionNo,
         productModel: o.productModel,
+        productType: o.productType,
         dimensionText: o.dimensionText,
         surfaceType: o.surfaceType,
         color: o.color,
@@ -654,6 +714,7 @@ async function initializePicker() {
           o.itemNo,
           o.productName,
           o.productModel,
+          o.productType,
           o.dimensionText,
           o.surfaceType,
           o.color,
@@ -674,6 +735,7 @@ function resetPickerQuery() {
     customerName: '',
     productionNo: '',
     productModel: '',
+    productType: '',
     surfaceType: '',
     color: '',
     keyword: '',

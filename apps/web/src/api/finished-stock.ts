@@ -129,6 +129,8 @@ export interface StockGroupOption {
 export interface StockGroupFilterOptions {
   customerNames: string[];
   productModels: string[];
+  /** 单值产品类型；组合类型拆开去重，筛选时按包含匹配 */
+  productTypes: string[];
   surfaceTypes: string[];
   colors: string[];
 }
@@ -242,6 +244,8 @@ export const getStockGroupOptions = (params: {
   customerName?: string;
   productionNo?: string;
   productModel?: string;
+  /** 单值包含匹配：如 self_lock 可命中 standard,self_lock */
+  productType?: string;
   surfaceType?: string;
   color?: string;
   bizType?: string;
@@ -255,6 +259,7 @@ export const getStockGroupOptions = (params: {
 export const getStockGroupFilterOptions = (params: {
   customerName?: string;
   productModel?: string;
+  productType?: string;
   surfaceType?: string;
   color?: string;
   onlyOpening?: boolean;

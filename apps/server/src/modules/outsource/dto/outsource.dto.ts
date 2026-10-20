@@ -162,6 +162,9 @@ export class QueryPartGroupOptionDto extends QueryPartGroupVisibilityDto {
 
   @IsOptional() @IsString() @MaxLength(128) productModel?: string;
 
+  /** 产品类型按单值包含匹配，可命中多选组合串 */
+  @IsOptional() @IsString() @MaxLength(32) productType?: string;
+
   /** 表面处理过滤（可选；不传则列出全部需外发的组） */
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 

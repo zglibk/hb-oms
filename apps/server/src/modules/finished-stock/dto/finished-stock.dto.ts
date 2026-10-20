@@ -192,6 +192,9 @@ export class QueryStockGroupOptionDto {
 
   @IsOptional() @IsString() @MaxLength(128) productModel?: string;
 
+  /** 产品类型按单值包含匹配，可命中多选组合串 */
+  @IsOptional() @IsString() @MaxLength(32) productType?: string;
+
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;
 
   @IsOptional() @IsString() @MaxLength(64) color?: string;

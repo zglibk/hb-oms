@@ -81,6 +81,7 @@ function directionOf(bizType: string): number {
 export interface StockGroupFilterOptions {
   customerNames: string[];
   productModels: string[];
+  productTypes: string[];
   surfaceTypes: string[];
   colors: string[];
 }
@@ -584,7 +585,7 @@ export class FinishedStockService {
   }
 
   /**
-   * 客户、产品型号、表面处理、颜色下拉项来自当前范围内的全部产品行，不能从最多
+   * 客户、产品型号、产品类型、表面处理、颜色下拉项来自当前范围内的全部产品行，不能从最多
    * 500 条的选择结果反推，否则较早订单中仍然有效的条件会从下拉框消失。
    */
   async findGroupFilterOptions(
@@ -594,13 +595,14 @@ export class FinishedStockService {
       onlyOpening: query.onlyOpening,
       customerName: query.customerName,
       productModel: query.productModel,
+      productType: query.productType,
       surfaceType: query.surfaceType,
       color: query.color,
     };
-    // 选项按「客户 → 产品型号 → 表面处理 → 颜色」单向级联，只受上级条件约束。
+    // 选项按「客户 → 产品型号 → 产品类型 → 表面处理 → 颜色」单向级联，只受上级条件约束。
     // 前端切换上级时会清空下级，因此下级旧值不能反过来压缩上级选项，否则会出现
     // 准备切换型号时只能看到当前表面处理/颜色所对应型号的假死现象。
-    const [customerRows, modelRows, surfaceRows, colorRows] = await Promise.all([
+    const [customerRows, modelRows, productTypeRows, surfaceRows, colorRows] = await Promise.all([
       this.loadGroupOptionCandidates({ onlyOpening: dropdownQuery.onlyOpening }),
       this.loadGroupOptionCandidates({
         onlyOpening: dropdownQuery.onlyOpening,
@@ -615,6 +617,13 @@ export class FinishedStockService {
         onlyOpening: dropdownQuery.onlyOpening,
         customerName: dropdownQuery.customerName,
         productModel: dropdownQuery.productModel,
+        productType: dropdownQuery.productType,
+      }),
+      this.loadGroupOptionCandidates({
+        onlyOpening: dropdownQuery.onlyOpening,
+        customerName: dropdownQuery.customerName,
+        productModel: dropdownQuery.productModel,
+        productType: dropdownQuery.productType,
         surfaceType: dropdownQuery.surfaceType,
       }),
     ]);
@@ -624,6 +633,9 @@ export class FinishedStockService {
     return {
       customerNames: distinct(customerRows.map((row) => row.customerName)),
       productModels: distinct(modelRows.map((row) => row.productModel)),
+      productTypes: distinct(productTypeRows.flatMap((row) =>
+        String(row.productType ?? '').split(',').map((value) => value.trim()).filter(Boolean),
+      )),
       surfaceTypes: distinct(surfaceRows.map((row) => row.surfaceType)),
       colors: distinct(colorRows.map((row) => row.color)),
     };
@@ -657,6 +669,11 @@ export class FinishedStockService {
     addLikeFilter('o.order_no', query.orderNo);
     addExactFilter('o.customer_name', query.customerName);
     addLikeFilter('o.production_no', query.productionNo);
+    const productType = query.productType?.trim();
+    if (productType) {
+      where += ' AND FIND_IN_SET(?, p.product_type) > 0';
+      params.push(productType);
+    }
     addExactFilter('p.surface_type', query.surfaceType);
     addExactFilter('p.color', query.color);
 

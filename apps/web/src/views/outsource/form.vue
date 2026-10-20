@@ -212,6 +212,22 @@
             placeholder="全部"
           />
         </el-form-item>
+        <el-form-item label="产品类型">
+          <el-select
+            v-model="pickerQuery.productType"
+            clearable
+            filterable
+            :loading="optionsLoading"
+            placeholder="全部"
+          >
+            <el-option
+              v-for="value in pickerFilterOptions.productTypes"
+              :key="value"
+              :label="productTypeLabel(value)"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="表面处理">
           <el-select v-model="pickerQuery.surfaceType" clearable :loading="optionsLoading" placeholder="全部">
             <el-option
@@ -315,7 +331,13 @@ import {
   type PartGroupOption,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
-import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight, sideLabel } from '@/constants/dict';
+import {
+  SURFACE_NONE,
+  UNIT_OPTIONS,
+  parseProductTypes,
+  qtyFromWeight,
+  sideLabel,
+} from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import {
@@ -374,10 +396,17 @@ const rules: FormRules = {
   backDate: [{ required: true, message: '请选择回厂日期', trigger: 'change' }],
 };
 
+/** 产品类型 / 表面处理字典：筛选项显示中文；取不到时回落原值。 */
+const productTypeDict = ref<Array<{ label: string; value: string }>>([]);
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
-loadDict('surface_type').then((rows: any[]) => {
-  surfaceDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
+Promise.all([loadDict('product_type'), loadDict('surface_type')]).then(([pt, sf]) => {
+  productTypeDict.value = pt.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
+  surfaceDict.value = sf.map((r: any) => ({ label: r.dictLabel, value: r.dictValue }));
 });
+function productTypeLabel(v: string | null | undefined): string {
+  if (!v) return '—';
+  return productTypeDict.value.find((o) => o.value === v)?.label ?? v;
+}
 const outsourceSurfaces = computed(() => surfaceDict.value.filter((o) => o.value !== SURFACE_NONE));
 
 /** 加工商下拉：基础数据里维护的启用供应商（接口只需登录，没有供应商菜单也能取） */
@@ -457,6 +486,7 @@ interface PickerQuery {
   customerName: string | undefined;
   productionNo: string;
   productModel: string | undefined;
+  productType: string | undefined;
   surfaceType: string | undefined;
   keyword: string;
 }
@@ -465,6 +495,7 @@ const pickerQuery = reactive<PickerQuery>({
   customerName: '',
   productionNo: '',
   productModel: '',
+  productType: '',
   surfaceType: '',
   keyword: '',
 });
@@ -474,6 +505,7 @@ const appliedPickerQuery = reactive<PickerQuery>({
   customerName: '',
   productionNo: '',
   productModel: '',
+  productType: '',
   surfaceType: '',
   keyword: '',
 });
@@ -500,12 +532,28 @@ const pickerFilterOptions = computed<PartGroupFilterOptions>(() => {
   const modelRows = customerRows.filter((row) =>
     pickerTextEquals(row.productModel, pickerQuery.productModel),
   );
+  const productTypeRows = modelRows.filter((row) =>
+    pickerProductTypeIncludes(row.productType, pickerQuery.productType),
+  );
   return {
     customerNames: distinctPickerValues(all, (row) => row.customerName),
     productModels: distinctPickerValues(customerRows, (row) => row.productModel),
-    surfaceTypes: distinctPickerValues(modelRows, (row) => row.surfaceType),
+    productTypes: distinctProductTypes(modelRows),
+    surfaceTypes: distinctPickerValues(productTypeRows, (row) => row.surfaceType),
   };
 });
+function pickerProductTypeIncludes(combined: string | null | undefined, selected: string | undefined): boolean {
+  if (!selected) return true;
+  return parseProductTypes(combined).includes(selected);
+}
+function distinctProductTypes(rows: PartGroupOption[]): string[] {
+  const values = new Set(rows.flatMap((row) => parseProductTypes(row.productType)));
+  const order = new Map(productTypeDict.value.map((option, index) => [option.value, index]));
+  return [...values].sort((a, b) => {
+    const orderDiff = (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER);
+    return orderDiff || productTypeLabel(a).localeCompare(productTypeLabel(b), 'zh-CN');
+  });
+}
 const productModelSelectOptions = computed(() =>
   pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
 );
@@ -514,6 +562,7 @@ const options = computed(() => visibleScope.value.filter((row) => (
   && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
   && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
   && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerProductTypeIncludes(row.productType, appliedPickerQuery.productType)
   && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
   && pickerTextIncludes(row.searchText, appliedPickerQuery.keyword)
 )));
@@ -526,7 +575,7 @@ const optionPageRows = computed(() => {
 let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 与成品出入库选择器保持一致，按「客户 → 产品型号 → 表面处理」逐级收窄；上级变化时
+// 与成品出入库选择器保持一致，按「客户 → 产品型号 → 产品类型 → 表面处理」逐级收窄；上级变化时
 // 清空其下级条件，避免不可见的残留条件锁住结果集。每次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
@@ -534,6 +583,7 @@ watch(
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
     pickerQuery.productModel = '';
+    pickerQuery.productType = '';
     pickerQuery.surfaceType = '';
     suppressPickerAutoSearch = false;
     void loadPickerData();
@@ -542,6 +592,18 @@ watch(
 );
 watch(
   () => pickerQuery.productModel,
+  () => {
+    if (suppressPickerAutoSearch || !pickerVisible.value) return;
+    suppressPickerAutoSearch = true;
+    pickerQuery.productType = '';
+    pickerQuery.surfaceType = '';
+    suppressPickerAutoSearch = false;
+    void loadPickerData();
+  },
+  { flush: 'sync' },
+);
+watch(
+  () => pickerQuery.productType,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
@@ -568,6 +630,7 @@ function loadPickerData() {
     customerName: pickerQuery.customerName?.trim() ?? '',
     productionNo: pickerQuery.productionNo?.trim() ?? '',
     productModel: pickerQuery.productModel?.trim() ?? '',
+    productType: pickerQuery.productType ?? '',
     surfaceType: pickerQuery.surfaceType ?? '',
     keyword: pickerQuery.keyword?.trim() ?? '',
   });
@@ -598,6 +661,7 @@ async function initializePicker() {
         row.customerName,
         row.productionNo,
         row.productModel,
+        row.productType,
         row.dimensionText,
         row.cycleCode,
         row.surfaceType,
@@ -620,6 +684,7 @@ function resetPickerQuery() {
     customerName: '',
     productionNo: '',
     productModel: '',
+    productType: '',
     surfaceType: '',
     keyword: '',
   });

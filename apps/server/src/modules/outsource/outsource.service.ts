@@ -34,6 +34,7 @@ export interface PartGroupOption {
   customerName: string | null;
   productionNo: string | null;
   productModel: string | null;
+  productType: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
   surfaceType: string;
@@ -65,6 +66,7 @@ export interface PartGroupOption {
 export interface PartGroupFilterOptions {
   customerNames: string[];
   productModels: string[];
+  productTypes: string[];
   surfaceTypes: string[];
 }
 
@@ -213,13 +215,13 @@ export class OutsourceService {
   }
 
   /**
-   * 客户、产品型号、表面处理下拉项：直接从当前可选记录全量去重，按上级条件
+   * 客户、产品型号、产品类型、表面处理下拉项：直接从当前可选记录全量去重，按上级条件
    * 单向收窄，不从最多 200 条的列表结果反推，避免旧记录中的选项缺失。
    */
   async findPartGroupFilterOptions(
     query: QueryPartGroupOptionDto,
   ): Promise<PartGroupFilterOptions> {
-    const buildRange = (level: 'customer' | 'productModel' | 'surfaceType') => {
+    const buildRange = (level: 'customer' | 'productModel' | 'productType' | 'surfaceType') => {
       const visibility = this.buildPartGroupVisibilityFilter(query);
       const params = visibility.params;
       let where = visibility.where;
@@ -232,7 +234,13 @@ export class OutsourceService {
       // 单向级联：当前字段只受它之前的上级条件约束。下级旧值不得反向限制上级选项，
       // 因为用户切换上级时前端会立即清空这些下级值。
       if (level !== 'customer') addExact('o.customer_name', query.customerName);
-      if (level === 'surfaceType') addExact('g.product_model', query.productModel);
+      if (level === 'productType' || level === 'surfaceType') {
+        addExact('g.product_model', query.productModel);
+      }
+      if (level === 'surfaceType' && query.productType?.trim()) {
+        where += ' AND FIND_IN_SET(?, p.product_type) > 0';
+        params.push(query.productType.trim());
+      }
       return {
         fromSql: `
           FROM t_order_part_group g
@@ -244,8 +252,9 @@ export class OutsourceService {
     };
     const customersRange = buildRange('customer');
     const modelsRange = buildRange('productModel');
+    const productTypesRange = buildRange('productType');
     const surfacesRange = buildRange('surfaceType');
-    const [customers, models, surfaces]: any[][] = await Promise.all([
+    const [customers, models, productTypes, surfaces]: any[][] = await Promise.all([
       this.dataSource.query(
         `SELECT DISTINCT o.customer_name AS value ${customersRange.fromSql}
           AND o.customer_name IS NOT NULL AND TRIM(o.customer_name) <> ''
@@ -259,17 +268,28 @@ export class OutsourceService {
         modelsRange.params,
       ),
       this.dataSource.query(
+        `SELECT DISTINCT p.product_type AS value ${productTypesRange.fromSql}
+          AND p.product_type IS NOT NULL AND TRIM(p.product_type) <> ''
+         ORDER BY p.product_type`,
+        productTypesRange.params,
+      ),
+      this.dataSource.query(
         `SELECT DISTINCT p.surface_type AS value ${surfacesRange.fromSql}
           AND p.surface_type IS NOT NULL AND TRIM(p.surface_type) <> ''
          ORDER BY p.surface_type`,
         surfacesRange.params,
       ),
     ]);
-    const valuesOf = (rows: any[]) => rows.map((row) => String(row.value));
+    const distinct = (values: Array<unknown>) =>
+      [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
     return {
-      customerNames: valuesOf(customers),
-      productModels: valuesOf(models),
-      surfaceTypes: valuesOf(surfaces),
+      customerNames: distinct(customers.map((row) => row.value)),
+      productModels: distinct(models.map((row) => row.value)),
+      productTypes: distinct(productTypes.flatMap((row) =>
+        String(row.value ?? '').split(',').map((value) => value.trim()).filter(Boolean),
+      )),
+      surfaceTypes: distinct(surfaces.map((row) => row.value)),
     };
   }
 
@@ -309,6 +329,11 @@ export class OutsourceService {
     addExactFilter('o.customer_name', query.customerName);
     addLikeFilter('o.production_no', query.productionNo);
     addExactFilter('g.product_model', query.productModel);
+    const productType = query.productType?.trim();
+    if (productType) {
+      where += ' AND FIND_IN_SET(?, p.product_type) > 0';
+      params.push(productType);
+    }
     if (query.surfaceType) {
       where += ' AND p.surface_type = ?';
       params.push(query.surfaceType);
@@ -448,6 +473,7 @@ export class OutsourceService {
           customerName: r.customerName ?? null,
           productionNo: r.productionNo ?? null,
           productModel: r.productModel ?? null,
+          productType: r.productType ?? null,
           dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
           cycleCode: r.cycleCode ?? null,
           surfaceType: r.surfaceType ?? SURFACE_NONE,
