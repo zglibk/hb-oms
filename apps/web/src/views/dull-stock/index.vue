@@ -118,6 +118,7 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="建档日期" width="105" align="center" prop="filingDate" />
         <el-table-column label="产品代码" width="100" align="center">
           <template #default="{ row }">
             {{ row.itemNo || '—' }}<audit-info mode="inline" :row="row" />
@@ -129,7 +130,6 @@
         <el-table-column label="生产单号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="建档日期" width="105" align="center" prop="filingDate" />
         <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
