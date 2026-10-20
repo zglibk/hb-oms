@@ -38,7 +38,7 @@ export class DullStock {
     type: 'varchar',
     length: 128,
     default: '',
-    comment: '客户名称（纯文本快照，不关联 t_customer；主数据改名不回写，§5.5）',
+    comment: '客户名称（可选来源快照；不明确可为空；不关联 t_customer，主数据改名不回写）',
   })
   customerName: string;
 
@@ -48,7 +48,7 @@ export class DullStock {
     type: 'varchar',
     length: 64,
     default: '',
-    comment: '生产单号（呆滞品来源，纯文本快照，不校验订单是否存在）',
+    comment: '生产单号（可选来源快照；不明确可为空；不校验订单是否存在）',
   })
   productionNo: string;
 
@@ -126,6 +126,13 @@ export class DullStock {
     comment: '数量单位：set套 piece支；本行四个数量列一律按本单位计，1套=2支；已有流水后不可改',
   })
   unit: string;
+
+  @Column({
+    name: 'filing_date',
+    type: 'date',
+    comment: '呆滞品建档日期（档案建立或纳入呆滞品台账的业务日期）',
+  })
+  filingDate: string;
 
   @Column({
     name: 'opening_qty',

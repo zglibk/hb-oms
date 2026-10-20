@@ -19,10 +19,11 @@
             <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="出入库月份">
+        <el-form-item label="出/入库日期">
           <el-date-picker
-            v-model="query.flowMonth" type="month" value-format="YYYY-MM" clearable
-            placeholder="全部月份" style="width: 140px" @change="onFlowMonthChange"
+            v-model="flowDateRange" type="daterange" value-format="YYYY-MM-DD" clearable
+            range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期"
+            style="width: 250px" @change="onFlowDateRangeChange"
           />
         </el-form-item>
         <el-form-item class="query-actions">
@@ -46,9 +47,10 @@
         </div>
         <span class="filter-summary">
           当前筛选 {{ summary.rows }} 行，结存合计 <b>{{ summary.totalBalancePcs }}</b> 支
-          <template v-if="query.flowMonth">
-            ，{{ query.flowMonth }} 入库 <b class="delta-in">{{ summary.monthlyInboundPcs }}</b> 支，
-            出库 <b class="delta-out">{{ summary.monthlyOutboundPcs }}</b> 支
+          <template v-if="hasFlowDateRange">
+            ，{{ query.flowDateFrom }} 至 {{ query.flowDateTo }} 入库
+            <b class="delta-in">{{ summary.periodInboundPcs }}</b> 支，
+            出库 <b class="delta-out">{{ summary.periodOutboundPcs }}</b> 支
           </template>
         </span>
       </div>
@@ -61,8 +63,10 @@
           <el-icon><InfoFilled /></el-icon>
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
           <b>结存数 = 期初数 + 入库数 − 出库数</b>，后两个数只能靠「登记出入库」产生，点行首箭头看流水。
+          建档日期只记录档案建立日期；顶部「出/入库日期」范围只按本页出入库流水的日期统计。
+          客户和生产单号均为选填，无法确认来源时可以留空。
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
-          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 入库数 − 出库数，后两个数只能靠「登记出入库」产生，点行首箭头看流水。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
+          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 入库数 − 出库数，后两个数只能靠「登记出入库」产生，点行首箭头看流水。建档日期只记录档案建立日期；顶部「出/入库日期」范围只按本页出入库流水的日期统计。客户和生产单号均为选填，无法确认来源时可以留空。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
         </hint-tip>
       </div>
 
@@ -77,7 +81,7 @@
               <table v-if="(flows[row.id] ?? []).length" class="expand-grid">
                 <thead>
                   <tr>
-                    <th>日期</th><th>方向</th><th>数量</th><th>变动后结存</th>
+                    <th>出/入库日期</th><th>方向</th><th>数量</th><th>变动后结存</th>
                     <th>原因</th><th>备注</th><th>操作人</th><th>操作</th>
                   </tr>
                 </thead>
@@ -125,6 +129,7 @@
         <el-table-column label="生产单号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
+        <el-table-column label="建档日期" width="105" align="center" prop="filingDate" />
         <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
@@ -168,27 +173,27 @@
             <span :class="row.outboundQty > 0 ? 'delta-out' : ''">{{ row.outboundQty }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="query.flowMonth" label="月入库数" width="90" align="center">
+        <el-table-column v-if="hasFlowDateRange" label="期间入库数" width="100" align="center">
           <template #header>
-            <el-tooltip :content="`${query.flowMonth} 月入库流水合计`" placement="top">
-              <span>月入库数</span>
+            <el-tooltip :content="`${query.flowDateFrom} 至 ${query.flowDateTo} 入库流水合计`" placement="top">
+              <span>期间入库数</span>
             </el-tooltip>
           </template>
           <template #default="{ row }">
-            <span :class="(row.monthlyInboundQty || 0) > 0 ? 'delta-in' : ''">
-              {{ row.monthlyInboundQty || 0 }}
+            <span :class="(row.periodInboundQty || 0) > 0 ? 'delta-in' : ''">
+              {{ row.periodInboundQty || 0 }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column v-if="query.flowMonth" label="月出库数" width="90" align="center">
+        <el-table-column v-if="hasFlowDateRange" label="期间出库数" width="100" align="center">
           <template #header>
-            <el-tooltip :content="`${query.flowMonth} 月出库流水合计`" placement="top">
-              <span>月出库数</span>
+            <el-tooltip :content="`${query.flowDateFrom} 至 ${query.flowDateTo} 出库流水合计`" placement="top">
+              <span>期间出库数</span>
             </el-tooltip>
           </template>
           <template #default="{ row }">
-            <span :class="(row.monthlyOutboundQty || 0) > 0 ? 'delta-out' : ''">
-              {{ row.monthlyOutboundQty || 0 }}
+            <span :class="(row.periodOutboundQty || 0) > 0 ? 'delta-out' : ''">
+              {{ row.periodOutboundQty || 0 }}
             </span>
           </template>
         </el-table-column>
@@ -239,19 +244,18 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <!-- 客户 / 生产单号至少填一项，两者互为条件，见 validateSource -->
-            <el-form-item label="客户" prop="customerName">
+            <el-form-item label="客户">
               <el-select
                 v-model="form.customerName" filterable allow-create default-first-option
-                clearable placeholder="可选择或直接输入" style="width: 100%"
+                clearable placeholder="选填，可选择或直接输入" style="width: 100%"
               >
                 <el-option v-for="c in customers" :key="c.id" :label="c.customerName" :value="c.customerName" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="生产单号" prop="productionNo">
-              <el-input v-model="form.productionNo" placeholder="与客户至少填一项" />
+            <el-form-item label="生产单号">
+              <el-input v-model="form.productionNo" placeholder="选填，填写原生产单号" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -317,6 +321,14 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="建档日期" prop="filingDate">
+              <el-date-picker
+                v-model="form.filingDate" type="date" value-format="YYYY-MM-DD"
+                placeholder="请选择建档日期" style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="期初数" prop="openingQty">
               <el-input-number v-model="form.openingQty" :min="0" :precision="0" :controls="false" style="width: 100%" />
             </el-form-item>
@@ -351,14 +363,14 @@
         type="info" :closable="false" show-icon class="mb12"
         :title="`${flowRow.itemNo}${flowRow.productModel ? ' / ' + flowRow.productModel : ''} — 当前结存 ${flowRow.balanceQty} ${unitLabel(flowRow.unit)}`"
       />
-      <el-form ref="flowFormRef" :model="flowForm" :rules="flowRules" label-width="90px" size="small">
+      <el-form ref="flowFormRef" :model="flowForm" :rules="flowRules" label-width="100px" size="small">
         <el-form-item label="方向" prop="direction">
           <el-radio-group v-model="flowForm.direction">
             <el-radio-button :value="STOCK_DIRECTION.IN">入库</el-radio-button>
             <el-radio-button :value="STOCK_DIRECTION.OUT">出库</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="日期" prop="flowDate">
+        <el-form-item label="出/入库日期" prop="flowDate">
           <el-date-picker v-model="flowForm.flowDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="数量" prop="quantity">
@@ -398,7 +410,7 @@
     <import-dialog
       v-model="importVisible"
       title="批量导入呆滞品"
-      tip="每一行都会新建一条呆滞品记录（本模块允许同产品代码多批，不会合并、不会覆盖）；整批校验通过才入库，任一行有问题会列出行号并整批回滚"
+      tip="模板中的客户、生产单号均可留空，建档日期必填；每一行都会新建一条呆滞品记录（本模块允许同产品代码多批，不会合并、不会覆盖）；整批校验通过才入库，任一行有问题会列出行号并整批回滚"
       confirm-text="即将导入文件「{n}」，每一行都会<b>新建</b>一条呆滞品记录。<br/>同一份文件重复导入会<b>重复建档</b>，请确认没有导过。"
       :download-template="downloadDullStockTemplate"
       :do-import="importDullStock"
@@ -450,6 +462,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
+import { formatBusinessDate } from '@/utils/date';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -464,7 +477,7 @@ import ColorTag from '@/components/ColorTag.vue';
  */
 const { dullStockColorEnabled: colorEnabled } = useFeatureFlags();
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => formatBusinessDate(new Date());
 const unitLabel = (unit: string) => labelOf(UNIT_OPTIONS, unit);
 
 /**
@@ -482,16 +495,19 @@ const loading = ref(false);
 const saving = ref(false);
 const list = ref<DullStockRow[]>([]);
 const total = ref(0);
-const summary = ref({ rows: 0, totalBalancePcs: 0, monthlyInboundPcs: 0, monthlyOutboundPcs: 0 });
+const summary = ref({ rows: 0, totalBalancePcs: 0, periodInboundPcs: 0, periodOutboundPcs: 0 });
+const flowDateRange = ref<[string, string] | null>(null);
 const query = reactive({
   page: 1,
   pageSize: 20,
   keyword: '',
   surfaceType: undefined as string | undefined,
   side: undefined as string | undefined,
-  flowMonth: undefined as string | undefined,
+  flowDateFrom: undefined as string | undefined,
+  flowDateTo: undefined as string | undefined,
   onlyInStock: true,
 });
+const hasFlowDateRange = computed(() => !!query.flowDateFrom && !!query.flowDateTo);
 
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('surface_type').then((rows: any[]) => {
@@ -525,9 +541,11 @@ function reload() {
   query.page = 1;
   load();
 }
-function onFlowMonthChange(value: string | null) {
-  // 月度流量应包含当月已经清空的档案；用户仍可随后重新勾选，与“有结存”条件叠加。
-  if (value) query.onlyInStock = false;
+function onFlowDateRangeChange(value: [string, string] | null) {
+  query.flowDateFrom = value?.[0] || undefined;
+  query.flowDateTo = value?.[1] || undefined;
+  // 期间流量应包含区间内已经清空的档案；用户仍可随后重新勾选，与“有结存”条件叠加。
+  if (value?.length === 2) query.onlyInStock = false;
   runKeywordSearch();
 }
 const {
@@ -539,12 +557,14 @@ const {
 /** 清空查询条件，恢复默认的“只看有结存”列表并返回第一页。 */
 function resetFilters() {
   cancelKeywordSearch();
+  flowDateRange.value = null;
   Object.assign(query, {
     page: 1,
     keyword: '',
     surfaceType: undefined,
     side: undefined,
-    flowMonth: undefined,
+    flowDateFrom: undefined,
+    flowDateTo: undefined,
     onlyInStock: true,
   });
   load();
@@ -621,6 +641,7 @@ const form = reactive({
   side: '' as string | undefined,
   // 默认「套」（2026-08-13 使用部门要求；车间盘点习惯按套报数）
   unit: 'set',
+  filingDate: today(),
   openingQty: 0,
   remark: '',
 });
@@ -633,43 +654,12 @@ function onUnitCheck(value: string, checked: unknown) {
   if (checked) form.unit = value;
 }
 
-/**
- * 客户 / 生产单号**至少填一项**。
- *
- * 呆滞品脱离了订单，这两项是日后认领这批货的仅有线索，两个都空的档案
- * 事后没人说得清是谁的货、从哪张单剩下的。二者互为条件，故两个字段各挂
- * 一条同样的校验，并在任一变动时联动重校，否则填了其中一个另一个的
- * 红字不会自己消。服务端另有一道同样的校验（前端拦的是手滑，API 直调拦不住）。
- */
-const validateSource = (_rule: unknown, _value: unknown, callback: (e?: Error) => void) => {
-  const filled = !!form.customerName?.trim() || !!form.productionNo?.trim();
-  callback(filled ? undefined : new Error('客户与生产单号至少填写一项'));
-};
-
 const rules: FormRules = {
   itemNo: [{ required: true, message: '请填写产品代码', trigger: 'blur' }],
-  customerName: [{ validator: validateSource, trigger: ['blur', 'change'] }],
-  productionNo: [{ validator: validateSource, trigger: ['blur', 'change'] }],
   unit: [{ required: true, message: '请选择单位', trigger: 'change' }],
+  filingDate: [{ required: true, message: '请选择建档日期', trigger: 'change' }],
   openingQty: [{ required: true, message: '请填写期初数', trigger: 'blur' }],
 };
-
-/**
- * openForm 赋值期间抑制联动重校。缺了它会打开弹窗就闪红字：
- * openForm 的字段赋值触发本 watch 时 formVisible 已翻真，validateField 的
- * 异步错误态与 nextTick 里的 clearValidate 存在微任务竞争，竞争结果取决于
- * async-validator 内部实现——不能赌，用标志位把这段窗口整个关掉。
- */
-let suppressCrossValidate = false;
-
-watch(
-  () => [form.customerName, form.productionNo],
-  () => {
-    if (!formVisible.value || suppressCrossValidate) return;
-    // 任一填上，另一个的红字要跟着消（validateField 校验不过会 reject，吞掉即可）
-    formRef.value?.validateField(['customerName', 'productionNo']).catch(() => {});
-  },
-);
 
 /** 已有流水的记录不许改单位 */
 const hasFlow = computed(
@@ -702,7 +692,6 @@ function onSurfaceChange(next: string) {
 }
 
 function openForm(row?: DullStockRow) {
-  suppressCrossValidate = true;
   editRow.value = row ?? null;
   form.itemNo = row?.itemNo ?? '';
   form.customerName = row?.customerName ?? '';
@@ -716,13 +705,13 @@ function openForm(row?: DullStockRow) {
   form.color = row ? row.color : '黑色';
   form.side = row?.side ?? '';
   form.unit = row?.unit ?? 'piece';
+  form.filingDate = row?.filingDate ?? today();
   form.openingQty = row?.openingQty ?? 0;
   form.remark = row?.remark ?? '';
   formVisible.value = true;
-  // 刚打开就飘红不合理（用户还没动手）：清掉上一次遗留的校验状态，再放开联动重校
+  // 刚打开就飘红不合理（用户还没动手）：清掉上一次遗留的校验状态。
   nextTick(() => {
     formRef.value?.clearValidate();
-    suppressCrossValidate = false;
   });
 }
 
@@ -743,6 +732,7 @@ async function onSubmitForm() {
       color: form.color || undefined,
       side: sideEnabled.value ? (form.side || '') : '',
       unit: form.unit,
+      filingDate: form.filingDate,
       openingQty: form.openingQty || 0,
       remark: form.remark || undefined,
     };
@@ -801,7 +791,7 @@ watch(() => flowForm.direction, () => {
 const flowRules: FormRules = {
   direction: [{ required: true, message: '请选择方向', trigger: 'change' }],
   quantity: [{ required: true, message: '请填写数量', trigger: 'blur' }],
-  flowDate: [{ required: true, message: '请选择日期', trigger: 'change' }],
+  flowDate: [{ required: true, message: '请选择出/入库日期', trigger: 'change' }],
   reason: [{ required: true, message: '请填写原因', trigger: 'change' }],
 };
 

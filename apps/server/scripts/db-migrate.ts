@@ -127,6 +127,8 @@ const MIGRATIONS: string[] = [
   'migration-socket-middle-common.sql',
   // 外发回厂记录按卡口外轨/内轨边别登记；存量记录保留为空串，不擅自拆分
   'migration-outsource-side.sql',
+  // 呆滞品档案新增独立建档日期；存量按原创建时间的业务日期回填
+  'migration-dull-stock-filing-date.sql',
 ];
 
 /**
@@ -254,6 +256,7 @@ const expectedColumns = [
   't_supplier.status',
   // 呆滞品管理（由「成品期初（不挂订单）」拆分独立）
   't_dull_stock.unit',
+  't_dull_stock.filing_date',
   't_dull_stock.opening_qty',
   't_dull_stock.inbound_qty',
   't_dull_stock.outbound_qty',

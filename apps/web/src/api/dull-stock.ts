@@ -23,12 +23,14 @@ export interface DullStockRow {
   side: string;
   /** set 套 / piece 支 */
   unit: string;
+  /** 档案建立 / 纳入呆滞品台账的业务日期 */
+  filingDate: string;
   openingQty: number;
   inboundQty: number;
   outboundQty: number;
-  /** 仅选择 flowMonth 时返回；本行单位口径下的当月流水合计 */
-  monthlyInboundQty?: number;
-  monthlyOutboundQty?: number;
+  /** 仅选择完整日期范围时返回；本行单位口径下的期间流水合计 */
+  periodInboundQty?: number;
+  periodOutboundQty?: number;
   balanceQty: number;
   remark: string | null;
   creatorName: string | null;
@@ -58,8 +60,9 @@ export interface DullStockQuery {
   keyword?: string;
   surfaceType?: string;
   side?: string;
-  /** 出入库月份 YYYY-MM；只返回该月发生过流水的档案 */
-  flowMonth?: string;
+  /** 出入库日期范围（含起止当天）；只返回期间发生过流水的档案 */
+  flowDateFrom?: string;
+  flowDateTo?: string;
   onlyInStock?: boolean;
 }
 
@@ -67,12 +70,12 @@ export interface DullStockSummary {
   rows: number;
   /** 结存合计：各行单位不同，一律折成支再汇总 */
   totalBalancePcs: number;
-  /** 选择月份时的月入/月出合计，统一折成支 */
-  monthlyInboundPcs: number;
-  monthlyOutboundPcs: number;
+  /** 选择完整日期范围时的期间入/出合计，统一折成支 */
+  periodInboundPcs: number;
+  periodOutboundPcs: number;
 }
 
-/** 建档/编辑入参（属性 + 单位 + 期初数；入库数/出库数不在此列） */
+/** 建档/编辑入参（属性 + 单位 + 建档日期 + 期初数；入库数/出库数不在此列） */
 export interface DullStockPayload {
   itemNo: string;
   customerName?: string;
@@ -86,6 +89,7 @@ export interface DullStockPayload {
   color?: string;
   side?: string;
   unit: string;
+  filingDate: string;
   openingQty: number;
   remark?: string;
 }

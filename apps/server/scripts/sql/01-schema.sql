@@ -665,8 +665,8 @@ CREATE TABLE IF NOT EXISTS t_part_adjust (
 CREATE TABLE IF NOT EXISTS t_dull_stock (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   item_no        VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '货号（如 53#）',
-  customer_name  VARCHAR(128) NOT NULL DEFAULT '' COMMENT '客户名称（纯文本快照，不关联 t_customer；主数据改名不回写，§5.5）',
-  production_no  VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '生产单号（呆滞品来源，纯文本快照，不校验订单是否存在）',
+  customer_name  VARCHAR(128) NOT NULL DEFAULT '' COMMENT '客户名称（可选来源快照；不明确可为空；不关联 t_customer，主数据改名不回写）',
+  production_no  VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '生产单号（可选来源快照；不明确可为空；不校验订单是否存在）',
   product_model  VARCHAR(128) NOT NULL DEFAULT '' COMMENT '产品型号（未填时按 货号+产品类型组合 自动拼，共享包 formatProductModel）',
   product_type   VARCHAR(128) NOT NULL DEFAULT '' COMMENT '产品类型多选组合串（字典序逗号拼接，如 standard,self_lock）',
   rail_section   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '轨道节数：two_section二节轨 three_section三节轨',
@@ -676,6 +676,7 @@ CREATE TABLE IF NOT EXISTS t_dull_stock (
   color          VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '颜色（字典 surface_color，允许手输新值）',
   side           VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：left左 right右，非卡口空串',
   unit           VARCHAR(16)  NOT NULL DEFAULT 'piece' COMMENT '数量单位：set套 piece支；本行四个数量列一律按本单位计，1套=2支；已有流水后不可改',
+  filing_date    DATE         NOT NULL COMMENT '呆滞品建档日期（档案建立或纳入呆滞品台账的业务日期）',
   opening_qty    INT          NOT NULL DEFAULT 0 COMMENT '期初数：建档时的呆滞存量（单位见 unit）',
   inbound_qty    INT          NOT NULL DEFAULT 0 COMMENT '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记出入库驱动，禁止直接改',
   outbound_qty   INT          NOT NULL DEFAULT 0 COMMENT '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记出入库驱动，禁止直接改',

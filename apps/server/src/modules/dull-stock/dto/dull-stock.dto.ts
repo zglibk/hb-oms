@@ -5,7 +5,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -69,6 +68,9 @@ export class CreateDullStockDto extends DullStockAttrDto {
   @IsIn(UNIT_VALUES, { message: '单位只能是「套」或「支」' })
   unit: string;
 
+  @IsDateString({}, { message: '建档日期格式不正确' })
+  filingDate: string;
+
   @Type(() => Number)
   @IsInt({ message: '期初数必须为整数' })
   @Min(0, { message: '期初数不能为负' })
@@ -113,10 +115,10 @@ export class QueryDullStockDto {
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 
-  /** 出入库流水月份（YYYY-MM）；选中后只列该月发生过出入库的档案，并返回月度入/出数量 */
-  @IsOptional()
-  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: '出入库月份格式应为 YYYY-MM' })
-  flowMonth?: string;
+  /** 出入库流水日期范围；两端都填时只列范围内发生过流水的档案，并返回期间入/出数量 */
+  @IsOptional() @IsDateString({}, { message: '出入库开始日期格式不正确' }) flowDateFrom?: string;
+
+  @IsOptional() @IsDateString({}, { message: '出入库结束日期格式不正确' }) flowDateTo?: string;
 
   /**
    * 只看有结存（balance_qty <> 0），默认 true——清空的呆滞品是历史痕迹，日常不看。
