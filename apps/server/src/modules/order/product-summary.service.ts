@@ -24,6 +24,7 @@ import {
 import { SystemConfigService } from '../system-config/system-config.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 import { createWorkbook, labelOf, styleSheet } from '../../common/utils/excel.util';
+import { businessDate } from '../../common/utils/date-range.util';
 
 /**
  * ===== 产品汇总查询（财务需求，2026-08-14）=====
@@ -829,12 +830,7 @@ export class ProductSummaryService {
 
   private dateText(v: any): string | null {
     if (!v) return null;
-    if (v instanceof Date) {
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, '0');
-      const d = String(v.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
+    if (v instanceof Date) return businessDate(v);
     return String(v).slice(0, 10);
   }
 }

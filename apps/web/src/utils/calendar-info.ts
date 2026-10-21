@@ -3,6 +3,7 @@
  * 依赖 lunar-typescript（法定节假日含调休数据）。
  */
 import { HolidayUtil, LunarMonth, Solar } from 'lunar-typescript';
+import { formatDateTime } from './date';
 
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -59,8 +60,24 @@ function restHolidayOf(s: Solar) {
   return h && !h.isWork() ? h : null;
 }
 
-function startOfToday(date: Date): Solar {
-  return Solar.fromYmd(date.getFullYear(), date.getMonth() + 1, date.getDate());
+interface BusinessWallClock {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function businessWallClock(date: Date): BusinessWallClock {
+  const [ymd, hms] = formatDateTime(date).split(' ');
+  const [year, month, day] = ymd.split('-').map(Number);
+  const [hour, minute, second] = hms.split(':').map(Number);
+  return { year, month, day, hour, minute, second };
+}
+
+function startOfToday(now: BusinessWallClock): Solar {
+  return Solar.fromYmd(now.year, now.month, now.day);
 }
 
 /** 向后查找下一个法定休息日（跳过调休上班日，以及 skipTarget 所指的当前这段假期） */
@@ -80,11 +97,11 @@ function findNextHoliday(from: Solar, skipTarget: string | null): NextHolidayInf
   return null;
 }
 
-function buildNextJieQi(solar: Solar, now: Date): NextJieQiInfo | null {
+function buildNextJieQi(solar: Solar, now: BusinessWallClock): NextJieQiInfo | null {
   const jq = solar.getLunar().getNextJieQi();
   if (!jq) return null;
   const js = jq.getSolar();
-  const jqDate = new Date(
+  const jqTime = Date.UTC(
     js.getYear(),
     js.getMonth() - 1,
     js.getDay(),
@@ -92,30 +109,32 @@ function buildNextJieQi(solar: Solar, now: Date): NextJieQiInfo | null {
     js.getMinute(),
     js.getSecond(),
   );
-  const sameDay =
-    now.getFullYear() === js.getYear()
-    && now.getMonth() + 1 === js.getMonth()
-    && now.getDate() === js.getDay();
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const jqDayStart = new Date(js.getYear(), js.getMonth() - 1, js.getDay());
+  const nowTime = Date.UTC(now.year, now.month - 1, now.day, now.hour, now.minute, now.second);
+  const sameDay = now.year === js.getYear()
+    && now.month === js.getMonth()
+    && now.day === js.getDay();
+  const dayStart = Date.UTC(now.year, now.month - 1, now.day);
+  const jqDayStart = Date.UTC(js.getYear(), js.getMonth() - 1, js.getDay());
   const daysLeft = Math.max(
     0,
-    Math.round((jqDayStart.getTime() - dayStart.getTime()) / 86_400_000),
+    Math.round((jqDayStart - dayStart) / 86_400_000),
   );
   // 若节气时刻已过但仍是同一天，仍算「今天」
-  if (sameDay && jqDate.getTime() <= now.getTime()) {
+  if (sameDay && jqTime <= nowTime) {
     return { name: jq.getName(), daysLeft: 0, isToday: true };
   }
   return { name: jq.getName(), daysLeft, isToday: sameDay };
 }
 
 export function getCalendarBrief(date = new Date()): CalendarBrief {
-  const solar = startOfToday(date);
+  const now = businessWallClock(date);
+  const solar = startOfToday(now);
   const lunar = solar.getLunar();
   const year = solar.getYear();
 
-  const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
-  const msLeft = Math.max(0, yearEnd.getTime() - date.getTime());
+  const yearEnd = Date.UTC(year, 11, 31, 23, 59, 59, 999);
+  const nowTime = Date.UTC(now.year, now.month - 1, now.day, now.hour, now.minute, now.second);
+  const msLeft = Math.max(0, yearEnd - nowTime);
   const yearLeftDays = Math.floor(msLeft / 86_400_000);
   const remSec = Math.floor((msLeft % 86_400_000) / 1000);
   const yearLeftHours = Math.floor(remSec / 3600);
@@ -149,7 +168,7 @@ export function getCalendarBrief(date = new Date()): CalendarBrief {
   return {
     solarText,
     lunarText,
-    nextJieQi: buildNextJieQi(solar, date),
+    nextJieQi: buildNextJieQi(solar, now),
     yearLeftDays,
     yearLeftHours,
     yearLeftMinutes,

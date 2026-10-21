@@ -27,6 +27,7 @@ import {
   importRejected,
   styleSheet,
 } from '../../common/utils/excel.util';
+import { businessDate, businessToday } from '../../common/utils/date-range.util';
 
 const BOM_EXPORT_LIMIT = 100;
 
@@ -98,9 +99,7 @@ const BORDER: Partial<ExcelJS.Borders> = {
 };
 
 function todayText(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return businessToday();
 }
 
 function cleanText(v: unknown): string {
@@ -122,9 +121,7 @@ function normalizeHeader(v: string): string {
 
 function excelCellText(cell: ExcelJS.Cell): string {
   if (cell.value instanceof Date) {
-    const d = cell.value;
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    return businessDate(cell.value);
   }
   return cellString(cell).trim();
 }

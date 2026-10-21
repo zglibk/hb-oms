@@ -135,6 +135,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import ImportDialog from '@/components/ImportDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -188,7 +189,7 @@ const onExport = () => exportWithConfirm({
 
 /* ===== 批量导入（生成期初单，由单据驱动库存） ===== */
 const importVisible = ref(false);
-const importDocDate = ref(new Date().toISOString().slice(0, 10));
+const importDocDate = ref(businessToday());
 const importRemark = ref('');
 
 const doImport = (file: File) =>

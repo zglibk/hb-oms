@@ -251,6 +251,7 @@ import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
+import { businessToday } from '@/utils/date';
 
 /** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
 /** 不是自己制的草稿：只有制单人与出入库主管角色能编辑 / 确认 / 作废 */
@@ -427,7 +428,7 @@ async function onReverse(row: FinishedDocRow) {
   actingId.value = row.id;
   try {
     const res = await reverseFinishedDoc(row.id, {
-      docDate: new Date().toISOString().slice(0, 10),
+      docDate: businessToday(),
       reason: String(value).trim(),
     });
     ElMessage.success(`已生成红字单 ${res.docNo}`);

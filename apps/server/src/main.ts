@@ -1,10 +1,15 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import { networkInterfaces } from 'os';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+
+// 所有未显式带时区的第三方库（ExcelJS / TypeORM / dayjs 历史调用）统一落到业务时区。
+// 业务日期仍优先走 date-range.util，不能把本行当成继续使用本地 Date getter 的理由。
+process.env.TZ = 'Asia/Shanghai';
 
 /** 获取本机局域网 IPv4 地址（用于开发期日志与 CORS 放行） */
 function getLanIps(): string[] {
@@ -24,6 +29,23 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
   const config = app.get(ConfigService);
   const isDev = (config.get<string>('NODE_ENV') || 'development') !== 'production';
+
+  // mysql2 的 timezone 选项只负责 JS Date 与 DATETIME 的转换，不会修改 SQL
+  // NOW()/CURDATE() 的会话时区。先给当前连接设东八区，再给池中新建的每条连接做同样初始化。
+  const dataSource = app.get(DataSource);
+  const pool = (dataSource.driver as any).pool;
+  pool?.on?.('connection', (connection: any) => {
+    connection.query("SET time_zone = '+08:00'");
+  });
+  await dataSource.query("SET time_zone = '+08:00'");
+  const [dbClock] = await dataSource.query(
+    'SELECT TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), NOW()) AS offsetMinutes',
+  );
+  if (Number(dbClock?.offsetMinutes) !== 480) {
+    throw new Error(
+      `MySQL 会话时区必须为 +08:00，当前偏移 ${dbClock?.offsetMinutes ?? '未知'} 分钟`,
+    );
+  }
 
   // 全局路由前缀 /api（与 Vite proxy、Nginx 同源化对齐）
   app.setGlobalPrefix('api');

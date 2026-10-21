@@ -445,6 +445,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 /** 「颜色」字段全局开关（展示开关；聚合键恒含颜色，与开关无关） */
 const { colorEnabled } = useFeatureFlags();
@@ -570,14 +571,11 @@ const pQuery = reactive({
 const showPeriodMore = ref(false);
 const periodMoreCount = computed(() => (pQuery.surfaceType ? 1 : 0));
 /** 单据日期区间默认本月 1 日 ~ 今天（财务月度对账的常用口径） */
-function localDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 function defaultPeriodRange(): [string, string] {
-  const today = new Date();
+  const today = businessToday();
   return [
-    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`,
-    localDate(today),
+    `${today.slice(0, 7)}-01`,
+    today,
   ];
 }
 const periodRange = ref<[string, string]>(defaultPeriodRange());

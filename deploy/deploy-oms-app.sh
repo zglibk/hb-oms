@@ -104,6 +104,7 @@ else
 fi
 
 echo "==> 4/5 PM2"
+export TZ=Asia/Shanghai
 if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
   pm2 restart "$PM2_NAME" --update-env
 else

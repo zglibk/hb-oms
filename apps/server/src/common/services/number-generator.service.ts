@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
-import dayjs from 'dayjs';
+import { businessToday } from '../utils/date-range.util';
 
 /**
  * 单号采番服务（无 Redis 方案，文档 20.4）。
@@ -17,7 +17,7 @@ export class NumberGeneratorService {
    * @param prefix 前缀，如 ORD / PLN / SC / FGI / SCT / FILE
    */
   async generate(prefix: string, manager?: EntityManager): Promise<string> {
-    const today = dayjs().format('YYMMDD');
+    const today = businessToday().slice(2).replace(/-/g, '');
     const key = `${prefix}:${today}`;
     const seq = await this.generateSequence(key, manager);
     return `${prefix}${today}-${String(seq).padStart(4, '0')}`;

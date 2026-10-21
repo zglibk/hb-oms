@@ -9,20 +9,30 @@
  * 全站约定年月日分隔符 "-" 。
  */
 
-/** 将日期补齐为两位数字符串 */
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : String(n);
-}
-
-/** MES 业务统一使用中国标准时间，避免浏览器所在时区改变业务日期。 */
-const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
+/** OMS 业务统一使用中国标准时间，避免浏览器所在时区改变业务日期。 */
+export const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
+export const BUSINESS_TIME_ZONE_OFFSET = '+08:00';
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const businessDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+const LOCAL_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
+const businessDateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   timeZone: BUSINESS_TIME_ZONE,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
 });
+
+function businessParts(date: Date): Record<string, string> {
+  return Object.fromEntries(
+    businessDateTimeFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+}
 
 /**
  * 格式化日期。
@@ -35,16 +45,20 @@ export function formatDate(
   withTime = false,
 ): string {
   if (value === null || value === undefined || value === '') return '';
-  const d = value instanceof Date ? value : new Date(value);
+  if (!withTime && typeof value === 'string' && DATE_ONLY_PATTERN.test(value.trim())) {
+    return value.trim();
+  }
+  const d = value instanceof Date
+    ? value
+    : typeof value === 'string' && LOCAL_DATE_TIME_PATTERN.test(value.trim().replace(' ', 'T'))
+      ? parseBusinessDateTime(value)
+      : new Date(value);
   if (isNaN(d.getTime())) return '';
-  const y = d.getFullYear();
-  const m = pad2(d.getMonth() + 1);
-  const day = pad2(d.getDate());
-  if (!withTime) return `${y}-${m}-${day}`;
-  const hh = pad2(d.getHours());
-  const mm = pad2(d.getMinutes());
-  const ss = pad2(d.getSeconds());
-  return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+  const parts = businessParts(d);
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  return withTime
+    ? `${date} ${parts.hour}:${parts.minute}:${parts.second}`
+    : date;
 }
 
 /**
@@ -59,19 +73,38 @@ export function formatBusinessDate(
 ): string {
   if (value === null || value === undefined || value === '') return '';
 
-  if (typeof value === 'string') {
-    const text = value.trim();
-    if (DATE_ONLY_PATTERN.test(text)) return text;
-  }
+  return formatDate(value, false);
+}
 
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
+/** 当前中国标准时间对应的业务日期。 */
+export function businessToday(now = new Date()): string {
+  return formatBusinessDate(now);
+}
 
-  const parts = businessDateFormatter.formatToParts(date);
-  const year = parts.find((part) => part.type === 'year')?.value;
-  const month = parts.find((part) => part.type === 'month')?.value;
-  const day = parts.find((part) => part.type === 'day')?.value;
-  return year && month && day ? `${year}-${month}-${day}` : '';
+/**
+ * Element Plus 日期面板传入的是“用户在面板上点到的本地日历格”，不是一个业务绝对时刻。
+ * 这里刻意读取本地年月日，避免东京等 UTC+8 以东浏览器把 00:00 换算成上海前一天。
+ */
+export function datePickerDay(value: Date): string {
+  if (Number.isNaN(value.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
+/**
+ * 将公告表单使用的无时区墙上时间按中国标准时间解析为绝对时刻。
+ * 已带 Z / ±HH:mm 的接口值保持其自身时区语义。
+ */
+export function parseBusinessDateTime(value: string | Date): Date {
+  if (value instanceof Date) return value;
+  const text = value.trim().replace(' ', 'T');
+  return new Date(LOCAL_DATE_TIME_PATTERN.test(text) ? `${text}${BUSINESS_TIME_ZONE_OFFSET}` : text);
+}
+
+/** el-date-picker(type=datetime) 使用的中国标准时间墙上时间。 */
+export function formatBusinessDateTimeInput(value: string | number | Date): string {
+  const date = typeof value === 'string' ? parseBusinessDateTime(value) : value;
+  return formatDate(date, true).replace(' ', 'T');
 }
 
 /** 格式化为日期时间（YYYY-MM-DD HH:mm:ss）的便捷别名 */

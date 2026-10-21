@@ -1,23 +1,94 @@
 import { BadRequestException } from '@nestjs/common';
 
-const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
-const businessDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+export const BUSINESS_TIME_ZONE = 'Asia/Shanghai';
+export const BUSINESS_TIME_ZONE_OFFSET = '+08:00';
+const LOCAL_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
+const businessDateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   timeZone: BUSINESS_TIME_ZONE,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
 });
+
+function businessParts(date: Date): Record<string, string> {
+  return Object.fromEntries(
+    businessDateTimeFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+}
+
+function dateOf(value: Date | string | number): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && LOCAL_DATE_TIME_PATTERN.test(value.trim().replace(' ', 'T'))) {
+    return parseBusinessDateTime(value);
+  }
+  return new Date(value);
+}
+
+/** 任意绝对时刻对应的中国标准时间业务日期。 */
+export function businessDate(value: Date | string | number): string {
+  const date = dateOf(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = businessParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/** 任意绝对时刻对应的中国标准时间，供导出与日志展示统一使用。 */
+export function businessDateTime(value: Date | string | number): string {
+  const date = dateOf(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = businessParts(date);
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
 
 /** 当前业务日期（中国标准时间），避免 UTC 日期在凌晨回退到前一天。 */
 export function businessToday(now = new Date()): string {
-  const parts = businessDateFormatter.formatToParts(now);
-  const year = parts.find((part) => part.type === 'year')?.value;
-  const month = parts.find((part) => part.type === 'month')?.value;
-  const day = parts.find((part) => part.type === 'day')?.value;
-  if (!year || !month || !day) {
+  const value = businessDate(now);
+  if (!value) {
     throw new Error('无法计算当前业务日期');
   }
-  return `${year}-${month}-${day}`;
+  return value;
+}
+
+/** 将无时区业务墙上时间明确按东八区解析；已带时区的 ISO 值按其自身语义解析。 */
+export function parseBusinessDateTime(value: string | Date): Date {
+  if (value instanceof Date) return value;
+  const text = value.trim().replace(' ', 'T');
+  return new Date(LOCAL_DATE_TIME_PATTERN.test(text) ? `${text}${BUSINESS_TIME_ZONE_OFFSET}` : text);
+}
+
+/** 在无时区的业务日历上平移自然日，供等长日期窗口等场景使用。 */
+export function shiftBusinessDate(value: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new Error(`无效业务日期：${value}`);
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
+    throw new Error(`无效业务日期：${value}`);
+  }
+  date.setUTCDate(date.getUTCDate() + days);
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+/** 两个业务日期之间包含首尾的自然日数；结束日早于开始日时返回非正数。 */
+export function businessDateSpan(from: string, to: string): number {
+  const shiftedFrom = shiftBusinessDate(from, 0);
+  const shiftedTo = shiftBusinessDate(to, 0);
+  return Math.round((Date.parse(shiftedTo) - Date.parse(shiftedFrom)) / 86_400_000) + 1;
 }
 
 /**
@@ -36,8 +107,7 @@ export function businessToday(now = new Date()): string {
 export function toDay(value?: string | Date | null): string | null {
   if (!value) return null;
   if (value instanceof Date) {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    return businessDate(value);
   }
   const text = String(value).trim();
   return text ? text.slice(0, 10) : null;

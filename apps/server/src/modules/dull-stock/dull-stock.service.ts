@@ -34,7 +34,7 @@ import {
 } from './dto/dull-stock.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate, auditDisplayName } from '../../common/utils/audit.util';
-import { businessToday } from '../../common/utils/date-range.util';
+import { businessDate, businessToday } from '../../common/utils/date-range.util';
 
 /** 单位中文名（用于报错文案） */
 function unitLabel(unit: string): string {
@@ -627,8 +627,7 @@ export class DullStockService {
   /** Excel 日期格可能是 Date 或文本，统一转成不含时区含义的 YYYY-MM-DD。 */
   private excelDateString(cell: import('exceljs').Cell): string {
     if (cell.value instanceof Date) {
-      const pad = (value: number) => String(value).padStart(2, '0');
-      return `${cell.value.getFullYear()}-${pad(cell.value.getMonth() + 1)}-${pad(cell.value.getDate())}`;
+      return businessDate(cell.value);
     }
     return cellString(cell);
   }

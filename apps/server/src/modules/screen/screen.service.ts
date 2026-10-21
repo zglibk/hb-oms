@@ -9,6 +9,7 @@ import {
   OUTBOUND_FAMILY_SQL,
 } from '../order/order-owed.util';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import { businessToday } from '../../common/utils/date-range.util';
 
 /** 区间跨度上限（天）：再长趋势图就挤成一团，且按月分桶已足够看全年 */
 const MAX_RANGE_DAYS = 366;
@@ -106,7 +107,7 @@ export class ScreenService {
 
   /** 解析并校验区间；缺省为本月 1 日 ~ 今天（服务器本地日期） */
   private resolveRange(fromArg?: string, toArg?: string) {
-    const today = this.ymd(new Date());
+    const today = businessToday();
     const to = toArg ? toArg.slice(0, 10) : today;
     const from = fromArg ? fromArg.slice(0, 10) : `${to.slice(0, 7)}-01`;
     const days = Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) + 1;
@@ -128,7 +129,12 @@ export class ScreenService {
       return keys;
     }
     for (let t = Date.parse(from); t <= Date.parse(to); t += DAY_MS) {
-      keys.push(new Date(t).toISOString().slice(0, 10));
+      const date = new Date(t);
+      keys.push([
+        date.getUTCFullYear(),
+        String(date.getUTCMonth() + 1).padStart(2, '0'),
+        String(date.getUTCDate()).padStart(2, '0'),
+      ].join('-'));
     }
     return keys;
   }
@@ -234,7 +240,4 @@ export class ScreenService {
     };
   }
 
-  private ymd(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
 }

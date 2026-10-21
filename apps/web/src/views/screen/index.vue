@@ -66,7 +66,7 @@
               start-placeholder="开始"
               end-placeholder="结束"
               :clearable="false"
-              :disabled-date="(d: Date) => d.getTime() > Date.now()"
+              :disabled-date="disableFutureRangeDate"
               popper-class="sv-picker-popper"
               placement="bottom-end"
               class="sv__picker"
@@ -197,6 +197,7 @@ import { tokenStore } from '@/utils/request';
 import { useUserStore } from '@/stores/user';
 import { useAutoScroll } from '@/composables/useAutoScroll';
 import { AUTO_SCROLL_SPEED_DEFAULT } from '@hb-oms/shared';
+import { businessToday, datePickerDay, formatDateTime } from '@/utils/date';
 
 /** 逻辑高度基准：所有字号 / 卡片高度按 1080 高的屏设计 */
 const BASE_H = 1080;
@@ -251,12 +252,11 @@ function toggleFullscreen() {
 
 /* ---------------- 时钟 ---------------- */
 const now = ref(new Date());
-const pad = (n: number) => String(n).padStart(2, '0');
-const clockText = computed(() => {
-  const d = now.value;
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const clockText = computed(() => formatDateTime(now.value));
+const weekText = computed(() => {
+  const day = new Date(`${businessToday(now.value)}T00:00:00Z`).getUTCDay();
+  return `星期${'日一二三四五六'[day]}`;
 });
-const weekText = computed(() => `星期${'日一二三四五六'[now.value.getDay()]}`);
 
 /* ---------------- 时间范围 ---------------- */
 type PresetKey = 'today' | 'week' | 'last30' | 'month' | 'quarter' | 'year' | 'custom';
@@ -268,19 +268,24 @@ const PRESETS: Array<{ key: Exclude<PresetKey, 'custom'>; label: string }> = [
   { key: 'quarter', label: '本季' },
   { key: 'year', label: '本年' },
 ];
-const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const disableFutureRangeDate = (date: Date) => datePickerDay(date) > businessToday(now.value);
+const ymdUtc = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+};
 
 /** 预设区间一律截止到今天（每次刷新重算，跨天挂着的电视自动跟上） */
 function rangeOf(key: Exclude<PresetKey, 'custom'>): [string, string] {
-  const t = new Date();
+  const to = businessToday();
+  const t = new Date(`${to}T00:00:00Z`);
   const start = new Date(t);
-  if (key === 'week') start.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  if (key === 'week') start.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
   // 滚动窗口：月初 / 季初时「本月」「本季」只有几天、区间面板几乎全是 0，电视上看着像坏了
-  if (key === 'last30') start.setDate(t.getDate() - 29);
-  if (key === 'month') start.setDate(1);
-  if (key === 'quarter') start.setMonth(Math.floor(t.getMonth() / 3) * 3, 1);
-  if (key === 'year') start.setMonth(0, 1);
-  return [ymd(start), ymd(t)];
+  if (key === 'last30') start.setUTCDate(t.getUTCDate() - 29);
+  if (key === 'month') start.setUTCDate(1);
+  if (key === 'quarter') start.setUTCMonth(Math.floor(t.getUTCMonth() / 3) * 3, 1);
+  if (key === 'year') start.setUTCMonth(0, 1);
+  return [ymdUtc(start), to];
 }
 
 function loadSavedRange(): { preset: PresetKey; custom: [string, string] | null } {
@@ -386,7 +391,7 @@ function outsourceSideSuffix(row: { side: string; legacyUnassigned: boolean }): 
 const data = reactive<ScreenData>({ ...empty });
 const overdueScrollSpeed = computed(() => data.scrollSpeeds.overdue);
 const outsourceScrollSpeed = computed(() => data.scrollSpeeds.outsource);
-const updatedText = computed(() => (data.generatedAt ? new Date(data.generatedAt).toTimeString().slice(0, 8) : '—'));
+const updatedText = computed(() => (data.generatedAt ? formatDateTime(data.generatedAt).slice(11) : '—'));
 
 let loading = false;
 async function load() {

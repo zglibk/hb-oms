@@ -1,5 +1,6 @@
 import request from '@/utils/request';
 import { downloadXlsx } from '@/utils/download';
+import { businessToday } from '@/utils/date';
 import type { PageResult } from './customer';
 
 export const PRODUCTION_BOM_EXPORT_LIMIT = 100;
@@ -115,7 +116,7 @@ export const importProductionBoms = (file: File, overwrite: boolean) => {
 };
 
 export const exportProductionBoms = (params: ProductionBomQuery) =>
-  downloadXlsx('/api/production-bom/export', params, `生产BOM_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  downloadXlsx('/api/production-bom/export', params, `生产BOM_${businessToday()}.xlsx`);
 
 export const exportSingleProductionBom = (id: number, drawingNo: string, version: string) =>
   downloadXlsx(

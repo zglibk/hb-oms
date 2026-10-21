@@ -186,10 +186,11 @@ import {
   normalizeProductTypes,
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 const tab = ref('group');
 const saving = ref(false);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = businessToday;
 
 /* ===================== 挂订单期初 ===================== */
 interface GroupRow {

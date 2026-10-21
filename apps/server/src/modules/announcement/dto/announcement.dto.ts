@@ -48,22 +48,22 @@ export class SaveAnnouncementDraftDto {
 
   /** ISO 日期时间；草稿不传时取当前时间。 */
   @IsOptional()
-  @IsString()
+  @IsDateString({}, { message: '发布时间格式不正确' })
   publishAt?: string;
 
   /** NULL/未传表示永久有效；非永久公告前端默认填发布时间后三天。 */
   @IsOptional()
-  @IsString()
+  @IsDateString({}, { message: '失效时间格式不正确' })
   expireAt?: string | null;
 }
 
 export class PublishAnnouncementDto {
   @IsOptional()
-  @IsString()
+  @IsDateString({}, { message: '发布时间格式不正确' })
   publishAt?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateString({}, { message: '失效时间格式不正确' })
   expireAt?: string | null;
 }
 

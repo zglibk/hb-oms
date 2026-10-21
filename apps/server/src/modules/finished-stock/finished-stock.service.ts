@@ -54,6 +54,7 @@ import { NumberGeneratorService } from '../../common/services/number-generator.s
 import { SystemConfigService } from '../system-config/system-config.service';
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import { businessToday } from '../../common/utils/date-range.util';
 import {
   EXPORT_ROW_LIMIT,
   addTipsSheet,
@@ -1158,7 +1159,7 @@ export class FinishedStockService {
     // 汇成一张期初单：整批一个事务，全有全无（部分成功后用户改完重提会重复加库存）
     const res = await this.createOpeningBalance(
       {
-        docDate: opts.docDate || new Date().toISOString().slice(0, 10),
+        docDate: opts.docDate || businessToday(),
         remark: opts.remark || '成品库存批量导入',
         items,
       } as OpeningFinishedDto,

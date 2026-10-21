@@ -426,6 +426,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -627,7 +628,7 @@ const onExport = () => exportWithConfirm({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `订单跟踪台账_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `订单跟踪台账_${businessToday()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   },

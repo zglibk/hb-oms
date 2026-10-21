@@ -570,7 +570,7 @@ import {
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { preloadCountryFlags, preloadCountryFlagsWhenIdle } from '@/utils/flag-preload';
-import { formatBusinessDate } from '@/utils/date';
+import { businessToday, datePickerDay } from '@/utils/date';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled, inchToMm } =
@@ -784,9 +784,6 @@ const emptyProduct = (): ProductRow => ({
   partGroups: defaultGroups('three_section'),
 });
 
-/** 中国标准时间的业务当天，避免 toISOString() 在凌晨取到前一天。 */
-const businessToday = () => formatBusinessDate(new Date());
-
 const form = reactive({
   poNo: '',
   /** 生产单号：订单级，与 PO# 一对一 */
@@ -854,11 +851,11 @@ function deliveryDateRules(pi: number) {
 }
 
 function disableFutureOrderDate(date: Date): boolean {
-  return formatBusinessDate(date) > businessToday();
+  return datePickerDay(date) > businessToday();
 }
 
 function disableDeliveryBeforeOrderDate(date: Date): boolean {
-  return !!form.orderDate && formatBusinessDate(date) < form.orderDate;
+  return !!form.orderDate && datePickerDay(date) < form.orderDate;
 }
 
 function onOrderDateChange() {

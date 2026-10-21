@@ -49,6 +49,7 @@ import {
   CurrentUserPayload,
 } from '../../common/decorators/current-user.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
+import { businessToday } from '../../common/utils/date-range.util';
 
 /** 将逗号分隔的 id 字符串（如 "1,2,3"）解析为 number[]；为空或无有效值时返回 undefined */
 function parseIdsQuery(s?: string): number[] | undefined {
@@ -498,9 +499,7 @@ export class SystemController {
   async materialExport(@Query() query: QueryMaterialDto, @Res() res: Response) {
     const ids = parseIdsQuery(query.ids);
     const buffer = await this.materialService.exportList(query, ids);
-    const filename = `部件清单_${new Date()
-      .toISOString()
-      .slice(0, 10)}.xlsx`;
+    const filename = `部件清单_${businessToday()}.xlsx`;
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -22,6 +22,7 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { sendXlsx } from '../../common/utils/excel-response.util';
+import { businessToday } from '../../common/utils/date-range.util';
 
 @Controller('production-bom')
 export class ProductionBomController {
@@ -76,7 +77,7 @@ export class ProductionBomController {
   @SkipTransform()
   async exportExcel(@Query() query: QueryProductionBomDto, @Res() res: Response) {
     const buffer = await this.service.exportExcel(query);
-    const date = new Date().toISOString().slice(0, 10);
+    const date = businessToday();
     sendXlsx(res, buffer, `生产BOM_${date}.xlsx`);
   }
 

@@ -241,7 +241,7 @@ import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import { useUserStore } from '@/stores/user';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { loadDict } from '@/composables/useDict';
-import { formatDateTime } from '@/utils/date';
+import { businessToday, formatDateTime } from '@/utils/date';
 import AppTable from '@/components/AppTable.vue';
 import ColorTag from '@/components/ColorTag.vue';
 
@@ -262,9 +262,7 @@ const formRef = ref<FormInstance>();
 let rowKey = 0;
 
 function todayText() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return businessToday();
 }
 
 const form = reactive({

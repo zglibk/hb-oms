@@ -317,6 +317,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 const route = useRoute();
 const router = useRouter();
@@ -358,7 +359,7 @@ interface PickerRow extends ItemRow {
 
 const form = reactive({
   bizType: (route.query.bizType as string) || FINISHED_BIZ_TYPE.INBOUND,
-  docDate: new Date().toISOString().slice(0, 10),
+  docDate: businessToday(),
   workTeam: '',
   remark: '',
   items: [] as ItemRow[],

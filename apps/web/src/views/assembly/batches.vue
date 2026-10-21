@@ -229,6 +229,7 @@ import { ASSEMBLY_STATUS, SIDE_OPTIONS, expandSideQtyRows, labelOf, sideLabel, t
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday, formatDateTime } from '@/utils/date';
 
 const route = useRoute();
 const router = useRouter();
@@ -249,7 +250,7 @@ loadDict('assembly_workshop').then((rows: any[]) => {
   workshopDict.value = rows.map((r) => ({ label: r.dictLabel, value: r.dictValue }));
 });
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = businessToday;
 
 interface BatchDraft {
   side: string;
@@ -344,8 +345,7 @@ function registrant(row: AssemblyBatchRow): string {
 }
 function minuteText(v: string | Date | null | undefined): string {
   if (!v) return '—';
-  const s = typeof v === 'string' ? v : v.toISOString();
-  return s.slice(0, 16).replace('T', ' ');
+  return formatDateTime(v).slice(0, 16);
 }
 
 /** 本批录入后该边别已录量是否超过订单数（超装配允许，仅提示） */

@@ -23,6 +23,7 @@ import { CreateEmployeeDto, QueryEmployeeDto, UpdateEmployeeDto } from './dto/em
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
+import { businessDate } from '../../common/utils/date-range.util';
 
 @Injectable()
 export class EmployeeService {
@@ -372,7 +373,7 @@ export class EmployeeService {
   private dateStr(v: string | Date | null | undefined): string | undefined {
     if (!v) return undefined;
     if (typeof v === 'string') return v.slice(0, 10);
-    return v.toISOString().slice(0, 10);
+    return businessDate(v);
   }
 
   /** 毕业时间按月录入：归一为当月首日 YYYY-MM-01 */

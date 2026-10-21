@@ -155,6 +155,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 
 const router = useRouter();
 const loading = ref(false);
@@ -276,7 +277,7 @@ const onExport = () => exportWithConfirm({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `开单信息_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `开单信息_${businessToday()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   },

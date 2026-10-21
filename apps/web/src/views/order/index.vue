@@ -287,6 +287,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
+import { businessToday } from '@/utils/date';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
@@ -404,7 +405,7 @@ async function onExportTotalPlan() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `总计划_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `总计划_${businessToday()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } finally {

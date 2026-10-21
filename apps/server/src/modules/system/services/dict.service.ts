@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import { businessDate } from '../../../common/utils/date-range.util';
 import { Dict } from '../entities/dict.entity';
 import { CurrentUserPayload } from '../../../common/decorators/current-user.decorator';
 import {
@@ -51,12 +52,7 @@ function cellText(v: ExcelJS.CellValue): string {
     }
     if ('text' in v) return String((v as any).text ?? '');
     if ('result' in v) return String((v as any).result ?? '');
-    if (v instanceof Date) {
-      const y = v.getFullYear();
-      const mo = String(v.getMonth() + 1).padStart(2, '0');
-      const d = String(v.getDate()).padStart(2, '0');
-      return `${y}-${mo}-${d}`;
-    }
+    if (v instanceof Date) return businessDate(v);
     return '';
   }
   return String(v);

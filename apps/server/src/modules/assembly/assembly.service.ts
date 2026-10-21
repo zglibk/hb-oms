@@ -35,6 +35,7 @@ import { ProductSnapshotService } from '../../common/services/product-snapshot.s
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { EXPORT_ROW_LIMIT, createWorkbook, styleSheet } from '../../common/utils/excel.util';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import { businessDate, businessDateTime, businessToday } from '../../common/utils/date-range.util';
 
 /** 装配管理列表行：按**订单产品行**一行，附该产品的装配进度聚合 */
 export interface AssemblyGroupRow {
@@ -661,25 +662,17 @@ export class AssemblyService {
   /** 审计时间戳 → 到分钟（导出表里精确到秒没有意义，还占列宽） */
   private minuteText(v: any): string {
     if (!v) return '';
-    const d = v instanceof Date ? v : new Date(v);
-    if (Number.isNaN(d.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return businessDateTime(v).slice(0, 16);
   }
 
   private dateText(v: any): string | null {
     if (!v) return null;
-    if (v instanceof Date) {
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, '0');
-      const d = String(v.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
+    if (v instanceof Date) return businessDate(v);
     return String(v).slice(0, 10);
   }
 
   private todayText(): string {
-    return this.dateText(new Date()) as string;
+    return businessToday();
   }
 
   /** GROUP_CONCAT 结果 → 去空字符串数组（无批次时 NULL，返回空数组） */

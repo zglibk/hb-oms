@@ -195,12 +195,23 @@ export const EDUCATION_TYPE_OPTIONS: Array<{ label: string; value: string; type:
  */
 export function ageFromBirthDate(birthDate: string | Date | null | undefined): number | null {
   if (!birthDate) return null;
-  const d = typeof birthDate === 'string' ? new Date(birthDate.slice(0, 10)) : birthDate;
-  if (Number.isNaN(d.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - d.getFullYear();
-  const m = today.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1;
+  const birthText = typeof birthDate === 'string'
+    ? birthDate.slice(0, 10)
+    : new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(birthDate);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthText);
+  if (!match) return null;
+  const [, y, m, d] = match.map(Number);
+  const checked = new Date(Date.UTC(y, m - 1, d));
+  if (checked.getUTCFullYear() !== y || checked.getUTCMonth() !== m - 1 || checked.getUTCDate() !== d) return null;
+  const todayText = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const [todayYear, todayMonth, todayDay] = todayText.split('-').map(Number);
+  let age = todayYear - y;
+  const monthDelta = todayMonth - m;
+  if (monthDelta < 0 || (monthDelta === 0 && todayDay < d)) age -= 1;
   return age >= 0 && age < 150 ? age : null;
 }
 
@@ -212,8 +223,12 @@ export function birthDateFromIdCard(idCard: string | null | undefined): string |
   const y = idCard.slice(6, 10);
   const m = idCard.slice(10, 12);
   const day = idCard.slice(12, 14);
-  const d = new Date(`${y}-${m}-${day}`);
-  if (Number.isNaN(d.getTime())) return null;
+  const d = new Date(Date.UTC(Number(y), Number(m) - 1, Number(day)));
+  if (
+    d.getUTCFullYear() !== Number(y)
+    || d.getUTCMonth() !== Number(m) - 1
+    || d.getUTCDate() !== Number(day)
+  ) return null;
   return `${y}-${m}-${day}`;
 }
 

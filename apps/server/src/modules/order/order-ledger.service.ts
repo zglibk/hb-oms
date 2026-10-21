@@ -28,6 +28,7 @@ import {
 } from './order-owed.util';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import { businessDate, businessToday } from '../../common/utils/date-range.util';
 
 /**
  * ===== 订单跟踪台账：本系统的核心产出（设计文档 §5.1）=====
@@ -410,7 +411,7 @@ export class OrderLedgerService {
       [...allParams, pageSize, (page - 1) * pageSize],
     );
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessToday();
     const list: LedgerRow[] = rows.map((r) => {
       const qtyPcs = Number(r.qtyPcs) || 0;
       const inQty = Number(r.inQty) || 0;
@@ -800,7 +801,7 @@ export class OrderLedgerService {
     ws.views = [{ state: 'frozen', ySplit: 1 }];
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessToday();
     list.forEach((r) => {
       ws.addRow([
         r.orderDate ?? '',
@@ -1087,7 +1088,7 @@ export class OrderLedgerService {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } };
     });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessToday();
     ws.getCell(`A${ws.rowCount + 2}`).value =
       `导出时间：${today} | 产品行数：${planRows.length} | 部件组行数：${list.length}`;
     return Buffer.from(await wb.xlsx.writeBuffer());
@@ -1104,12 +1105,7 @@ export class OrderLedgerService {
 
   private dateText(v: any): string | null {
     if (!v) return null;
-    if (v instanceof Date) {
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, '0');
-      const d = String(v.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
+    if (v instanceof Date) return businessDate(v);
     return String(v).slice(0, 10);
   }
 }

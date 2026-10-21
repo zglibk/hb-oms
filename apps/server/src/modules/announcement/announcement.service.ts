@@ -17,6 +17,7 @@ import {
 } from '@hb-oms/shared';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
+import { parseBusinessDateTime } from '../../common/utils/date-range.util';
 import {
   createWorkbook,
   dateTimeText,
@@ -72,13 +73,13 @@ export class AnnouncementService {
     // MySQL DATETIME 不存毫秒；默认立即发布若保留毫秒，往返后可能被驱动舍入到下一秒，
     // 导致紧接着点“发布”被误判成定时公告。默认值先对齐到整秒。
     now.setMilliseconds(0);
-    const publishAt = dto.publishAt ? new Date(dto.publishAt) : now;
+    const publishAt = dto.publishAt ? parseBusinessDateTime(dto.publishAt) : now;
     if (Number.isNaN(publishAt.getTime())) throw new BadRequestException('发布时间格式不正确');
     let expireAt: Date | null;
     if (dto.expireAt === null) {
       expireAt = null;
     } else if (dto.expireAt) {
-      expireAt = new Date(dto.expireAt);
+      expireAt = parseBusinessDateTime(dto.expireAt);
       if (Number.isNaN(expireAt.getTime())) throw new BadRequestException('失效时间格式不正确');
     } else {
       expireAt = new Date(publishAt.getTime() + 3 * 24 * 60 * 60 * 1000);
@@ -138,11 +139,11 @@ export class AnnouncementService {
     const row = await this.requireAnnouncement(id);
     if (row.status !== ANNOUNCEMENT_STATUS.DRAFT) throw new BadRequestException('仅草稿可以发布');
 
-    const publishAt = dto.publishAt ? new Date(dto.publishAt) : row.publishAt;
+    const publishAt = dto.publishAt ? parseBusinessDateTime(dto.publishAt) : row.publishAt;
     const expireAt = dto.expireAt === null || dto.expireAt === ''
       ? null
       : dto.expireAt
-        ? new Date(dto.expireAt)
+        ? parseBusinessDateTime(dto.expireAt)
         : row.expireAt;
     if (Number.isNaN(publishAt.getTime()) || (expireAt && Number.isNaN(expireAt.getTime()))) {
       throw new BadRequestException('发布或失效时间格式不正确');

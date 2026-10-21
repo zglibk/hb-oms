@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
+import { businessDateTime } from './date-range.util';
 import { EXPORT_ROW_LIMIT, PRODUCT_TYPE_OPTIONS, normalizeProductTypes } from '@hb-oms/shared';
 
 // 上限定义在共享包（前端导出前要拿它做预检，两端必须同一个数），此处转出方便本层引用
@@ -168,10 +169,7 @@ export function addTipsSheet(
  */
 export function dateTimeText(v: Date | string | null | undefined): string {
   if (!v) return '';
-  const d = v instanceof Date ? v : new Date(v);
-  if (Number.isNaN(d.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return businessDateTime(v).slice(0, 16);
 }
 
 /* ==================== 导入侧公共件 ==================== */

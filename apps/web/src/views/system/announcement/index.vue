@@ -111,7 +111,11 @@ import {
   type AnnouncementItem,
   type SaveAnnouncementPayload,
 } from '@/api/announcement';
-import { formatDateTime } from '@/utils/date';
+import {
+  formatBusinessDateTimeInput,
+  formatDateTime,
+  parseBusinessDateTime,
+} from '@/utils/date';
 import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
 
 const router = useRouter();
@@ -145,9 +149,7 @@ function defaultTimes() {
   return { publishAt: dateTimeValue(now), expireAt: dateTimeValue(new Date(now.getTime() + 3 * 86400000)) };
 }
 function dateTimeValue(value: string | Date) {
-  const d = value instanceof Date ? value : new Date(value);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return formatBusinessDateTimeInput(value);
 }
 function resetForm() {
   const times = defaultTimes();
@@ -192,13 +194,13 @@ function openEdit(row: AnnouncementItem) {
 }
 function onPermanentChange(value: unknown) {
   if (!value && !form.expireAt) {
-    const base = form.publishAt ? new Date(form.publishAt) : new Date();
+    const base = form.publishAt ? parseBusinessDateTime(form.publishAt) : new Date();
     form.expireAt = dateTimeValue(new Date(base.getTime() + 3 * 86400000));
   }
 }
 function onPublishAtChange(value: unknown) {
   if (form.permanent || typeof value !== 'string' || !value) return;
-  form.expireAt = dateTimeValue(new Date(new Date(value).getTime() + 3 * 86400000));
+  form.expireAt = dateTimeValue(new Date(parseBusinessDateTime(value).getTime() + 3 * 86400000));
 }
 async function saveDraft() {
   if (!formRef.value) return;

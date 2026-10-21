@@ -346,6 +346,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
+import { businessToday } from '@/utils/date';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
@@ -387,7 +388,7 @@ interface ItemRow {
 const form = reactive({
   processorName: '',
   /** 实际回厂日期，默认今天——本模块只记已回厂的件 */
-  backDate: new Date().toISOString().slice(0, 10),
+  backDate: businessToday(),
   items: [] as ItemRow[],
 });
 

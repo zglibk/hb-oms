@@ -61,13 +61,13 @@ defineOptions({ name: 'ChangelogView' });
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { ElMessage } from 'element-plus';
 import { getChangelogList, type ChangelogItem } from '@/api/changelog';
-import { formatDate } from '@/utils/date';
+import { businessToday, formatDate } from '@/utils/date';
 
 const list = ref<ChangelogItem[]>([]);
 const loading = ref(false);
 const showBackTop = ref(false);
 const pageRef = ref<HTMLElement | null>(null);
-const currentYear = new Date().getFullYear();
+const currentYear = Number(businessToday().slice(0, 4));
 
 async function load() {
   loading.value = true;

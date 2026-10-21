@@ -8,10 +8,10 @@ import { Repository } from 'typeorm';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join, posix, isAbsolute } from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import dayjs from 'dayjs';
 import { FileEntity } from './entities/file.entity';
 import { NumberGeneratorService } from '../../common/services/number-generator.service';
 import { sniffFileType, SniffedKind } from './file-type.util';
+import { businessToday } from '../../common/utils/date-range.util';
 
 /** 允许上传的真实文件类型白名单（文档 19.5；安全审查 P1）
  * 判定依据为「文件内容魔数」而非客户端声明的 MIME；
@@ -80,7 +80,7 @@ export class FileService {
     }
 
     // 日期子目录 uploads/2026/06/30/
-    const datePath = dayjs().format('YYYY/MM/DD');
+    const datePath = businessToday().replace(/-/g, '/');
     const absDir = join(this.uploadRoot, datePath);
     if (!existsSync(absDir)) {
       mkdirSync(absDir, { recursive: true });
