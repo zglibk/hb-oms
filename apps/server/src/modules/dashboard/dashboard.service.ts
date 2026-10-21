@@ -67,7 +67,7 @@ export interface DashboardOwedRow {
   merchandiser: string | null;
   productionNo: string | null;
   productModel: string | null;
-  /** 产品名称（首页两张卡片 2026-09-26 起展示它而非产品型号），口径同入库单：见 productNameOf */
+  /** 产品名称（首页两张卡片 2026-09-26 起展示它而非产品型号），首页展示口径见 productNameOf */
   productName: string | null;
   /** 规格（mm 统一口径）：前端按查看单位现算 mm/寸，故只回数值不回展示串 */
   dimensionMm: number | null;
@@ -99,7 +99,7 @@ export interface DashboardOutsourceRow {
   surfaceType: string | null;
   color: string | null;
   productModel: string | null;
-  /** 产品名称（取订单产品行，口径同入库单：见 productNameOf） */
+  /** 产品名称（取订单产品行，首页展示口径见 productNameOf） */
   productName: string | null;
   productionNo: string | null;
   /**
@@ -478,7 +478,7 @@ export class DashboardService {
   }
 
   /**
-   * 首页卡片的「产品名称」：订单产品名称，补「滑轨」/ 分体行补出货形态（外中轨/内轨），与入库单纸面同一套
+   * 首页卡片的「产品名称」：订单产品名称，补「滑轨」/ 分体行补出货形态（外中轨/内轨）。
    * （共享包 withRailSuffix + railNameSuffixOf）——分体两行订单里的产品名称常一模一样，不补形态分不出彼此。
    * 订单没填产品名称时由调用方回落产品型号，不留空格子。
    */

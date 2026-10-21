@@ -122,7 +122,7 @@ export function buildDeliveryRows(
       materialCode: s(r.material_code),
       customerDrawingNo: s(r.customer_drawing_no),
       // 分体行把出货形态（外中轨/内轨）带进产品名称，否则分体两行印成同一个名字（2026-09-25）；
-      // 整品行保持订单原文——送货单不补「滑轨」（使用方只要求入库单补）
+      // 整品行保持订单原文——送货单不补「滑轨」
       productName: r.is_split
         ? withRailSuffix(s(r.product_name), railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section))
         : bracketSplitWord(s(r.product_name)), // 整品行只给「分体」加括号，不补「滑轨」

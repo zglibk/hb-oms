@@ -1,4 +1,11 @@
-import { formatProductTypes, piecesToUnitQty, railNameSuffixOf, withRailSuffix, sanitizeItemCode } from '@hb-oms/shared';
+import {
+  bracketSplitWord,
+  formatProductTypes,
+  piecesToUnitQty,
+  railNameSuffixOf,
+  sanitizeItemCode,
+  withRailSuffix,
+} from '@hb-oms/shared';
 import { colorTextOf, mergeByProduct, specTextOf, unitLabelOf } from './print-note.util';
 
 /**
@@ -57,8 +64,9 @@ export interface InboundNoteRow {
   /** 纸面「产品代码」栏（2026-09-25 起）：货号 */
   itemNo: string;
   /**
-   * 纸面「产品名称」栏（2026-09-25 新增，产品代码与规格之间）：订单产品名称，末尾不是「…轨」时补「滑轨」
-   * （共享包 withRailSuffix，已含「轨」字不补），如「45#普通」→「45#普通滑轨」。
+   * 纸面「产品名称」栏（2026-09-25 新增，产品代码与规格之间）：
+   * 整品行直接印订单产品名称原文，不自动补「滑轨」；分体滑轨行仍带出货形态，
+   * 避免同名的外中轨/内轨两行无法区分。
    */
   productName: string;
   /**
@@ -143,11 +151,14 @@ export function buildInboundRows(
       productTypeText: formatProductTypes(r.product_type),
       // 存量值可能夹着中文说明（「45#无锁力」），纸面只印代码部分（sanitizeItemCode，库里不回写）
       itemNo: sanitizeItemCode(r.item_no),
-      // 分体行补它的出货形态（外中轨/内轨），整品补「滑轨」——否则分体两行印成同一个名字
-      productName: withRailSuffix(
-        s(r.product_name),
-        railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section),
-      ),
+      // 整品行直接印订单原文，不再自动补「滑轨」；分体行仍带出货形态，
+      // 否则外中轨/内轨两行的订单名称相同时，仓库无法区分。
+      productName: r.is_split
+        ? withRailSuffix(
+            s(r.product_name),
+            railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section),
+          )
+        : bracketSplitWord(s(r.product_name)),
       categoryText: categoryTextOf(r.item_no, r.product_name, r.product_type),
       materialThickness: thicknessOf(Number(r.order_product_id) || 0),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
