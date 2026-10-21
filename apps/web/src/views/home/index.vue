@@ -248,7 +248,7 @@
           <div class="risk-footer">
             <div v-for="item in riskItems" :key="item.key" class="risk-metric" :class="`is-${item.key}`">
               <span class="risk-metric__icon">
-                <component :is="item.icon" :size="18" :stroke-width="2.25" aria-hidden="true" />
+                <component :is="item.icon" :size="21" :stroke-width="2.25" aria-hidden="true" />
               </span>
               <div class="risk-metric__body">
                 <div class="risk-metric__summary">
@@ -1758,7 +1758,7 @@ export default { name: 'HomeDashboard' };
   position: relative;
   min-width: 0;
   height: 128px;
-  transform: translateX(-3px);
+  transform: translateX(1px);
 }
 
 .risk-chart-center {
@@ -1781,10 +1781,10 @@ export default { name: 'HomeDashboard' };
   }
 
   span {
-    margin-top: 4px;
+    margin-top: 3px;
     color: #273550;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 400;
     white-space: nowrap;
   }
 }
@@ -1794,7 +1794,8 @@ export default { name: 'HomeDashboard' };
   min-width: 0;
   flex-direction: column;
   gap: 14px;
-  padding-right: 2px;
+  padding: 0 10px 0 4px;
+  box-sizing: border-box;
 
   &__row {
     display: grid;
@@ -1851,17 +1852,17 @@ export default { name: 'HomeDashboard' };
 
   &__icon {
     display: flex;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
 
     svg {
       display: block;
-      width: 18px;
-      height: 18px;
+      width: 21px;
+      height: 21px;
       aspect-ratio: 1;
       flex: none;
     }
@@ -1907,7 +1908,7 @@ export default { name: 'HomeDashboard' };
     flex: none;
     font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 400;
     line-height: 14px;
     white-space: nowrap;
 
@@ -1938,7 +1939,7 @@ export default { name: 'HomeDashboard' };
 .is-neutral { color: var(--el-text-color-secondary); }
 
 @media (min-width: 1361px) {
-  .risk-content { grid-template-columns: 145px minmax(0, 1fr); }
+  .risk-content { grid-template-columns: 153px minmax(0, 1fr); gap: 0; }
   .risk-legend { gap: 13px; }
   .risk-legend__row { grid-template-columns: 9px minmax(0, 1fr) 34px 40px; gap: 5px; }
   .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
