@@ -89,17 +89,13 @@ export class DullStockService {
       );
     }
     if (dateRange) {
-      // 日期范围筛选有流水的档案；没有可筛日期的纯期初档案必须始终保留。
       qb.andWhere(
-        `(EXISTS (
-            SELECT 1 FROM t_dull_stock_flow mf
-            WHERE mf.dull_id = d.id
-              AND mf.flow_date >= :flowDateFrom
-              AND mf.flow_date <= :flowDateTo
-          ) OR NOT EXISTS (
-            SELECT 1 FROM t_dull_stock_flow af
-            WHERE af.dull_id = d.id
-          ))`,
+        `EXISTS (
+          SELECT 1 FROM t_dull_stock_flow mf
+          WHERE mf.dull_id = d.id
+            AND mf.flow_date >= :flowDateFrom
+            AND mf.flow_date <= :flowDateTo
+        )`,
         { flowDateFrom: dateRange.from, flowDateTo: dateRange.to },
       );
     }

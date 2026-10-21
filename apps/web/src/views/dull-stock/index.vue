@@ -462,7 +462,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
-import { formatBusinessDate, recentSixNaturalMonthRange } from '@/utils/date';
+import { formatBusinessDate } from '@/utils/date';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
@@ -496,16 +496,15 @@ const saving = ref(false);
 const list = ref<DullStockRow[]>([]);
 const total = ref(0);
 const summary = ref({ rows: 0, totalBalancePcs: 0, periodInboundPcs: 0, periodOutboundPcs: 0 });
-const initialFlowDateRange = recentSixNaturalMonthRange();
-const flowDateRange = ref<[string, string] | null>(initialFlowDateRange);
+const flowDateRange = ref<[string, string] | null>(null);
 const query = reactive({
   page: 1,
   pageSize: 20,
   keyword: '',
   surfaceType: undefined as string | undefined,
   side: undefined as string | undefined,
-  flowDateFrom: initialFlowDateRange[0] as string | undefined,
-  flowDateTo: initialFlowDateRange[1] as string | undefined,
+  flowDateFrom: undefined as string | undefined,
+  flowDateTo: undefined as string | undefined,
   onlyInStock: false,
 });
 const hasFlowDateRange = computed(() => !!query.flowDateFrom && !!query.flowDateTo);
@@ -555,18 +554,17 @@ const {
   cancel: cancelKeywordSearch,
 } = useDebouncedSearch(reload);
 
-/** 清空查询条件，恢复最近六个自然月的默认流水范围并返回第一页。 */
+/** 清空查询条件，恢复全量档案并返回第一页。 */
 function resetFilters() {
   cancelKeywordSearch();
-  const defaultRange = recentSixNaturalMonthRange();
-  flowDateRange.value = defaultRange;
+  flowDateRange.value = null;
   Object.assign(query, {
     page: 1,
     keyword: '',
     surfaceType: undefined,
     side: undefined,
-    flowDateFrom: defaultRange[0],
-    flowDateTo: defaultRange[1],
+    flowDateFrom: undefined,
+    flowDateTo: undefined,
     onlyInStock: false,
   });
   load();
