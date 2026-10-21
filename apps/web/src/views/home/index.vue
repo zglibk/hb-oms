@@ -159,7 +159,7 @@
     </div>
 
     <!-- 中段双卡：常用功能占 2/3，交付风险占 1/3，原有上下区域不改。 -->
-    <el-row :gutter="16" class="overview-row" v-if="canDashboard">
+    <el-row v-if="canDashboard && showOverviewCards" :gutter="16" class="overview-row">
       <el-col :xs="24" :lg="16">
         <el-card shadow="never" class="overview-card quick-card">
           <div class="overview-card__head">
@@ -199,15 +199,32 @@
               <IconChartPieFilled class="overview-card__title-icon" aria-hidden="true" />
               交付风险分布
             </span>
-            <el-select
-              v-model="riskDays"
-              class="risk-period"
-              size="small"
-              aria-label="交付风险统计周期"
-              @change="loadRisk"
-            >
-              <el-option v-for="item in riskDayOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
+            <div class="risk-filters">
+              <el-select
+                v-model="riskDays"
+                class="risk-period"
+                size="small"
+                placeholder="自定义"
+                aria-label="交付风险统计周期"
+                @change="onRiskDaysChange"
+              >
+                <el-option v-for="item in riskDayOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+              <el-date-picker
+                v-model="riskDateRange"
+                class="risk-date-range"
+                type="daterange"
+                size="small"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                range-separator="-"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                :disabled-date="disableFutureRiskDate"
+                aria-label="交付风险下单日期范围"
+                @change="onRiskDateRangeChange"
+              />
+            </div>
           </div>
 
           <div class="risk-content">
@@ -529,6 +546,12 @@ import ChangelogNoticeDialog from './ChangelogNoticeDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
 import { ADMIN_ROLE_CODE, SUPER_ADMIN_ROLE_CODE } from '@hb-oms/shared';
+import {
+  businessToday,
+  datePickerDay,
+  formatBusinessDate,
+  formatDateTime,
+} from '@/utils/date';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -536,6 +559,16 @@ const announcementStore = useAnnouncementStore();
 const { homeOwedScrollSpeed, homeOutsourceScrollSpeed } = useFeatureFlags();
 const announcementBadge = computed(() => announcementStore.unreadCount > 99 ? '99+' : announcementStore.unreadCount);
 const loading = ref(false);
+const overviewMedia = typeof window === 'undefined'
+  ? null
+  : window.matchMedia('(min-width: 1600px) and (min-height: 901px)');
+const showOverviewCards = ref(overviewMedia?.matches ?? true);
+
+function onOverviewMediaChange(event: MediaQueryListEvent) {
+  showOverviewCards.value = event.matches;
+  if (event.matches) void loadRisk();
+  void nextTick(scheduleListHeightUpdate);
+}
 
 type QuickTone = 'green' | 'blue' | 'orange' | 'violet' | 'red';
 interface QuickAction {
@@ -551,7 +584,7 @@ interface QuickAction {
 const quickActions: QuickAction[] = [
   { label: '订单管理', icon: IconNotes, tone: 'green', path: '/order', permissions: ['order'] },
   { label: '外发登记', icon: IconExternalLink, tone: 'blue', path: '/outsource/form', permissions: ['outsource', 'outsource:create'] },
-  { label: '装配批次', icon: IconSettings, tone: 'orange', path: '/assembly', permissions: ['assembly'] },
+  { label: '装配管理', icon: IconSettings, tone: 'orange', path: '/assembly', permissions: ['assembly'] },
   {
     label: '生产入库', icon: IconHome, tone: 'violet', path: '/finished-stock/form',
     query: { bizType: FINISHED_BIZ_TYPE.INBOUND }, permissions: ['finished-stock', 'finished-stock:create'],
@@ -580,15 +613,25 @@ function openQuickAction(action: QuickAction) {
 
 type RiskDays = 30 | 60 | 90;
 type RiskKey = 'overdue' | 'upcoming' | 'normal';
-const riskDays = ref<RiskDays>(30);
+const riskDays = ref<RiskDays | undefined>(30);
 const riskDayOptions: Array<{ label: string; value: RiskDays }> = [
   { label: '近30天', value: 30 },
   { label: '近60天', value: 60 },
   { label: '近90天', value: 90 },
 ];
+/** 周期预设也把实际生效区间填进日期框；是否自定义仍由 riskDays 是否为空判断。 */
+function riskRangeOf(days: RiskDays): [string, string] {
+  const to = businessToday();
+  const from = new Date(`${to}T00:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - (days - 1));
+  return [from.toISOString().slice(0, 10), to];
+}
+const riskDateRange = ref<[string, string] | null>(riskRangeOf(30));
 const riskLoading = ref(false);
 const deliveryRisk = ref<DeliveryRiskSummary>({
   days: 30,
+  dateFrom: '',
+  dateTo: '',
   total: 0,
   overdue: { count: 0, rate: 0, changeRate: 0 },
   upcoming: { count: 0, rate: 0, changeRate: 0 },
@@ -655,14 +698,52 @@ function trendClass(key: RiskKey, value: number): string {
   return favorable ? 'is-good' : 'is-bad';
 }
 
+const disableFutureRiskDate = (date: Date) => datePickerDay(date) > businessToday();
+
+function onRiskDaysChange(value: RiskDays) {
+  if (!riskDayOptions.some((item) => item.value === value)) return;
+  riskDateRange.value = riskRangeOf(value);
+  void loadRisk();
+}
+
+function onRiskDateRangeChange(value: [string, string] | null) {
+  if (!value?.[0] || !value?.[1]) {
+    riskDays.value = 30;
+    riskDateRange.value = riskRangeOf(30);
+    void loadRisk();
+    return;
+  }
+  const days = Math.round((Date.parse(value[1]) - Date.parse(value[0])) / 86_400_000) + 1;
+  if (days < 1 || days > 366) {
+    ElMessage.warning(days < 1 ? '开始日期不能晚于结束日期' : '日期范围最长为 366 天');
+    riskDays.value = 30;
+    riskDateRange.value = riskRangeOf(30);
+    void loadRisk();
+    return;
+  }
+  riskDays.value = undefined;
+  void loadRisk();
+}
+
 let riskRequestSeq = 0;
 async function loadRisk() {
-  if (!canDashboard.value) return;
+  if (!canDashboard.value || !showOverviewCards.value) return;
   const seq = ++riskRequestSeq;
   riskLoading.value = true;
   try {
-    const result = await getDeliveryRisk(riskDays.value);
-    if (seq === riskRequestSeq) deliveryRisk.value = result;
+    const days = riskDays.value;
+    const range = riskDateRange.value;
+    // 周期预设与自定义范围互斥传给接口；日期框即使已显示预设区间，也不能同时发送两组参数。
+    const result = await getDeliveryRisk(days
+      ? { days }
+      : range
+        ? { dateFrom: range[0], dateTo: range[1] }
+        : { days: 30 });
+    if (seq === riskRequestSeq) {
+      deliveryRisk.value = result;
+      // 以后端实际统计边界为准，避免跨天或服务端口径调整后筛选框与卡片数据不一致。
+      riskDateRange.value = [result.dateFrom, result.dateTo];
+    }
   } finally {
     if (seq === riskRequestSeq) riskLoading.value = false;
   }
@@ -812,6 +893,7 @@ const outsourceScroll = useAutoScroll(() => scrollWrapOf(outsourceTableRef.value
 onMounted(() => {
   owedScroll.start();
   outsourceScroll.start();
+  overviewMedia?.addEventListener('change', onOverviewMediaChange);
   window.addEventListener('resize', scheduleListHeightUpdate);
   void nextTick(scheduleListHeightUpdate);
 });
@@ -847,6 +929,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer);
+  overviewMedia?.removeEventListener('change', onOverviewMediaChange);
   window.removeEventListener('resize', scheduleListHeightUpdate);
   cancelAnimationFrame(listResizeRaf);
 });
@@ -854,8 +937,7 @@ onUnmounted(() => {
 type GreetingTone = 'night' | 'morning' | 'forenoon' | 'noon' | 'afternoon' | 'evening';
 
 const greetingMeta = computed(() => {
-  void nowTick.value;
-  const h = new Date().getHours();
+  const h = Number(formatDateTime(nowTick.value).slice(11, 13));
   if (h < 6) return { text: '夜深了', tone: 'night' as GreetingTone };
   if (h < 9) return { text: '早上好', tone: 'morning' as GreetingTone };
   if (h < 12) return { text: '上午好', tone: 'forenoon' as GreetingTone };
@@ -883,8 +965,7 @@ const summaryLoaded = ref(false);
 const tipData = computed<TipData | null>(() => {
   if (!canDashboard.value || !summaryLoaded.value) return null;
   const s = summary.value;
-  const d = new Date(nowTick.value);
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = formatBusinessDate(nowTick.value);
   return {
     activeOrders: s.cards.activeOrders,
     overdueOrders: s.cards.overdueOrders,
@@ -948,8 +1029,10 @@ const calOpen = ref(false);
 /** 日历面板抬头：大号「日」+ 年月 + 星期 */
 const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 const calHead = computed(() => {
-  const d = new Date(nowTick.value);
-  return { day: d.getDate(), ym: `${d.getFullYear()}年${d.getMonth() + 1}月`, week: `星期${WEEK_CN[d.getDay()]}` };
+  const today = formatBusinessDate(nowTick.value);
+  const [year, month, day] = today.split('-').map(Number);
+  const week = new Date(`${today}T00:00:00Z`).getUTCDay();
+  return { day, ym: `${year}年${month}月`, week: `星期${WEEK_CN[week]}` };
 });
 
 const yearCdLabel = computed(() => {
@@ -1452,14 +1535,14 @@ export default { name: 'HomeDashboard' };
     flex: 1;
     flex-direction: column;
     overflow: hidden;
-    padding: 12px 14px 10px;
+    padding: 8px 14px 10px;
     box-sizing: border-box;
   }
 
   &__head {
     display: flex;
-    min-height: 24px;
-    flex: 0 0 24px;
+    min-height: 20px;
+    flex: 0 0 20px;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
@@ -1469,12 +1552,12 @@ export default { name: 'HomeDashboard' };
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    transform: translateY(2px);
     color: #101a33;
     font-size: 14px;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1;
+    white-space: nowrap;
 
     &-icon {
       display: block;
@@ -1496,11 +1579,11 @@ export default { name: 'HomeDashboard' };
   min-height: 0;
   height: 186px;
   flex: 0 0 186px;
-  margin-top: 24px;
+  margin-top: 10px;
   grid-template-columns: repeat(6, 85px);
   grid-template-rows: repeat(2, 85px);
-  justify-content: space-between;
-  column-gap: 12px;
+  justify-content: center;
+  column-gap: clamp(12px, calc((100% - 558px) / 5), 85px);
   row-gap: 16px;
 }
 
@@ -1520,15 +1603,17 @@ export default { name: 'HomeDashboard' };
   padding: 8px 4px 7px;
   border: 1px solid transparent;
   border-radius: 7px;
-  background: var(--quick-bg);
+  background: transparent;
   color: #14203a;
   font: inherit;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled),
+  &:focus-visible {
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--quick-color) 24%, transparent);
+    background: var(--quick-bg);
     box-shadow: 0 6px 16px color-mix(in srgb, var(--quick-color) 12%, transparent);
   }
 
@@ -1603,18 +1688,52 @@ export default { name: 'HomeDashboard' };
 }
 
 .risk-period {
-  width: 108px;
-  transform: translateY(5px);
+  width: 84px;
+  flex: 0 0 84px;
 
   :deep(.el-select__wrapper) {
     min-height: 30px;
-    padding: 2px 9px;
+    padding: 2px 7px;
     border-radius: 6px;
     box-shadow: 0 0 0 1px #dfe6ef inset;
     font-size: 12px;
 
     .el-select__suffix { color: #53617a; }
   }
+}
+
+.risk-card .overview-card__head {
+  min-height: 30px;
+  flex-basis: 30px;
+}
+
+.risk-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 6px;
+}
+
+.risk-date-range {
+  --el-date-editor-daterange-width: 200px;
+  width: 200px !important;
+  flex: 0 0 200px;
+
+  :deep(.el-range-separator) {
+    width: 10px;
+    padding: 0 2px;
+    font-size: 11px;
+  }
+}
+
+:deep(.risk-date-range.el-range-editor.el-input__wrapper) {
+  min-height: 30px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #dfe6ef inset;
+  font-size: 11px;
 }
 
 .risk-card :deep(.el-card__body) {
@@ -1803,17 +1922,6 @@ export default { name: 'HomeDashboard' };
 .is-bad { color: #ff515b; }
 .is-neutral { color: var(--el-text-color-secondary); }
 
-@media (max-width: 1360px) and (min-width: 1200px) {
-  .risk-content { grid-template-columns: 128px minmax(0, 1fr); }
-  .risk-chart-wrap { transform: translateX(-5px); }
-  .risk-legend { gap: 18px; }
-  .risk-legend__row { grid-template-columns: 8px minmax(0, 1fr) 30px 36px; gap: 4px; }
-  .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
-  .risk-metric { padding: 0 5px; gap: 5px; }
-  .risk-metric__icon { width: 26px; height: 26px; flex-basis: 26px; }
-  .risk-metric__label small { display: none; }
-}
-
 @media (min-width: 1361px) {
   .risk-content { grid-template-columns: 145px minmax(0, 1fr); }
   .risk-legend { gap: 20px; }
@@ -1824,22 +1932,9 @@ export default { name: 'HomeDashboard' };
   .risk-metric__label small { display: none; }
 }
 
-@media (max-width: 768px) {
-  .overview-card { height: auto; min-height: 286px; }
-  .quick-card :deep(.el-card__body) { height: auto; }
-  .quick-grid { grid-template-columns: repeat(2, 92px); grid-template-rows: repeat(6, 92px); height: auto; justify-content: space-around; }
-  .quick-action { width: 92px; height: 92px; }
-  .quick-card { min-height: 704px; }
-  .risk-card { min-height: 464px; }
-  .risk-card :deep(.el-card__body) { height: auto; }
-  .risk-content {
-    height: auto;
-    grid-template-columns: 1fr;
-  }
-  .risk-legend { padding: 0 12px 10px; }
-  .risk-footer { height: auto; padding-top: 10px; grid-template-columns: 1fr; }
-  .risk-metric { padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--el-border-color-lighter); }
-  .risk-metric:last-child { border-bottom: 0; }
+/* 典型笔记本 CSS 视口（1366×768、1536×864、1920×900）及更小屏幕不展示中段双卡。 */
+@media (max-width: 1599px), (max-height: 900px) {
+  .overview-row { display: none; }
 }
 /* 「规格」列表头即单位开关：保持表头原样式，只加切换图标与悬停反馈 */
 .dim-toggle {

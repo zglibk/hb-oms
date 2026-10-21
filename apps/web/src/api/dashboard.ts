@@ -83,17 +83,26 @@ export interface DeliveryRiskMetric {
 }
 
 export interface DeliveryRiskSummary {
-  days: 30 | 60 | 90;
+  /** 自定义日期范围时为 null。 */
+  days: 30 | 60 | 90 | null;
+  dateFrom: string;
+  dateTo: string;
   total: number;
   overdue: DeliveryRiskMetric;
   upcoming: DeliveryRiskMetric;
   normal: DeliveryRiskMetric;
 }
 
+export interface DeliveryRiskQuery {
+  days?: 30 | 60 | 90;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 /** 首页看板汇总（登录即可访问，不挂权限点） */
 export const getDashboardSummary = () =>
   request.get<any, DashboardSummary>('/api/dashboard/summary');
 
-/** 首页交付风险分布（按下单日期取最近 30/60/90 天的进行中订单）。 */
-export const getDeliveryRisk = (days: 30 | 60 | 90) =>
-  request.get<any, DeliveryRiskSummary>('/api/dashboard/delivery-risk', { params: { days } });
+/** 首页交付风险分布：预设周期或自定义下单日期范围二选一。 */
+export const getDeliveryRisk = (params: DeliveryRiskQuery) =>
+  request.get<any, DeliveryRiskSummary>('/api/dashboard/delivery-risk', { params });

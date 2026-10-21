@@ -27,6 +27,6 @@ export class DashboardController {
   @Get('delivery-risk')
   @RequirePermissions('stat:dashboard')
   async deliveryRisk(@Query() query: QueryDeliveryRiskDto) {
-    return this.service.deliveryRisk(query.days);
+    return this.service.deliveryRisk(query);
   }
 }

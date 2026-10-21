@@ -553,7 +553,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 ### 5.2 首页看板（销售视角）
 
 - 汇总卡：进行中订单数、总成品欠数（支）、总发货欠数（支）、逾期订单数。
-- 汇总卡与待办列表之间增加两张概览卡：左侧「常用功能」为订单管理、外发登记、装配批次、生产入库、销售出库、订单台账、产品汇总、呆滞品八个快捷入口，入口按当前用户权限禁用；右侧「交付风险分布」按进行中订单去重统计逾期未发货、未来 7 天临近交期、正常推进三类，同一订单逾期优先、三类互斥。时间范围按下单日期切换近 30/60/90 天，并展示相对上一等长窗口的变化。
+- 汇总卡与待办列表之间增加两张概览卡，仅在 CSS 视口至少 1600×901 的大屏桌面端显示，笔记本或其它小屏整块隐藏：左侧「常用功能」为订单管理、外发登记、装配管理、生产入库、销售出库、订单台账、产品汇总、呆滞品、成品库存、用户管理、通知公告、系统配置十二个快捷入口，入口按当前用户权限禁用，默认透明，仅悬浮或键盘聚焦时显示状态底色；六列入口整体居中，宽屏时水平间距与按钮宽度一致。右侧「交付风险分布」按进行中订单去重统计逾期未发货、未来 7 天临近交期、正常推进三类，同一订单逾期优先、三类互斥。时间范围按下单日期在近 30/60/90 天周期与最长 366 天的自定义范围之间互斥选择；日期框始终回显当前实际统计区间，选择周期时自动填入对应起止日，手动改日期后切换为自定义，清空自定义范围回落并显示近 30 天；卡片展示相对所选范围之前紧邻的上一等长窗口的变化。
 - 列表区左卡为逾期未发货 / 临近交期 7 天内订单双页签；右卡为近期外发回厂 / 通知公告双页签，默认仍显示近期外发回厂。待办与外发两张列表自动滚动速度默认均为 22px/s，可在「系统配置 → 滚动速度」分别调整。通知公告只取最新 10 条，使用无表头、无表格线且不自动滚动的自定义列表；未读显示红底白字 `New`，页签红色角标显示未读数（超过 99 显示 `99+`），“更多”打开顶栏通知公告中心。
 - 首页是普通管理页；全屏的**数据可视化大屏**另见 §5.2.1。
 - 整块看板（含右侧通知公告页签）仍由 `stat:dashboard` 控制；没有该权限的用户仍可通过顶栏铃铛、即时弹窗与独立详情页接收通告。
@@ -611,7 +611,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | part-stock | `GET /part-stock`、`POST /part-stock/adjust` | 部件台账查询 / 手工调整（写 t_part_adjust 流水） |
 | product-summary | `GET /product-summary`、`GET /product-summary/export`、`GET /product-summary/period`、`GET /product-summary/period/export` | **产品汇总查询**（§5.3）：Tab1 累计口径复用 findLedger 二次聚合；Tab2 期间进销存按单据日期切区间；两个导出均双 Sheet |
 | system | 用户/角色/菜单/字典/物料 CRUD；`POST /system/user/:id/unlock` | 用户列表区分正常启用、登录锁定、停用；管理员可解除普通账号锁定，超级管理员可解除全部账号锁定；重置密码同时清锁 |
-| dashboard | `GET /dashboard/summary`、`GET /dashboard/delivery-risk?days=30` | 首页看板汇总、近 30/60/90 天交付风险分布 |
+| dashboard | `GET /dashboard/summary`、`GET /dashboard/delivery-risk?days=30`、`GET /dashboard/delivery-risk?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD` | 首页看板汇总、按预设周期或自定义下单日期范围查询交付风险分布 |
 | announcement | `GET /announcement/pending`、`GET /announcement/history`、`GET /announcement/:id`、`POST /announcement/:id/view`、`GET/POST /announcement/:id/replies`、`POST /announcement/ack` | 全员通告中心、首次查看/批量确认、公开/非公开追加回复 |
 | announcement | `GET /announcement/stream` | Bearer Token SSE；20 秒心跳，最长 5 分钟后重连，客户端收到事件后重拉权威数据 |
 | announcement-admin | `/announcement/admin` 草稿增删改、`/:id/publish`、`/:id/withdraw`、查看记录、回复导出 | 仅管理员/超级管理员；发布后锁定，回复 Excel 空结果/超 5000 行拒绝 |

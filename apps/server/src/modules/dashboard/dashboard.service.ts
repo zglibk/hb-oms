@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
   FINISHED_DOC_STATUS,
@@ -17,6 +17,13 @@ import {
   OUTBOUND_FAMILY_PARAMS,
   OUTBOUND_FAMILY_SQL,
 } from '../order/order-owed.util';
+import {
+  businessDate,
+  businessDateSpan,
+  businessToday,
+  shiftBusinessDate,
+} from '../../common/utils/date-range.util';
+import { QueryDeliveryRiskDto } from './dto/query-delivery-risk.dto';
 
 /**
  * ===== 首页看板（销售视角，设计文档 §5.2）=====
@@ -195,13 +202,30 @@ export class DashboardService {
    * - 同一订单只要有一个仍欠货的产品逾期，整单优先归入「逾期未发货」；
    * - 无逾期、但有产品在未来 7 天内到期且欠货，归入「临近交期」；
    * - 其余进行中订单归入「正常推进」；
-   * - 近 N 天按下单日期取数，「较上期」对比紧邻的前一个等长下单日期窗口。
+   * - 周期或自定义日期范围按下单日期取数，「较上期」对比紧邻的前一个等长下单日期窗口。
    */
-  async deliveryRisk(days: number) {
-    const safeDays = [30, 60, 90].includes(days) ? days : 30;
+  async deliveryRisk(query: QueryDeliveryRiskDto) {
+    const hasCustomRange = Boolean(query.dateFrom || query.dateTo);
+    if (hasCustomRange && query.days !== undefined) {
+      throw new BadRequestException('统计周期与自定义日期范围不能同时使用');
+    }
+    if (hasCustomRange && (!query.dateFrom || !query.dateTo)) {
+      throw new BadRequestException('自定义日期范围必须同时填写开始和结束日期');
+    }
+
+    const days = query.days ?? 30;
+    const dateTo = hasCustomRange ? query.dateTo! : businessToday();
+    const dateFrom = hasCustomRange ? query.dateFrom! : shiftBusinessDate(dateTo, -(days - 1));
+    const rangeDays = businessDateSpan(dateFrom, dateTo);
+    if (rangeDays < 1) throw new BadRequestException('开始日期不能晚于结束日期');
+    if (rangeDays > 366) throw new BadRequestException('日期范围最长为 366 天');
+    if (dateTo > businessToday()) throw new BadRequestException('结束日期不能晚于今天');
+
+    const previousTo = shiftBusinessDate(dateFrom, -1);
+    const previousFrom = shiftBusinessDate(dateFrom, -rangeDays);
     const [current, previous] = await Promise.all([
-      this.loadDeliveryRiskWindow(safeDays, false),
-      this.loadDeliveryRiskWindow(safeDays, true),
+      this.loadDeliveryRiskWindow(dateFrom, dateTo),
+      this.loadDeliveryRiskWindow(previousFrom, previousTo),
     ]);
 
     const item = (key: keyof Omit<DeliveryRiskCounts, 'total'>) => {
@@ -217,7 +241,9 @@ export class DashboardService {
     };
 
     return {
-      days: safeDays,
+      days: hasCustomRange ? null : days,
+      dateFrom,
+      dateTo,
       total: current.total,
       overdue: item('overdue'),
       upcoming: item('upcoming'),
@@ -225,15 +251,7 @@ export class DashboardService {
     };
   }
 
-  private async loadDeliveryRiskWindow(days: number, previous: boolean): Promise<DeliveryRiskCounts> {
-    // 当前期：[今天-(N-1), 今天]；上期：[今天-(2N-1), 今天-N]，均为 N 个自然日。
-    const dateSql = previous
-      ? `AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND o.order_date <  DATE_SUB(CURDATE(), INTERVAL ? DAY)`
-      : `AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-         AND o.order_date <= CURDATE()`;
-    const dateParams = previous ? [days * 2 - 1, days - 1] : [days - 1];
-
+  private async loadDeliveryRiskWindow(dateFrom: string, dateTo: string): Promise<DeliveryRiskCounts> {
     const rows: any[] = await this.dataSource.query(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN risk.hasOverdue = 1 THEN 1 ELSE 0 END) AS overdue,
@@ -251,10 +269,11 @@ export class DashboardService {
                                    AND p.qty_pcs - IFNULL(fin.out_qty, 0) > 0
                               THEN 1 ELSE 0 END) AS hasUpcoming
                 ${this.activeGroupsFrom}
-                ${dateSql}
+                AND o.order_date >= ?
+                AND o.order_date <= ?
                GROUP BY o.id
               ) risk`,
-      [UPCOMING_DAYS, ...this.activeGroupsParams, ...dateParams],
+      [UPCOMING_DAYS, ...this.activeGroupsParams, dateFrom, dateTo],
     );
     const row = rows?.[0] ?? {};
     return {
@@ -472,12 +491,7 @@ export class DashboardService {
 
   private dateText(v: any): string | null {
     if (!v) return null;
-    if (v instanceof Date) {
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, '0');
-      const d = String(v.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
+    if (v instanceof Date) return businessDate(v);
     return String(v).slice(0, 10);
   }
 }
