@@ -229,7 +229,7 @@
 
           <div class="risk-content">
             <div class="risk-chart-wrap">
-              <AppChart :option="riskChartOption" height="160px" />
+              <AppChart :option="riskChartOption" height="128px" />
               <div class="risk-chart-center" aria-hidden="true">
                 <strong>{{ formatCount(deliveryRisk.total) }}</strong>
                 <span>进行中订单</span>
@@ -517,8 +517,8 @@ import {
   IconMinus,
   IconNotes,
   IconPackages,
-  IconSettings,
-  IconUpload,
+  IconTools,
+  IconTruckDelivery,
   IconUserCog,
 } from '@tabler/icons-vue';
 import type { EChartsOption } from 'echarts';
@@ -585,13 +585,13 @@ interface QuickAction {
 const quickActions: QuickAction[] = [
   { label: '订单管理', icon: IconNotes, tone: 'green', path: '/order', permissions: ['order'] },
   { label: '外发登记', icon: IconExternalLink, tone: 'blue', path: '/outsource/form', permissions: ['outsource', 'outsource:create'] },
-  { label: '装配管理', icon: IconSettings, tone: 'orange', path: '/assembly', permissions: ['assembly'] },
+  { label: '装配管理', icon: IconTools, tone: 'orange', path: '/assembly', permissions: ['assembly'] },
   {
     label: '生产入库', icon: IconHome, tone: 'violet', path: '/finished-stock/form',
     query: { bizType: FINISHED_BIZ_TYPE.INBOUND }, permissions: ['finished-stock', 'finished-stock:create'],
   },
   {
-    label: '销售出库', icon: IconUpload, tone: 'red', path: '/finished-stock/form',
+    label: '销售出库', icon: IconTruckDelivery, tone: 'red', path: '/finished-stock/form',
     query: { bizType: FINISHED_BIZ_TYPE.SALE_OUTBOUND }, permissions: ['finished-stock', 'finished-stock:create'],
   },
   { label: '订单台账', icon: IconClipboardText, tone: 'blue', path: '/ledger', permissions: ['ledger'] },
@@ -1524,7 +1524,7 @@ export default { name: 'HomeDashboard' };
 .overview-card {
   display: flex;
   width: 100%;
-  height: 268px;
+  height: 236px;
   flex-direction: column;
   border-color: #e5eaf1;
   border-radius: 8px;
@@ -1747,7 +1747,7 @@ export default { name: 'HomeDashboard' };
 
 .risk-content {
   display: grid;
-  height: 160px;
+  height: 128px;
   margin-top: 3px;
   grid-template-columns: minmax(160px, 0.95fr) minmax(220px, 1.05fr);
   align-items: center;
@@ -1757,7 +1757,7 @@ export default { name: 'HomeDashboard' };
 .risk-chart-wrap {
   position: relative;
   min-width: 0;
-  height: 160px;
+  height: 128px;
   transform: translateX(-3px);
 }
 
@@ -1793,7 +1793,7 @@ export default { name: 'HomeDashboard' };
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 22px;
+  gap: 14px;
   padding-right: 2px;
 
   &__row {
@@ -1939,7 +1939,7 @@ export default { name: 'HomeDashboard' };
 
 @media (min-width: 1361px) {
   .risk-content { grid-template-columns: 145px minmax(0, 1fr); }
-  .risk-legend { gap: 20px; }
+  .risk-legend { gap: 13px; }
   .risk-legend__row { grid-template-columns: 9px minmax(0, 1fr) 34px 40px; gap: 5px; }
   .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
   .risk-metric { padding: 0 4px; gap: 7px; }
