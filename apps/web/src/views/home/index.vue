@@ -239,7 +239,7 @@
               <div v-for="item in riskItems" :key="item.key" class="risk-legend__row">
                 <span class="risk-legend__dot" :style="{ backgroundColor: item.color }"></span>
                 <span class="risk-legend__label">{{ item.label }}</span>
-                <strong>{{ formatCount(item.metric.count) }}</strong>
+                <strong :style="{ color: item.chartColor }">{{ formatCount(item.metric.count) }}</strong>
                 <span class="risk-legend__rate">{{ formatPercent(item.metric.rate) }}</span>
               </div>
             </div>
@@ -248,20 +248,21 @@
           <div class="risk-footer">
             <div v-for="item in riskItems" :key="item.key" class="risk-metric" :class="`is-${item.key}`">
               <span class="risk-metric__icon">
-                <component :is="item.icon" :size="15" :stroke-width="2.25" aria-hidden="true" />
+                <component :is="item.icon" :size="18" :stroke-width="2.25" aria-hidden="true" />
               </span>
               <div class="risk-metric__body">
-                <div class="risk-metric__value">
+                <div class="risk-metric__summary">
                   <strong>{{ formatCount(item.metric.count) }}</strong>
-                  <span :class="trendClass(item.key, item.metric.changeRate)">
-                    <component :is="trendIcon(item.metric.changeRate)" :size="10" :stroke-width="3" aria-hidden="true" />
-                    {{ formatTrend(item.metric.changeRate) }}
-                  </span>
-                </div>
-                <div class="risk-metric__label">
                   <span>{{ item.shortLabel }}</span>
-                  <small>较上期</small>
                 </div>
+                <span
+                  class="risk-metric__trend"
+                  :class="trendClass(item.key, item.metric.changeRate)"
+                  :aria-label="`较上期 ${formatTrend(item.metric.changeRate)}`"
+                >
+                  <component :is="trendIcon(item.metric.changeRate)" :size="11" :stroke-width="3" aria-hidden="true" />
+                  {{ formatTrend(item.metric.changeRate) }}
+                </span>
               </div>
             </div>
           </div>
@@ -640,12 +641,12 @@ const deliveryRisk = ref<DeliveryRiskSummary>({
 const riskItems = computed(() => [
   {
     key: 'overdue' as const, label: '逾期未发货', shortLabel: '逾期未发货', color: '#ff5a60',
-    icon: IconAlertCircle, metric: deliveryRisk.value.overdue,
+    chartColor: '#ff5a60', icon: IconAlertCircle, metric: deliveryRisk.value.overdue,
   },
   {
     key: 'upcoming' as const, label: `临近交期（${summary.value.upcomingDays}天）`,
     shortLabel: `临近交期（${summary.value.upcomingDays}天）`,
-    color: '#ff9f2f', icon: IconClock, metric: deliveryRisk.value.upcoming,
+    color: '#ff9f2f', chartColor: '#ff9f2f', icon: IconClock, metric: deliveryRisk.value.upcoming,
   },
   {
     key: 'normal' as const, label: '正常推进', shortLabel: '正常推进', color: '#16b88f', chartColor: '#43cdb0',
@@ -656,7 +657,7 @@ const riskChartOption = computed<EChartsOption>(() => {
   const values = riskItems.value.map((item) => ({
     value: item.metric.count,
     name: item.label,
-    itemStyle: { color: 'chartColor' in item ? item.chartColor : item.color },
+    itemStyle: { color: item.chartColor },
   }));
   const hasData = deliveryRisk.value.total > 0;
   return {
@@ -1717,9 +1718,10 @@ export default { name: 'HomeDashboard' };
 }
 
 .risk-date-range {
-  --el-date-editor-daterange-width: 200px;
-  width: 200px !important;
-  flex: 0 0 200px;
+  --el-date-editor-daterange-width: 184px;
+  width: 184px !important;
+  max-width: 184px;
+  flex: 0 0 184px;
 
   :deep(.el-range-separator) {
     width: 10px;
@@ -1729,6 +1731,8 @@ export default { name: 'HomeDashboard' };
 }
 
 :deep(.risk-date-range.el-range-editor.el-input__wrapper) {
+  width: 184px !important;
+  max-width: 184px;
   min-height: 30px;
   padding: 2px 7px;
   border-radius: 6px;
@@ -1838,39 +1842,45 @@ export default { name: 'HomeDashboard' };
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
-  padding: 0 8px;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 5px;
   border-right: 1px solid #e8edf3;
 
   &:last-child { border-right: 0; }
 
   &__icon {
     display: flex;
-    width: 30px;
-    height: 30px;
-    flex: 0 0 30px;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
 
     svg {
       display: block;
-      width: 15px;
-      height: 15px;
+      width: 18px;
+      height: 18px;
       aspect-ratio: 1;
       flex: none;
     }
   }
 
-  &__body { min-width: 0; flex: 1; }
-  &__value,
-  &__label {
+  &__body {
     display: flex;
+    min-width: 0;
     align-items: center;
-    justify-content: space-between;
-    gap: 5px;
+    justify-content: center;
+    gap: 8px;
   }
-  &__value {
+
+  &__summary {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+
     strong {
       font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
       font-size: 16px;
@@ -1878,43 +1888,48 @@ export default { name: 'HomeDashboard' };
       letter-spacing: -0.3px;
       line-height: 17px;
     }
-    span {
-      display: inline-flex;
-      align-items: center;
-      white-space: nowrap;
-      font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
-      font-size: 10px;
-      font-weight: 700;
-      line-height: 14px;
 
-      svg {
-        width: 10px;
-        height: 10px;
-        margin-right: 1px;
-        flex: none;
-      }
+    span {
+      overflow: hidden;
+      max-width: 78px;
+      margin-top: 1px;
+      color: #6f7e96;
+      font-size: 10px;
+      line-height: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
-  &__label {
-    margin-top: 1px;
-    color: #6f7e96;
+
+  &__trend {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    font-family: 'Barlow Semi Condensed', 'Arial Narrow', sans-serif;
     font-size: 10px;
-    line-height: 13px;
+    font-weight: 700;
+    line-height: 14px;
     white-space: nowrap;
-    small { font-size: 10px; }
+
+    svg {
+      width: 11px;
+      height: 11px;
+      margin-right: 1px;
+      flex: none;
+    }
   }
 
   &.is-overdue {
     .risk-metric__icon { background: #fff0f1; color: #ff5a60; }
-    .risk-metric__value strong { color: #ff5a60; }
+    .risk-metric__summary strong { color: #ff5a60; }
   }
   &.is-upcoming {
     .risk-metric__icon { background: #fff5e9; color: #ff9f2f; }
-    .risk-metric__value strong { color: #f58a14; }
+    .risk-metric__summary strong { color: #f58a14; }
   }
   &.is-normal {
     .risk-metric__icon { background: #eaf8f4; color: #16b88f; }
-    .risk-metric__value strong { color: #12a982; }
+    .risk-metric__summary strong { color: #12a982; }
   }
 }
 
@@ -1927,9 +1942,7 @@ export default { name: 'HomeDashboard' };
   .risk-legend { gap: 20px; }
   .risk-legend__row { grid-template-columns: 9px minmax(0, 1fr) 34px 40px; gap: 5px; }
   .risk-legend__label { overflow: hidden; text-overflow: ellipsis; }
-  .risk-metric { padding: 0 6px; gap: 5px; }
-  .risk-metric__icon { width: 26px; height: 26px; flex-basis: 26px; }
-  .risk-metric__label small { display: none; }
+  .risk-metric { padding: 0 4px; gap: 7px; }
 }
 
 /* 典型笔记本 CSS 视口（1366×768、1536×864、1920×900）及更小屏幕不展示中段双卡。 */
