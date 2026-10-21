@@ -136,12 +136,23 @@
     <!-- 产品选择器（挂订单期初用）：按边别展开 -->
     <el-dialog v-model="pickerVisible" title="选择要录期初的订单产品" width="1000px" top="6vh" @open="loadOptions">
       <div class="picker-bar">
+        <el-date-picker
+          v-model="pickerDeliveryRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          start-placeholder="交期开始"
+          end-placeholder="交期结束"
+          size="small"
+          style="width: 250px"
+          @change="loadOptions"
+        />
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
           placeholder="订单号/客户/生产单号/型号/产品代码"
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
+        <el-button size="small" @click="resetPickerFilters">重置</el-button>
         <span class="picker-tip">只列「期初补录」订单；含卡口的产品按左右分行录入</span>
       </div>
       <el-table ref="pickerRef" :data="pickerRows" v-loading="pickerLoading" border stripe size="small" height="52vh"
@@ -186,7 +197,7 @@ import {
   normalizeProductTypes,
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
 
 const tab = ref('group');
 const saving = ref(false);
@@ -213,6 +224,7 @@ const groupTotal = computed(() => groupRows.value.reduce((s, r) => s + (r.quanti
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
 const pickerKeyword = ref('');
+const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 const pickerRows = ref<GroupRow[]>([]);
 const picked = ref<GroupRow[]>([]);
 const pickerRef = ref<any>();
@@ -226,6 +238,8 @@ async function loadOptions() {
     const opts = await getStockGroupOptions({
       keyword: pickerKeyword.value || undefined,
       limit: 300,
+      deliveryFrom: pickerDeliveryRange.value?.[0],
+      deliveryTo: pickerDeliveryRange.value?.[1],
       // 只列「期初补录」订单：期初豁免装配闸门，挂正常订单等于绕过闸门凭空加库存。
       // 服务端 buildOpeningItems 另有硬校验，这里的过滤只是不让人选错。
       onlyOpening: true,
@@ -248,6 +262,11 @@ async function loadOptions() {
   } finally {
     pickerLoading.value = false;
   }
+}
+function resetPickerFilters() {
+  pickerKeyword.value = '';
+  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  void loadOptions();
 }
 function isSelectable(row: GroupRow) {
   return !groupRows.value.some(

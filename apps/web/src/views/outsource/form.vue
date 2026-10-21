@@ -238,6 +238,17 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="交期">
+          <el-date-picker
+            v-model="pickerDeliveryRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            style="width: 100%"
+            @change="initializePicker"
+          />
+        </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="pickerQuery.keyword"
@@ -346,7 +357,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
@@ -482,6 +493,7 @@ function onDetailEditorKeyup(event: KeyboardEvent) {
 
 /* ===== 部件组选择器 ===== */
 const pickerVisible = ref(false);
+const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
@@ -653,6 +665,8 @@ async function initializePicker() {
     const rows = await getPartGroupOptions({
       all: true,
       includeSearchText: true,
+      deliveryFrom: pickerDeliveryRange.value?.[0],
+      deliveryTo: pickerDeliveryRange.value?.[1],
     });
     if (requestId !== pickerInitRequestId) return;
     optionSource.value = rows.map((row) => ({
@@ -691,7 +705,8 @@ function resetPickerQuery() {
   });
   suppressPickerAutoSearch = false;
   showReturned.value = false;
-  void loadPickerData();
+  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  void initializePicker();
 }
 function onPickChange(rows: PartGroupOption[]) {
   picked.value = rows;

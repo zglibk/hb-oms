@@ -187,17 +187,23 @@ import {
   getLogActions,
   deleteLogs,
 } from '@/api/system';
-import { formatDateTime } from '@/utils/date';
+import { formatDateTime, recentSixNaturalMonthRange } from '@/utils/date';
 import ColorTag from '@/components/ColorTag.vue';
 
 const loading = ref(false);
 const list = ref<any[]>([]);
 const total = ref(0);
 const selection = ref<any[]>([]);
-const dateRange = ref<string[] | null>(null);
+const initialDateRange = recentSixNaturalMonthRange();
+const dateRange = ref<string[] | null>(initialDateRange);
 const moduleOptions = ref<string[]>([]);
 const actionOptions = ref<string[]>([]);
-const query = reactive<any>({ page: 1, pageSize: 10 });
+const query = reactive<any>({
+  page: 1,
+  pageSize: 10,
+  startDate: initialDateRange[0],
+  endDate: initialDateRange[1],
+});
 
 const detailVisible = ref(false);
 const detailRow = ref<any | null>(null);
@@ -249,9 +255,10 @@ function resetQuery() {
   query.module = undefined;
   query.action = undefined;
   query.result = undefined;
-  query.startDate = undefined;
-  query.endDate = undefined;
-  dateRange.value = null;
+  const defaultRange = recentSixNaturalMonthRange();
+  dateRange.value = defaultRange;
+  query.startDate = defaultRange[0];
+  query.endDate = defaultRange[1];
   loadActions();
   reload();
 }

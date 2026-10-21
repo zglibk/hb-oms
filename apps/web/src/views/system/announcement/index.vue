@@ -115,6 +115,7 @@ import {
   formatBusinessDateTimeInput,
   formatDateTime,
   parseBusinessDateTime,
+  recentSixNaturalMonthRange,
 } from '@/utils/date';
 import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
 
@@ -129,7 +130,7 @@ const query = reactive<{
   page: number;
   pageSize: number;
 }>({ keyword: '', status: '', level: '', page: 1, pageSize: 20 });
-const publishDateRange = ref<[string, string] | []>([]);
+const publishDateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 const formVisible = ref(false);
 const editId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
@@ -162,8 +163,8 @@ async function load() {
       keyword: query.keyword.trim() || undefined,
       status: query.status || undefined,
       level: query.level || undefined,
-      publishDateFrom: publishDateRange.value[0] || undefined,
-      publishDateTo: publishDateRange.value[1] || undefined,
+      publishDateFrom: publishDateRange.value?.[0] || undefined,
+      publishDateTo: publishDateRange.value?.[1] || undefined,
       page: query.page,
       pageSize: query.pageSize,
     });
@@ -174,7 +175,7 @@ async function load() {
 function search() { query.page = 1; void load(); }
 function resetQuery() {
   Object.assign(query, { keyword: '', status: '', level: '', page: 1 });
-  publishDateRange.value = [];
+  publishDateRange.value = recentSixNaturalMonthRange();
   void load();
 }
 function openCreate() { editId.value = null; resetForm(); formVisible.value = true; }

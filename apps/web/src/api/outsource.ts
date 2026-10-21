@@ -141,6 +141,8 @@ export const getPartGroupOptions = (params: {
   productModel?: string;
   productType?: string;
   surfaceType?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
   /** 隐藏已回齐（累计回厂 ≥ 组支数）的部件组 */
   hideReturned?: boolean;
   /** 只列已回齐的部件组（与 hideReturned 互斥） */
@@ -157,6 +159,8 @@ export const getPartGroupFilterOptions = (params: {
   productModel?: string;
   productType?: string;
   surfaceType?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
   hideReturned?: boolean;
   onlyReturned?: boolean;
 }) =>

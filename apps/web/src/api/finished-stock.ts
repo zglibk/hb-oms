@@ -248,6 +248,8 @@ export const getStockGroupOptions = (params: {
   productType?: string;
   surfaceType?: string;
   color?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
   bizType?: string;
   limit?: number;
   onlyOpening?: boolean;
@@ -262,6 +264,8 @@ export const getStockGroupFilterOptions = (params: {
   productType?: string;
   surfaceType?: string;
   color?: string;
+  deliveryFrom?: string;
+  deliveryTo?: string;
   onlyOpening?: boolean;
 } = {}) =>
   request.get<any, StockGroupFilterOptions>('/api/finished-stock/group-filter-options', { params });

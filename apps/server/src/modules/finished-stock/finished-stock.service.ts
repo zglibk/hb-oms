@@ -594,6 +594,8 @@ export class FinishedStockService {
   ): Promise<StockGroupFilterOptions> {
     const dropdownQuery = {
       onlyOpening: query.onlyOpening,
+      deliveryFrom: query.deliveryFrom,
+      deliveryTo: query.deliveryTo,
       customerName: query.customerName,
       productModel: query.productModel,
       productType: query.productType,
@@ -604,24 +606,36 @@ export class FinishedStockService {
     // 前端切换上级时会清空下级，因此下级旧值不能反过来压缩上级选项，否则会出现
     // 准备切换型号时只能看到当前表面处理/颜色所对应型号的假死现象。
     const [customerRows, modelRows, productTypeRows, surfaceRows, colorRows] = await Promise.all([
-      this.loadGroupOptionCandidates({ onlyOpening: dropdownQuery.onlyOpening }),
       this.loadGroupOptionCandidates({
         onlyOpening: dropdownQuery.onlyOpening,
+        deliveryFrom: dropdownQuery.deliveryFrom,
+        deliveryTo: dropdownQuery.deliveryTo,
+      }),
+      this.loadGroupOptionCandidates({
+        onlyOpening: dropdownQuery.onlyOpening,
+        deliveryFrom: dropdownQuery.deliveryFrom,
+        deliveryTo: dropdownQuery.deliveryTo,
         customerName: dropdownQuery.customerName,
       }),
       this.loadGroupOptionCandidates({
         onlyOpening: dropdownQuery.onlyOpening,
+        deliveryFrom: dropdownQuery.deliveryFrom,
+        deliveryTo: dropdownQuery.deliveryTo,
         customerName: dropdownQuery.customerName,
         productModel: dropdownQuery.productModel,
       }),
       this.loadGroupOptionCandidates({
         onlyOpening: dropdownQuery.onlyOpening,
+        deliveryFrom: dropdownQuery.deliveryFrom,
+        deliveryTo: dropdownQuery.deliveryTo,
         customerName: dropdownQuery.customerName,
         productModel: dropdownQuery.productModel,
         productType: dropdownQuery.productType,
       }),
       this.loadGroupOptionCandidates({
         onlyOpening: dropdownQuery.onlyOpening,
+        deliveryFrom: dropdownQuery.deliveryFrom,
+        deliveryTo: dropdownQuery.deliveryTo,
         customerName: dropdownQuery.customerName,
         productModel: dropdownQuery.productModel,
         productType: dropdownQuery.productType,
@@ -655,6 +669,14 @@ export class FinishedStockService {
     // 期初录入页传 onlyOpening=true：期初只能挂「期初补录」订单，
     // 挂正常订单等于绕过装配闸门凭空加库存（服务端另有硬校验，见 buildOpeningItems）
     if (query.onlyOpening) where += ' AND o.is_opening = 1';
+    if (query.deliveryFrom) {
+      where += ' AND p.delivery_date >= ?';
+      params.push(query.deliveryFrom);
+    }
+    if (query.deliveryTo) {
+      where += ' AND p.delivery_date <= ?';
+      params.push(query.deliveryTo);
+    }
     const addLikeFilter = (column: string, value?: string) => {
       const normalized = value?.trim();
       if (!normalized) return;

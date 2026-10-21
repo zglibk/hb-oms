@@ -239,6 +239,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { recentSixNaturalMonthRange } from '@/utils/date';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -258,7 +259,7 @@ const query = reactive({
   /** 默认勾选「只看未回齐」（2026-09-26 使用方要求）：打开页面先看还有货在外面的部件；「重置」也回到勾选 */
   onlyUnreturned: true,
 });
-const dateRange = ref<[string, string] | null>(null);
+const dateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('surface_type').then((rows: any[]) => {
@@ -305,7 +306,7 @@ function resetQuery() {
   query.keyword = '';
   query.surfaceType = undefined;
   query.onlyUnreturned = true;
-  dateRange.value = null;
+  dateRange.value = recentSixNaturalMonthRange();
   runKeywordSearch();
 }
 

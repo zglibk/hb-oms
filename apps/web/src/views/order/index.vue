@@ -40,6 +40,7 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <filter-more-toggle v-model="showMoreFilters" :count="moreFilterCount" />
         </el-form-item>
       </el-form>
@@ -287,7 +288,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
@@ -359,7 +360,7 @@ const salesmanOptions = computed(() => [...new Set([...ORDER_SALESMAN_OPTIONS, .
 const merchandiserOptions = computed(() => [
   ...new Set([...ORDER_MERCHANDISER_OPTIONS, ...staffFromOrders.value.merchandisers]),
 ]);
-const dateRange = ref<[string, string] | null>(null);
+const dateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 
 // assembly_workshop 字典不再需要——订单环节已不安排装配车间
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
@@ -382,6 +383,24 @@ function reload() {
   load();
 }
 const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+function resetFilters() {
+  Object.assign(query, {
+    page: 1,
+    keyword: '',
+    status: undefined,
+    salesman: undefined,
+    merchandiser: undefined,
+    customerDrawingNo: '',
+    drawingNo: '',
+    productType: undefined,
+    railSection: undefined,
+    surfaceType: undefined,
+  });
+  dateRange.value = recentSixNaturalMonthRange();
+  deliveryRange.value = null;
+  showMoreFilters.value = false;
+  runKeywordSearch();
+}
 load();
 onActivated(load);
 

@@ -199,6 +199,11 @@ export class QueryStockGroupOptionDto {
 
   @IsOptional() @IsString() @MaxLength(64) color?: string;
 
+  /** 订单产品交期范围；选择器默认最近六个自然月，可由用户清空查看全部。 */
+  @IsOptional() @IsDateString({}, { message: '交期开始日期格式不正确' }) deliveryFrom?: string;
+
+  @IsOptional() @IsDateString({}, { message: '交期结束日期格式不正确' }) deliveryTo?: string;
+
   /** 用途：inbound 入库（附可入库量）/ sale_outbound 出库（附当前结存） */
   @IsOptional() @IsString() @MaxLength(32) bizType?: string;
 

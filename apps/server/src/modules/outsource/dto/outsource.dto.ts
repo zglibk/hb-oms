@@ -135,6 +135,11 @@ export class QueryOutsourcePartDto {
 
 /** 部件组选择器的回齐状态口径：列表与下拉选项共用，保证两边取数范围一致 */
 export class QueryPartGroupVisibilityDto {
+  /** 订单产品交期范围；选择器默认最近六个自然月，可由用户清空查看全部。 */
+  @IsOptional() @IsDateString({}, { message: '交期开始日期格式不正确' }) deliveryFrom?: string;
+
+  @IsOptional() @IsDateString({}, { message: '交期结束日期格式不正确' }) deliveryTo?: string;
+
   /**
    * 隐藏已回齐的部件组（累计回厂 ≥ 组支数，2026-09-26）：登记页选择器默认传 true。
    * 过滤放服务端而非前端——选项有条数上限，已回齐的组占着名额会把真正待回的挤出列表。

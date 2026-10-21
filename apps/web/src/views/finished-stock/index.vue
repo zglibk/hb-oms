@@ -27,6 +27,7 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -247,6 +248,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { recentSixNaturalMonthRange } from '@/utils/date';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -293,7 +295,7 @@ const query = reactive({
   bizType: undefined as string | undefined,
   status: undefined as number | undefined,
 });
-const dateRange = ref<[string, string] | null>(null);
+const dateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 
 async function load() {
   loading.value = true;
@@ -338,6 +340,16 @@ function reload() {
   load();
 }
 const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+function resetFilters() {
+  Object.assign(query, {
+    page: 1,
+    keyword: '',
+    bizType: undefined,
+    status: undefined,
+  });
+  dateRange.value = recentSixNaturalMonthRange();
+  runKeywordSearch();
+}
 load();
 onActivated(load);
 

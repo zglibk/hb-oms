@@ -426,7 +426,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -464,7 +464,14 @@ const query = reactive({
   hasFinishedInbound: false,
   hasFinishedOutbound: false,
 });
-const deliveryRange = ref<[string, string] | null>(null);
+
+/**
+ * 台账默认看含当前月在内的最近六个自然月：例如 2026-10-21 → 2026-05-01 ~ 2026-10-21。
+ * 从首页精确定位产品时不叠加默认区间，避免较早的逾期记录被日期条件挡掉。
+ */
+const routeProductId = Number(route.query.orderProductId);
+const hasFocusedProduct = Number.isInteger(routeProductId) && routeProductId > 0;
+const deliveryRange = ref<[string, string] | null>(hasFocusedProduct ? null : recentSixNaturalMonthRange());
 
 /** 查询条件「更多」折叠区：默认收起；收起时按钮上显示折叠区里生效的条件个数 */
 const showMoreFilters = ref(false);
@@ -533,7 +540,7 @@ const {
   cancel: cancelKeywordSearch,
 } = useDebouncedSearch(reload);
 
-/** 清空页面筛选及首页跳转带入的产品定位条件，恢复完整台账列表。 */
+/** 清空页面筛选及首页跳转带入的产品定位条件，恢复默认近半年台账列表。 */
 async function resetFilters() {
   cancelKeywordSearch();
   Object.assign(query, {
@@ -551,7 +558,7 @@ async function resetFilters() {
     hasFinishedInbound: false,
     hasFinishedOutbound: false,
   });
-  deliveryRange.value = null;
+  deliveryRange.value = recentSixNaturalMonthRange();
   showMoreFilters.value = false;
 
   // query 与表头箭头必须一起恢复默认排序；只改请求参数会让界面仍显示旧排序状态。

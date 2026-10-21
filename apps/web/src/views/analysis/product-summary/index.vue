@@ -445,7 +445,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { recentSixNaturalMonthRange } from '@/utils/date';
 
 /** 「颜色」字段全局开关（展示开关；聚合键恒含颜色，与开关无关） */
 const { colorEnabled } = useFeatureFlags();
@@ -497,7 +497,7 @@ const sQuery = reactive({
   onlyOwed: false,
   onlyStocked: false,
 });
-const orderDateRange = ref<[string, string] | null>(null);
+const orderDateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 /** 查询条件「更多」：收起时按钮上显示折叠区里生效的条件个数 */
 const showSummaryMore = ref(false);
 const summaryMoreCount = computed(
@@ -550,7 +550,7 @@ function resetSummaryFilters() {
     onlyOwed: false,
     onlyStocked: false,
   });
-  orderDateRange.value = null;
+  orderDateRange.value = recentSixNaturalMonthRange();
   resetCustomerFilter();
   runSummarySearch();
 }
@@ -570,15 +570,8 @@ const pQuery = reactive({
 });
 const showPeriodMore = ref(false);
 const periodMoreCount = computed(() => (pQuery.surfaceType ? 1 : 0));
-/** 单据日期区间默认本月 1 日 ~ 今天（财务月度对账的常用口径） */
-function defaultPeriodRange(): [string, string] {
-  const today = businessToday();
-  return [
-    `${today.slice(0, 7)}-01`,
-    today,
-  ];
-}
-const periodRange = ref<[string, string]>(defaultPeriodRange());
+/** 单据日期区间与其它流水列表一致，默认最近六个自然月。 */
+const periodRange = ref<[string, string]>(recentSixNaturalMonthRange());
 
 function periodFilters() {
   return {
@@ -620,7 +613,7 @@ function resetPeriodFilters() {
     customerName: undefined,
     surfaceType: undefined,
   });
-  periodRange.value = defaultPeriodRange();
+  periodRange.value = recentSixNaturalMonthRange();
   resetCustomerFilter();
   runPeriodSearch();
 }

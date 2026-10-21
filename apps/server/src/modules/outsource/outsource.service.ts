@@ -200,6 +200,14 @@ export class OutsourceService {
   private buildPartGroupVisibilityFilter(query: QueryPartGroupVisibilityDto) {
     const params: any[] = [ORDER_STATUS.CANCELLED, SURFACE_NONE];
     let where = ' WHERE o.status <> ? AND p.surface_type <> ?';
+    if (query.deliveryFrom) {
+      where += ' AND p.delivery_date >= ?';
+      params.push(query.deliveryFrom);
+    }
+    if (query.deliveryTo) {
+      where += ' AND p.delivery_date <= ?';
+      params.push(query.deliveryTo);
+    }
     const returnedSql = `COALESCE((SELECT SUM(op2.return_qty) FROM t_outsource_part op2
                                WHERE op2.order_part_group_id = g.id), 0)`;
     // 卡口外轨、内轨需要在返回到前端后再按 left/right 判定；此处不能用组总数把

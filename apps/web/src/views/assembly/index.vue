@@ -36,6 +36,7 @@
         </el-form-item>
         <el-form-item>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
+          <el-button size="small" :icon="RefreshLeft" @click="resetFilters">重置</el-button>
           <el-button
             size="small" v-permission="'assembly:export'" plain :icon="Download"
             :loading="exporting" @click="onExport"
@@ -120,7 +121,7 @@
 <script setup lang="ts">
 import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, Tools, InfoFilled, Download } from '@element-plus/icons-vue';
+import { Search, Tools, InfoFilled, Download, RefreshLeft } from '@element-plus/icons-vue';
 import { getAssemblyList, downloadAssemblyExport, type AssemblyGroupRow } from '@/api/assembly';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
@@ -129,6 +130,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import { recentSixNaturalMonthRange } from '@/utils/date';
 
 const loading = ref(false);
 const list = ref<AssemblyGroupRow[]>([]);
@@ -141,7 +143,7 @@ const query = reactive({
   onlyUnfinished: false,
   onlyOverdue: false,
 });
-const deliveryRange = ref<[string, string] | null>(null);
+const deliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
@@ -167,6 +169,17 @@ function reload() {
   load();
 }
 const { schedule: scheduleKeywordSearch, flush: runKeywordSearch } = useDebouncedSearch(reload);
+function resetFilters() {
+  Object.assign(query, {
+    page: 1,
+    keyword: '',
+    workshop: undefined,
+    onlyUnfinished: false,
+    onlyOverdue: false,
+  });
+  deliveryRange.value = recentSixNaturalMonthRange();
+  runKeywordSearch();
+}
 load();
 onActivated(load);
 

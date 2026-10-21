@@ -82,6 +82,26 @@ export function businessToday(now = new Date()): string {
 }
 
 /**
+ * 默认业务查询区间：含当前月在内的最近六个自然月。
+ *
+ * 例如业务日期为 2026-10-21 时返回 2026-05-01 ～ 2026-10-21。
+ * 这里用 UTC 只做无时区的日历月运算，最终仍手工拼接日期，避免 ISO/浏览器时区
+ * 把查询边界偏移一天。调用方每次重置都应重新调用，不能长期复用模块加载时的旧值。
+ */
+export function recentSixNaturalMonthRange(today = businessToday()): [string, string] {
+  const normalizedToday = DATE_ONLY_PATTERN.test(today) ? today : businessToday();
+  const year = Number(normalizedToday.slice(0, 4));
+  const month = Number(normalizedToday.slice(5, 7));
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  start.setUTCMonth(start.getUTCMonth() - 5);
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return [
+    `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}-01`,
+    normalizedToday,
+  ];
+}
+
+/**
  * Element Plus 日期面板传入的是“用户在面板上点到的本地日历格”，不是一个业务绝对时刻。
  * 这里刻意读取本地年月日，避免东京等 UTC+8 以东浏览器把 00:00 换算成上海前一天。
  */

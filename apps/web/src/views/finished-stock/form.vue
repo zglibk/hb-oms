@@ -214,6 +214,17 @@
             <el-option v-for="value in pickerFilterOptions.colors" :key="value" :label="value" :value="value" />
           </el-select>
         </el-form-item>
+        <el-form-item label="交期">
+          <el-date-picker
+            v-model="pickerDeliveryRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            style="width: 100%"
+            @change="initializePicker"
+          />
+        </el-form-item>
         <el-form-item label="关键词" class="picker-keyword">
           <el-input v-model="pickerQuery.keyword" clearable placeholder="请输入关键词" @keyup.enter="loadPickerData" />
         </el-form-item>
@@ -317,7 +328,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
 
 const route = useRoute();
 const router = useRouter();
@@ -496,6 +507,7 @@ async function refreshLimits() {
 /* ===== 选择器 ===== */
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
+const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
 interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
@@ -687,6 +699,8 @@ async function initializePicker() {
     const opts = await getStockGroupOptions({
       bizType: form.bizType,
       includeSearchText: true,
+      deliveryFrom: pickerDeliveryRange.value?.[0],
+      deliveryTo: pickerDeliveryRange.value?.[1],
     });
     if (requestId !== pickerInitRequestId) return;
     pickerSourceRows.value = opts.flatMap((o) =>
@@ -742,7 +756,8 @@ function resetPickerQuery() {
     keyword: '',
   });
   suppressPickerAutoSearch = false;
-  void loadPickerData();
+  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  void initializePicker();
 }
 /** 已在明细中的 (产品行,边别) 不可重复选；销售出库一张单只能服务同一客户。 */
 function isSelectable(row: ItemRow): boolean {
