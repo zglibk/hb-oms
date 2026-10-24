@@ -30,7 +30,7 @@
             <preprinted-note-sheet v-if="runtime.config.mode === 'preprinted'" class="sheet-shadow"
               :config="runtime.config" :note="note as any" :rows="rows as any" />
             <delivery-note-sheet v-else class="sheet-shadow" :note="pageNote(rows)" :template-code="templateCode"
-              :profile-config="runtime.config" />
+              :profile-config="runtime.config" :show-total="index === pages.length - 1" />
           </template>
         </div>
         <div v-if="runtime.config.mode === 'blank' && runtime.config.pagination.strategy === 'auto'"
@@ -88,6 +88,7 @@ const pages = computed(() => note.value && runtime.value
     note.value.rows as unknown as Record<string, unknown>[],
     runtime.value.config,
     rowMeasurement.value,
+    { footerOnLastPageOnly: true },
   ) as unknown as DeliveryNoteRow[][]
   : []);
 function pageNote(rows: DeliveryNoteRow[]): DeliveryNote { return { ...note.value!, rows }; }

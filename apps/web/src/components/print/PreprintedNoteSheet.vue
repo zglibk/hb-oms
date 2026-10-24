@@ -20,6 +20,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PrintLayoutField, PrintProfileConfig } from '@/api/print-config';
+import { deliveryPoText } from '@/constants/delivery-note';
 import { printPaperBodyOf } from '@/utils/print-paper';
 
 const props = defineProps<{
@@ -56,7 +57,9 @@ function fieldText(item: PrintLayoutField) {
 
 function rowValue(row: Record<string, any>, field: string, index: number) {
   if (field === 'seq') return String(row.seq ?? index + 1);
-  return String(field.split('.').reduce<any>((obj, key) => obj?.[key], row) ?? '');
+  const value = field.split('.').reduce<any>((obj, key) => obj?.[key], row);
+  if (field === 'poNo') return deliveryPoText(value);
+  return String(value ?? '');
 }
 </script>
 

@@ -1,7 +1,7 @@
 import type { DeliveryNoteRow } from '@/api/finished-stock';
 
 /**
- * 送货单模板注册表（CLAUDE.md §5.6「送货单打印」）。
+ * 送货单模板注册表（AGENTS.md §5.6「送货单打印」）。
  *
  * 不同客户的送货单版式不同——列集合、列名、联系电话、签名项都不一样，本文件是这些
  * **版式差异的唯一定义处**。服务端只负责把候选字段全给出来，不持有任何版式知识。
@@ -59,6 +59,15 @@ export interface DeliveryTemplate {
   minRows: number;
   /** 纸面右侧竖排联次说明 */
   footerNote: string;
+}
+
+/**
+ * 送货单的列头已经写明「客户PO# / 采购单编号 / 合同编号」，明细值不再重复展示
+ * 用户录入时可能带上的开头 `PO#`。只处理开头的字面前缀，不改订单原值，也不误伤
+ * `2PO26070092` 这类正文中包含 PO 的真实编号。
+ */
+export function deliveryPoText(value: string | null | undefined): string {
+  return String(value ?? '').trim().replace(/^PO#\s*[:：]?\s*/i, '');
 }
 
 const ADDRESS = '地址：广东省中山市南头穗西月桂东路23号';

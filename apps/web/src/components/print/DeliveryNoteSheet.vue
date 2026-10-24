@@ -96,7 +96,7 @@
             {{ c.key === 'seq' ? note.rows.length + n : '' }}
           </td>
         </tr>
-        <tr class="total-row" data-print-table-foot>
+        <tr v-if="showTotal" class="total-row" data-print-table-foot>
           <td :colspan="totalLabelSpan" class="c"><b>合计</b></td>
           <td class="c"><b>{{ totalText }}</b></td>
           <!-- 合计行右侧：单头备注（车间在这里写「共19托」这类装箱信息） -->
@@ -121,7 +121,12 @@
 import { computed } from 'vue';
 import type { DeliveryNote, DeliveryNoteRow } from '@/api/finished-stock';
 import { COMPANY_FULL_NAME } from '@/constants/company';
-import { deliveryTemplateOf, footerNotePartsOf, type DeliveryColumn } from '@/constants/delivery-note';
+import {
+  deliveryPoText,
+  deliveryTemplateOf,
+  footerNotePartsOf,
+  type DeliveryColumn,
+} from '@/constants/delivery-note';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import type { PrintProfileConfig } from '@/api/print-config';
 import { printPaperBodyOf } from '@/utils/print-paper';
@@ -139,13 +144,17 @@ import { printPaperBodyOf } from '@/utils/print-paper';
  *   2. 屏幕纸面与打印纸面等高（297mm − 上下 7mm = 283mm），否则预览是骗人的；
  *   3. 类名 `.print-sheet` 是服务端 PdfService 判断「渲染完成」的选择器，不能改名。
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   note: DeliveryNote;
   /** 模板编码；取不到时 deliveryTemplateOf 回落通用模板 */
   templateCode: string;
   profileConfig?: PrintProfileConfig;
   measurement?: boolean;
-}>();
+  /** 多页单据只在末页显示合计；模板预览和测量纸面默认仍显示。 */
+  showTotal?: boolean;
+}>(), {
+  showTotal: true,
+});
 
 const paperBody = computed(() => props.profileConfig
   ? printPaperBodyOf(props.profileConfig.paper)
@@ -226,6 +235,7 @@ function cellOf(row: DeliveryNoteRow, col: DeliveryColumn): string {
       if (v) break;
     }
   }
+  if (col.key === 'poNo') return deliveryPoText(v);
   return v;
 }
 
