@@ -86,7 +86,12 @@ export class CreateOrderProductDto {
   @MaxLength(128, { message: '客户图号不能超过 128 个字符' })
   customerDrawingNo?: string;
 
-  @IsOptional() @IsString() @MaxLength(128) productName?: string;
+  /** 产品名称：新增与编辑均必填；数据库暂保留可空以兼容历史数据 */
+  @IsString({ message: '产品名称必须是文本' })
+  @MaxLength(128, { message: '产品名称不能超过 128 个字符' })
+  @Matches(/\S/, { message: '产品名称必填' })
+  @IsNotEmpty({ message: '产品名称必填' })
+  productName: string;
 
   /** 产品类型多选组合（数组或逗号串均可，服务端经共享包规范化） */
   @IsOptional() @IsString() @MaxLength(128) productType?: string;

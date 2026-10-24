@@ -167,7 +167,7 @@ export interface OrderProductPayload {
   materialCode?: string;
   itemNo?: string;
   customerDrawingNo?: string;
-  productName?: string;
+  productName: string;
   productType?: string;
   railSection?: string;
   productRequirement?: string;

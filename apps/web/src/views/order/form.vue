@@ -328,7 +328,12 @@
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" :md="6">
-              <el-form-item label="产品名称" label-width="80px">
+              <el-form-item
+                label="产品名称"
+                label-width="80px"
+                :prop="`products.${pi}.productName`"
+                :rules="productNameRules(pi)"
+              >
                 <el-input v-model="p.productName" :disabled="viewMode" />
               </el-form-item>
             </el-col>
@@ -336,7 +341,13 @@
                  可在「系统配置 → 业务字段」全局停用；停用时只是不显示输入框，
                  p.customerDrawingNo 仍随表单原样回传，不洗掉历史值 -->
             <el-col v-if="customerDrawingNoEnabled" :xs="24" :sm="12" :md="6">
-              <el-form-item label="客户图号" label-width="80px">
+              <el-form-item label-width="80px" class="customer-drawing-item">
+                <template #label>
+                  <span class="customer-drawing-label">
+                    <span>客户图号</span>
+                    <span class="customer-drawing-label__optional">(可选)</span>
+                  </span>
+                </template>
                 <el-input
                   v-model="p.customerDrawingNo" placeholder="客户来图图号"
                   :spellcheck="false" :formatter="upperFmt" :parser="upperFmt"
@@ -794,7 +805,7 @@ const form = reactive({
   salesman: '',
   merchandiser: '',
   orderSource: '',
-  /** 期初补录标记：0正常 1期初补录（免非关键必填校验，四数口径不变，§4.8） */
+  /** 期初补录标记：0正常 1期初补录（仅作区分展示，不豁免校验，四数口径不变，§4.8） */
   isOpening: 0,
   remark: '',
   /** 订单备注（图文混排 HTML，wangEditor 输出） */
@@ -846,6 +857,17 @@ function deliveryDateRules(pi: number) {
         callback();
       },
       trigger: 'change',
+    },
+  ];
+}
+
+function productNameRules(pi: number) {
+  return [
+    {
+      required: true,
+      whitespace: true,
+      message: `请输入产品 ${pi + 1} 的产品名称`,
+      trigger: ['blur', 'change'],
     },
   ];
 }
@@ -1448,7 +1470,7 @@ async function onSave() {
       itemNo: withWidthHash(p.itemNo) || undefined,
       customerDrawingNo: p.customerDrawingNo || undefined,
       // 产品名称按用户输入原样保存，不自动追加「滑轨」或分体部件形态
-      productName: p.productName || undefined,
+      productName: p.productName,
       productType: p._types.join(','),
       railSection: p.railSection,
       productRequirement: p.productRequirement || undefined,
@@ -1577,6 +1599,27 @@ export default { name: 'OrderForm' };
   .ml12 { margin-left: 12px; }
 }
 .order-form { max-width: 1280px; }
+.customer-drawing-item {
+  /* small 表单控件高 24px；标签固定在同一高度内换行，避免把本列输入框向下挤。 */
+  :deep(.el-form-item__label) {
+    height: var(--el-component-size-small);
+    line-height: 1;
+    align-items: center;
+  }
+}
+.customer-drawing-label {
+  display: inline-flex;
+  height: var(--el-component-size-small);
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  line-height: 12px;
+  white-space: nowrap;
+}
+.customer-drawing-label__optional {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
 .order-form--readonly {
   :deep(.el-input__wrapper),
   :deep(.el-select__wrapper),

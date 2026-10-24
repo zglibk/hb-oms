@@ -594,7 +594,7 @@
 <tr>
 <td>product_name</td>
 <td>varchar(128)</td>
-<td>产品名称</td>
+<td><strong>产品名称（应用层必填）</strong>；按输入原文保存，不自动追加「滑轨」或分体形态。数据库列保留可空以兼容存量，编辑历史空值订单时要求补齐</td>
 </tr>
 <tr>
 <td>product_type</td>
@@ -664,7 +664,7 @@
 <tr>
 <td>customer_drawing_no</td>
 <td>varchar(128)</td>
-<td><strong>客户图号</strong>：客户来图上的图号；区别于部件组的 <code>drawing_no</code>（生产图号，内部转化的技术图纸）</td>
+<td><strong>客户图号（选填）</strong>：客户来图上的图号；区别于部件组的 <code>drawing_no</code>（生产图号，内部转化的技术图纸）</td>
 </tr>
 <tr>
 <td>delivery_date</td>

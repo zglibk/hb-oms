@@ -222,7 +222,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | is_export / export_country | tinyint / varchar(64) | 是否出口 / 出口国家 |
 | material_id / material_code | int / varchar(64) | 物料主数据 ID（可空支持手工行）/ 物料代码快照 |
 | item_no | varchar(64) | 货号快照 |
-| product_name | varchar(128) | 产品名称 |
+| product_name | varchar(128) | **产品名称（应用层必填）**；按输入原文保存，不自动追加「滑轨」或分体形态。数据库列保留可空以兼容存量，编辑历史空值订单时要求补齐 |
 | product_type | varchar(128) | 产品类型多选组合（字典序逗号拼接，如 `standard,self_lock`；候选值：standard 普通 / buffer 缓冲 / socket 卡口 / rebound 反弹 / self_lock 自锁 / anti_tilt 防倾倒…可扩展；含 socket 即触发卡口规则） |
 | rail_section | varchar(32) | 轨道节数：two_section 二节轨 / three_section 三节轨 |
 | is_split | tinyint | **分体出货**：0整品 1分体，**仅三节轨可开**（二节轨只有外/内两个部件，业务上不拆单下单；前端禁用开关、服务端硬校验）。客户把一支滑轨拆成多行下单（如三节轨拆「外中轨」+「内轨」两行）、分开包装出货、不组装成整品时，逐行开启。**出货形态不落库**，由该行部件组构成即时推导（组列表即事实源，共享包 `splitParts`/`splitSuffix`）：产品级型号后缀随形态变（`45#缓冲外中轨`/`45#缓冲内轨`）。**分体行（含内轨等单部件行）同样要装配自身小零件**——与整品行一样录装配批次、受入库闸门约束（使用部门口径，2026-08-13 定）。分体行组并集不得覆盖全部部件（那就是整品，服务端拒绝） |
@@ -236,7 +236,7 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 | qty_pcs | int | **支数口径**（服务端计算冗余）：unit=套 → order_qty×2，unit=支 → order_qty。台账「订单数」即此值 |
 | ~~production_no~~ | — | **【已删除 2026-08-07】** 已上移订单级 `t_order.production_no`（migration-drop-deprecated-order-cols.sql） |
 | ~~assembly_workshop~~ | — | **【已删除 2026-08-07】** 订单环节不安排装配车间，改由装配批次 `t_assembly_batch.workshop` 录入 |
-| customer_drawing_no | varchar(128) | **客户图号**：客户来图上的图号；区别于部件组的 `drawing_no`（生产图号，内部转化的技术图纸） |
+| customer_drawing_no | varchar(128) | **客户图号（选填）**：客户来图上的图号；区别于部件组的 `drawing_no`（生产图号，内部转化的技术图纸） |
 | delivery_date | date | **订单交期（应用层必填）**；不得早于下单日期，同日合法。数据库列保留可空以兼容存量，不做批量回填 |
 | delivery_address | varchar(255) | 交货地址 |
 | remark / sort | | 备注 / 行序 |
