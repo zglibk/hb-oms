@@ -72,9 +72,9 @@
             <col style="width: 8%" />
             <col style="width: 11%" />
             <col v-if="customerDrawingNoEnabled" style="width: 9%" />
-            <col :style="{ width: customerDrawingNoEnabled ? '18%' : '27%' }" />
+            <col :style="{ width: customerDrawingNoEnabled ? '15%' : '24%' }" />
             <col style="width: 7.5%" />
-            <col style="width: 6%" />
+            <col style="width: 9%" />
             <col style="width: 8.5%" />
             <col style="width: 5%" />
             <col style="width: 10%" />
@@ -84,11 +84,11 @@
           <thead>
             <tr>
               <th>产品代码</th>
-              <th>部件<br />编码</th>
+              <th>产品名称</th>
               <th v-if="customerDrawingNoEnabled">客户图号</th>
               <th>产品要求描述</th>
               <th>尺寸<br />(mm)</th>
-              <th>颜色</th>
+              <th>表面处理</th>
               <th>数量/支</th>
               <th>边别</th>
               <th>图号</th>
@@ -100,11 +100,15 @@
             <tr v-for="(r, i) in taskRows" :key="i">
               <!-- 相邻同货号行的同值列纵向合并（分体拆行的纸质单形态），span=0 表示被上方合并 -->
               <td v-if="spans.itemNo[i]" :rowspan="spans.itemNo[i]" class="c">{{ r.itemNo || '—' }}</td>
-              <td class="c">{{ r.partCode || '—' }}</td>
+              <td class="c">{{ r.productName || '—' }}</td>
               <td v-if="customerDrawingNoEnabled" class="c">{{ r.customerDrawingNo || '—' }}</td>
               <td v-if="spans.requirement[i]" :rowspan="spans.requirement[i]" class="pre">{{ r.requirement || '—' }}</td>
               <td v-if="spans.dimension[i]" :rowspan="spans.dimension[i]" class="c">{{ r.dimension || '—' }}</td>
-              <td v-if="spans.color[i]" :rowspan="spans.color[i]" class="c">{{ r.color || '—' }}</td>
+              <td
+                v-if="spans.surfaceTreatment[i]"
+                :rowspan="spans.surfaceTreatment[i]"
+                class="c"
+              >{{ r.surfaceTreatment || '—' }}</td>
               <td class="c num">{{ r.qtyPcs }}</td>
               <td class="c">{{ r.side || '—' }}</td>
               <td v-if="spans.drawing[i]" :rowspan="spans.drawing[i]" class="c pre">{{ r.drawing || '—' }}</td>
@@ -151,6 +155,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Printer, Download } from '@element-plus/icons-vue';
+import { formatSurfaceColorText } from '@hb-oms/shared';
 import {
   getOrderDetail,
   downloadOrderTaskPdf,
@@ -162,7 +167,6 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useFeatureStore } from '@/stores/feature';
 import { COMPANY_FULL_NAME } from '@/constants/company';
 import {
-  formatProductTypes,
   formatDimension,
   splitParts,
   splitSuffix,
@@ -238,11 +242,11 @@ const surfaceLabel = (v: string | null) => {
 
 interface TaskRow {
   itemNo: string;
-  partCode: string;
+  productName: string;
   customerDrawingNo: string;
   requirement: string;
   dimension: string;
-  color: string;
+  surfaceTreatment: string;
   qtyPcs: number;
   side: string;
   drawing: string;
@@ -268,14 +272,14 @@ function toRows(p: OrderProductItem): TaskRow[] {
       .filter(Boolean),
   )];
   const base: Omit<TaskRow, 'qtyPcs' | 'side'> = {
-    // 存量产品代码可能夹着中文说明（「45#无锁力」），单据上只印代码部分
-    itemNo: [sanitizeItemCode(p.itemNo), formatProductTypes(p.productType ?? '')].filter(Boolean).join(' '),
-    partCode: [p.productName, p.materialCode].filter(Boolean).join('-'),
+    // 只印订单产品代码；产品类型有独立业务含义，不得再拼进该列。
+    itemNo: sanitizeItemCode(p.itemNo),
+    productName: p.productName ?? '',
     customerDrawingNo: p.customerDrawingNo ?? '',
     requirement: p.productRequirement ?? '',
     dimension: formatDimension(p.dimensionRaw, p.dimensionUnit, p.dimensionMm) ?? '',
-    // 纸质单「颜色」格常填的是表面处理（如封漆）：color 为空时回落表面处理中文
-    color: p.color || surfaceLabel(p.surfaceType),
+    // 与通用送货单共用唯一组合口径：表面处理/颜色；无颜色时只印表面处理。
+    surfaceTreatment: formatSurfaceColorText(p.surfaceType, p.color, surfaceLabel),
     drawing: drawings.join('\n'),
     // 分类：分体行按组构成推导形态（外中轨/内轨…），整品行标「整品」
     category: p.isSplit ? splitSuffix(splitParts(groupTypes, p.railSection)) : '整品',
@@ -301,7 +305,7 @@ const totalQty = computed(() => taskRows.value.reduce((s, r) => s + (r.qtyPcs ||
 
 /**
  * 逐列 rowspan：相邻**同货号**且该列同值的行合并成一格（分体拆行的两行共用
- * 货号/要求/尺寸/颜色/图号，纸质单即此形态）。返回值 span[i]=N 表示第 i 行
+ * 产品代码/要求/尺寸/表面处理/图号，纸质单即此形态）。返回值 span[i]=N 表示第 i 行
  * 起跨 N 行，0 表示被上方合并（该 td 不渲染）。
  */
 function spanOf(rows: TaskRow[], pick: (r: TaskRow) => string): number[] {
@@ -323,7 +327,7 @@ const spans = computed(() => ({
   itemNo: spanOf(taskRows.value, (r) => r.itemNo),
   requirement: spanOf(taskRows.value, (r) => r.requirement),
   dimension: spanOf(taskRows.value, (r) => r.dimension),
-  color: spanOf(taskRows.value, (r) => r.color),
+  surfaceTreatment: spanOf(taskRows.value, (r) => r.surfaceTreatment),
   drawing: spanOf(taskRows.value, (r) => r.drawing),
 }));
 

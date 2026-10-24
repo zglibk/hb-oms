@@ -210,7 +210,10 @@ export class FinishedStockService {
     > = await this.dataSource.query(
       `SELECT i.id, i.sort, i.order_product_id, i.side, i.quantity,
               i.order_no, i.customer_name, i.production_no, i.item_no,
-              i.product_model, i.dimension_mm, i.dimension_text, i.color, i.surface_type, i.remark,
+              i.product_model, i.dimension_mm, i.dimension_text,
+              CASE WHEN p.id IS NULL THEN i.color ELSE p.color END AS color,
+              CASE WHEN p.id IS NULL THEN i.surface_type ELSE p.surface_type END AS surface_type,
+              i.remark,
               p.material_code, p.customer_drawing_no, p.product_name, p.product_requirement,
               p.unit, p.dimension_raw, p.dimension_unit, p.delivery_address,
               p.is_split, p.rail_section,
@@ -249,7 +252,8 @@ export class FinishedStockService {
     // 同名多码时取第一条（客户名相同即同一收货方，抬头一致）
     const customer = customers[0] ?? null;
 
-    // 纸面「颜色」格印表面处理中文名（colorTextOf），字典在服务端转，页面与 PDF 同值
+    // 送货单「表面处理」格取订单产品行的表面处理 + 颜色（订单产品已删时才回落明细快照），
+    // 字典在服务端转中文并拼成「表面处理/颜色」，页面与 PDF 同值
     const surfaceLabeler = dictLabeler(await loadDictLabels(this.dataSource, ['surface_type']));
     // 「料厚」列（2026-09-26）：与入库单同一取法（各部件组料厚按组序去重「/」并列）
     const thickness = await this.loadThicknessByProduct([

@@ -1,5 +1,12 @@
-import { bracketSplitWord, piecesToUnitQty, railNameSuffixOf, withRailSuffix, sanitizeItemCode } from '@hb-oms/shared';
-import { colorTextOf, mergeByProduct, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
+import {
+  bracketSplitWord,
+  formatSurfaceColorText,
+  piecesToUnitQty,
+  railNameSuffixOf,
+  sanitizeItemCode,
+  withRailSuffix,
+} from '@hb-oms/shared';
+import { mergeByProduct, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
 
 /**
  * 送货单取数的纯逻辑（CLAUDE.md §5.6「送货单打印」）。
@@ -36,7 +43,7 @@ export interface DeliveryNoteSourceRow {
   dimension_mm: number | null;
   dimension_text: string | null;
   color: string | null;
-  /** 表面处理字典值：纸面「颜色」格印它的中文名（见 colorTextOf） */
+  /** 表面处理字典值：通用送货单的「表面处理」格会与颜色拼接 */
   surface_type: string | null;
   remark: string | null;
   /** 以下来自 JOIN 的订单侧（产品行被删时为 null，各字段自行回落明细快照） */
@@ -82,8 +89,8 @@ export interface DeliveryNoteRow {
   /** 料厚：各部件组料厚按组序去重后「/」并列（如 1.2/1.0），与入库单同口径 */
   materialThickness: string;
   /**
-   * 纸面「颜色」格：**表面处理中文名优先**，表面处理为空或「无」时才回落明细的颜色字段（colorTextOf）。
-   * 通用模板有独立的「颜色」列；
+   * 通用送货单的「表面处理」格：订单表面处理中文名与颜色用「/」拼接，
+   * 颜色为空时只印表面处理；表面处理为空或为「无」时只印颜色。
    * 该列受 §5.7 全局「颜色」开关控制——停用时整列不印（与其它页面口径一致）。
    */
   color: string;
@@ -131,7 +138,7 @@ export function buildDeliveryRows(
       itemNo: sanitizeItemCode(r.item_no),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
       materialThickness: thicknessOf(Number(r.order_product_id) || 0),
-      color: colorTextOf(r.surface_type, r.color, surfaceLabel),
+      color: formatSurfaceColorText(r.surface_type, r.color, surfaceLabel),
       qty: piecesToUnitQty(r._pcs, unit),
       unit,
       unitLabel: unitLabelOf(unit),
