@@ -129,6 +129,8 @@ const MIGRATIONS: string[] = [
   'migration-outsource-side.sql',
   // 呆滞品档案新增独立建档日期；存量按原创建时间的业务日期回填
   'migration-dull-stock-filing-date.sql',
+  // 送货单自动分页解除内置 6/7 行旧上限，按纸面实测高度尽量填满
+  'migration-print-delivery-auto-fill.sql',
 ];
 
 /**

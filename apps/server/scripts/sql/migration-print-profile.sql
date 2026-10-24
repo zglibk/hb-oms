@@ -50,10 +50,10 @@ SET @continuous_delivery := JSON_OBJECT(
   'margins',JSON_OBJECT('top',5,'right',5,'bottom',5,'left',5),
   'offset',JSON_OBJECT('x',0,'y',0),
   'style',JSON_OBJECT('fontScale',100,'borderWidthPt',0.75),
-  'pagination',JSON_OBJECT('strategy','auto','rowsPerPage',6),
+  'pagination',JSON_OBJECT('strategy','auto','rowsPerPage',50),
   'layout',JSON_OBJECT('snapMm',0.5,'elements',JSON_ARRAY())
 );
-SET @a5_delivery := JSON_SET(@continuous_delivery, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.paper.driverOrientation', 'landscape', '$.pagination.rowsPerPage', 7);
+SET @a5_delivery := JSON_SET(@continuous_delivery, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.paper.driverOrientation', 'landscape');
 SET @continuous_inbound := JSON_SET(@continuous_delivery, '$.pagination.rowsPerPage', 7);
 SET @a5_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 148, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 148, '$.paper.driverFormName', 'A5', '$.paper.driverOrientation', 'landscape', '$.pagination.rowsPerPage', 8);
 SET @a4_inbound := JSON_SET(@continuous_inbound, '$.paper.widthMm', 210, '$.paper.heightMm', 297, '$.paper.bodyWidthMm', 210, '$.paper.bodyHeightMm', 297, '$.paper.driverFormName', 'A4', '$.paper.driverOrientation', 'portrait', '$.pagination.rowsPerPage', 24);

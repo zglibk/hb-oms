@@ -105,7 +105,10 @@
             <el-form-item label="X / Y 偏移"><el-input-number v-model="editorConfig.offset.x" :min="-20" :max="20" :step="0.1" /> / <el-input-number v-model="editorConfig.offset.y" :min="-20" :max="20" :step="0.1" /> mm</el-form-item>
             <el-form-item label="线条粗细"><el-input-number v-model="editorConfig.style.borderWidthPt" :min="0.1" :max="3" :step="0.05" /> pt</el-form-item>
             <el-form-item label="分页"><el-radio-group v-model="editorConfig.pagination.strategy"><el-radio value="auto">自动</el-radio><el-radio value="fixed">固定行数</el-radio></el-radio-group></el-form-item>
-            <el-form-item label="每页明细"><el-input-number v-model="editorConfig.pagination.rowsPerPage" :min="1" :max="50" /> 行</el-form-item>
+            <el-form-item :label="editorConfig.pagination.strategy === 'auto' ? '每页上限' : '每页明细'">
+              <el-input-number v-model="editorConfig.pagination.rowsPerPage" :min="1" :max="50" /> 行
+              <small v-if="editorConfig.pagination.strategy === 'auto'">系统会按纸面实测高度分页；设为 50 可尽量填满。</small>
+            </el-form-item>
           </el-collapse-item>
         </el-collapse>
       </el-form>

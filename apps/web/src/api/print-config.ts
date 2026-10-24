@@ -121,7 +121,8 @@ export function defaultPrintConfig(documentType: PrintDocumentType): PrintProfil
     margins: { top: 5, right: 5, bottom: 5, left: 5 },
     offset: { x: 0, y: 0 },
     style: { fontScale: 100, borderWidthPt: 0.75 },
-    pagination: { strategy: 'auto', rowsPerPage: documentType === 'delivery_note' ? 6 : 7 },
+    // 自动分页会再按真实纸面高度与折行高度拆页；送货单用 50 解除旧版每页 6 行的提前截断。
+    pagination: { strategy: 'auto', rowsPerPage: documentType === 'delivery_note' ? 50 : 7 },
     layout: { snapMm: 0.5, elements: [] },
   };
 }
