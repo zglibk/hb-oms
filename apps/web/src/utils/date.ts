@@ -102,6 +102,32 @@ export function recentSixNaturalMonthRange(today = businessToday()): [string, st
 }
 
 /**
+ * 订单跟踪台账默认交期区间：最近六个自然月起点至业务当天六个月后的同日。
+ *
+ * 例如业务日期为 2026-10-24 时返回 2026-05-01 ～ 2027-04-24；若目标月没有同日
+ * （如 8 月 31 日加六个月），则取目标月月末。这样既保留近期历史，也默认覆盖未到期订单。
+ */
+export function ledgerDeliveryDateRange(today = businessToday()): [string, string] {
+  const [start, normalizedToday] = recentSixNaturalMonthRange(today);
+  const year = Number(normalizedToday.slice(0, 4));
+  const month = Number(normalizedToday.slice(5, 7));
+  const day = Number(normalizedToday.slice(8, 10));
+  const targetMonth = new Date(Date.UTC(year, month - 1 + 6, 1));
+  const targetMonthLastDay = new Date(Date.UTC(
+    targetMonth.getUTCFullYear(),
+    targetMonth.getUTCMonth() + 1,
+    0,
+  )).getUTCDate();
+  const targetDay = Math.min(day, targetMonthLastDay);
+  const pad = (part: number) => String(part).padStart(2, '0');
+
+  return [
+    start,
+    `${targetMonth.getUTCFullYear()}-${pad(targetMonth.getUTCMonth() + 1)}-${pad(targetDay)}`,
+  ];
+}
+
+/**
  * Element Plus 日期面板传入的是“用户在面板上点到的本地日历格”，不是一个业务绝对时刻。
  * 这里刻意读取本地年月日，避免东京等 UTC+8 以东浏览器把 00:00 换算成上海前一天。
  */
