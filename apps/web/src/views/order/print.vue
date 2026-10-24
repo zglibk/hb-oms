@@ -496,13 +496,16 @@ export default { name: 'OrderPrint' };
   border: 1px solid #333;
   padding: 1.2mm 1.5mm;
   vertical-align: middle;
-  word-break: break-all;
+  /* 每一列都允许自动折行，连续编码放不下时也不能被单元格裁切。 */
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .task-table th { font-weight: 700; text-align: center; }
 .task-table .c { text-align: center; }
 .task-table .num { font-weight: 700; }
 /* 产品要求描述/图号是多行文本，保留换行 */
-.task-table .pre { white-space: pre-wrap; }
+.task-table .pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .total-row td { font-size: 13px; }
 
 .doc-remark {

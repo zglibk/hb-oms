@@ -204,11 +204,8 @@ function headerOf(col: DeliveryColumn): string {
   return unit ? col.label.replace('{unit}', unit) : '数量';
 }
 
-const NOWRAP_KEYS: Array<DeliveryColumn['key']> = [
-  'seq', 'itemNo', 'materialThickness', 'specText', 'color', 'unitLabel', 'qty',
-];
 function cellClass(col: DeliveryColumn) {
-  return { c: col.align === 'center', pre: !!col.pre, nowrap: NOWRAP_KEYS.includes(col.key) };
+  return { c: col.align === 'center', pre: !!col.pre };
 }
 
 function cellOf(row: DeliveryNoteRow, col: DeliveryColumn): string {
@@ -446,15 +443,19 @@ function signValue(label: string): string {
   border: var(--border-width, 1px) solid #333;
   padding: 1.2mm 1.5mm;
   vertical-align: middle;
-  /* 优先在空格/标点折行；不要 break-all，118% 下会把 16080、494.02.065 拦腰截开。 */
+  /*
+   * 所有表头与明细格都必须能自动折行。优先在空格/标点换行；连续的客户编码、
+   * 表面处理等字符串实在放不下时才允许在任意位置断开，不能再用 nowrap 把内容裁出格子。
+   * 折行后的实际行高会由隐藏纸面测量，并参与应用层自动分页。
+   */
+  white-space: normal;
   word-break: normal;
   overflow-wrap: anywhere;
 }
-.note-table th { font-weight: 700; text-align: center; white-space: nowrap; }
+.note-table th { font-weight: 700; text-align: center; }
 .note-table .c { text-align: center; }
-.note-table .nowrap { white-space: nowrap; overflow-wrap: normal; }
 /* 品名/备注是多行文本，保留换行 */
-.note-table .pre { white-space: pre-wrap; }
+.note-table .pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .total-row td { font-size: calc(13px * var(--font-scale, 1)); }
 
 /* ===== 签名栏（margin-top:auto 把它顶到页面底部，见 .print-sheet 的 flex 说明） ===== */

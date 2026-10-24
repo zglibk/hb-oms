@@ -74,10 +74,20 @@ function rowValue(row: Record<string, any>, field: string, index: number) {
   font-family: SimSun, 'Songti SC', 'Noto Serif CJK SC', 'Noto Sans CJK SC', 'Microsoft YaHei', serif;
   font-size: calc(12px * var(--font-scale, 1));
 }
-.placed-field, .placed-table { position: absolute; box-sizing: border-box; overflow: hidden; }
+.placed-field, .placed-table { position: absolute; box-sizing: border-box; }
+.placed-field { overflow: hidden; }
 .placed-field { white-space: pre-wrap; line-height: 1.2; }
-.placed-table { border-collapse: collapse; table-layout: fixed; }
-.placed-table th, .placed-table td { padding: 0 .8mm; border: 0; vertical-align: middle; overflow: hidden; }
+.placed-table { border-collapse: collapse; table-layout: fixed; overflow: visible; }
+.placed-table th,
+.placed-table td {
+  padding: 0 .8mm;
+  border: 0;
+  vertical-align: middle;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
 @media print {
   .print-sheet { margin: var(--page-offset-y, 0) auto 0; break-after: page; print-color-adjust: exact; }
 }

@@ -273,9 +273,13 @@ function signValue(label: string): string {
   border: var(--border-width, 1px) solid #333;
   padding: 0.6mm 1.2mm;
   vertical-align: middle;
-  word-break: break-all;
+  /* 长产品名称、代码、表面处理与库位均可折行；实际行高交给自动分页测量。 */
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .note-table th { height: 7.5mm; font-weight: 700; text-align: center; }
+.note-table td { white-space: pre-wrap; }
 .note-table .c { text-align: center; }
 
 /* ===== 签名栏（margin-top:auto 把它顶到页面底部，见 .print-sheet 的 flex 说明） ===== */

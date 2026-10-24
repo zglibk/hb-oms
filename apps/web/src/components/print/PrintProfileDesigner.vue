@@ -323,9 +323,17 @@ function testPrint() {
 .calibration-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; opacity: .55; pointer-events: none; }
 .design-item { position: absolute; box-sizing: border-box; padding: 2px; border: 1px dashed #409eff; background: #ecf5ffb8; overflow: hidden; cursor: move; user-select: none; }
 .design-item.readonly { cursor: default; }
-.design-item.table { background: repeating-linear-gradient(#f4f9ff,#f4f9ff 15px,#d9ecff 16px); }
+.design-item.table { overflow: visible; background: repeating-linear-gradient(#f4f9ff,#f4f9ff 15px,#d9ecff 16px); }
 .sample-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: inherit; }
-.sample-table th, .sample-table td { padding: 0 2px; border: 0; overflow: hidden; white-space: nowrap; }
+.sample-table th,
+.sample-table td {
+  padding: 0 2px;
+  border: 0;
+  overflow: visible;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
 .design-item.active { outline: 2px solid #f56c6c; }
 .resize-handle { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; background: #f56c6c; cursor: nwse-resize; }
 .design-item.readonly .resize-handle { display: none; }
