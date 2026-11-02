@@ -125,9 +125,9 @@ export class DullStockService {
       .take(pageSize);
 
     const [list, total] = await qb.getManyAndCount();
-    const result: DullStockListRow[] = dateRange
-      ? await this.attachPeriodFlow(list, dateRange)
-      : list.map((row) => Object.assign(row, this.emptyPeriod(row)));
+    // 无月份时也按四类业务汇总全生命周期流水，主列表才能保持与手工台账一致；
+    // 选择月份后，同一组字段自动切为该月口径。
+    const result = await this.attachFlowSummary(list, dateRange);
     return { list: result, total, page, pageSize };
   }
 
@@ -146,27 +146,34 @@ export class DullStockService {
         (s, r) => s + toPieces(dateRange ? r.periodClosingQty : r.balanceQty, r.unit),
         0,
       ),
-      periodOpeningPcs: dateRange
-        ? all.list.reduce((s, r) => s + toPieces(r.periodOpeningQty || 0, r.unit), 0)
-        : 0,
-      periodInboundPcs: query.flowDateFrom && query.flowDateTo
-        ? all.list.reduce((s, r) => s + toPieces(r.periodInboundQty || 0, r.unit), 0)
-        : 0,
-      periodOutboundPcs: query.flowDateFrom && query.flowDateTo
-        ? all.list.reduce((s, r) => s + toPieces(r.periodOutboundQty || 0, r.unit), 0)
-        : 0,
-      periodCustomerReturnPcs: dateRange
-        ? all.list.reduce((s, r) => s + toPieces(r.periodCustomerReturnQty || 0, r.unit), 0)
-        : 0,
-      periodProductionIssuePcs: dateRange
-        ? all.list.reduce((s, r) => s + toPieces(r.periodProductionIssueQty || 0, r.unit), 0)
-        : 0,
-      periodProductionInboundPcs: dateRange
-        ? all.list.reduce((s, r) => s + toPieces(r.periodProductionInboundQty || 0, r.unit), 0)
-        : 0,
-      periodShipmentPcs: dateRange
-        ? all.list.reduce((s, r) => s + toPieces(r.periodShipmentQty || 0, r.unit), 0)
-        : 0,
+      periodOpeningPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodOpeningQty || 0, r.unit),
+        0,
+      ),
+      periodInboundPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodInboundQty || 0, r.unit),
+        0,
+      ),
+      periodOutboundPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodOutboundQty || 0, r.unit),
+        0,
+      ),
+      periodCustomerReturnPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodCustomerReturnQty || 0, r.unit),
+        0,
+      ),
+      periodProductionIssuePcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodProductionIssueQty || 0, r.unit),
+        0,
+      ),
+      periodProductionInboundPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodProductionInboundQty || 0, r.unit),
+        0,
+      ),
+      periodShipmentPcs: all.list.reduce(
+        (s, r) => s + toPieces(r.periodShipmentQty || 0, r.unit),
+        0,
+      ),
     };
   }
 
@@ -180,12 +187,17 @@ export class DullStockService {
     return { from, to };
   }
 
-  /** 给当前页档案附上所选月份的月初、四类变动数量/日期与月末结存。 */
-  private async attachPeriodFlow(
+  /**
+   * 给列表行挂四类流水数量/日期与期末结存。
+   * 月份为空时汇总全生命周期，日期保留年份；选择月份后仅汇总当月，日期显示月日。
+   */
+  private async attachFlowSummary(
     list: DullStock[],
-    dateRange: FlowDateRange,
+    dateRange: FlowDateRange | null,
   ): Promise<DullStockListRow[]> {
     if (!list.length) return [];
+    const effectiveRange = dateRange ?? { from: '1000-01-01', to: '9999-12-31' };
+    const dateFormat = dateRange ? '%m-%d' : '%Y-%m-%d';
     const rows = await this.flowRepo
       .createQueryBuilder('f')
       .select('f.dullId', 'dullId')
@@ -206,7 +218,7 @@ export class DullStockService {
         'periodCustomerReturnQty',
       )
       .addSelect(
-        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :customerReturn THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        `GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :customerReturn THEN DATE_FORMAT(f.flowDate, '${dateFormat}') END ORDER BY f.flowDate SEPARATOR '、')`,
         'periodCustomerReturnDates',
       )
       .addSelect(
@@ -214,7 +226,7 @@ export class DullStockService {
         'periodProductionIssueQty',
       )
       .addSelect(
-        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionIssue THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        `GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionIssue THEN DATE_FORMAT(f.flowDate, '${dateFormat}') END ORDER BY f.flowDate SEPARATOR '、')`,
         'periodProductionIssueDates',
       )
       .addSelect(
@@ -222,7 +234,7 @@ export class DullStockService {
         'periodProductionInboundQty',
       )
       .addSelect(
-        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionInbound THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        `GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionInbound THEN DATE_FORMAT(f.flowDate, '${dateFormat}') END ORDER BY f.flowDate SEPARATOR '、')`,
         'periodProductionInboundDates',
       )
       .addSelect(
@@ -230,13 +242,13 @@ export class DullStockService {
         'periodShipmentQty',
       )
       .addSelect(
-        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :shipment THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        `GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :shipment THEN DATE_FORMAT(f.flowDate, '${dateFormat}') END ORDER BY f.flowDate SEPARATOR '、')`,
         'periodShipmentDates',
       )
       .where('f.dullId IN (:...ids)', { ids: list.map((row) => row.id) })
       .setParameters({
-        flowDateFrom: dateRange.from,
-        flowDateTo: dateRange.to,
+        flowDateFrom: effectiveRange.from,
+        flowDateTo: effectiveRange.to,
         inDirection: STOCK_DIRECTION.IN,
         outDirection: STOCK_DIRECTION.OUT,
         customerReturn: DULL_STOCK_FLOW_TYPE.CUSTOMER_RETURN,
@@ -251,7 +263,9 @@ export class DullStockService {
       const period = byId.get(row.id);
       const periodInboundQty = Number(period?.periodInboundQty || 0);
       const periodOutboundQty = Number(period?.periodOutboundQty || 0);
-      const periodOpeningQty = (row.openingQty || 0) + Number(period?.beforeDelta || 0);
+      const periodOpeningQty = dateRange
+        ? (row.openingQty || 0) + Number(period?.beforeDelta || 0)
+        : row.openingQty || 0;
       return Object.assign(row, {
         periodOpeningQty,
         periodInboundQty,
@@ -267,23 +281,6 @@ export class DullStockService {
         periodShipmentDates: period?.periodShipmentDates || '',
       });
     });
-  }
-
-  private emptyPeriod(row: DullStock): Omit<DullStockListRow, keyof DullStock> {
-    return {
-      periodOpeningQty: row.openingQty || 0,
-      periodInboundQty: 0,
-      periodOutboundQty: 0,
-      periodClosingQty: row.balanceQty || 0,
-      periodCustomerReturnQty: 0,
-      periodCustomerReturnDates: '',
-      periodProductionIssueQty: 0,
-      periodProductionIssueDates: '',
-      periodProductionInboundQty: 0,
-      periodProductionInboundDates: '',
-      periodShipmentQty: 0,
-      periodShipmentDates: '',
-    };
   }
 
   /**
@@ -476,7 +473,7 @@ export class DullStockService {
 
   /* ==================== 导出 / 导入 ==================== */
 
-  /** 导出当前筛选结果（列序对齐页面，四个数一并带出便于对账） */
+  /** 导出当前筛选结果（分类流水口径与页面一致，另保留建档辅助字段） */
   async exportExcel(query: QueryDullStockDto): Promise<Buffer> {
     const all = await this.findList({ ...query, page: 1, pageSize: EXPORT_ROW_LIMIT + 1 });
     if (!all.list.length) {
@@ -505,18 +502,14 @@ export class DullStockService {
       { header: '边别' },
       { header: '单位' },
       { header: query.flowDateFrom ? '月初数' : '期初数' },
-      ...(!query.flowDateFrom
-        ? [{ header: '入库数' }, { header: '出库数' }]
-        : [
-            { header: '客户退货数量' },
-            { header: '客户退货日期' },
-            { header: '生产领料数量' },
-            { header: '生产领料日期' },
-            { header: '生产入库数量' },
-            { header: '生产入库日期' },
-            { header: '出货数量' },
-            { header: '出货日期' },
-          ]),
+      { header: '客户退货数量' },
+      { header: '客户退货日期' },
+      { header: '生产领料数量' },
+      { header: '生产领料日期' },
+      { header: '生产入库数量' },
+      { header: '生产入库日期' },
+      { header: '出货数量' },
+      { header: '出货日期' },
       { header: query.flowDateFrom ? '月末结存' : '结存数' },
       { header: '备注' },
     ];
@@ -536,26 +529,20 @@ export class DullStockService {
         labelOf(SIDE_OPTIONS, r.side),
         unitLabel(r.unit),
         query.flowDateFrom ? r.periodOpeningQty || 0 : r.openingQty || 0,
-        ...(!query.flowDateFrom
-          ? [r.inboundQty || 0, r.outboundQty || 0]
-          : [
-              r.periodCustomerReturnQty || 0,
-              r.periodCustomerReturnDates || '',
-              r.periodProductionIssueQty || 0,
-              r.periodProductionIssueDates || '',
-              r.periodProductionInboundQty || 0,
-              r.periodProductionInboundDates || '',
-              r.periodShipmentQty || 0,
-              r.periodShipmentDates || '',
-            ]),
+        r.periodCustomerReturnQty || 0,
+        r.periodCustomerReturnDates || '',
+        r.periodProductionIssueQty || 0,
+        r.periodProductionIssueDates || '',
+        r.periodProductionInboundQty || 0,
+        r.periodProductionInboundDates || '',
+        r.periodShipmentQty || 0,
+        r.periodShipmentDates || '',
         query.flowDateFrom ? r.periodClosingQty || 0 : r.balanceQty || 0,
         r.remark || '',
       ]);
     }
     styleSheet(ws, {
-      centerColumns: query.flowDateFrom && query.flowDateTo
-        ? [4, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
-        : [4, 7, 8, 9, 12, 13, 14, 15, 16, 17],
+      centerColumns: [4, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
     });
 
     const buf = await wb.xlsx.writeBuffer();

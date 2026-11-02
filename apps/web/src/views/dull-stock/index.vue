@@ -49,13 +49,12 @@
         <span class="filter-summary">
           当前筛选 {{ summary.rows }} 行，{{ hasFlowDateRange ? '月末结存' : '结存' }}合计
           <b>{{ summary.totalBalancePcs }}</b> 支
-          <template v-if="hasFlowDateRange">
-            ，{{ flowMonth }}：月初 <b>{{ summary.periodOpeningPcs }}</b> 支，
-            客退 <b class="delta-in">{{ summary.periodCustomerReturnPcs }}</b> 支，
-            领料 <b class="delta-out">{{ summary.periodProductionIssuePcs }}</b> 支，
-            生产入库 <b class="delta-in">{{ summary.periodProductionInboundPcs }}</b> 支，
-            出货 <b class="delta-out">{{ summary.periodShipmentPcs }}</b> 支
-          </template>
+          ，{{ hasFlowDateRange ? `${flowMonth}：月初` : '累计：期初' }}
+          <b>{{ summary.periodOpeningPcs }}</b> 支，
+          客退 <b class="delta-in">{{ summary.periodCustomerReturnPcs }}</b> 支，
+          领料 <b class="delta-out">{{ summary.periodProductionIssuePcs }}</b> 支，
+          生产入库 <b class="delta-in">{{ summary.periodProductionInboundPcs }}</b> 支，
+          出货 <b class="delta-out">{{ summary.periodShipmentPcs }}</b> 支
         </span>
       </div>
     </el-card>
@@ -67,10 +66,11 @@
           <el-icon><InfoFilled /></el-icon>
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
           <b>结存数 = 期初数 + 客退 + 生产入库 − 生产领料 − 出货</b>，变动只能靠「登记库存变动」产生，点行首箭头看日期与明细。
-          选择月份后显示月初、四类变动与月末结存，可直接导出月度清单；“出货”流水可打印送货单。
+          主列表按手工台账展示期初、四类变动数量与日期、结存；选择月份后切换为月度口径。
+          “出货”送货单可直接从行末操作区打印。
           客户和生产单号均为选填，无法确认来源时可以留空。
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
-          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 客退 + 生产入库 − 生产领料 − 出货，所有变动逐笔留日期。选择月份后显示月初、四类变动与月末结存并可导出；“出货”流水可打印送货单。客户和生产单号均为选填，但打印送货单前必须补充客户。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
+          <template #content>已完结订单剩下的成品，一条记录 = 一批货。主列表按手工台账展示生产单号、客户、产品属性、期初、客户退货、生产领料、生产入库、出货、结存和备注，四类变动同时显示数量与日期。月份留空看累计，选择月份看当月；行末“打印送货单”可选择具体出货记录。打印前必须补充客户。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
         </hint-tip>
       </div>
 
@@ -127,39 +127,23 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="建档日期" width="105" align="center" prop="filingDate" />
-        <el-table-column label="产品代码" width="100" align="center">
+        <el-table-column label="生产单号" width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.itemNo || '—' }}<audit-info mode="inline" :row="row" />
+            {{ row.productionNo || '—' }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <el-table-column label="客户" min-width="120" show-overflow-tooltip>
+        <el-table-column label="客户" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ row.customerName || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="生产单号" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
-        <el-table-column label="节数" width="75" align="center">
-          <template #default="{ row }">{{ railSectionLabel(row.railSection) || '—' }}</template>
-        </el-table-column>
         <el-table-column label="规格" width="75" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="料厚" width="80" align="center">
-          <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
-            <span v-else>—</span>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="colorEnabled" label="颜色" width="60" align="center">
-          <template #default="{ row }">
-            <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
@@ -169,54 +153,70 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="单位" width="64" align="center">
+        <el-table-column label="单位套/支" width="76" align="center">
           <template #default="{ row }">{{ labelOf(UNIT_OPTIONS, row.unit) }}</template>
         </el-table-column>
-        <el-table-column v-if="!hasFlowDateRange" label="期初数" width="80" align="center">
-          <template #default="{ row }">{{ row.openingQty }}</template>
+        <el-table-column label="材料厚度" width="90" align="center">
+          <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
         </el-table-column>
-        <el-table-column v-if="!hasFlowDateRange" label="入库数" width="80" align="center">
-          <template #default="{ row }">
-            <span :class="row.inboundQty > 0 ? 'delta-in' : ''">{{ row.inboundQty }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="!hasFlowDateRange" label="出库数" width="80" align="center">
-          <template #default="{ row }">
-            <span :class="row.outboundQty > 0 ? 'delta-out' : ''">{{ row.outboundQty }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="月初数" width="80" align="center">
+        <el-table-column :label="hasFlowDateRange ? '月初数' : '期初数'" width="80" align="center">
           <template #default="{ row }">{{ row.periodOpeningQty || 0 }}</template>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="客户退货" width="105" align="center">
-          <template #default="{ row }"><b class="delta-in">{{ row.periodCustomerReturnQty || 0 }}</b><small class="flow-dates">{{ row.periodCustomerReturnDates || '—' }}</small></template>
+        <el-table-column label="客户退货" align="center">
+          <el-table-column label="数量" width="72" align="center">
+            <template #default="{ row }"><b class="delta-in">{{ row.periodCustomerReturnQty || 0 }}</b></template>
+          </el-table-column>
+          <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+            <template #default="{ row }"><span class="flow-dates">{{ row.periodCustomerReturnDates || '—' }}</span></template>
+          </el-table-column>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="生产领料" width="105" align="center">
-          <template #default="{ row }"><b class="delta-out">{{ row.periodProductionIssueQty || 0 }}</b><small class="flow-dates">{{ row.periodProductionIssueDates || '—' }}</small></template>
+        <el-table-column label="生产车间" align="center">
+          <el-table-column label="领料" align="center">
+            <el-table-column label="数量" width="72" align="center">
+              <template #default="{ row }"><b class="delta-out">{{ row.periodProductionIssueQty || 0 }}</b></template>
+            </el-table-column>
+            <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+              <template #default="{ row }"><span class="flow-dates">{{ row.periodProductionIssueDates || '—' }}</span></template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="入库" align="center">
+            <el-table-column label="数量" width="72" align="center">
+              <template #default="{ row }"><b class="delta-in">{{ row.periodProductionInboundQty || 0 }}</b></template>
+            </el-table-column>
+            <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+              <template #default="{ row }"><span class="flow-dates">{{ row.periodProductionInboundDates || '—' }}</span></template>
+            </el-table-column>
+          </el-table-column>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="生产入库" width="105" align="center">
-          <template #default="{ row }"><b class="delta-in">{{ row.periodProductionInboundQty || 0 }}</b><small class="flow-dates">{{ row.periodProductionInboundDates || '—' }}</small></template>
+        <el-table-column label="出货" align="center">
+          <el-table-column label="数量" width="72" align="center">
+            <template #default="{ row }"><b class="delta-out">{{ row.periodShipmentQty || 0 }}</b></template>
+          </el-table-column>
+          <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+            <template #default="{ row }"><span class="flow-dates">{{ row.periodShipmentDates || '—' }}</span></template>
+          </el-table-column>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="出货" width="105" align="center">
-          <template #default="{ row }"><b class="delta-out">{{ row.periodShipmentQty || 0 }}</b><small class="flow-dates">{{ row.periodShipmentDates || '—' }}</small></template>
-        </el-table-column>
-        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.remark || '—' }}</template>
-        </el-table-column>
-        <el-table-column :label="hasFlowDateRange ? '月末结存' : '结存数'" width="100" align="center" fixed="right">
+        <el-table-column :label="hasFlowDateRange ? '月末结存' : '结存数'" width="100" align="center">
           <template #default="{ row }">
             <span :class="(hasFlowDateRange ? row.periodClosingQty : row.balanceQty) > 0 ? 'num-ok' : 'num-zero'">
               {{ hasFlowDateRange ? (row.periodClosingQty || 0) : row.balanceQty }}{{ unitLabel(row.unit) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="250" align="center" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
                 size="small" v-permission.disable="'dull-stock:stock'" link type="primary" :icon="Sort"
                 @click="openFlow(row)"
               >库存变动</el-button>
+              <el-button
+                size="small" v-permission.disable="'dull-stock:print'" link type="primary" :icon="Printer"
+                :disabled="(row.periodShipmentQty || 0) <= 0" @click="openShipmentNotes(row)"
+              >打印送货单</el-button>
               <el-button
                 size="small" v-permission.disable="'dull-stock:update'" link type="primary" :icon="EditPen"
                 @click="openForm(row)"
@@ -231,6 +231,34 @@
       </app-table>
       <app-pagination class="pager" :total="total" v-model:page="query.page" v-model:size="query.pageSize" @change="load" />
     </el-card>
+
+    <!-- 同一批货可能分多次出货：从主列表进入后先选择本次要打印的出货流水。 -->
+    <el-dialog
+      v-model="shipmentDialogVisible"
+      :title="`${shipmentRow?.productModel || shipmentRow?.itemNo || '呆滞品'}－选择出货送货单`"
+      width="680px"
+    >
+      <el-table :data="shipmentFlows" v-loading="shipmentLoading" border stripe>
+        <el-table-column label="出货日期" prop="flowDate" width="120" align="center" />
+        <el-table-column label="出货数量" width="110" align="center">
+          <template #default="{ row }">{{ row.quantity }} {{ shipmentRow ? unitLabel(shipmentRow.unit) : '' }}</template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.reason || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" :icon="Printer" @click="openDeliveryNote(row)">打印</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button size="small" @click="shipmentDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 建档 / 编辑 -->
     <el-dialog v-model="formVisible" :title="editRow ? '编辑呆滞品' : '新增呆滞品'" width="760px">
@@ -458,7 +486,6 @@ import {
   STOCK_DIRECTION_VALUE as STOCK_DIRECTION,
   SURFACE_DEFAULT_COLOR,
   sideLabel,
-  railSectionLabel,
   normalizeProductTypes,
   parseProductTypes,
   hasSocket,
@@ -649,6 +676,42 @@ async function onDeleteFlow(row: DullStockRow, flow: DullStockFlowRow) {
 function openDeliveryNote(flow: DullStockFlowRow) {
   const { href } = router.resolve({ path: '/dull-stock/delivery-note', query: { id: flow.id } });
   window.open(href, '_blank', 'noopener');
+}
+
+/* ===== 主列表送货单入口 ===== */
+const shipmentDialogVisible = ref(false);
+const shipmentLoading = ref(false);
+const shipmentRow = ref<DullStockRow | null>(null);
+const shipmentFlows = ref<DullStockFlowRow[]>([]);
+
+async function openShipmentNotes(row: DullStockRow) {
+  if (!row.customerName?.trim()) {
+    ElMessage.warning('打印送货单前，请先编辑该呆滞品并补充客户');
+    return;
+  }
+  shipmentRow.value = row;
+  shipmentFlows.value = [];
+  shipmentDialogVisible.value = true;
+  shipmentLoading.value = true;
+  try {
+    const res = await getDullStockFlows({
+      dullId: row.id,
+      pageSize: 1000,
+      flowDateFrom: query.flowDateFrom,
+      flowDateTo: query.flowDateTo,
+    });
+    const shipments = res.list.filter(
+      (flow) => flow.flowType === DULL_STOCK_FLOW_TYPE.SHIPMENT,
+    );
+    if (!shipments.length) {
+      shipmentDialogVisible.value = false;
+      ElMessage.warning(hasFlowDateRange.value ? '所选月份没有可打印的出货记录' : '该呆滞品暂无出货记录');
+      return;
+    }
+    shipmentFlows.value = shipments;
+  } finally {
+    shipmentLoading.value = false;
+  }
 }
 
 /* ===== 建档 / 编辑 ===== */

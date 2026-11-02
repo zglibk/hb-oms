@@ -30,7 +30,7 @@ export interface DullStockRow {
   openingQty: number;
   inboundQty: number;
   outboundQty: number;
-  /** 仅选择完整日期范围时返回；本行单位口径下的期间流水合计 */
+  /** 月份为空时为全生命周期累计；选择月份后为该月流水合计 */
   periodInboundQty?: number;
   periodOutboundQty?: number;
   periodOpeningQty?: number;
@@ -83,7 +83,7 @@ export interface DullStockSummary {
   rows: number;
   /** 结存合计：各行单位不同，一律折成支再汇总 */
   totalBalancePcs: number;
-  /** 选择完整日期范围时的期间入/出合计，统一折成支 */
+  /** 当前统计口径下的分类流水合计：月份为空看累计，选择月份看当月；统一折成支 */
   periodInboundPcs: number;
   periodOutboundPcs: number;
   periodOpeningPcs: number;
