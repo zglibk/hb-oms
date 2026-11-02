@@ -4,18 +4,18 @@ import {
   piecesToUnitQty,
   railNameSuffixOf,
   sanitizeItemCode,
+  sideLabel,
+  UNIT,
   withRailSuffix,
 } from '@hb-oms/shared';
-import { mergeByProduct, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
+import { mergeByProductSide, specTextOf, sumByUnit, unitLabelOf } from './print-note.util';
 
 /**
  * 送货单取数的纯逻辑（CLAUDE.md §5.6「送货单打印」）。
  *
- * 送货单是**给客户的单据**，与系统内部台账口径有两处刻意的差异：
- *   1. **左右合并**：含卡口产品的出库明细按 left/right 分两行（结存要按边别核算），
- *      但客户拿到的纸质单只有一行——按订单产品行合并再折算。
- *   2. **数量跟随订单单位**：内部一律记「支」，送货单按客户下单的口径（套/支）印，
- *      折算走共享包 `piecesToUnitQty`，**不在此另写除法**。
+ * 送货单是**给客户的单据**：含卡口产品按 left/right 分行打印，名称后标注边别；
+ * 单边数量没有「套」的含义，故按「支」显示。其它产品仍按客户下单的套/支单位换算，
+ * 折算走共享包 `piecesToUnitQty`，**不在此另写除法**。
  *
  * 上面两条与「规格文本、单位中文、分单位合计」的实现都在
  * [print-note.util.ts](./print-note.util.ts)，与《入库单》共用（2026-08-14 按 §4.4 抽出）；
@@ -63,9 +63,13 @@ export interface DeliveryNoteSourceRow {
 
 /** 送货单一行（模板无关的全字段行） */
 export interface DeliveryNoteRow {
-  /** 序号（合并左右后重排，从 1 起） */
+  /** 序号（同边别批次合并后重排，从 1 起） */
   seq: number;
   orderProductId: number;
+  /** 含卡口产品的边别；非卡口为空 */
+  side: string;
+  /** 左 / 右；非卡口为空 */
+  sideLabel: string;
   /** 采购单编号 / 合同编号（客户订单文件上的号） */
   poNo: string;
   /** 物料编码 / 产品编码（客户方编码）——两套模板叫法不同，取的是同一个字段 */
@@ -110,9 +114,22 @@ export interface DeliveryNoteRow {
 
 const s = (v: unknown): string => (v == null ? '' : String(v).trim());
 
+/** 送货单不另挤一列，在所有模板实际使用的品名候选值末尾统一标注边别。 */
+function withSideMark(value: string | null | undefined, side: string): string {
+  const text = s(value);
+  const label = sideLabel(side);
+  if (!label || !text) return text;
+  // 存量名称若已人工带边别，不重复追加。
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`(?:[-－]\\s*${escaped}边?|[（(]\\s*${escaped}边?\\s*[）)])$`).test(text)) {
+    return text;
+  }
+  return `${text}（${label}）`;
+}
+
 /**
- * 出库明细 → 送货单行：按订单产品行合并左右两行、数量折成订单单位、重排序号。
- * 合并与折算见 print-note.util.ts，这里只做送货单的字段映射。
+ * 出库明细 → 送货单行：按「订单产品行 + 边别」合并同边别批次、重排序号。
+ * 左右分别成行并按支显示；不分边别的产品仍折成订单单位。
  */
 export function buildDeliveryRows(
   src: DeliveryNoteSourceRow[],
@@ -120,26 +137,30 @@ export function buildDeliveryRows(
   /** 订单产品行 → 料厚文本（见 FinishedStockService.loadThicknessByProduct） */
   thicknessOf: (orderProductId: number) => string = () => '',
 ): DeliveryNoteRow[] {
-  return mergeByProduct(src).map((r, i) => {
-    const unit = s(r.unit);
+  return mergeByProductSide(src).map((r, i) => {
+    const side = s(r.side);
+    const unit = side ? UNIT.PIECE : s(r.unit);
+    const baseProductName = r.is_split
+      ? withRailSuffix(s(r.product_name), railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section))
+      : bracketSplitWord(s(r.product_name));
     return {
       seq: i + 1,
       orderProductId: Number(r.order_product_id) || 0,
+      side,
+      sideLabel: sideLabel(side),
       poNo: s(r.po_no),
       materialCode: s(r.material_code),
       customerDrawingNo: s(r.customer_drawing_no),
       // 分体行把出货形态（外中轨/内轨）带进产品名称，否则分体两行印成同一个名字（2026-09-25）；
       // 整品行保持订单原文——送货单不补「滑轨」
-      productName: r.is_split
-        ? withRailSuffix(s(r.product_name), railNameSuffixOf(r.is_split, s(r.group_types).split(','), r.rail_section))
-        : bracketSplitWord(s(r.product_name)), // 整品行只给「分体」加括号，不补「滑轨」
-      productRequirement: s(r.product_requirement),
-      productModel: s(r.product_model),
+      productName: withSideMark(baseProductName, side),
+      productRequirement: withSideMark(r.product_requirement, side),
+      productModel: withSideMark(r.product_model, side),
       itemNo: sanitizeItemCode(r.item_no),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
       materialThickness: thicknessOf(Number(r.order_product_id) || 0),
       color: formatSurfaceColorText(r.surface_type, r.color, surfaceLabel),
-      qty: piecesToUnitQty(r._pcs, unit),
+      qty: side ? r._pcs : piecesToUnitQty(r._pcs, unit),
       unit,
       unitLabel: unitLabelOf(unit),
       qtyPcs: r._pcs,

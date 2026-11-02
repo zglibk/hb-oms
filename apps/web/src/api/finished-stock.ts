@@ -304,6 +304,10 @@ export const reverseFinishedDoc = (id: number, data: ReversePayload) =>
 export interface DeliveryNoteRow {
   seq: number;
   orderProductId: number;
+  /** 含卡口产品的边别；非卡口为空 */
+  side: string;
+  /** 左 / 右；非卡口为空 */
+  sideLabel: string;
   /** 采购单编号 / 合同编号 */
   poNo: string;
   /** 物料编码 / 产品编码（客户方编码）——两套模板叫法不同，取的是同一个字段 */
@@ -388,6 +392,10 @@ export const downloadDeliveryNotePdf = (
 export interface InboundNoteRow {
   seq: number;
   orderProductId: number;
+  /** 含卡口产品的边别；非卡口为空 */
+  side: string;
+  /** 纸面「边别」栏：左 / 右；非卡口为「—」 */
+  sideLabel: string;
   /** 纸面「产品名称」栏：产品型号，如 45#自锁外中轨 */
   productModel: string;
   /** 产品类型中文组合（如「普通自锁」），保留给兼容调用方 */
@@ -404,7 +412,7 @@ export interface InboundNoteRow {
   specText: string;
   /** 纸面「表面处理」格：优先为表面处理中文名，空值时回落颜色；受 §5.7 全局颜色开关控制 */
   color: string;
-  /** 已按订单单位折算后的数量（奇数支折套会出现 0.5） */
+  /** 卡口单边按支显示；非卡口按订单单位折算 */
   qty: number;
   /** set / piece */
   unit: string;

@@ -206,7 +206,7 @@ export const DELIVERY_TEMPLATES: DeliveryTemplate[] = [
  *
  * **刻意用假客户与假单号**：这是一张配置页，不该把真实客户的地址电话摆在上面；
  * 想看真实效果可以在预览页切成「真实单据」。三行明细覆盖了模板的典型情形——
- * 多行品名描述、寸与 mm 两种规格写法、含卡口合并后的整行、带备注的行。
+ * 多行品名描述、寸与 mm 两种规格写法、含卡口的左右标注、带备注的行。
  */
 export const SAMPLE_DELIVERY_NOTE = {
   docId: 0,
@@ -228,19 +228,21 @@ export const SAMPLE_DELIVERY_NOTE = {
     {
       seq: 1,
       orderProductId: 0,
+      side: 'left',
+      sideLabel: '左',
       poNo: '2PO26070092',
       materialCode: '903.001-0107',
       customerDrawingNo: 'HB-53A-001',
-      productName: '异型同步隐藏三节轨',
-      productRequirement: '异型同步隐藏三节轨\nCS-81CN-17寸\n配全新2D全灰把手',
-      productModel: '53#普通卡口滑轨',
+      productName: '异型同步隐藏三节轨（左）',
+      productRequirement: '异型同步隐藏三节轨\nCS-81CN-17寸\n配全新2D全灰把手（左）',
+      productModel: '53#普通卡口滑轨（左）',
       itemNo: '53#',
       specText: '17寸',
       materialThickness: '1.2/1.0',
       color: '电泳/黑色',
-      qty: 500,
-      unit: 'set',
-      unitLabel: '套',
+      qty: 1000,
+      unit: 'piece',
+      unitLabel: '支',
       qtyPcs: 1000,
       productionNo: 'NSK2615',
       orderNo: 'ORD260814-0001',
@@ -249,19 +251,21 @@ export const SAMPLE_DELIVERY_NOTE = {
     {
       seq: 2,
       orderProductId: 0,
+      side: 'right',
+      sideLabel: '右',
       poNo: '20260626002',
       materialCode: '040100000059',
       customerDrawingNo: '',
-      productName: '自闭装配式导轨~海宝~400X45~带卡包',
+      productName: '自闭装配式导轨~海宝~400X45~带卡包（右）',
       productRequirement: '',
-      productModel: '45#自锁滑轨',
+      productModel: '45#自锁滑轨（右）',
       itemNo: '45#',
       specText: '400mm',
       materialThickness: '1.0',
       color: '喷涂/白色',
-      qty: 260,
-      unit: 'set',
-      unitLabel: '套',
+      qty: 520,
+      unit: 'piece',
+      unitLabel: '支',
       qtyPcs: 520,
       productionNo: 'JJG2646-B',
       orderNo: 'ORD260814-0002',
@@ -270,6 +274,8 @@ export const SAMPLE_DELIVERY_NOTE = {
     {
       seq: 3,
       orderProductId: 0,
+      side: '',
+      sideLabel: '',
       poNo: '20260703004',
       // 这一行故意不给客户方编码：预览时能直接看到编码列**回退到客户图号**的效果
       materialCode: '',
@@ -290,9 +296,12 @@ export const SAMPLE_DELIVERY_NOTE = {
       remark: '',
     },
   ],
-  totals: [{ unit: 'set', unitLabel: '套', qty: 888 }],
-  unitConsistent: true,
-  unitLabel: '套',
+  totals: [
+    { unit: 'piece', unitLabel: '支', qty: 1520 },
+    { unit: 'set', unitLabel: '套', qty: 128 },
+  ],
+  unitConsistent: false,
+  unitLabel: null,
 };
 
 /** 客户资料 / 系统配置的模板下拉选项 */

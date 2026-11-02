@@ -4,10 +4,10 @@ import { DIMENSION_UNIT, SURFACE_NONE, UNIT_OPTIONS } from '@hb-oms/shared';
  * 纸质单据取数的**共用纯逻辑**（送货单 / 入库单，CLAUDE.md §5.6）。
  *
  * 两张单印给不同的人——送货单给客户、入库单给仓库——版式与列集合完全不同，
- * 但「怎么把出入库明细变成纸面上的一行」这件事是同一套：
- *   1. 含卡口产品按 left/right 分两行落库（结存要按边别核算），纸面只有一行；
- *   2. 内部一律记「支」，纸面按订单单位（套/支）印；
- *   3. 规格、单位中文、分单位合计的口径必须一致。
+ * 但「怎么把出入库明细变成纸面行」仍有大量共用逻辑：
+ *   1. 内部一律记「支」，纸面按业务口径显示单位；
+ *   2. 规格、单位中文、分单位合计的口径必须一致；
+ *   3. 入库单与送货单都按「产品 + 边别」合并同边别批次，左右分别保留。
  *
  * 2026-08-14 入库单落地时按 §4.4「发现第二处相似实现时，先抽公共封装再继续」
  * 从 delivery-note.util.ts 搬出来，两边共用。**本文件不含任何版式知识**
@@ -60,7 +60,7 @@ export function colorTextOf(
   return s(color);
 }
 
-/** `mergeByProduct` 需要的最小字段集（各单据的源行都是它的超集） */
+/** 纸面合并函数需要的最小字段集（各单据的源行都是它的超集） */
 export interface MergeableItemRow {
   id: number;
   order_product_id: number;
@@ -69,24 +69,20 @@ export interface MergeableItemRow {
 }
 
 /**
- * 按订单产品行合并明细：含卡口产品的 left/right 两行并成一行，支数累加、备注去重后并列。
- *
- * 纸面一行一个产品——左右是内部核算维度（结存按边别隔离），拿给客户或仓库的纸质单上
- * 从来只有一行。备注取各边别去重后并列（左右通常相同，不同则都留着——那多半是
- * 包装说明，丢了就少信息）。
+ * 按调用方给出的键合并明细：支数累加、备注去重后并列。
+ * 入库单与送货单都按「产品 + 边别」归并同边别批次。
  *
  * 返回的行保留源行的全部字段（取首个出现的边别的快照值），另附：
  * - `_pcs`    合并后的总支数
  * - `_remark` 合并后的备注
  */
-export function mergeByProduct<T extends MergeableItemRow>(
+function mergeRows<T extends MergeableItemRow>(
   src: T[],
+  keyOf: (row: T) => string,
 ): Array<T & { _pcs: number; _remark: string }> {
   const merged = new Map<string, T & { _pcs: number; _remarks: string[] }>();
   src.forEach((r) => {
-    // 锚点恒为订单产品行（纯属性行形态已于 2026-08-11 下线）；真为 0 时退回按明细行分组，
-    // 至少不会把两条互不相干的明细并成一行
-    const key = Number(r.order_product_id) > 0 ? `p${r.order_product_id}` : `i${r.id}`;
+    const key = keyOf(r);
     const hit = merged.get(key);
     if (hit) {
       hit._pcs += Number(r.quantity) || 0;
@@ -104,6 +100,17 @@ export function mergeByProduct<T extends MergeableItemRow>(
     ...(rest as T & { _pcs: number }),
     _remark: [...new Set(_remarks)].join('；'),
   }));
+}
+
+/** 纸面按「产品 + 边别」合并同边别批次，左、右必须保留为两张纸面行。 */
+export function mergeByProductSide<T extends MergeableItemRow & { side: string | null }>(
+  src: T[],
+): Array<T & { _pcs: number; _remark: string }> {
+  return mergeRows(src, (r) =>
+    Number(r.order_product_id) > 0
+      ? `p${r.order_product_id}#${s(r.side)}`
+      : `i${r.id}`,
+  );
 }
 
 /** `sumByUnit` 需要的最小字段集 */

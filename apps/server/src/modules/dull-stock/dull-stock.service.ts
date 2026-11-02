@@ -13,6 +13,7 @@ import {
   formatProductModel,
   formatProductTypes,
   normalizeProductTypes,
+  sideLabel,
   toPieces,
 } from '@hb-oms/shared';
 import {
@@ -356,6 +357,9 @@ export class DullStockService {
       .join('/');
     const unit = row.unit || UNIT.PIECE;
     const unitText = unitLabel(unit);
+    const stockSideLabel = sideLabel(row.side);
+    const productName = row.productModel || row.itemNo || '';
+    const markedProductName = stockSideLabel ? `${productName}（${stockSideLabel}）` : productName;
     const docNo = `DSO${flow.flowDate.replaceAll('-', '')}-${String(flow.id).padStart(4, '0')}`;
 
     return {
@@ -378,12 +382,16 @@ export class DullStockService {
         {
           seq: 1,
           orderProductId: 0,
+          side: row.side || '',
+          sideLabel: stockSideLabel,
           poNo: '',
           materialCode: row.itemNo || '',
           customerDrawingNo: '',
-          productName: row.productModel || row.itemNo || '',
+          productName: markedProductName,
           productRequirement: '',
-          productModel: row.productModel || '',
+          productModel: stockSideLabel && row.productModel
+            ? `${row.productModel}（${stockSideLabel}）`
+            : row.productModel || '',
           itemNo: row.itemNo || '',
           specText: row.dimensionText || (row.dimensionMm ? `${row.dimensionMm}mm` : ''),
           materialThickness: row.materialThickness || '',

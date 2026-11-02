@@ -158,10 +158,10 @@ const fieldSets = {
 const fields = computed(() => fieldSets[props.documentType].map(([value, label]) => ({ value, label })));
 const rowFields = props.documentType === 'delivery_note'
   ? [['seq', '序号'], ['productionNo', '生产单号'], ['itemNo', '产品代码'], ['productName', '产品名称'], ['specText', '规格'], ['qty', '数量'], ['unitLabel', '单位']]
-  : [['seq', '序号'], ['productionNo', '生产单号'], ['itemNo', '产品代码'], ['productName', '产品名称'], ['specText', '规格'], ['qty', '数量'], ['unitLabel', '单位']];
+  : [['seq', '序号'], ['productionNo', '生产单号'], ['itemNo', '产品代码'], ['productName', '产品名称'], ['sideLabel', '边别'], ['specText', '规格'], ['qty', '数量'], ['unitLabel', '单位']];
 const sampleRows = [
-  { seq: 1, productionNo: 'HYS0921', itemNo: '7851407', productName: '45#普通滑轨', specText: '450mm', qty: 1000, unitLabel: '支' },
-  { seq: 2, productionNo: 'GRA7809', itemNo: 'P004305', productName: '35#缓冲滑轨', specText: '375mm', qty: 800, unitLabel: '套' },
+  { seq: 1, productionNo: 'HYS0921', itemNo: '7851407', productName: '45#普通滑轨', sideLabel: '左', specText: '450mm', qty: 1000, unitLabel: '支' },
+  { seq: 2, productionNo: 'GRA7809', itemNo: 'P004305', productName: '35#缓冲滑轨', sideLabel: '右', specText: '375mm', qty: 800, unitLabel: '支' },
 ];
 const sampleFields: Record<string, string> = props.documentType === 'delivery_note'
   ? { deliveryNo: '20261013-0001', docDate: '2026-10-13', customerName: '样例客户', customerPhone: '0760-88888888', customerAddress: '中山市样例路 1 号', salesman: '张三', merchandiser: '李四', creatorName: '制单员', remark: '样例备注' }

@@ -4,9 +4,11 @@ import {
   piecesToUnitQty,
   railNameSuffixOf,
   sanitizeItemCode,
+  sideLabel,
+  UNIT,
   withRailSuffix,
 } from '@hb-oms/shared';
-import { colorTextOf, mergeByProduct, specTextOf, unitLabelOf } from './print-note.util';
+import { colorTextOf, mergeByProductSide, specTextOf, unitLabelOf } from './print-note.util';
 
 /**
  * 入库单取数的纯逻辑（CLAUDE.md §5.6「入库单打印」）。
@@ -14,7 +16,7 @@ import { colorTextOf, mergeByProduct, specTextOf, unitLabelOf } from './print-no
  * 入库单是**给仓库的内部凭证**（装配完工 → 仓库收货，主管/质检/制单三方签字），
  * 锚点是既有的生产入库单 `t_finished_doc(biz_type='inbound')`，不新建业务表。
  *
- * 与送货单共用的三件事（合并左右、规格文本、单位中文）都在
+ * 与送货单共用的三件事（按产品与边别归并、规格文本、单位中文）都在
  * [print-note.util.ts](./print-note.util.ts)，这里只做入库单自己的字段映射。
  * 本文件同样**不含版式知识**——哪几列、列叫什么名由前端纸面组件决定。
  */
@@ -50,9 +52,13 @@ export interface InboundNoteSourceRow {
 
 /** 入库单一行 */
 export interface InboundNoteRow {
-  /** 序号（合并左右后重排，从 1 起） */
+  /** 序号（同边别批次合并后重排，从 1 起） */
   seq: number;
   orderProductId: number;
+  /** 含卡口产品的边别；非卡口为空 */
+  side: string;
+  /** 纸面「边别」栏：左 / 右；非卡口显示「—」 */
+  sideLabel: string;
   /**
    * 纸面「产品名称」栏：产品型号快照（货号 + 产品类型中文 + 部件组后缀，
    * 如 `45#自锁外中轨`、`53#普通自锁滑轨`）。业务部门 2026-08-14 指定用它而不是
@@ -127,10 +133,9 @@ export function categoryTextOf(
 }
 
 /**
- * 入库明细 → 入库单行：按订单产品行合并左右两行、数量折成订单单位、重排序号。
- *
- * 含卡口产品的 left/right 在纸面上合并成一行：入库对象是装配产出的整套滑轨（§5.2），
- * 左右是内部核算维度（结存按边别隔离），仓库点的是「这个产品收了多少」。
+ * 入库明细 → 入库单行：按「订单产品行 + 边别」合并同边别批次、重排序号。
+ * 卡口产品左右分别成行，以独立「边别」列标识，单边数量按支显示；
+ * 非卡口产品仍按订单单位换算。
  */
 export function buildInboundRows(
   src: InboundNoteSourceRow[],
@@ -138,11 +143,14 @@ export function buildInboundRows(
   /** 订单产品行 → 料厚文本（按组序去重、「/」并列；见 loadThicknessByProduct） */
   thicknessOf: (orderProductId: number) => string,
 ): InboundNoteRow[] {
-  return mergeByProduct(src).map((r, i) => {
-    const unit = s(r.unit);
+  return mergeByProductSide(src).map((r, i) => {
+    const side = s(r.side);
+    const unit = side ? UNIT.PIECE : s(r.unit);
     return {
       seq: i + 1,
       orderProductId: Number(r.order_product_id) || 0,
+      side,
+      sideLabel: sideLabel(side) || '—',
       productModel: s(r.product_model),
       productTypeText: formatProductTypes(r.product_type),
       // 存量值可能夹着中文说明（「45#无锁力」），纸面只印代码部分（sanitizeItemCode，库里不回写）
@@ -159,7 +167,7 @@ export function buildInboundRows(
       materialThickness: thicknessOf(Number(r.order_product_id) || 0),
       specText: specTextOf(r.dimension_raw, r.dimension_unit, r.dimension_mm, r.dimension_text),
       color: colorTextOf(r.surface_type, r.color, surfaceLabel),
-      qty: piecesToUnitQty(r._pcs, unit),
+      qty: side ? r._pcs : piecesToUnitQty(r._pcs, unit),
       unit,
       unitLabel: unitLabelOf(unit),
       qtyPcs: r._pcs,
