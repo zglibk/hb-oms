@@ -72,7 +72,8 @@ const { changelogScrollSpeed } = useFeatureFlags();
 /** 速度由系统配置独立控制，保存后当前会话即可响应式生效。 */
 const scroller = useAutoScroll(() => scrollRef.value, {
   speed: changelogScrollSpeed,
-  holdMs: 2500,
+  // 更新说明篇幅较短，保留回顶阅读缓冲，但避免到底后出现明显停顿。
+  holdMs: 500,
 });
 
 /** 同一版本可能维护成多条记录（不同分类/标题），按记录逐段展示 */
@@ -170,6 +171,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+:global(.changelog-notice .el-dialog__body) {
+  /* 全局弹窗样式会让 body 自带滚动条；本弹窗只允许正文这一层负责滚动。 */
+  overflow: hidden;
+}
+
 .changelog-notice__head {
   display: flex;
   align-items: center;
@@ -187,7 +193,8 @@ onBeforeUnmount(() => {
 }
 
 .changelog-notice__body {
-  max-height: 320px;
+  max-height: min(320px, calc(100vh - 230px));
+  max-height: min(320px, calc(100dvh - 230px));
   overflow-y: auto;
   padding-right: 4px;
   /* 保留滚轮、触控和脚本滚动，只隐藏会挤占正文宽度的原生滚动条。 */
