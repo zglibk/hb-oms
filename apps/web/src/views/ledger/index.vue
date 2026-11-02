@@ -104,7 +104,9 @@
       </div>
       <app-table
         ref="ledgerTableRef"
+        class="ledger-table"
         :data="list" v-loading="loading" border stripe
+        :serial-width="48"
         :page="query.page" :page-size="query.pageSize" row-key="orderProductId"
         :default-sort="{ prop: 'orderDate', order: 'descending' }"
         @sort-change="onSortChange"
@@ -112,7 +114,7 @@
       >
         <!-- 行内展开：部件组明细（随主行返回）+ 该产品行的出入库 / 外发 / 装配三条流水，
              流水展开时才加载（§5.1） -->
-        <el-table-column type="expand" width="36" fixed="left">
+        <el-table-column type="expand" width="32" fixed="left">
           <template #default="{ row }">
             <div v-loading="detailLoadingId === row.orderProductId" class="lg-detail">
               <!-- 部件组明细：工艺属性在组级；卡口外轨、内轨的回厂进度继续拆到左/右。 -->
@@ -246,46 +248,46 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="orderDate" sortable="custom" label="下单日期" width="102" align="center">
+        <el-table-column prop="orderDate" sortable="custom" label="下单日期" width="96" align="center">
           <template #default="{ row }">{{ dateText(row.orderDate) }}</template>
         </el-table-column>
-        <el-table-column label="跟单员" width="84" align="center">
+        <el-table-column label="跟单员" width="72" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.merchandiser" :seed="row.merchandiser">{{ row.merchandiser }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column sortable="custom" label="客户" prop="customerName" min-width="100" class-name="col-left" show-overflow-tooltip />
-        <el-table-column prop="productionNo" sortable="custom" label="生产单号" width="110" show-overflow-tooltip>
+        <el-table-column sortable="custom" label="客户" prop="customerName" min-width="84" class-name="col-left" show-overflow-tooltip />
+        <el-table-column prop="productionNo" sortable="custom" label="生产单号" width="96" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column sortable="custom" label="产品代码" prop="itemNo" width="96" show-overflow-tooltip>
+        <el-table-column sortable="custom" label="产品代码" prop="itemNo" width="86" show-overflow-tooltip>
           <template #default="{ row }">{{ row.itemNo || row.materialCode || '—' }}</template>
         </el-table-column>
-        <el-table-column sortable="custom" label="产品名称" prop="productName" min-width="130" class-name="col-left" show-overflow-tooltip>
+        <el-table-column sortable="custom" label="产品名称" prop="productName" min-width="116" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || row.productModel || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品部件" width="100" show-overflow-tooltip>
+        <el-table-column label="产品部件" width="90" show-overflow-tooltip>
           <template #default="{ row }">{{ groupTypesText(row) }}</template>
         </el-table-column>
-        <el-table-column prop="dimensionMm" sortable="custom" :label="dimColLabel" width="86" align="center">
+        <el-table-column prop="dimensionMm" sortable="custom" :label="dimColLabel" width="72" align="center">
           <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
         </el-table-column>
-        <el-table-column label="表面处理" width="88" align="center">
+        <el-table-column label="表面处理" width="74" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="orderQty" sortable="custom" label="订单数量" width="92" align="center">
+        <el-table-column prop="orderQty" sortable="custom" label="订单数量" width="80" align="center">
           <template #default="{ row }">{{ row.orderQty }}{{ unitLabel(row.unit) }}</template>
         </el-table-column>
-        <el-table-column prop="deliveryDate" sortable="custom" label="订单交期" width="102" align="center">
+        <el-table-column prop="deliveryDate" sortable="custom" label="订单交期" width="96" align="center">
           <template #default="{ row }">
             <span :class="{ 'num-overdue': row.overdue }">{{ dateText(row.deliveryDate) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="returnedQty" sortable="custom" label="外发回厂数" width="100" align="center">
+        <el-table-column prop="returnedQty" sortable="custom" label="外发回厂数" width="86" align="center">
           <template #default="{ row }">
             <span v-if="row.outsourceOwed == null" class="num-na">—</span>
             <span v-else :title="`外发欠数：${row.outsourceOwed}`">{{ row.returnedQty }}</span>
@@ -293,7 +295,7 @@
         </el-table-column>
 
         <el-table-column label="组装" align="center">
-          <el-table-column label="车间" width="84" align="center">
+          <el-table-column label="车间" width="68" align="center">
             <template #default="{ row }">
               <color-tag v-if="row.assemblyWorkshops?.length" :seed="row.assemblyWorkshops.join(',')">
                 {{ dictLabels(workshopDict, row.assemblyWorkshops) }}
@@ -301,7 +303,7 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column prop="assembledQty" sortable="custom" label="完成数" width="82" align="center">
+          <el-table-column prop="assembledQty" sortable="custom" label="完成数" width="72" align="center">
             <template #default="{ row }">
               <span
                 :class="{ 'num-ok': row.assemblyPendingQty <= 0 }"
@@ -309,7 +311,7 @@
               >{{ row.assembledQty }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="预计完成时间" width="108" align="center">
+          <el-table-column label="预计完成时间" width="94" align="center">
             <template #header>
               <span class="time-header">
                 预计完成时间
@@ -322,26 +324,26 @@
           </el-table-column>
         </el-table-column>
 
-        <el-table-column prop="qtyPcs" sortable="custom" label="订单数(支)" width="88" align="center" class-name="col-key">
+        <el-table-column prop="qtyPcs" sortable="custom" label="订单数(支)" width="76" align="center" class-name="col-key">
           <template #default="{ row }">{{ row.qtyPcs }}</template>
         </el-table-column>
 
         <el-table-column label="成品仓库进销存" align="center">
-          <el-table-column prop="inQty" sortable="custom" label="已入库数" width="88" align="center" class-name="col-key">
+          <el-table-column prop="inQty" sortable="custom" label="已入库数" width="76" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
           </el-table-column>
-          <el-table-column label="入库时间" width="96" align="center">
+          <el-table-column label="入库时间" width="90" align="center">
             <template #default="{ row }">{{ dateText(row.lastInboundDate) }}</template>
           </el-table-column>
-          <el-table-column prop="productionOwed" sortable="custom" label="未入库数" width="88" align="center" class-name="col-key">
+          <el-table-column prop="productionOwed" sortable="custom" label="未入库数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="outQty" sortable="custom" label="已出货数" width="88" align="center" class-name="col-key">
+          <el-table-column prop="outQty" sortable="custom" label="已出货数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.outQty }}</template>
           </el-table-column>
-          <el-table-column label="出货时间" width="96" align="center">
+          <el-table-column label="出货时间" width="90" align="center">
             <template #header>
               <span class="time-header">
                 出货时间
@@ -352,16 +354,16 @@
             </template>
             <template #default="{ row }">{{ dateText(row.lastOutboundDate) }}</template>
           </el-table-column>
-          <el-table-column prop="deliveryOwed" sortable="custom" label="未出货数" width="88" align="center" class-name="col-key">
+          <el-table-column prop="deliveryOwed" sortable="custom" label="未出货数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="stockQty" sortable="custom" label="库存数量" width="88" align="center" class-name="col-key">
+          <el-table-column prop="stockQty" sortable="custom" label="库存数量" width="76" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
           </el-table-column>
         </el-table-column>
-        <el-table-column label="状态" width="76" align="center" fixed="right">
+        <el-table-column label="状态" width="68" align="center" fixed="right">
           <template #default="{ row }">
             <el-tag v-if="row.overdue" size="small" type="danger">逾期</el-tag>
             <el-tag v-else-if="row.deliveryOwed <= 0" size="small" type="success">已交清</el-tag>
@@ -714,6 +716,8 @@ export default { name: 'OrderLedger' };
   color: var(--el-text-color-regular);
   white-space: nowrap;
 }
+/* 台账字段多，主表统一收紧左右内边距；自由文本列仍保留溢出提示。 */
+:deep(.ledger-table .el-table__cell .cell) { padding: 0 6px; }
 /* 四数列加浅底，从一堆属性列里凸显出来 */
 :deep(.col-key) { background: var(--el-fill-color-light); }
 /* 多级表头第二行信息密度较高：弱化字重并缩小一档，一级分组标题仍保持全局加粗。 */

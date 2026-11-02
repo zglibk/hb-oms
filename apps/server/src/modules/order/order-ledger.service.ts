@@ -774,7 +774,8 @@ export class OrderLedgerService {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('订单跟踪台账');
 
-    const columns: Array<{ header: string; width: number; productLevel?: boolean }> = [
+    type LedgerExportColumn = { header: string; width: number; group?: string };
+    const columns: LedgerExportColumn[] = [
       { header: '下单日期', width: 12 },
       { header: '跟单员', width: 10 },
       { header: '客户', width: 20 },
@@ -785,22 +786,22 @@ export class OrderLedgerService {
       { header: dimHeader, width: 12 },
       { header: '表面处理', width: 11 },
       { header: '订单数量', width: 10 },
-      { header: '单位', width: 7 },
       { header: '订单交期', width: 12 },
       { header: '外发回厂数', width: 11 },
-      { header: '组装车间', width: 12 },
-      { header: '组装完成数', width: 11 },
-      { header: '预计完成时间', width: 13 },
+      { header: '车间', width: 12, group: '组装' },
+      { header: '完成数', width: 11, group: '组装' },
+      { header: '预计完成时间', width: 13, group: '组装' },
       { header: '订单数(支)', width: 11 },
-      { header: '已入库数', width: 10 },
-      { header: '入库时间', width: 12 },
-      { header: '未入库数', width: 10 },
-      { header: '已出货数', width: 10 },
-      { header: '出货时间', width: 12 },
-      { header: '未出货数', width: 10 },
-      { header: '库存数量', width: 10 },
+      { header: '已入库数', width: 10, group: '成品仓库进销存' },
+      { header: '入库时间', width: 12, group: '成品仓库进销存' },
+      { header: '未入库数', width: 10, group: '成品仓库进销存' },
+      { header: '已出货数', width: 10, group: '成品仓库进销存' },
+      { header: '出货时间', width: 12, group: '成品仓库进销存' },
+      { header: '库存数量', width: 10, group: '成品仓库进销存' },
       { header: '状态', width: 10 },
       // 以下为系统补充追溯字段：不打断手工台账主列顺序，统一放在状态之后
+      { header: '单位', width: 7 },
+      { header: '未出货数', width: 10 },
       { header: '业务员', width: 10 },
       { header: '系统订单号', width: 16 },
       { header: '客户物料编码', width: 14 },
@@ -811,15 +812,41 @@ export class OrderLedgerService {
       { header: '外发欠数', width: 10 },
       { header: '最近实际完成', width: 13 },
     ];
-    ws.columns = columns.map((c) => ({ header: c.header, width: c.width }));
-    const head = ws.getRow(1);
-    head.font = { bold: true };
-    head.alignment = { vertical: 'middle', horizontal: 'center' };
-    head.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
+    ws.columns = columns.map((c) => ({ width: c.width }));
+
+    // 手工台账是两级表头：普通列纵向合并，「组装」「成品仓库进销存」横向分组。
+    // 分组列保留连续定义，便于生成稳定的合并区域；系统补充列仍按普通列处理。
+    columns.forEach((column, index) => {
+      const columnNo = index + 1;
+      if (column.group) {
+        ws.getCell(2, columnNo).value = column.header;
+      } else {
+        ws.getCell(1, columnNo).value = column.header;
+        ws.mergeCells(1, columnNo, 2, columnNo);
+      }
     });
-    ws.views = [{ state: 'frozen', ySplit: 1 }];
-    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+    for (let start = 0; start < columns.length; ) {
+      const group = columns[start].group;
+      if (!group) {
+        start += 1;
+        continue;
+      }
+      let end = start;
+      while (end + 1 < columns.length && columns[end + 1].group === group) end += 1;
+      ws.getCell(1, start + 1).value = group;
+      ws.mergeCells(1, start + 1, 1, end + 1);
+      start = end + 1;
+    }
+    [ws.getRow(1), ws.getRow(2)].forEach((head) => {
+      head.font = { bold: true };
+      head.alignment = { vertical: 'middle', horizontal: 'center' };
+      head.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
+      });
+    });
+    ws.getRow(1).height = 24;
+    ws.getRow(2).height = 22;
+    ws.views = [{ state: 'frozen', ySplit: 2 }];
 
     const today = businessToday();
     list.forEach((r) => {
@@ -834,7 +861,6 @@ export class OrderLedgerService {
         dimCell(r),
         label('surface_type', r.surfaceType),
         r.orderQty,
-        unitLabel(r.unit),
         r.deliveryDate ?? '',
         r.outsourceOwed == null ? '' : r.returnedQty,
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
@@ -846,9 +872,10 @@ export class OrderLedgerService {
         r.productionOwed,
         r.outQty,
         r.lastOutboundDate ?? '',
-        r.deliveryOwed,
         r.stockQty,
         r.overdue ? '逾期' : r.deliveryOwed <= 0 ? '已交清' : '跟进中',
+        unitLabel(r.unit),
+        r.deliveryOwed,
         r.salesman ?? '',
         r.orderNo ?? '',
         r.materialCode ?? '',
