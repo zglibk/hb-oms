@@ -67,10 +67,10 @@
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
           <b>结存数 = 期初数 + 客退 + 生产入库 − 生产领料 − 出货</b>，变动只能靠「登记库存变动」产生，点行首箭头看日期与明细。
           主列表按手工台账展示期初、四类变动数量与日期、结存；选择月份后切换为月度口径。
-          “出货”送货单可直接从行末操作区打印。
+          “出货”送货单可从行末「更多 → 送货单」打印。
           客户和生产单号均为选填，无法确认来源时可以留空。
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
-          <template #content>已完结订单剩下的成品，一条记录 = 一批货。主列表按手工台账展示生产单号、客户、产品属性、期初、客户退货、生产领料、生产入库、出货、结存和备注，四类变动同时显示数量与日期。月份留空看累计，选择月份看当月；行末“打印送货单”可选择具体出货记录。打印前必须补充客户。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
+          <template #content>已完结订单剩下的成品，一条记录 = 一批货。主列表按手工台账展示生产单号、客户、产品属性、期初、客户退货、生产领料、生产入库、出货、结存和备注，四类变动同时显示数量与日期。月份留空看累计，选择月份看当月；库存变动发生日期默认今天，也可补录历史日期，不能选择未来日期；行末“更多 → 送货单”可选择具体出货记录。打印前必须补充客户。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
         </hint-tip>
       </div>
 
@@ -417,7 +417,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="发生日期" prop="flowDate">
-          <el-date-picker v-model="flowForm.flowDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          <el-date-picker
+            v-model="flowForm.flowDate" type="date" value-format="YYYY-MM-DD"
+            :disabled-date="disableFutureBusinessDate" :clearable="false" style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="数量" prop="quantity">
           <!-- 单位内嵌在输入框右侧（2026-08-13），不再另起一行文案 -->
@@ -501,7 +504,7 @@ import {
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
-import { formatBusinessDate } from '@/utils/date';
+import { disableFutureBusinessDate, formatBusinessDate } from '@/utils/date';
 import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';

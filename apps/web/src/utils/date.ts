@@ -137,6 +137,11 @@ export function datePickerDay(value: Date): string {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
+/** 实际业务发生日期允许历史补录，但不能选择中国标准时间的未来日期。 */
+export function disableFutureBusinessDate(value: Date): boolean {
+  return datePickerDay(value) > businessToday();
+}
+
 /**
  * 将公告表单使用的无时区墙上时间按中国标准时间解析为绝对时刻。
  * 已带 Z / ±HH:mm 的接口值保持其自身时区语义。

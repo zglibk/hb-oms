@@ -54,7 +54,11 @@ import { NumberGeneratorService } from '../../common/services/number-generator.s
 import { SystemConfigService } from '../system-config/system-config.service';
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
-import { businessToday } from '../../common/utils/date-range.util';
+import {
+  assertBusinessDateNotFuture,
+  assertBusinessToday,
+  businessToday,
+} from '../../common/utils/date-range.util';
 import {
   EXPORT_ROW_LIMIT,
   addTipsSheet,
@@ -1198,6 +1202,9 @@ export class FinishedStockService {
 
   /** 建草稿单；单号事务内采番，明细快照由服务端读取落库 */
   async create(dto: CreateFinishedDocDto, user: CurrentUserPayload) {
+    if (dto.bizType !== FINISHED_BIZ_TYPE.OPENING_BALANCE) {
+      assertBusinessDateNotFuture(dto.docDate, '单据日期');
+    }
     return this.dataSource.transaction(async (mgr) => {
       const docNo = await this.numberGenerator.generate(prefixOf(dto.bizType), mgr);
       const doc = await mgr.getRepository(FinishedDoc).save(
@@ -1235,6 +1242,7 @@ export class FinishedStockService {
    */
   async createOpeningBalance(dto: OpeningFinishedDto, user: CurrentUserPayload) {
     if (!dto.items?.length) throw new BadRequestException('至少需要一条期初明细');
+    assertBusinessDateNotFuture(dto.docDate, '期初日期');
     return this.dataSource.transaction(async (mgr) => {
       const docNo = await this.numberGenerator.generate(
         prefixOf(FINISHED_BIZ_TYPE.OPENING_BALANCE),
@@ -1349,6 +1357,9 @@ export class FinishedStockService {
     if (doc.bizType !== dto.bizType) {
       throw new BadRequestException('单据业务类型不可更改；如需更换请作废后重新建单');
     }
+    if (doc.bizType !== FINISHED_BIZ_TYPE.OPENING_BALANCE) {
+      assertBusinessDateNotFuture(dto.docDate, '单据日期');
+    }
     return this.dataSource.transaction(async (mgr) => {
       await mgr.getRepository(FinishedDoc).update(id, {
         docDate: dto.docDate,
@@ -1419,6 +1430,7 @@ export class FinishedStockService {
    * 支持按行部分冲销；每行冲销量 ≤ 原行数量 − 该行已冲销量。红字单本身不可再冲销。
    */
   async reverse(id: number, dto: ReverseFinishedDocDto, user: CurrentUserPayload) {
+    assertBusinessToday(dto.docDate, '冲销单日期');
     return this.dataSource.transaction(async (mgr) => {
       const origin = await mgr.getRepository(FinishedDoc).findOne({ where: { id } });
       if (!origin) throw new NotFoundException('单据不存在');

@@ -64,6 +64,8 @@
                   v-model="form.backDate"
                   type="date"
                   value-format="YYYY-MM-DD"
+                  :disabled-date="disableFutureBusinessDate"
+                  :clearable="false"
                   class="shared-block__date"
                 />
               </el-form-item>
@@ -357,7 +359,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, disableFutureBusinessDate } from '@/utils/date';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import {
   ENTRY_MODE_OPTIONS,

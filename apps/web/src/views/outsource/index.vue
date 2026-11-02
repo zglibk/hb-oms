@@ -168,7 +168,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="回厂日期" required>
-          <el-date-picker v-model="editForm.backDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          <el-date-picker
+            v-model="editForm.backDate" type="date" value-format="YYYY-MM-DD"
+            :disabled-date="disableFutureBusinessDate" :clearable="false" style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="表面处理">
           <el-select v-model="editForm.surfaceType" clearable placeholder="按订单带出" style="width: 100%">
@@ -240,6 +243,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
+import { disableFutureBusinessDate } from '@/utils/date';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();

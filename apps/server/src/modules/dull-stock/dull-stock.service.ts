@@ -37,7 +37,11 @@ import {
 } from './dto/dull-stock.dto';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate, auditDisplayName } from '../../common/utils/audit.util';
-import { businessDate, businessToday } from '../../common/utils/date-range.util';
+import {
+  assertBusinessDateNotFuture,
+  businessDate,
+  businessToday,
+} from '../../common/utils/date-range.util';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
 /** 单位中文名（用于报错文案） */
@@ -750,6 +754,7 @@ export class DullStockService {
 
   /** 登记一笔出入库：锁档案行 → 算新结存 → 判负 → 更新累计数 → 落流水 */
   async createFlow(dullId: number, dto: CreateDullStockFlowDto, user: CurrentUserPayload) {
+    assertBusinessDateNotFuture(dto.flowDate, '发生日期');
     return this.dataSource.transaction(async (mgr) => {
       const row = await this.lockRow(mgr, dullId);
       const direction = dullStockFlowDirection(dto.flowType);

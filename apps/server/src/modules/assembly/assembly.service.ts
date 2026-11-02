@@ -35,7 +35,12 @@ import { ProductSnapshotService } from '../../common/services/product-snapshot.s
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { EXPORT_ROW_LIMIT, createWorkbook, styleSheet } from '../../common/utils/excel.util';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
-import { businessDate, businessDateTime, businessToday } from '../../common/utils/date-range.util';
+import {
+  assertBusinessDateNotFuture,
+  businessDate,
+  businessDateTime,
+  businessToday,
+} from '../../common/utils/date-range.util';
 
 /** 装配管理列表行：按**订单产品行**一行，附该产品的装配进度聚合 */
 export interface AssemblyGroupRow {
@@ -367,6 +372,7 @@ export class AssemblyService {
       const planStartDate = this.normalizeDate(dto.planStartDate);
       const planDate = this.normalizeDate(dto.planDate);
       const actualDate = this.normalizeDate(dto.actualDate);
+      if (actualDate) assertBusinessDateNotFuture(actualDate, '实际完成日期');
       this.assertDates(planStartDate, planDate, actualDate);
 
       const saved = await mgr.getRepository(AssemblyBatch).save(
@@ -397,6 +403,7 @@ export class AssemblyService {
   /**
    * 编辑装配批次（锚点不可改）。下调数量或退回「计划中」都会压低可入库量，
    * 改完必须复核 `可入库量 ≥ 0`，为负则整笔回滚（§7.14）。
+   * 实际完成日允许补录或纠正历史日期，但不能晚于业务当天。
    */
   async updateBatch(id: number, dto: UpdateAssemblyBatchDto, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
@@ -416,6 +423,7 @@ export class AssemblyService {
       const planStartDate = this.normalizeDate(dto.planStartDate);
       const planDate = this.normalizeDate(dto.planDate);
       const actualDate = this.normalizeDate(dto.actualDate);
+      if (actualDate) assertBusinessDateNotFuture(actualDate, '实际完成日期');
       this.assertDates(planStartDate, planDate, actualDate);
 
       await mgr.getRepository(AssemblyBatch).update(id, {

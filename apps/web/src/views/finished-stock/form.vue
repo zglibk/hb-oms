@@ -24,7 +24,10 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="单据日期" prop="docDate">
-              <el-date-picker v-model="form.docDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker
+                v-model="form.docDate" type="date" value-format="YYYY-MM-DD"
+                :disabled-date="disableFutureBusinessDate" :clearable="false" style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col v-if="isInbound" :xs="24" :sm="12" :md="6">
@@ -328,7 +331,7 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday } from '@/utils/date';
+import { businessToday, disableFutureBusinessDate } from '@/utils/date';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 const route = useRoute();

@@ -56,6 +56,41 @@ export function businessToday(now = new Date()): string {
   return value;
 }
 
+/**
+ * 断言即时生效的系统动作日期就是中国标准时间的当天。
+ *
+ * 现用于点击即生成且立即生效的红字冲销；允许历史补录的实际发生日应改用
+ * `assertBusinessDateNotFuture`。页面禁用日期选择器不能替代服务端校验。
+ */
+export function assertBusinessToday(
+  value: string | Date | null | undefined,
+  label: string,
+  now = new Date(),
+): void {
+  const today = businessToday(now);
+  if (toDay(value) !== today) {
+    throw new BadRequestException(`${label}只能为当天（${today}）`);
+  }
+}
+
+/**
+ * 断言实际业务发生日期不晚于中国标准时间的当天。
+ *
+ * 实际发生日期默认当天，但允许事后补录历史事实；未来日期没有“已发生”的业务含义。
+ * 页面日期面板的禁选只是体验优化，服务端必须继续兜底。
+ */
+export function assertBusinessDateNotFuture(
+  value: string | Date | null | undefined,
+  label: string,
+  now = new Date(),
+): void {
+  const day = toDay(value);
+  const today = businessToday(now);
+  if (day && day > today) {
+    throw new BadRequestException(`${label}不能晚于今天（${today}）`);
+  }
+}
+
 /** 将无时区业务墙上时间明确按东八区解析；已带时区的 ISO 值按其自身语义解析。 */
 export function parseBusinessDateTime(value: string | Date): Date {
   if (value instanceof Date) return value;

@@ -50,7 +50,7 @@ export class CreateAssemblyBatchDto {
   @IsDateString({}, { message: '计划完成时间格式不正确' })
   planDate?: string | null;
 
-  /** 实际完成时间：留空 = 计划中，已填 = 已完成（该批数量计入可入库量） */
+  /** 实际完成时间：留空 = 计划中，已填 = 已完成；允许历史补录，但不能晚于业务当天 */
   @ValidateIf((o) => o.actualDate !== null && o.actualDate !== '' && o.actualDate !== undefined)
   @IsDateString({}, { message: '实际完成时间格式不正确' })
   actualDate?: string | null;

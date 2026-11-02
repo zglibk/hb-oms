@@ -177,6 +177,7 @@
           <el-form-item label="实际完成">
             <el-date-picker
               v-model="draft.actualDate" type="date" value-format="YYYY-MM-DD" clearable
+              :disabled-date="disableFutureBusinessDate"
               style="width: 140px" placeholder="留空=计划中"
             />
           </el-form-item>
@@ -229,7 +230,7 @@ import { ASSEMBLY_STATUS, SIDE_OPTIONS, expandSideQtyRows, labelOf, sideLabel, t
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday, formatDateTime } from '@/utils/date';
+import { businessToday, disableFutureBusinessDate, formatDateTime } from '@/utils/date';
 
 const route = useRoute();
 const router = useRouter();

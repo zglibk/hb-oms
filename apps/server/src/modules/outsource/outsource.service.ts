@@ -24,6 +24,7 @@ import { auditOnCreate, auditOnUpdate } from '../../common/utils/audit.util';
 import { PartGroupSnapshotService } from '../../common/services/part-group-snapshot.service';
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
+import { assertBusinessDateNotFuture } from '../../common/utils/date-range.util';
 
 /** 可外发部件组行（供录入表单的选择器） */
 export interface PartGroupOption {
@@ -613,6 +614,7 @@ export class OutsourceService {
   }
 
   async create(dto: CreateOutsourcePartDto, user: CurrentUserPayload) {
+    assertBusinessDateNotFuture(dto.backDate, '回厂日期');
     const groupIds = dto.items.map((it) => it.orderPartGroupId);
     const snapshots = await this.partGroupSnapshot.load(null, groupIds);
     const audit = auditOnCreate(user);
@@ -679,6 +681,7 @@ export class OutsourceService {
   async update(id: number, dto: UpdateOutsourcePartDto, user: CurrentUserPayload) {
     const row = await this.findOne(id);
     await this.ownership.assertCanModify('outsource', row, user, '修改');
+    assertBusinessDateNotFuture(dto.backDate, '回厂日期');
     const surfaceType = dto.surfaceType || row.surfaceType;
     if (!needsOutsource(surfaceType)) {
       throw new BadRequestException('表面处理不能为「无」——不外发的产品不该有回厂记录');
