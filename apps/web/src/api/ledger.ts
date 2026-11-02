@@ -47,6 +47,8 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
+  /** 订单录入的产品名称原文 */
+  productName: string | null;
   /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
@@ -89,6 +91,8 @@ export interface LedgerRow {
   /** 装配未完成量 = 订单数 − 装配完成量，可为负（超装配） */
   assemblyPendingQty: number;
   nextAssemblyPlanDate: string | null;
+  /** 最近一次已确认入库方向单据日期（红字冲销本身不作为入库时间） */
+  lastInboundDate: string | null;
   /** 最近一次已确认销售出库的单据日期 */
   lastOutboundDate: string | null;
   overdue: boolean;

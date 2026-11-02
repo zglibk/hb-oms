@@ -55,7 +55,7 @@ export class OrderController {
   }
 
   /**
-   * 订单跟踪台账（系统核心页面，§5.1）：按部件组一行，四数实时聚合。
+   * 订单跟踪台账（系统核心页面，§5.1）：按订单产品一行，四数实时聚合。
    * **必须注册在 `:id` 之前**，否则 /order/ledger 会被参数路由吞掉（ParseIntPipe 直接 400）。
    */
   @Get('ledger')

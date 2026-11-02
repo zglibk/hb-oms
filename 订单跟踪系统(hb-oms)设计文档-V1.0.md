@@ -500,64 +500,61 @@ material_code、item_no 货号、product_name、product_type（多选组合，§
 
 ## 5. 台账与统计口径（系统核心）
 
-### 5.1 订单跟踪台账（核心页面，按**部件组**一行——对齐手工台账粒度）
+### 5.1 订单跟踪台账（核心页面，按**订单产品**一行——列序对齐手工台账）
 
 台账列结构与手工《订单跟踪表台账》逐列对照（手工列名 → 系统来源）：
 
 | 手工台账列 | 系统来源 |
 |---|---|
 | 下单日期 | t_order.order_date |
-| 业务跟单 | t_order.salesman / merchandiser |
+| 跟单员 | t_order.merchandiser |
 | 客户 | t_order.customer_name |
-| 订单号 | t_order.order_no（系统生成的 `ORD...` 编号，与订单管理列表一致） |
-| 生产单号 | t_order.production_no（订单级业务生产编号） |
-| 产品编码 | t_order_product.material_code |
-| 产品型号 | t_order_part_group.product_model（货号+类型组合+组后缀，如 45#缓冲外中轨） |
-| 规格(MM) | t_order_product.dimension_mm |
-| 数量 / 单位 | t_order_product.order_qty / unit（聚合口径用组 qty_pcs 支数） |
+| 生产单号 | t_order.production_no；缺失时页面回落系统订单号 t_order.order_no |
+| 产品代码 | t_order_product.item_no；历史为空时回落 material_code |
+| 产品名称 | t_order_product.product_name 原文；历史为空时回落系统拼接型号 |
+| 产品部件 | 该产品各 t_order_part_group.group_type 去重并列 |
+| 规格 | t_order_product.dimension_mm，按系统查看单位显示 mm / 寸 |
 | 表面处理 | t_order_product.surface_type（字典） |
-| 图号 / 版本 | t_order_part_group.drawing_no / drawing_version |
-| 材料厚度 | t_order_part_group.material_thickness |
-| 外发已回货数量 | Σt_outsource_part.return_qty（按组聚合） |
-| 装配车间 | 聚合该部件组各装配批次的 t_assembly_batch.workshop（多批不同车间则并列显示） |
-| 装配完成 / 完成时间 | 已完成批次数量合计 / 最近一次已完成批次的 t_assembly_batch.actual_date |
-| 成品入库 | 完成数（下方聚合） |
-| 订单欠数 | 成品欠数 = 订单数 − 完成数 |
+| 订单数量 | t_order_product.order_qty + unit（原始录入口径） |
 | 订单交期 | t_order_product.delivery_date |
-| 成品出货 / 出货时间 | 出库数 / 最近一次已确认销售出库单的 t_finished_doc.doc_date（红字冲销本身不作为出货时间） |
-| 成品结存 | **发货欠数** = 订单数 − 出库数（手工表「结存」即此口径）；当前实物库存另有「库存数」列 |
+| 外发回厂数 | 该产品各部件组 Σt_outsource_part.return_qty；不走外发显示「—」 |
+| 组装车间 / 完成数 / 预计完成时间 | 批次车间去重并列 / actual_date 非空批次数量合计 / 最早一批未完成批次 plan_date |
+| 订单数(支) | t_order_product.qty_pcs |
+| 已入库数 / 入库时间 | 完成数 / 最近一次已确认入向正单日期（含期初，红字本身不作为时间） |
+| 未入库数 | 成品欠数 = 订单数 − 已入库数 |
+| 已出货数 / 出货时间 | 出库数 / 最近一次已确认销售出库正单日期（红字本身不作为时间） |
+| 未出货数 | 发货欠数 = 订单数 − 已出货数（系统保留的双欠数补充列） |
+| 库存数量 | t_finished_balance 当前结存 |
+| 状态 | 逾期 / 已交清 / 跟进中（按交期与未出货数派生） |
 
 聚合口径伪 SQL（实时聚合，无冗余列）：
 
 ```sql
 SELECT
-  g.qty_pcs                                                   AS 订单数,     -- 支（组支数，默认=产品支数）
+  p.qty_pcs                                                   AS 订单数,     -- 产品支数
   IFNULL(fin.in_qty, 0)                                       AS 完成数,     -- Σ已确认入库(FGI+期初) − Σ对应红字
-  IFNULL(fout.out_qty, 0)                                     AS 出库数,     -- Σ已确认出库(FGO) − Σ对应红字
-  IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该组）
-  g.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 成品欠数,   -- 手工表「订单欠数」；可为负 = 超产
-  g.qty_pcs - IFNULL(fout.out_qty, 0)                         AS 发货欠数,   -- 手工表「成品结存」；可为负 = 超发
+  IFNULL(fin.out_qty, 0)                                      AS 出库数,     -- Σ已确认出库(FGO) − Σ对应红字
+  IFNULL(bal.qty, 0)                                          AS 库存数,     -- Σbalance（该产品）
+  p.qty_pcs - IFNULL(fin.in_qty, 0)                           AS 成品欠数,   -- 页面「未入库数」；可为负 = 超产
+  p.qty_pcs - IFNULL(fin.out_qty, 0)                          AS 发货欠数,   -- 页面「未出货数」；可为负 = 超发
   IFNULL(ret.return_qty, 0)                                   AS 外发已回货,
   IFNULL(asm.done_qty, 0)                                     AS 装配完成量, -- Σ已完成装配批次 qty（actual_date 非空）
-  g.qty_pcs - IFNULL(asm.done_qty, 0)                         AS 装配未完成量
-FROM t_order_part_group g
-JOIN t_order_product p ON p.id = g.order_product_id
-JOIN t_order o ON o.id = g.order_id
-LEFT JOIN (按 order_part_group_id 聚合已确认入向明细，红字按 direction 自然抵扣) fin ...
-LEFT JOIN (同上，出向) fout ...
-LEFT JOIN (按 order_part_group_id 聚合 balance) bal ...
-LEFT JOIN (按 order_part_group_id 聚合 t_outsource_part) ret ...
-LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非空) asm ...
+  p.qty_pcs - IFNULL(asm.done_qty, 0)                         AS 装配未完成量
+FROM t_order_product p
+JOIN t_order o ON o.id = p.order_id
+LEFT JOIN (按 order_product_id 聚合已确认成品明细，红字按 direction 自然抵扣) fin ...
+LEFT JOIN (按 order_product_id 聚合 balance) bal ...
+LEFT JOIN (部件组 JOIN 外发回厂流水后按 order_product_id 聚合) ret ...
+LEFT JOIN (按 order_product_id 聚合 t_assembly_batch) asm ...
 ```
 
 - 红字单 direction 与原单相反，聚合时按 `direction × quantity` 求和即自然抵扣，无需特判。
 - 欠数为负（超产/超发）正常显示负数并高亮，不截断为 0。
 - **完成数包含期初**（`opening_balance`）：期初是上线前已完成的存量，业务上确实"已完成"，不计入就与手工账对不上。
   ⚠️ 这与 §4.4 入库闸门的「已入库量」**故意不同**——闸门必须排除期初，否则「装配 0 + 期初 N」的组额度恒为 −N、永久挡死后续正常入库。两处服务于不同问题，勿"统一"。
-- 同产品行多组时，产品级列（客户/日期/数量/表面处理等）跨组行合并单元格展示（手工表蓝色区块的系统化）。
-- 装配进度：最近计划完成时间、最早未完成批次计划完成时间供逾期提示。
-- 台账行内可展开：该组的出入库流水、外发流水、装配批次明细。走独立接口 `GET /order/ledger/detail?orderPartGroupId=`，**展开时才加载**（一页几十行随列表全查三张流水太重）。
-- 同一产品行拆多个部件组时，产品级列（下单日期/业务跟单/客户/订单号/生产单号/产品编码/规格/数量单位/表面处理/订单交期）**跨行合并**，观感对齐手工台账；仅合并相邻的同产品行。
+- 主列表按订单产品一行；组级图号/版本/料厚和逐部件外发进度放在行内展开，避免产品级四数因按组铺行而重复。
+- 组装预计完成时间取最早一批未完成装配的计划完成日；最近实际完成日通过完成数悬停和展开批次查看。
+- 台账行内可展开：该产品的部件组明细、出入库流水、外发流水、装配批次。逐笔流水走独立接口 `GET /order/ledger/detail?orderProductId=`，**展开时才加载**。
 - 筛选：客户、业务员、跟单员、交期区间、只看有欠数、只看逾期（delivery_date < 今天 且 发货欠数 > 0）、成品入库（净入库数不为 0）、成品出货（净出货数不为 0）、表面处理（字典）、是否出口、产品类型（多选组合按**包含匹配**：FIND_IN_SET 单值命中即入选）、装配车间；多个条件按 AND 叠加。交期初值受全局「默认日期范围」开关控制：关闭时留空查全部；启用时从含当前月在内最近六个自然月的月初开始，延伸到业务当天六个月后的同日（目标月无同日则取月末；例：2026-10-24 为 2026-05-01～2027-04-24），让未到期订单可见。重置恢复当前配置对应初值，列表、汇总与导出共用。从首页按产品精确定位时不叠加该默认区间。
 - 支持 Excel 导出（沿用 hb-mes export 模块模式，列序与手工台账一致，便于过渡期并行对账）。
 
@@ -602,7 +599,7 @@ LEFT JOIN (按 order_part_group_id 聚合 t_assembly_batch，仅 actual_date 非
 | process-info | CRUD + `GET /process-info/by-drawing?drawingNo=` | 工艺信息；by-drawing 供订单表单按图号带入 |
 | order | `POST /order`、`PUT /order/:id`、`GET /order`、`GET /order/:id`、`POST /order/:id/finish`、`POST /order/:id/reopen`、`DELETE /order/:id` | 四级结构一次性提交（产品行+部件组+部件行嵌套 DTO，编辑时带行 ID 原地更新）；订单列表默认按下单日期降序、同日按 ID 降序后分页；`GET /order/:id` 带 `editGuard`（是否被引用、引用计数、当前用户能否更正）；被引用后的修改限制见 §7。**DELETE 于 2026-08-07 取代原 `/cancel`**：两者限制条件相同（被外发/装配/出入库引用即禁止），留废记录无价值，故改为连带删四级数据；`ORDER_STATUS.CANCELLED` 枚举保留供历史数据 |
 | order | `GET /order/ledger` | **订单跟踪台账**（§5.1 聚合，核心接口） |
-| order | `GET /order/ledger/detail?orderPartGroupId=` | 台账行内展开：该部件组的出入库/外发/装配三条流水，按需加载 |
+| order | `GET /order/ledger/detail?orderProductId=` | 台账行内展开：该产品的出入库/外发/装配三条流水，按需加载 |
 | order | `GET /order/ledger/export` | 台账 Excel 导出：按当前筛选全量导出，复用 findLedger 口径；上限 5000 行，超限拒绝 |
 | outsource | `POST /outsource`、`PUT /outsource/:id`、`POST /outsource/:id/send`、`POST /outsource/:id/close`、`POST /outsource/:id/cancel`、`GET /outsource`、`GET /outsource/:id` | send=登记实际发外日期；close=手工回齐关闭 |
 | outsource | `POST /outsource/item/:itemId/return`、`DELETE /outsource/return/:id` | 回货登记/撤销（撤销需权限，留操作日志） |

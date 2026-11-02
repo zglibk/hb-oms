@@ -4,6 +4,8 @@ export const LEDGER_SORT_FIELDS = [
   'deliveryDate',
   'customerName',
   'productionNo',
+  'itemNo',
+  'productName',
   'materialCode',
   'dimensionMm',
   'orderQty',

@@ -21,7 +21,7 @@ export class QueryLedgerDto {
 
   @IsOptional() @IsIn(['asc', 'desc']) sortOrder?: LedgerSortOrder;
 
-  /** 关键字：订单号/客户/生产单号/产品型号/货号/产品编码 模糊 */
+  /** 关键字：订单号/客户/生产单号/产品名称/货号/客户物料编码/组型号/生产图号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
   @IsOptional() @IsString() @MaxLength(128) customerName?: string;

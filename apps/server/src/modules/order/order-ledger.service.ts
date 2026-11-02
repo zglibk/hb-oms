@@ -125,6 +125,8 @@ export interface LedgerRow {
   orderNo: string | null;
   materialCode: string | null;
   itemNo: string | null;
+  /** 订单录入的产品名称原文；手工台账「产品名称」直接取本字段 */
+  productName: string | null;
   /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
@@ -186,6 +188,8 @@ export interface LedgerRow {
   nextAssemblyPlanDate: string | null;
   /** 最近一次已确认销售出库的单据日期（红字冲销本身不作为出货时间） */
   lastOutboundDate: string | null;
+  /** 最近一次已确认入库方向单据日期（含期初；红字冲销本身不作为入库时间） */
+  lastInboundDate: string | null;
   /** 是否逾期：交期已过且仍欠发货 */
   overdue: boolean;
 }
@@ -196,6 +200,8 @@ const LEDGER_SORT_SQL: Record<LedgerSortField, string> = {
   deliveryDate: 'p.delivery_date',
   customerName: 'o.customer_name',
   productionNo: "COALESCE(NULLIF(o.production_no, ''), o.order_no)",
+  itemNo: "NULLIF(p.item_no, '')",
+  productName: "NULLIF(p.product_name, '')",
   materialCode: "NULLIF(p.material_code, '')",
   dimensionMm: 'p.dimension_mm',
   orderQty: 'p.order_qty',
@@ -231,12 +237,12 @@ export class OrderLedgerService {
     if (query.keyword) {
       // 生产图号在部件组上（展开行才显示），但要能搜到——故用 EXISTS 下钻匹配
       where.push(`(o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?
-                   OR p.item_no LIKE ? OR p.material_code LIKE ?
+                   OR p.item_no LIKE ? OR p.product_name LIKE ? OR p.material_code LIKE ?
                    OR EXISTS (SELECT 1 FROM t_order_part_group g2
                                WHERE g2.order_product_id = p.id
                                  AND (g2.product_model LIKE ? OR g2.drawing_no LIKE ?)))`);
       const kw = `%${query.keyword}%`;
-      params.push(kw, kw, kw, kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw, kw, kw);
     }
     if (query.customerName) {
       where.push('o.customer_name = ?');
@@ -312,6 +318,8 @@ export class OrderLedgerService {
         LEFT JOIN (
               SELECT fi.order_product_id AS pid,
                      SUM(CASE WHEN ${INBOUND_FAMILY_SQL}  THEN fd.direction * fi.quantity ELSE 0 END) AS in_qty,
+                     MAX(CASE WHEN ${INBOUND_FAMILY_SQL} AND fd.direction > 0
+                              THEN fd.doc_date END) AS last_in_date,
                      SUM(CASE WHEN ${OUTBOUND_FAMILY_SQL} THEN -fd.direction * fi.quantity ELSE 0 END) AS out_qty,
                      MAX(CASE WHEN ${OUTBOUND_FAMILY_SQL} AND fd.direction < 0
                               THEN fd.doc_date END) AS last_out_date
@@ -349,6 +357,7 @@ export class OrderLedgerService {
     // 派生表参数在 WHERE 参数之前（SQL 里 JOIN 先于 WHERE 出现）。
     // 外发已无单据与状态可言（只剩回厂流水），故不再需要排除作废单的参数。
     const joinParams: Array<string | number> = [
+      ...INBOUND_FAMILY_PARAMS,
       ...INBOUND_FAMILY_PARAMS,
       ...OUTBOUND_FAMILY_PARAMS,
       ...OUTBOUND_FAMILY_PARAMS,
@@ -391,6 +400,7 @@ export class OrderLedgerService {
               o.order_no AS orderNo, o.order_date AS orderDate, o.customer_name AS customerName,
               o.salesman AS salesman, o.merchandiser AS merchandiser,
               o.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
+              p.product_name AS productName,
               p.product_type AS productType, p.rail_section AS railSection, p.is_split AS isSplit,
               p.dimension_raw AS dimensionRaw, p.dimension_unit AS dimensionUnit,
               p.dimension_mm AS dimensionMm, p.order_qty AS orderQty, p.unit AS unit,
@@ -404,6 +414,7 @@ export class OrderLedgerService {
               IFNULL(asm.done_qty, 0)   AS assembledQty,
               asm.last_completed_date   AS lastAssemblyCompletedDate,
               asm.next_plan_date        AS nextAssemblyPlanDate,
+              fin.last_in_date          AS lastInboundDate,
               fin.last_out_date         AS lastOutboundDate
        ${fromSql}${havingSql}
        ORDER BY (${sortExpression} IS NULL), ${sortExpression} ${sortDirection}, p.id DESC
@@ -430,6 +441,7 @@ export class OrderLedgerService {
         orderNo: r.orderNo ?? null,
         materialCode: r.materialCode ?? null,
         itemNo: r.itemNo ?? null,
+        productName: r.productName ?? null,
         // 产品级型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；
         // 分体行后缀由组构成推导，组数据在 attachPartGroups 里才有，先给整品拼法、随后覆盖
         productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
@@ -462,6 +474,7 @@ export class OrderLedgerService {
         lastAssemblyCompletedDate: this.dateText(r.lastAssemblyCompletedDate),
         assemblyPendingQty: qtyPcs - assembledQty,
         nextAssemblyPlanDate: this.dateText(r.nextAssemblyPlanDate),
+        lastInboundDate: this.dateText(r.lastInboundDate),
         lastOutboundDate: this.dateText(r.lastOutboundDate),
         overdue: !!deliveryDate && deliveryDate < today && deliveryOwed > 0,
       };
@@ -740,7 +753,10 @@ export class OrderLedgerService {
     }
 
     // 表面处理与装配车间落库的是字典值（如 spray / assembly_2），导出必须转中文
-    const dict = await loadDictLabels(this.dataSource, ['surface_type', 'assembly_workshop']);
+    const dict = await loadDictLabels(
+      this.dataSource,
+      ['surface_type', 'assembly_workshop', 'part_group_type'],
+    );
     const label = dictLabeler(dict);
     const unitLabel = (v: string | null) =>
       UNIT_OPTIONS.find((o) => o.value === v)?.label ?? (v ?? '');
@@ -760,36 +776,40 @@ export class OrderLedgerService {
 
     const columns: Array<{ header: string; width: number; productLevel?: boolean }> = [
       { header: '下单日期', width: 12 },
-      { header: '业务员', width: 10 },
       { header: '跟单员', width: 10 },
       { header: '客户', width: 20 },
-      { header: '订单编号', width: 16 },
-      { header: '产品编码', width: 14 },
-      { header: '产品型号', width: 22 },
+      { header: '生产单号', width: 16 },
+      { header: '产品代码', width: 14 },
+      { header: '产品名称', width: 20 },
+      { header: '产品部件', width: 14 },
       { header: dimHeader, width: 12 },
+      { header: '表面处理', width: 11 },
       { header: '订单数量', width: 10 },
       { header: '单位', width: 7 },
-      { header: '表面处理', width: 11 },
-      ...(colorEnabled
-        ? [{ header: '颜色', width: 10 }]
-        : []),
+      { header: '订单交期', width: 12 },
+      { header: '外发回厂数', width: 11 },
+      { header: '组装车间', width: 12 },
+      { header: '组装完成数', width: 11 },
+      { header: '预计完成时间', width: 13 },
+      { header: '订单数(支)', width: 11 },
+      { header: '已入库数', width: 10 },
+      { header: '入库时间', width: 12 },
+      { header: '未入库数', width: 10 },
+      { header: '已出货数', width: 10 },
+      { header: '出货时间', width: 12 },
+      { header: '未出货数', width: 10 },
+      { header: '库存数量', width: 10 },
+      { header: '状态', width: 10 },
+      // 以下为系统补充追溯字段：不打断手工台账主列顺序，统一放在状态之后
+      { header: '业务员', width: 10 },
+      { header: '系统订单号', width: 16 },
+      { header: '客户物料编码', width: 14 },
+      ...(colorEnabled ? [{ header: '颜色', width: 10 }] : []),
       { header: '生产图号', width: 16 },
       { header: '版本', width: 8 },
       { header: '料厚', width: 14 },
-      { header: '外发已回货', width: 11 },
       { header: '外发欠数', width: 10 },
-      { header: '装配车间', width: 12 },
-      { header: '装配完成', width: 10 },
-      { header: '完成时间', width: 12 },
-      { header: '订单数(支)', width: 11 },
-      { header: '成品入库', width: 10 },
-      { header: '成品欠数', width: 10 },
-      { header: '订单交期', width: 12 },
-      { header: '成品出货', width: 10 },
-      { header: '出货时间', width: 12 },
-      { header: '发货欠数', width: 10 },
-      { header: '库存数', width: 10 },
-      { header: '状态', width: 10 },
+      { header: '最近实际完成', width: 13 },
     ];
     ws.columns = columns.map((c) => ({ header: c.header, width: c.width }));
     const head = ws.getRow(1);
@@ -805,36 +825,41 @@ export class OrderLedgerService {
     list.forEach((r) => {
       ws.addRow([
         r.orderDate ?? '',
-        r.salesman ?? '',
         r.merchandiser ?? '',
         r.customerName ?? '',
         r.productionNo || r.orderNo || '',
-        r.materialCode ?? '',
-        r.productModel ?? '',
+        sanitizeItemCode(r.itemNo) || r.materialCode || '',
+        r.productName || r.productModel || '',
+        joinGroupField(r, (g) => label('part_group_type', g.groupType)),
         dimCell(r),
+        label('surface_type', r.surfaceType),
         r.orderQty,
         unitLabel(r.unit),
-        label('surface_type', r.surfaceType),
-        ...(colorEnabled ? [r.color ?? ''] : []),
-        // 组级字段按组序去重并列（一个产品多组时如「DWG-OM/DWG-IN」）
-        joinGroupField(r, (g) => g.drawingNo),
-        joinGroupField(r, (g) => g.drawingVersion),
-        joinGroupField(r, (g) => g.materialThickness),
-        r.returnedQty,
-        // 不外发的产品留空而不是 0——0 会被读成「已全部回厂」
-        r.outsourceOwed ?? '',
+        r.deliveryDate ?? '',
+        r.outsourceOwed == null ? '' : r.returnedQty,
         r.assemblyWorkshops.map((w) => label('assembly_workshop', w)).join('/'),
         r.assembledQty,
-        r.lastAssemblyCompletedDate ?? '',
+        r.nextAssemblyPlanDate ?? '',
         r.qtyPcs,
         r.inQty,
+        r.lastInboundDate ?? '',
         r.productionOwed,
-        r.deliveryDate ?? '',
         r.outQty,
         r.lastOutboundDate ?? '',
         r.deliveryOwed,
         r.stockQty,
         r.overdue ? '逾期' : r.deliveryOwed <= 0 ? '已交清' : '跟进中',
+        r.salesman ?? '',
+        r.orderNo ?? '',
+        r.materialCode ?? '',
+        ...(colorEnabled ? [r.color ?? ''] : []),
+        // 组级字段按组序去重并列（一个产品多组时如「DWG-OM/DWG-IN」）
+        joinGroupField(r, (g) => g.drawingNo),
+        joinGroupField(r, (g) => g.drawingVersion),
+        joinGroupField(r, (g) => g.materialThickness),
+        // 不外发的产品留空而不是 0——0 会被读成「已全部回厂」
+        r.outsourceOwed ?? '',
+        r.lastAssemblyCompletedDate ?? '',
       ]);
     });
 
@@ -851,11 +876,11 @@ export class OrderLedgerService {
     cells[0] = '合计';
     put('客户', `${summary.rows} 行`);
     put('订单数(支)', summary.totalQty);
-    put('成品入库', summary.totalIn);
-    put('成品欠数', summary.totalProductionOwed);
-    put('成品出货', summary.totalOut);
-    put('发货欠数', summary.totalDeliveryOwed);
-    put('库存数', summary.totalStock);
+    put('已入库数', summary.totalIn);
+    put('未入库数', summary.totalProductionOwed);
+    put('已出货数', summary.totalOut);
+    put('未出货数', summary.totalDeliveryOwed);
+    put('库存数量', summary.totalStock);
     const totalRow = ws.addRow(cells);
     totalRow.font = { bold: true };
     totalRow.eachCell((cell) => {
@@ -870,10 +895,10 @@ export class OrderLedgerService {
   /**
    * ===== 导出总计划（订单列表页，对齐 hb-mes 的「总计划」）=====
    *
-   * 行粒度 = **订单产品行**（一行一个产品），与台账导出的部件组粒度互补：
-   * 总计划给业务/PMC 看"这张单的这个产品做到哪了"，台账给车间看逐组明细。
+   * 行粒度 = **订单产品行**（一行一个产品），与台账主列表一致；
+   * 总计划额外补充 PO、产品要求、片材等订单计划字段，台账侧重跟踪流转进度。
    *
-   * **四数不另写聚合 SQL**：直接调 findLedger 拿部件组行再按 orderProductId 汇总，
+   * **四数不另写聚合 SQL**：直接调 findLedger 取得产品行，
    * 与台账页、订单自动完结共用同一份口径（§5.6）。一个产品跨多个部件组时，
    * 组级字段（生产图号/版本/料厚/组类型）去重后用「/」并列。
    */
