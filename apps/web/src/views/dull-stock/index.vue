@@ -210,6 +210,10 @@
           <template #default="{ row }">
             <app-actions>
               <el-button
+                size="small" v-permission.disable="'dull-stock:update'" link type="primary" :icon="EditPen"
+                @click="openForm(row)"
+              >编辑</el-button>
+              <el-button
                 size="small" v-permission.disable="'dull-stock:stock'" link type="primary" :icon="Sort"
                 @click="openFlow(row)"
               >库存变动</el-button>
@@ -225,10 +229,6 @@
                   >送货单</el-button>
                 </span>
               </el-tooltip>
-              <el-button
-                size="small" v-permission.disable="'dull-stock:update'" link type="primary" :icon="EditPen"
-                @click="openForm(row)"
-              >编辑</el-button>
               <el-button
                 size="small" v-permission.disable="'dull-stock:delete'" link type="danger" :icon="Delete"
                 @click="onDelete(row)"
