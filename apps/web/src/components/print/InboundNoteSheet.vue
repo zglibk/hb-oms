@@ -22,7 +22,7 @@
       </div>
       <div class="doc-meta__item">
         <!-- 内部凭证，直接印系统单号（FGI260814-0001），不像送货单那样派生日期形态 -->
-        <span class="doc-meta__label">入库单号：NO:</span>
+        <span class="doc-meta__label">入库单号：</span>
         <span class="doc-meta__value">{{ note.docNo }}</span>
       </div>
     </div>
@@ -123,18 +123,19 @@ interface InboundColumn {
  * 「表面处理」仍沿用服务端 colorTextOf 的单值口径：优先印表面处理中文名，未填或为「无」
  * 时回落颜色；该列继续受 §5.7 颜色开关控制。
  *
- * 列宽合计 100%。删除类别后把空间优先让给产品名称、表面处理与存放位置：产品名称 29%，
- * 表面处理 8%，存放位置 11.8%。A5 只有 128mm 可用高度，任一格频繁折行都会把 10 行明细
+ * 列宽合计 100%。删除类别后把空间优先让给产品名称、表面处理与存放位置：产品名称 26%，
+ * 表面处理 11%，存放位置 11.8%。表面处理需容纳四字表头与常见处理名称，避免被挤成三行；
+ * A5 只有 128mm 可用高度，任一格频繁折行都会把 10 行明细
  * 挤出纸面——再调整列宽前仍需按纸面实际字体实测。
  */
 const COLUMNS: InboundColumn[] = [
   { key: 'seq', label: '序号', width: '4.9%', align: 'center' },
   { key: 'productionNo', label: '生产单号', width: '10.1%', align: 'center' },
   { key: 'itemNo', label: '产品代码', width: '10.3%', align: 'center' },
-  { key: 'productName', label: '产品名称', width: '29%', align: 'center' },
+  { key: 'productName', label: '产品名称', width: '26%', align: 'center' },
   { key: 'specText', label: '规格', width: '6.7%', align: 'center' },
   { key: 'materialThickness', label: '料厚', width: '7.6%', align: 'center' },
-  { key: 'color', label: '表面处理', width: '8%', align: 'center', flag: 'colorEnabled' },
+  { key: 'color', label: '表面处理', width: '11%', align: 'center', flag: 'colorEnabled' },
   // 有独立「单位」列，故数量列表头只写「数量」、单元格也不带单位后缀
   { key: 'unitLabel', label: '单位', width: '4.9%', align: 'center' },
   { key: 'qty', label: '数量', width: '6.7%', align: 'center' },

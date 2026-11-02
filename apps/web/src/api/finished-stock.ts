@@ -419,7 +419,7 @@ export interface InboundNoteRow {
 
 export interface InboundNote {
   docId: number;
-  /** 纸面「入库单号 NO:」——直接印系统单号（FGI260814-0001），不派生 */
+  /** 纸面「入库单号」——直接印系统单号（FGI260814-0001），不派生、不加 NO 前缀 */
   docNo: string;
   docDate: string;
   bizType: string;

@@ -381,7 +381,7 @@ export class FinishedStockService {
     return {
       docId: doc.id,
       /**
-       * 纸面「入库单号 NO:」——**直接印系统单号**（如 FGI260814-0001），
+       * 纸面「入库单号」——**直接印系统单号**（如 FGI260814-0001），不加 NO 前缀，
        * 不像送货单那样派生成日期形态：入库单是内部凭证，印原号才能直接回查到单据。
        */
       docNo: doc.docNo,
