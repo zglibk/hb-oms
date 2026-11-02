@@ -45,6 +45,12 @@ const constantRoutes: RouteRecordRaw[] = [
     meta: { title: '送货单' },
   },
   {
+    path: '/dull-stock/delivery-note',
+    name: 'DullStockDeliveryNotePrint',
+    component: () => import('@/views/finished-stock/delivery-note.vue'),
+    meta: { title: '呆滞品送货单', activeMenu: '/dull-stock' },
+  },
+  {
     path: '/finished-stock/inbound-note',
     name: 'InboundNotePrint',
     component: () => import('@/views/finished-stock/inbound-note.vue'),

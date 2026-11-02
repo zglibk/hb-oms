@@ -2,6 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
+  DULL_STOCK_FLOW_TYPE,
+  dullStockFlowDirection,
+  dullStockFlowTypeLabel,
   RAIL_SECTION_OPTIONS,
   SIDE_OPTIONS,
   STOCK_DIRECTION,
@@ -35,6 +38,7 @@ import {
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
 import { auditOnCreate, auditOnUpdate, auditDisplayName } from '../../common/utils/audit.util';
 import { businessDate, businessToday } from '../../common/utils/date-range.util';
+import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 
 /** 单位中文名（用于报错文案） */
 function unitLabel(unit: string): string {
@@ -44,6 +48,16 @@ function unitLabel(unit: string): string {
 type DullStockListRow = DullStock & {
   periodInboundQty: number;
   periodOutboundQty: number;
+  periodOpeningQty: number;
+  periodClosingQty: number;
+  periodCustomerReturnQty: number;
+  periodCustomerReturnDates: string;
+  periodProductionIssueQty: number;
+  periodProductionIssueDates: string;
+  periodProductionInboundQty: number;
+  periodProductionInboundDates: string;
+  periodShipmentQty: number;
+  periodShipmentDates: string;
 };
 
 type FlowDateRange = { from: string; to: string };
@@ -77,27 +91,33 @@ export class DullStockService {
     const qb = this.repo.createQueryBuilder('d');
     const dateRange = this.flowDateRange(query);
 
-    // 默认只看有结存；清空的呆滞品是历史痕迹，日常不看但要能查出来
-    if (query.onlyInStock !== false) qb.andWhere('d.balanceQty <> 0');
+    // 默认全量；用户主动勾选时，月度视图按月末结存、普通视图按当前结存判断。
+    if (query.onlyInStock === true) {
+      if (dateRange) {
+        qb.andWhere(
+          `(d.openingQty + COALESCE((
+            SELECT SUM(sf.direction * sf.quantity)
+              FROM t_dull_stock_flow sf
+             WHERE sf.dull_id = d.id AND sf.flow_date <= :stockDateTo
+          ), 0)) <> 0`,
+          { stockDateTo: dateRange.to },
+        );
+      } else {
+        qb.andWhere('d.balanceQty <> 0');
+      }
+    }
     if (query.surfaceType) qb.andWhere('d.surfaceType = :st', { st: query.surfaceType });
     if (query.side != null) qb.andWhere('d.side = :sd', { sd: query.side });
     if (query.keyword) {
       qb.andWhere(
-        `(d.itemNo LIKE :kw OR d.productModel LIKE :kw
+        `(d.itemNo LIKE :kw OR d.productModel LIKE :kw OR d.materialThickness LIKE :kw
           OR d.customerName LIKE :kw OR d.productionNo LIKE :kw)`,
         { kw: `%${query.keyword}%` },
       );
     }
     if (dateRange) {
-      qb.andWhere(
-        `EXISTS (
-          SELECT 1 FROM t_dull_stock_flow mf
-          WHERE mf.dull_id = d.id
-            AND mf.flow_date >= :flowDateFrom
-            AND mf.flow_date <= :flowDateTo
-        )`,
-        { flowDateFrom: dateRange.from, flowDateTo: dateRange.to },
-      );
+      // 月度台账不能只列“本月有流水”的货：本月无变动但仍有月初/月末结存的行也必须出现。
+      qb.andWhere('d.filingDate <= :flowDateTo', { flowDateTo: dateRange.to });
     }
     qb.orderBy('d.itemNo', 'ASC')
       .addOrderBy('d.id', 'DESC')
@@ -107,7 +127,7 @@ export class DullStockService {
     const [list, total] = await qb.getManyAndCount();
     const result: DullStockListRow[] = dateRange
       ? await this.attachPeriodFlow(list, dateRange)
-      : list.map((row) => Object.assign(row, { periodInboundQty: 0, periodOutboundQty: 0 }));
+      : list.map((row) => Object.assign(row, this.emptyPeriod(row)));
     return { list: result, total, page, pageSize };
   }
 
@@ -118,15 +138,34 @@ export class DullStockService {
    * **折成支**再汇总——§5.3「全局数量以支为准」在汇总口径上仍然成立。
    */
   async findSummary(query: QueryDullStockDto) {
+    const dateRange = this.flowDateRange(query);
     const all = await this.findList({ ...query, page: 1, pageSize: 100000 });
     return {
       rows: all.total,
-      totalBalancePcs: all.list.reduce((s, r) => s + toPieces(r.balanceQty, r.unit), 0),
+      totalBalancePcs: all.list.reduce(
+        (s, r) => s + toPieces(dateRange ? r.periodClosingQty : r.balanceQty, r.unit),
+        0,
+      ),
+      periodOpeningPcs: dateRange
+        ? all.list.reduce((s, r) => s + toPieces(r.periodOpeningQty || 0, r.unit), 0)
+        : 0,
       periodInboundPcs: query.flowDateFrom && query.flowDateTo
         ? all.list.reduce((s, r) => s + toPieces(r.periodInboundQty || 0, r.unit), 0)
         : 0,
       periodOutboundPcs: query.flowDateFrom && query.flowDateTo
         ? all.list.reduce((s, r) => s + toPieces(r.periodOutboundQty || 0, r.unit), 0)
+        : 0,
+      periodCustomerReturnPcs: dateRange
+        ? all.list.reduce((s, r) => s + toPieces(r.periodCustomerReturnQty || 0, r.unit), 0)
+        : 0,
+      periodProductionIssuePcs: dateRange
+        ? all.list.reduce((s, r) => s + toPieces(r.periodProductionIssueQty || 0, r.unit), 0)
+        : 0,
+      periodProductionInboundPcs: dateRange
+        ? all.list.reduce((s, r) => s + toPieces(r.periodProductionInboundQty || 0, r.unit), 0)
+        : 0,
+      periodShipmentPcs: dateRange
+        ? all.list.reduce((s, r) => s + toPieces(r.periodShipmentQty || 0, r.unit), 0)
         : 0,
     };
   }
@@ -141,7 +180,7 @@ export class DullStockService {
     return { from, to };
   }
 
-  /** 给当前页档案附上所选日期范围的入库/出库数；累计字段保持原口径不变。 */
+  /** 给当前页档案附上所选月份的月初、四类变动数量/日期与月末结存。 */
   private async attachPeriodFlow(
     list: DullStock[],
     dateRange: FlowDateRange,
@@ -151,36 +190,104 @@ export class DullStockService {
       .createQueryBuilder('f')
       .select('f.dullId', 'dullId')
       .addSelect(
-        'SUM(CASE WHEN f.direction = :inDirection THEN f.quantity ELSE 0 END)',
+        'SUM(CASE WHEN f.flowDate < :flowDateFrom THEN f.direction * f.quantity ELSE 0 END)',
+        'beforeDelta',
+      )
+      .addSelect(
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.direction = :inDirection THEN f.quantity ELSE 0 END)',
         'periodInboundQty',
       )
       .addSelect(
-        'SUM(CASE WHEN f.direction = :outDirection THEN f.quantity ELSE 0 END)',
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.direction = :outDirection THEN f.quantity ELSE 0 END)',
         'periodOutboundQty',
       )
+      .addSelect(
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :customerReturn THEN f.quantity ELSE 0 END)',
+        'periodCustomerReturnQty',
+      )
+      .addSelect(
+        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :customerReturn THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        'periodCustomerReturnDates',
+      )
+      .addSelect(
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionIssue THEN f.quantity ELSE 0 END)',
+        'periodProductionIssueQty',
+      )
+      .addSelect(
+        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionIssue THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        'periodProductionIssueDates',
+      )
+      .addSelect(
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionInbound THEN f.quantity ELSE 0 END)',
+        'periodProductionInboundQty',
+      )
+      .addSelect(
+        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :productionInbound THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        'periodProductionInboundDates',
+      )
+      .addSelect(
+        'SUM(CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :shipment THEN f.quantity ELSE 0 END)',
+        'periodShipmentQty',
+      )
+      .addSelect(
+        "GROUP_CONCAT(DISTINCT CASE WHEN f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo AND f.flowType = :shipment THEN DATE_FORMAT(f.flowDate, '%m-%d') END ORDER BY f.flowDate SEPARATOR '、')",
+        'periodShipmentDates',
+      )
       .where('f.dullId IN (:...ids)', { ids: list.map((row) => row.id) })
-      .andWhere('f.flowDate >= :flowDateFrom AND f.flowDate <= :flowDateTo', {
+      .setParameters({
         flowDateFrom: dateRange.from,
         flowDateTo: dateRange.to,
-      })
-      .setParameters({
         inDirection: STOCK_DIRECTION.IN,
         outDirection: STOCK_DIRECTION.OUT,
+        customerReturn: DULL_STOCK_FLOW_TYPE.CUSTOMER_RETURN,
+        productionIssue: DULL_STOCK_FLOW_TYPE.PRODUCTION_ISSUE,
+        productionInbound: DULL_STOCK_FLOW_TYPE.PRODUCTION_INBOUND,
+        shipment: DULL_STOCK_FLOW_TYPE.SHIPMENT,
       })
       .groupBy('f.dullId')
-      .getRawMany<{ dullId: string; periodInboundQty: string; periodOutboundQty: string }>();
+      .getRawMany<Record<string, string>>();
     const byId = new Map(rows.map((row) => [Number(row.dullId), row]));
     return list.map((row) => {
       const period = byId.get(row.id);
+      const periodInboundQty = Number(period?.periodInboundQty || 0);
+      const periodOutboundQty = Number(period?.periodOutboundQty || 0);
+      const periodOpeningQty = (row.openingQty || 0) + Number(period?.beforeDelta || 0);
       return Object.assign(row, {
-        periodInboundQty: Number(period?.periodInboundQty || 0),
-        periodOutboundQty: Number(period?.periodOutboundQty || 0),
+        periodOpeningQty,
+        periodInboundQty,
+        periodOutboundQty,
+        periodClosingQty: periodOpeningQty + periodInboundQty - periodOutboundQty,
+        periodCustomerReturnQty: Number(period?.periodCustomerReturnQty || 0),
+        periodCustomerReturnDates: period?.periodCustomerReturnDates || '',
+        periodProductionIssueQty: Number(period?.periodProductionIssueQty || 0),
+        periodProductionIssueDates: period?.periodProductionIssueDates || '',
+        periodProductionInboundQty: Number(period?.periodProductionInboundQty || 0),
+        periodProductionInboundDates: period?.periodProductionInboundDates || '',
+        periodShipmentQty: Number(period?.periodShipmentQty || 0),
+        periodShipmentDates: period?.periodShipmentDates || '',
       });
     });
   }
 
+  private emptyPeriod(row: DullStock): Omit<DullStockListRow, keyof DullStock> {
+    return {
+      periodOpeningQty: row.openingQty || 0,
+      periodInboundQty: 0,
+      periodOutboundQty: 0,
+      periodClosingQty: row.balanceQty || 0,
+      periodCustomerReturnQty: 0,
+      periodCustomerReturnDates: '',
+      periodProductionIssueQty: 0,
+      periodProductionIssueDates: '',
+      periodProductionInboundQty: 0,
+      periodProductionInboundDates: '',
+      periodShipmentQty: 0,
+      periodShipmentDates: '',
+    };
+  }
+
   /**
-   * 某档案的出入库流水（最新在前），逐行附「变动后结存」。
+   * 某档案的库存变动流水（最新在前），逐行附「变动后结存」。
    *
    * **变动后结存刻意不落库**：流水允许整条删除，存了快照就会在删掉中间一笔后
    * 让后续所有行的快照集体失真、还得回填。改为在这里按 `id ASC`
@@ -200,7 +307,12 @@ export class DullStockService {
       return Object.assign(f, { balanceAfter: running });
     });
 
-    const list = derived.reverse();
+    const filtered = derived.filter((flow) => {
+      if (query.flowDateFrom && flow.flowDate < query.flowDateFrom) return false;
+      if (query.flowDateTo && flow.flowDate > query.flowDateTo) return false;
+      return true;
+    });
+    const list = filtered.reverse();
     return {
       list: list.slice((page - 1) * pageSize, page * pageSize),
       total: list.length,
@@ -211,6 +323,83 @@ export class DullStockService {
 
   async findOne(id: number) {
     return this.mustGet(id);
+  }
+
+  /** 一笔“出货”流水对应一张送货单；纸型与成品送货单完全复用。 */
+  async buildDeliveryNote(flowId: number) {
+    const flow = await this.flowRepo.findOne({ where: { id: flowId } });
+    if (!flow) throw new NotFoundException('呆滞品流水不存在');
+    if (flow.flowType !== DULL_STOCK_FLOW_TYPE.SHIPMENT) {
+      throw new BadRequestException('只有“出货”流水可以打印送货单');
+    }
+    const row = await this.mustGet(flow.dullId);
+    const customerName = String(row.customerName ?? '').trim();
+    if (!customerName) {
+      throw new BadRequestException('该呆滞品未填写客户，无法打印送货单；请先编辑档案补充客户');
+    }
+
+    const customers: any[] = await this.dataSource.query(
+      `SELECT customer_code, contact_phone, delivery_address, delivery_template
+         FROM t_customer
+        WHERE customer_name = ?
+        ORDER BY id ASC
+        LIMIT 1`,
+      [customerName],
+    );
+    const customer = customers[0] ?? null;
+    const label = dictLabeler(await loadDictLabels(this.dataSource, ['surface_type']));
+    const surface = label('surface_type', row.surfaceType);
+    const surfaceColor = [surface === '无' ? '' : surface, row.color]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean)
+      .join('/');
+    const unit = row.unit || UNIT.PIECE;
+    const unitText = unitLabel(unit);
+    const docNo = `DSO${flow.flowDate.replaceAll('-', '')}-${String(flow.id).padStart(4, '0')}`;
+
+    return {
+      docId: flow.id,
+      docNo,
+      deliveryNo: docNo,
+      docDate: flow.flowDate,
+      bizType: 'dull_stock_shipment',
+      status: 1,
+      remark: flow.remark ?? flow.reason ?? '',
+      creatorName: flow.creatorName ?? '',
+      customerName,
+      customerCode: String(customer?.customer_code ?? ''),
+      customerPhone: String(customer?.contact_phone ?? ''),
+      customerAddress: String(customer?.delivery_address ?? ''),
+      templateCode: String(customer?.delivery_template ?? '').trim(),
+      salesman: '',
+      merchandiser: '',
+      rows: [
+        {
+          seq: 1,
+          orderProductId: 0,
+          poNo: '',
+          materialCode: row.itemNo || '',
+          customerDrawingNo: '',
+          productName: row.productModel || row.itemNo || '',
+          productRequirement: '',
+          productModel: row.productModel || '',
+          itemNo: row.itemNo || '',
+          specText: row.dimensionText || (row.dimensionMm ? `${row.dimensionMm}mm` : ''),
+          materialThickness: row.materialThickness || '',
+          color: surfaceColor,
+          qty: flow.quantity,
+          unit,
+          unitLabel: unitText,
+          qtyPcs: toPieces(flow.quantity, unit),
+          productionNo: row.productionNo || '',
+          orderNo: '',
+          remark: flow.reason || '',
+        },
+      ],
+      totals: [{ unit, unitLabel: unitText, qty: flow.quantity }],
+      unitConsistent: true,
+      unitLabel: unitText,
+    };
   }
 
   /* ==================== 档案 ==================== */
@@ -245,7 +434,7 @@ export class DullStockService {
       // 单位一改，历史流水记的数含义就变了（20 套 ≠ 20 支），故有流水后锁死
       if (dto.unit !== row.unit && flowCount > 0) {
         throw new BadRequestException(
-          `该呆滞品已有 ${flowCount} 笔出入库流水，单位不能再改；` +
+          `该呆滞品已有 ${flowCount} 笔库存变动流水，单位不能再改；` +
             `如需换单位请先删除流水，或另建一条呆滞品记录`,
         );
       }
@@ -270,7 +459,7 @@ export class DullStockService {
   }
 
   /**
-   * 删除档案：**有出入库流水时禁止**（照 §5.5「被业务引用后限制删除」）。
+   * 删除档案：**有库存变动流水时禁止**（照 §5.5「被业务引用后限制删除」）。
    * 直接连流水一起删会让已发生的出入库凭空消失，账对不上还查不出所以然。
    */
   async remove(id: number) {
@@ -278,7 +467,7 @@ export class DullStockService {
     const flowCount = await this.flowRepo.count({ where: { dullId: id } });
     if (flowCount > 0) {
       throw new BadRequestException(
-        `呆滞品「${row.itemNo}」已有 ${flowCount} 笔出入库流水，不能删除；请先在展开行里删除这些流水`,
+        `呆滞品「${row.itemNo}」已有 ${flowCount} 笔库存变动流水，不能删除；请先在展开行里删除这些流水`,
       );
     }
     await this.repo.delete(id);
@@ -310,20 +499,25 @@ export class DullStockService {
       { header: '产品类型' },
       { header: '节数' },
       { header: '规格(mm)' },
+      { header: '料厚' },
       { header: '表面处理' },
       { header: '颜色' },
       { header: '边别' },
       { header: '单位' },
-      { header: '期初数' },
-      { header: '入库数' },
-      { header: '出库数' },
-      ...(query.flowDateFrom && query.flowDateTo
-        ? [
-            { header: `${query.flowDateFrom}至${query.flowDateTo}入库数` },
-            { header: `${query.flowDateFrom}至${query.flowDateTo}出库数` },
-          ]
-        : []),
-      { header: '结存数' },
+      { header: query.flowDateFrom ? '月初数' : '期初数' },
+      ...(!query.flowDateFrom
+        ? [{ header: '入库数' }, { header: '出库数' }]
+        : [
+            { header: '客户退货数量' },
+            { header: '客户退货日期' },
+            { header: '生产领料数量' },
+            { header: '生产领料日期' },
+            { header: '生产入库数量' },
+            { header: '生产入库日期' },
+            { header: '出货数量' },
+            { header: '出货日期' },
+          ]),
+      { header: query.flowDateFrom ? '月末结存' : '结存数' },
       { header: '备注' },
     ];
     for (const r of all.list as any[]) {
@@ -336,24 +530,32 @@ export class DullStockService {
         formatProductTypes(r.productType || ''),
         labelOf(RAIL_SECTION_OPTIONS, r.railSection),
         r.dimensionMm || 0,
+        r.materialThickness || '',
         r.surfaceType || '',
         r.color || '',
         labelOf(SIDE_OPTIONS, r.side),
         unitLabel(r.unit),
-        r.openingQty || 0,
-        r.inboundQty || 0,
-        r.outboundQty || 0,
-        ...(query.flowDateFrom && query.flowDateTo
-          ? [r.periodInboundQty || 0, r.periodOutboundQty || 0]
-          : []),
-        r.balanceQty || 0,
+        query.flowDateFrom ? r.periodOpeningQty || 0 : r.openingQty || 0,
+        ...(!query.flowDateFrom
+          ? [r.inboundQty || 0, r.outboundQty || 0]
+          : [
+              r.periodCustomerReturnQty || 0,
+              r.periodCustomerReturnDates || '',
+              r.periodProductionIssueQty || 0,
+              r.periodProductionIssueDates || '',
+              r.periodProductionInboundQty || 0,
+              r.periodProductionInboundDates || '',
+              r.periodShipmentQty || 0,
+              r.periodShipmentDates || '',
+            ]),
+        query.flowDateFrom ? r.periodClosingQty || 0 : r.balanceQty || 0,
         r.remark || '',
       ]);
     }
     styleSheet(ws, {
       centerColumns: query.flowDateFrom && query.flowDateTo
-        ? [4, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]
-        : [4, 7, 8, 11, 12, 13, 14, 15, 16],
+        ? [4, 7, 8, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        : [4, 7, 8, 9, 12, 13, 14, 15, 16, 17],
     });
 
     const buf = await wb.xlsx.writeBuffer();
@@ -362,7 +564,7 @@ export class DullStockService {
 
   /**
    * 导入模板：只含**建档**字段（含期初数），不含入库数/出库数。
-   * 那两个数是流水累计值，唯一写入口是「登记出入库」（§4.6），
+   * 那两个数是流水累计值，唯一写入口是「登记库存变动」（§4.6），
    * 模板给列让人填，填了也不会生效，反而误导。
    */
   async buildImportTemplate(): Promise<Buffer> {
@@ -376,6 +578,7 @@ export class DullStockService {
       { header: '产品类型' },
       { header: '节数' },
       { header: '规格(mm)' },
+      { header: '料厚' },
       { header: '表面处理' },
       { header: '颜色' },
       { header: '边别' },
@@ -385,10 +588,10 @@ export class DullStockService {
       { header: '备注' },
     ];
     ws.addRow([
-      '53#', '海尔', 'SC2508001', '', '普通,自锁', '三节轨', 450,
+      '53#', '海尔', 'SC2508001', '', '普通,自锁', '三节轨', 450, '2.00',
       '电泳', '黑色', '', '支', businessToday(), 200, '示例行，导入前请删除',
     ]);
-    styleSheet(ws, { centerColumns: [6, 7, 10, 11, 12, 13] });
+    styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13] });
 
     addTipsSheet(wb, [
       ['一行 = 一批货', '呆滞品**刻意不设唯一键**：同产品代码同客户先后剩下的几批要各建各的档，所以导入的每一行都会**新建一条记录**，不会合并、不会覆盖。'],
@@ -398,12 +601,13 @@ export class DullStockService {
       ['产品型号', '留空会按「产品代码 + 产品类型」自动拼。'],
       ['产品类型', '可多选，用逗号分隔，如「普通,自锁」。'],
       ['节数', `可填 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}，留空表示不区分。`],
+      ['料厚', '选填，如 2.00、1.2×1.0×1.2；用于清单辨货和送货单打印。'],
       ['表面处理 / 颜色', '按实物填，如 电泳 / 黑色。这两项是认货的主要依据，建议填全。'],
       ['边别', '产品类型含「卡口」时填 左 / 右；不含卡口请留空。'],
       ['单位', `必填，${UNIT_OPTIONS.map((o) => o.label).join(' / ')}。本行的四个数量都按这个单位计（1 套 = 2 支），页面顶部合计会统一折成支。`],
       ['建档日期', '必填，格式 YYYY-MM-DD；表示这批货建立档案或纳入呆滞品台账的日期，不等同于后续每笔出入库日期。'],
       ['期初数', '必填，不小于 0 的整数，指这批货一开始有多少。'],
-      ['入库数 / 出库数', '**不能导入**：它们是出入库流水的累计值，只能在页面上逐笔「登记出入库」，这样每一笔进出才有据可查。'],
+      ['库存变动', '**不能导入**：客户退货、生产领料、生产入库、出货都是流水，只能在页面上逐笔「登记库存变动」，这样每一笔进出才有日期和依据。'],
       ['导入规则', '整批校验通过才落库；任一行有问题会列出逐行原因并**整批回滚**，不会导入一半。'],
     ]);
 
@@ -419,7 +623,9 @@ export class DullStockService {
    */
   async importFromExcel(buffer: Buffer, user: CurrentUserPayload) {
     const ws = await loadFirstSheet(buffer);
-    const filingHeader = cellString(ws.getRow(1).getCell(12)).replace(/[*＊\s]/g, '');
+    const hasThicknessColumn = cellString(ws.getRow(1).getCell(8)).replace(/[*＊\s]/g, '') === '料厚';
+    const filingColumn = hasThicknessColumn ? 13 : 12;
+    const filingHeader = cellString(ws.getRow(1).getCell(filingColumn)).replace(/[*＊\s]/g, '');
     if (filingHeader !== '建档日期') {
       throw new BadRequestException('导入模板缺少「建档日期」列，请重新下载最新模板后填写');
     }
@@ -433,12 +639,15 @@ export class DullStockService {
 
     ws.eachRow((row, idx) => {
       if (idx === 1) return; // 表头
-      const [itemNo, customerName, productionNo, productModel, typeText, railLabel,
-        dimension, surfaceType, color, sideLabel, unitLabelText] =
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((c) => cellString(row.getCell(c)));
-      const filingDate = this.excelDateString(row.getCell(12));
-      const openingQty = cellString(row.getCell(13));
-      const remark = cellString(row.getCell(14));
+      const [itemNo, customerName, productionNo, productModel, typeText, railLabel, dimension] =
+        [1, 2, 3, 4, 5, 6, 7].map((c) => cellString(row.getCell(c)));
+      const materialThickness = hasThicknessColumn ? cellString(row.getCell(8)) : '';
+      const offset = hasThicknessColumn ? 1 : 0;
+      const [surfaceType, color, sideLabel, unitLabelText] =
+        [8, 9, 10, 11].map((c) => cellString(row.getCell(c + offset)));
+      const filingDate = this.excelDateString(row.getCell(12 + offset));
+      const openingQty = cellString(row.getCell(13 + offset));
+      const remark = cellString(row.getCell(14 + offset));
       if (![itemNo, customerName, productionNo, typeText, unitLabelText, filingDate, openingQty].some(Boolean)) return;
 
       const at = `第 ${idx} 行`;
@@ -506,6 +715,7 @@ export class DullStockService {
           productType,
           railSection,
           dimensionMm,
+          materialThickness: materialThickness || undefined,
           surfaceType: surfaceType || undefined,
           color: color || undefined,
           side,
@@ -549,13 +759,15 @@ export class DullStockService {
     });
   }
 
-  /* ==================== 出入库流水（入库数/出库数的唯一写入口） ==================== */
+  /* ==================== 库存变动流水（入库数/出库数的唯一写入口） ==================== */
 
   /** 登记一笔出入库：锁档案行 → 算新结存 → 判负 → 更新累计数 → 落流水 */
   async createFlow(dullId: number, dto: CreateDullStockFlowDto, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
       const row = await this.lockRow(mgr, dullId);
-      const delta = dto.direction * dto.quantity;
+      const direction = dullStockFlowDirection(dto.flowType);
+      if (!direction) throw new BadRequestException('流水类型无效');
+      const delta = direction * dto.quantity;
       const next = (row.balanceQty || 0) + delta;
       if (next < 0) {
         const u = unitLabel(row.unit);
@@ -564,7 +776,7 @@ export class DullStockService {
         );
       }
 
-      const isIn = dto.direction === STOCK_DIRECTION.IN;
+      const isIn = direction === STOCK_DIRECTION.IN;
       await mgr.getRepository(DullStock).update(dullId, {
         inboundQty: (row.inboundQty || 0) + (isIn ? dto.quantity : 0),
         outboundQty: (row.outboundQty || 0) + (isIn ? 0 : dto.quantity),
@@ -575,10 +787,11 @@ export class DullStockService {
       const flow = await mgr.getRepository(DullStockFlow).save(
         mgr.getRepository(DullStockFlow).create({
           dullId,
-          direction: dto.direction,
+          direction,
+          flowType: dto.flowType,
           quantity: dto.quantity,
           flowDate: dto.flowDate,
-          reason: dto.reason,
+          reason: dto.reason?.trim() || dullStockFlowTypeLabel(dto.flowType),
           remark: dto.remark ?? null,
           creatorId: user.id,
           creatorName: auditDisplayName(user) || null,
@@ -597,7 +810,7 @@ export class DullStockService {
   async removeFlow(flowId: number, user: CurrentUserPayload) {
     return this.dataSource.transaction(async (mgr) => {
       const flow = await mgr.getRepository(DullStockFlow).findOne({ where: { id: flowId } });
-      if (!flow) throw new NotFoundException('出入库流水不存在');
+      if (!flow) throw new NotFoundException('库存变动流水不存在');
       const row = await this.lockRow(mgr, flow.dullId);
 
       // 回滚 = 反向应用这笔流水
@@ -668,6 +881,7 @@ export class DullStockService {
       railSection: (dto.railSection ?? '').trim(),
       dimensionMm,
       dimensionText: (dto.dimensionText ?? '').trim() || (dimensionMm ? `${dimensionMm}mm` : ''),
+      materialThickness: (dto.materialThickness ?? '').trim(),
       surfaceType: (dto.surfaceType ?? '').trim(),
       color: (dto.color ?? '').trim(),
       side: (dto.side ?? '').trim(),

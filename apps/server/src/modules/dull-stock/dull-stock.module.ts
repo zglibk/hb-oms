@@ -4,6 +4,7 @@ import { DullStock } from './entities/dull-stock.entity';
 import { DullStockFlow } from './entities/dull-stock-flow.entity';
 import { DullStockController } from './dull-stock.controller';
 import { DullStockService } from './dull-stock.service';
+import { PrintConfigModule } from '../print-config/print-config.module';
 
 /**
  * 呆滞品管理（2026-08-11 由「成品期初（不挂订单）」拆分独立）。
@@ -15,7 +16,7 @@ import { DullStockService } from './dull-stock.service';
  * 故不导出 service——没有别的模块需要往这本账里写数。
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([DullStock, DullStockFlow])],
+  imports: [TypeOrmModule.forFeature([DullStock, DullStockFlow]), PrintConfigModule],
   controllers: [DullStockController],
   providers: [DullStockService],
 })

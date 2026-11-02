@@ -432,6 +432,7 @@ CREATE TABLE IF NOT EXISTS t_system_config (
   customer_drawing_no_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '客户图号字段启用开关：1启用 0停用（停用后全系统隐藏客户图号的录入与展示，不删除既有数据）',
   dull_stock_color_enabled TINYINT     NOT NULL DEFAULT 1 COMMENT '呆滞品颜色字段启用开关：1启用 0停用；**独立于 color_field_enabled**，只管呆滞品管理页的颜色列与建档弹窗',
   product_requirement_enabled TINYINT  NOT NULL DEFAULT 1 COMMENT '产品要求描述字段启用开关：1启用 0停用（停用后隐藏订单产品级「产品要求描述」的录入与展示，不删除既有数据）',
+  default_date_filter_enabled TINYINT   NOT NULL DEFAULT 0 COMMENT '默认日期范围开关：1启用 0停用；停用时列表首次进入与重置均不带日期条件，启用时按页面口径加载半年范围',
   inch_to_mm              DECIMAL(6,3) NOT NULL DEFAULT 25.000 COMMENT '英寸换算系数：1 英寸 = N mm（我司口径 25，非国标 25.4）；仅影响之后的录入折算与寸视图显示，不重算已落库 mm',
   dimension_view_unit     VARCHAR(8)   NOT NULL DEFAULT 'mm' COMMENT '规格默认查看单位：mm毫米 inch寸；控制首页/订单跟踪台账/订单管理三页的初始视图与台账、总计划两个导出的规格列',
   delivery_template_default VARCHAR(32) NOT NULL DEFAULT 'generic' COMMENT '送货单默认模板编码：nsk耐斯克 jinggong精工 generic通用；客户资料未单独配置模板时用它',
@@ -672,14 +673,15 @@ CREATE TABLE IF NOT EXISTS t_dull_stock (
   rail_section   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '轨道节数：two_section二节轨 three_section三节轨',
   dimension_mm   INT          NOT NULL DEFAULT 0 COMMENT '规格（mm 统一口径，1英寸=25mm）',
   dimension_text VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '规格展示文本（如 350mm）',
+  material_thickness VARCHAR(32) NOT NULL DEFAULT '' COMMENT '料厚（如 2.00、1.2×1.0×1.2）',
   surface_type   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '表面处理（字典 surface_type）：none无 seal_paint封漆 electrophoresis电泳 spray喷涂 smooth_paint平滑漆…',
   color          VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '颜色（字典 surface_color，允许手输新值）',
   side           VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '边别：left左 right右，非卡口空串',
   unit           VARCHAR(16)  NOT NULL DEFAULT 'piece' COMMENT '数量单位：set套 piece支；本行四个数量列一律按本单位计，1套=2支；已有流水后不可改',
   filing_date    DATE         NOT NULL COMMENT '呆滞品建档日期（档案建立或纳入呆滞品台账的业务日期）',
   opening_qty    INT          NOT NULL DEFAULT 0 COMMENT '期初数：建档时的呆滞存量（单位见 unit）',
-  inbound_qty    INT          NOT NULL DEFAULT 0 COMMENT '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记出入库驱动，禁止直接改',
-  outbound_qty   INT          NOT NULL DEFAULT 0 COMMENT '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记出入库驱动，禁止直接改',
+  inbound_qty    INT          NOT NULL DEFAULT 0 COMMENT '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记库存变动驱动，禁止直接改',
+  outbound_qty   INT          NOT NULL DEFAULT 0 COMMENT '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记库存变动驱动，禁止直接改',
   balance_qty    INT          NOT NULL DEFAULT 0 COMMENT '结存数 = 期初数 + 入库数 − 出库数，不得为负',
   remark         VARCHAR(255) NULL COMMENT '备注',
   creator_id     INT          NULL COMMENT '创建人ID',
@@ -697,15 +699,17 @@ CREATE TABLE IF NOT EXISTS t_dull_stock_flow (
   id            INT AUTO_INCREMENT PRIMARY KEY,
   dull_id       INT          NOT NULL COMMENT '所属呆滞品档案行',
   direction     TINYINT      NOT NULL COMMENT '方向：1入库 -1出库（与成品出入库 STOCK_DIRECTION 同口径）',
-  quantity      INT          NOT NULL DEFAULT 0 COMMENT '本次数量，恒为正；方向由 direction 表达（单位同档案行 unit）',
-  flow_date     DATE         NOT NULL COMMENT '出入库日期',
-  reason        VARCHAR(255) NOT NULL COMMENT '原因/用途说明（必填，如退货入库/清库处理/盘盈盘亏）',
+  flow_type     VARCHAR(32)  NOT NULL COMMENT '流水类型：customer_return客退 production_issue生产领料 production_inbound生产入库 shipment出货',
+  quantity      INT          NOT NULL DEFAULT 0 COMMENT '本次数量，恒为正；方向由 flow_type 唯一推导并冗余在 direction（单位同档案行 unit）',
+  flow_date     DATE         NOT NULL COMMENT '库存变动发生日期',
+  reason        VARCHAR(255) NOT NULL COMMENT '可选说明；未填时取流水类型中文名',
   remark        VARCHAR(255) NULL COMMENT '备注',
   creator_id    INT          NULL COMMENT '操作人ID',
   creator_name  VARCHAR(64)  NULL COMMENT '操作人姓名快照',
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_dull (dull_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='呆滞品出入库流水（只增不改，录错可整条删除并同事务回滚累计数；变动后结存不落库，查询时按 id 正序累计推导）';
+  KEY idx_dull (dull_id),
+  KEY idx_dull_flow_month (flow_date, flow_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='呆滞品库存变动流水（只增不改，录错可整条删除并同事务回滚累计数；变动后结存不落库，查询时按 id 正序累计推导）';
 
 -- 针式打印纸型档案、发布版本与单据全局默认
 CREATE TABLE IF NOT EXISTS t_print_profile (

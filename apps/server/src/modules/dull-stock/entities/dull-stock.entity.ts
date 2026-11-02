@@ -19,7 +19,7 @@ import {
  *
  * 四个数的口径：`结存数 = 期初数 + 入库数 − 出库数`。
  * 期初数建档时录入、可编辑；入库数/出库数是 `t_dull_stock_flow` 的**累计值**，
- * 只由「登记出入库」驱动，任何业务代码都不得直接改这两列（§4.6「不直接改数无痕」）。
+ * 只由「登记库存变动」驱动，任何业务代码都不得直接改这两列（§4.6「不直接改数无痕」）。
  *
  * 轻量记账行，不采番、无单据号（§5.4，与装配批次、外发件回厂记录同列）。
  */
@@ -92,6 +92,15 @@ export class DullStock {
   dimensionText: string;
 
   @Column({
+    name: 'material_thickness',
+    type: 'varchar',
+    length: 32,
+    default: '',
+    comment: '料厚（如 2.00、1.2×1.0×1.2）',
+  })
+  materialThickness: string;
+
+  @Column({
     name: 'surface_type',
     type: 'varchar',
     length: 32,
@@ -146,7 +155,7 @@ export class DullStock {
     name: 'inbound_qty',
     type: 'int',
     default: 0,
-    comment: '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记出入库驱动，禁止直接改',
+    comment: '入库数：累计入库量 = Σ t_dull_stock_flow 入向流水；只由登记库存变动驱动，禁止直接改',
   })
   inboundQty: number;
 
@@ -154,7 +163,7 @@ export class DullStock {
     name: 'outbound_qty',
     type: 'int',
     default: 0,
-    comment: '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记出入库驱动，禁止直接改',
+    comment: '出库数：累计出库量 = Σ t_dull_stock_flow 出向流水；只由登记库存变动驱动，禁止直接改',
   })
   outboundQty: number;
 

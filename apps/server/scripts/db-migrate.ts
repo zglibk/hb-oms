@@ -131,6 +131,10 @@ const MIGRATIONS: string[] = [
   'migration-dull-stock-filing-date.sql',
   // 送货单自动分页解除内置 6/7 行旧上限，按纸面实测高度尽量填满
   'migration-print-delivery-auto-fill.sql',
+  // 列表默认日期范围改为系统配置开关，默认关闭以恢复全量查询
+  'migration-default-date-filter.sql',
+  // 呆滞品补料厚、四类业务流水、月度台账及出货送货单权限
+  'migration-dull-stock-monthly-ledger.sql',
 ];
 
 /**
@@ -265,9 +269,11 @@ const expectedColumns = [
   't_dull_stock.balance_qty',
   't_dull_stock.customer_name',
   't_dull_stock.production_no',
+  't_dull_stock.material_thickness',
   't_dull_stock_flow.dull_id',
   't_dull_stock_flow.direction',
   't_dull_stock_flow.flow_date',
+  't_dull_stock_flow.flow_type',
   // 审计追溯六件套（§5.5）：抽查各表的姓名快照列，缺了说明迁移没跑到
   't_dict.creator_name',
   't_dict.updater_name',
@@ -289,6 +295,7 @@ const expectedColumns = [
   // 呆滞品颜色（独立于全局颜色开关）
   't_system_config.dull_stock_color_enabled',
   't_system_config.product_requirement_enabled',
+  't_system_config.default_date_filter_enabled',
   // 单位换算（非布尔配置：换算系数 + 默认查看单位）
   't_system_config.inch_to_mm',
   't_system_config.dimension_view_unit',

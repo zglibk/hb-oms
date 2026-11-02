@@ -1,5 +1,6 @@
 import request from '@/utils/request';
-import { downloadXlsx } from '@/utils/download';
+import { downloadFile, downloadXlsx } from '@/utils/download';
+import type { DeliveryNote } from './finished-stock';
 import type { PageResult } from './customer';
 
 /**
@@ -18,6 +19,7 @@ export interface DullStockRow {
   railSection: string;
   dimensionMm: number;
   dimensionText: string;
+  materialThickness: string;
   surfaceType: string;
   color: string;
   side: string;
@@ -31,6 +33,16 @@ export interface DullStockRow {
   /** 仅选择完整日期范围时返回；本行单位口径下的期间流水合计 */
   periodInboundQty?: number;
   periodOutboundQty?: number;
+  periodOpeningQty?: number;
+  periodClosingQty?: number;
+  periodCustomerReturnQty?: number;
+  periodCustomerReturnDates?: string;
+  periodProductionIssueQty?: number;
+  periodProductionIssueDates?: string;
+  periodProductionInboundQty?: number;
+  periodProductionInboundDates?: string;
+  periodShipmentQty?: number;
+  periodShipmentDates?: string;
   balanceQty: number;
   remark: string | null;
   creatorName: string | null;
@@ -39,12 +51,13 @@ export interface DullStockRow {
   updatedAt: string;
 }
 
-/** 出入库流水行；balanceAfter 由服务端按 id 正序累计推导，不落库 */
+/** 库存变动流水行；balanceAfter 由服务端按 id 正序累计推导，不落库 */
 export interface DullStockFlowRow {
   id: number;
   dullId: number;
   /** 1 入库 / -1 出库 */
   direction: number;
+  flowType: string;
   quantity: number;
   balanceAfter: number;
   flowDate: string;
@@ -60,7 +73,7 @@ export interface DullStockQuery {
   keyword?: string;
   surfaceType?: string;
   side?: string;
-  /** 出入库日期范围（含起止当天）；只返回期间发生过流水的档案 */
+  /** 月度台账起止日期（含起止当天）；页面按自然月成对传入 */
   flowDateFrom?: string;
   flowDateTo?: string;
   onlyInStock?: boolean;
@@ -73,6 +86,11 @@ export interface DullStockSummary {
   /** 选择完整日期范围时的期间入/出合计，统一折成支 */
   periodInboundPcs: number;
   periodOutboundPcs: number;
+  periodOpeningPcs: number;
+  periodCustomerReturnPcs: number;
+  periodProductionIssuePcs: number;
+  periodProductionInboundPcs: number;
+  periodShipmentPcs: number;
 }
 
 /** 建档/编辑入参（属性 + 单位 + 建档日期 + 期初数；入库数/出库数不在此列） */
@@ -85,6 +103,7 @@ export interface DullStockPayload {
   railSection?: string;
   dimensionMm?: number;
   dimensionText?: string;
+  materialThickness?: string;
   surfaceType?: string;
   color?: string;
   side?: string;
@@ -94,12 +113,12 @@ export interface DullStockPayload {
   remark?: string;
 }
 
-/** 登记一笔出入库（入库数/出库数的唯一写入口） */
+/** 登记一笔库存变动（入库数/出库数的唯一写入口） */
 export interface DullStockFlowPayload {
-  direction: number;
+  flowType: string;
   quantity: number;
   flowDate: string;
-  reason: string;
+  reason?: string;
   remark?: string;
 }
 
@@ -109,7 +128,13 @@ export const getDullStockList = (params: DullStockQuery) =>
 export const getDullStockSummary = (params: DullStockQuery) =>
   request.get<any, DullStockSummary>('/api/dull-stock/summary', { params });
 
-export const getDullStockFlows = (params: { dullId: number; page?: number; pageSize?: number }) =>
+export const getDullStockFlows = (params: {
+  dullId: number;
+  page?: number;
+  pageSize?: number;
+  flowDateFrom?: string;
+  flowDateTo?: string;
+}) =>
   request.get<any, PageResult<DullStockFlowRow>>('/api/dull-stock/flow', { params });
 
 export const createDullStock = (data: DullStockPayload) =>
@@ -131,6 +156,15 @@ export const deleteDullStockFlow = (flowId: number) =>
   request.delete<any, { id: number; dullId: number; balanceQty: number }>(
     `/api/dull-stock/flow/${flowId}`,
   );
+
+export const getDullStockDeliveryNote = (flowId: number) =>
+  request.get<any, DeliveryNote>(`/api/dull-stock/flow/${flowId}/delivery-note`);
+
+export const downloadDullStockDeliveryNotePdf = (
+  flowId: number,
+  fallbackName: string,
+  options?: { profileId?: number; version?: number; templateCode?: string },
+) => downloadFile(`/api/dull-stock/flow/${flowId}/delivery-note-pdf`, options, fallbackName);
 
 /** 导出当前筛选结果（服务端按筛选全量导出，超 5000 行会拒绝） */
 export const downloadDullStockExport = (params: DullStockQuery) =>

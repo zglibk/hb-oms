@@ -1,9 +1,9 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
- * 呆滞品出入库流水（2026-08-11）。
+ * 呆滞品库存变动流水（2026-08-11，2026-11-02 细分四类业务类型）。
  *
- * 一行 = 一笔出入库登记。`quantity` **恒为正**，出入方向由 `direction` 表达
+ * 一行 = 一笔库存变动登记。`quantity` **恒为正**，出入方向由 `flowType` 唯一推导并冗余到 `direction`
  * （与成品出入库同口径，复用共享包 `STOCK_DIRECTION`），聚合时统一 `direction × quantity`。
  *
  * **录错可整条删除**（与部件台账 `t_part_adjust` 的「只能反向调整」不同）：
@@ -33,21 +33,29 @@ export class DullStockFlow {
   direction: number;
 
   @Column({
+    name: 'flow_type',
+    type: 'varchar',
+    length: 32,
+    comment: '流水类型：customer_return客退 production_issue生产领料 production_inbound生产入库 shipment出货',
+  })
+  flowType: string;
+
+  @Column({
     name: 'quantity',
     type: 'int',
     default: 0,
-    comment: '本次数量，**恒为正**；方向由 direction 表达（单位同档案行 unit）',
+    comment: '本次数量，恒为正；方向由 flow_type 唯一推导并冗余在 direction（单位同档案行 unit）',
   })
   quantity: number;
 
-  @Column({ name: 'flow_date', type: 'date', comment: '出入库日期' })
+  @Column({ name: 'flow_date', type: 'date', comment: '库存变动发生日期' })
   flowDate: string;
 
   @Column({
     name: 'reason',
     type: 'varchar',
     length: 255,
-    comment: '原因/用途说明（必填，如退货入库/清库处理/盘盈盘亏）',
+    comment: '可选说明；未填时取流水类型中文名',
   })
   reason: string;
 

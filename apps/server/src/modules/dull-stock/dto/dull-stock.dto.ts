@@ -9,12 +9,15 @@ import {
   Min,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { STOCK_DIRECTION, UNIT } from '@hb-oms/shared';
+import {
+  DULL_STOCK_FLOW_TYPE_OPTIONS,
+  UNIT,
+} from '@hb-oms/shared';
 import { toBoolean } from '../../../common/utils/transform.util';
 
 const SIDE_VALUES = ['', 'left', 'right'];
 const UNIT_VALUES = [UNIT.SET, UNIT.PIECE];
-const DIRECTION_VALUES = [STOCK_DIRECTION.IN, STOCK_DIRECTION.OUT];
+const FLOW_TYPE_VALUES = DULL_STOCK_FLOW_TYPE_OPTIONS.map((item) => item.value);
 
 /**
  * 呆滞品档案的属性字段（新增与编辑共用）。
@@ -54,6 +57,8 @@ export class DullStockAttrDto {
 
   @IsOptional() @IsString() @MaxLength(64, { message: '规格文本不能超过 64 个字符' }) dimensionText?: string;
 
+  @IsOptional() @IsString() @MaxLength(32, { message: '料厚不能超过 32 个字符' }) materialThickness?: string;
+
   @IsOptional() @IsString() @MaxLength(32, { message: '表面处理不能超过 32 个字符' }) surfaceType?: string;
 
   @IsOptional() @IsString() @MaxLength(64, { message: '颜色不能超过 64 个字符' }) color?: string;
@@ -82,23 +87,19 @@ export class UpdateDullStockDto extends CreateDullStockDto {}
 
 /** 登记一笔出入库（入库数/出库数的唯一写入口） */
 export class CreateDullStockFlowDto {
-  @Type(() => Number)
-  @IsIn(DIRECTION_VALUES, { message: '方向只能是「入库」或「出库」' })
-  direction: number;
+  @IsIn(FLOW_TYPE_VALUES, { message: '流水类型只能是客户退货、生产领料、生产入库或出货' })
+  flowType: string;
 
   @Type(() => Number)
   @IsInt({ message: '数量必须为整数' })
   @Min(1, { message: '数量必须大于 0' })
   quantity: number;
 
-  @IsDateString({}, { message: '出入库日期格式不正确' })
+  @IsDateString({}, { message: '发生日期格式不正确' })
   flowDate: string;
 
-  // 顺序同 DullStockAttrDto.itemNo：长度限制在上、必填贴属性，保证留空时提示是「原因必填」
-  @MaxLength(255, { message: '原因不能超过 255 个字符' })
-  @IsNotEmpty({ message: '原因必填' })
-  @IsString({ message: '原因必填' })
-  reason: string;
+  /** 类型已经说明业务含义；这里只补充可选说明。 */
+  @IsOptional() @IsString() @MaxLength(255, { message: '说明不能超过 255 个字符' }) reason?: string;
 
   @IsOptional() @IsString() @MaxLength(255, { message: '备注不能超过 255 个字符' }) remark?: string;
 }
@@ -115,13 +116,13 @@ export class QueryDullStockDto {
 
   @IsOptional() @IsIn(SIDE_VALUES, { message: '边别只能是「左」或「右」' }) side?: string;
 
-  /** 出入库流水日期范围；两端都填时只列范围内发生过流水的档案，并返回期间入/出数量 */
+  /** 月度台账的起止日期；页面按自然月成对传入，返回月初、分类变动和月末结存。 */
   @IsOptional() @IsDateString({}, { message: '出入库开始日期格式不正确' }) flowDateFrom?: string;
 
   @IsOptional() @IsDateString({}, { message: '出入库结束日期格式不正确' }) flowDateTo?: string;
 
   /**
-   * 只看有结存（balance_qty <> 0），默认 true——清空的呆滞品是历史痕迹，日常不看。
+   * 只看有结存，默认 false（全量加载）。普通视图按当前结存判断，月度视图按月末结存判断。
    * 布尔参数必须用 toBoolean，不能用 @Type(() => Boolean)：全局 ValidationPipe
    * 开了 enableImplicitConversion，字符串 "false" 会被隐式转成 true（§一 已踩）。
    */
@@ -135,4 +136,15 @@ export class QueryDullStockFlowDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
 
   @IsOptional() @Type(() => Number) @IsInt() dullId?: number;
+
+  @IsOptional() @IsDateString({}, { message: '流水开始日期格式不正确' }) flowDateFrom?: string;
+
+  @IsOptional() @IsDateString({}, { message: '流水结束日期格式不正确' }) flowDateTo?: string;
+}
+
+/** 呆滞品出货送货单打印参数，与成品送货单使用同一纸型体系。 */
+export class DullStockPrintQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) profileId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) version?: number;
+  @IsOptional() @IsString() @MaxLength(32) templateCode?: string;
 }

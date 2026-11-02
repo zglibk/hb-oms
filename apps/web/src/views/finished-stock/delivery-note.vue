@@ -15,7 +15,7 @@
       </div>
       <div>
         <el-button size="small" :icon="Printer" :disabled="loading || !note || !runtime" @click="onPrint">打印</el-button>
-        <el-button size="small" type="primary" :icon="Download" v-permission.disable="'finished-stock:print'"
+        <el-button size="small" type="primary" :icon="Download" v-permission.disable="printPermission"
           :loading="downloading" :disabled="loading || !note || !runtime" @click="onDownloadPdf">导出PDF</el-button>
       </div>
     </header>
@@ -50,6 +50,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft, Printer, Download } from '@element-plus/icons-vue';
 import { getDeliveryNote, downloadDeliveryNotePdf, type DeliveryNote, type DeliveryNoteRow } from '@/api/finished-stock';
+import { getDullStockDeliveryNote, downloadDullStockDeliveryNotePdf } from '@/api/dull-stock';
 import { getRuntimePrintProfile, type RuntimePrintProfile } from '@/api/print-config';
 import { measurePrintRows, paginateRows, type PrintRowMeasurement } from '@/utils/print-pagination';
 import { readBlobError } from '@/utils/download';
@@ -65,6 +66,8 @@ const { deliveryTemplateDefault } = useFeatureFlags();
 const featureStore = useFeatureStore();
 const route = useRoute();
 const router = useRouter();
+const isDullStock = computed(() => route.path.startsWith('/dull-stock/'));
+const printPermission = computed(() => isDullStock.value ? 'dull-stock:print' : 'finished-stock:print');
 const id = Number(route.query.id);
 const requestedProfileId = Number(route.query.profileId) || undefined;
 const requestedVersion = Number(route.query.version) || undefined;
@@ -97,7 +100,8 @@ async function init() {
   if (!id) return goBack();
   try {
     const [res, profile] = await Promise.all([
-      getDeliveryNote(id), getRuntimePrintProfile('delivery_note', requestedProfileId, requestedVersion),
+      isDullStock.value ? getDullStockDeliveryNote(id) : getDeliveryNote(id),
+      getRuntimePrintProfile('delivery_note', requestedProfileId, requestedVersion),
       featureStore.loaded ? Promise.resolve() : featureStore.load(),
     ]);
     note.value = res;
@@ -157,13 +161,16 @@ async function onDownloadPdf() {
   if (!runtime.value) return;
   downloading.value = true;
   try {
-    await downloadDeliveryNotePdf(id, `送货单-${note.value?.deliveryNo || note.value?.docNo}.pdf`, {
+    const download = isDullStock.value
+      ? downloadDullStockDeliveryNotePdf
+      : downloadDeliveryNotePdf;
+    await download(id, `送货单-${note.value?.deliveryNo || note.value?.docNo}.pdf`, {
       profileId: runtime.value.profileId, version: runtime.value.version, templateCode: templateCode.value,
     });
   } catch (err) { ElMessage.error(await readBlobError(err)); }
   finally { downloading.value = false; }
 }
-function goBack() { router.push('/finished-stock'); }
+function goBack() { router.push(isDullStock.value ? '/dull-stock' : '/finished-stock'); }
 onBeforeUnmount(() => { document.title = originalTitle; pageStyle?.remove(); });
 </script>
 

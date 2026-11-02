@@ -9,18 +9,20 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { DullStockService } from './dull-stock.service';
 import {
   CreateDullStockDto,
   CreateDullStockFlowDto,
   QueryDullStockDto,
   QueryDullStockFlowDto,
+  DullStockPrintQueryDto,
   UpdateDullStockDto,
 } from './dto/dull-stock.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -28,6 +30,8 @@ import { OperationLog } from '../../common/decorators/operation-log.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { sendXlsx } from '../../common/utils/excel-response.util';
 import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { PdfService } from '../../common/services/pdf.service';
+import { PrintConfigService } from '../print-config/print-config.service';
 
 /**
  * 读权限口径（§2.1）：全部只读接口用菜单权限点 `dull-stock`，
@@ -35,7 +39,11 @@ import { CurrentUser, CurrentUserPayload } from '../../common/decorators/current
  */
 @Controller('dull-stock')
 export class DullStockController {
-  constructor(private readonly service: DullStockService) {}
+  constructor(
+    private readonly service: DullStockService,
+    private readonly pdfService: PdfService,
+    private readonly printConfigService: PrintConfigService,
+  ) {}
 
   @Get()
   @RequirePermissions('dull-stock')
@@ -50,11 +58,55 @@ export class DullStockController {
     return this.service.findSummary(query);
   }
 
-  /** 出入库流水（按档案行下钻），逐行附推导出的「变动后结存」 */
+  /** 库存变动流水（按档案行下钻），逐行附推导出的「变动后结存」 */
   @Get('flow')
   @RequirePermissions('dull-stock')
   async flowList(@Query() query: QueryDullStockFlowDto) {
     return this.service.findFlowList(query);
+  }
+
+  /** 呆滞品“出货”流水送货单取数。 */
+  @Get('flow/:flowId/delivery-note')
+  @RequirePermissions('dull-stock')
+  async deliveryNote(@Param('flowId', ParseIntPipe) flowId: number) {
+    return this.service.buildDeliveryNote(flowId);
+  }
+
+  /** 复用现有送货单纸型，由服务端渲染同一前端打印页生成 PDF。 */
+  @Get('flow/:flowId/delivery-note-pdf')
+  @SkipTransform()
+  @RequirePermissions('dull-stock:print')
+  @OperationLog('呆滞品管理', '导出送货单PDF')
+  async deliveryNotePdf(
+    @Param('flowId', ParseIntPipe) flowId: number,
+    @Query() query: DullStockPrintQueryDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const note = await this.service.buildDeliveryNote(flowId);
+    await this.printConfigService.runtime({
+      documentType: 'delivery_note',
+      profileId: query.profileId,
+      version: query.version,
+    });
+    const token = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const base = (process.env.PRINT_BASE_URL || 'http://127.0.0.1:5174').replace(/\/+$/, '');
+    const params = new URLSearchParams({ id: String(flowId) });
+    if (query.profileId) params.set('profileId', String(query.profileId));
+    if (query.version) params.set('version', String(query.version));
+    if (query.templateCode) params.set('templateCode', query.templateCode);
+    const buf = await this.pdfService.renderPrintPage(
+      `${base}/dull-stock/delivery-note?${params.toString()}`,
+      token,
+    );
+    const filename = `送货单-${note.deliveryNo || note.docNo}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="delivery-note.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
   }
 
   /** 导出当前筛选结果；@SkipTransform 返回文件流，**必须注册在 `:id` 之前** */
@@ -97,12 +149,12 @@ export class DullStockController {
   }
 
   /**
-   * 删除录错的出入库流水，同事务回滚累计数。
+   * 删除录错的库存变动流水，同事务回滚累计数。
    * **必须注册在 `:id` 型路由之前**，否则 `flow` 会被当成 id 走进 ParseIntPipe。
    */
   @Delete('flow/:flowId')
   @RequirePermissions('dull-stock:stock')
-  @OperationLog('呆滞品管理', '删除出入库流水')
+  @OperationLog('呆滞品管理', '删除库存变动流水')
   async removeFlow(
     @Param('flowId', ParseIntPipe) flowId: number,
     @CurrentUser() user: CurrentUserPayload,
@@ -134,10 +186,10 @@ export class DullStockController {
     return this.service.remove(id);
   }
 
-  /** 登记一笔出入库 —— 入库数/出库数的唯一写入口 */
+  /** 登记一笔库存变动 —— 入库数/出库数的唯一写入口 */
   @Post(':id/flow')
   @RequirePermissions('dull-stock:stock')
-  @OperationLog('呆滞品管理', '登记出入库')
+  @OperationLog('呆滞品管理', '登记库存变动')
   async createFlow(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateDullStockFlowDto,

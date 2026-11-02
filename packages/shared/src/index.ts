@@ -23,3 +23,4 @@ export * from './ledger';
 export * from './admin-role';
 export * from './print';
 export * from './ui-config';
+export * from './dull-stock';

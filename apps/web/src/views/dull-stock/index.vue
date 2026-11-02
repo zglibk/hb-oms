@@ -19,15 +19,16 @@
             <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="出/入库日期">
+        <el-form-item label="月份">
           <el-date-picker
-            v-model="flowDateRange" type="daterange" value-format="YYYY-MM-DD" clearable
-            range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期"
-            style="width: 250px" @change="onFlowDateRangeChange"
+            v-model="flowMonth" type="month" value-format="YYYY-MM" clearable
+            placeholder="选择统计月份" style="width: 150px" @change="onFlowMonthChange"
           />
         </el-form-item>
         <el-form-item class="query-actions">
-          <el-checkbox v-model="query.onlyInStock" @change="runKeywordSearch">只看有结存</el-checkbox>
+          <el-checkbox v-model="query.onlyInStock" @change="runKeywordSearch">
+            {{ hasFlowDateRange ? '只看月末有结存' : '只看有结存' }}
+          </el-checkbox>
           <el-button size="small" type="primary" :icon="Search" @click="runKeywordSearch">查询</el-button>
           <el-button size="small" @click="resetFilters">重置</el-button>
         </el-form-item>
@@ -46,11 +47,14 @@
           >导出</el-button>
         </div>
         <span class="filter-summary">
-          当前筛选 {{ summary.rows }} 行，结存合计 <b>{{ summary.totalBalancePcs }}</b> 支
+          当前筛选 {{ summary.rows }} 行，{{ hasFlowDateRange ? '月末结存' : '结存' }}合计
+          <b>{{ summary.totalBalancePcs }}</b> 支
           <template v-if="hasFlowDateRange">
-            ，{{ query.flowDateFrom }} 至 {{ query.flowDateTo }} 入库
-            <b class="delta-in">{{ summary.periodInboundPcs }}</b> 支，
-            出库 <b class="delta-out">{{ summary.periodOutboundPcs }}</b> 支
+            ，{{ flowMonth }}：月初 <b>{{ summary.periodOpeningPcs }}</b> 支，
+            客退 <b class="delta-in">{{ summary.periodCustomerReturnPcs }}</b> 支，
+            领料 <b class="delta-out">{{ summary.periodProductionIssuePcs }}</b> 支，
+            生产入库 <b class="delta-in">{{ summary.periodProductionInboundPcs }}</b> 支，
+            出货 <b class="delta-out">{{ summary.periodShipmentPcs }}</b> 支
           </template>
         </span>
       </div>
@@ -62,11 +66,11 @@
         <hint-tip class="tip">
           <el-icon><InfoFilled /></el-icon>
           已完结订单剩下的成品，<b>一条记录 = 一批货</b>。
-          <b>结存数 = 期初数 + 入库数 − 出库数</b>，后两个数只能靠「登记出入库」产生，点行首箭头看流水。
-          建档日期只记录档案建立日期；顶部「出/入库日期」范围只按本页出入库流水的日期统计。
+          <b>结存数 = 期初数 + 客退 + 生产入库 − 生产领料 − 出货</b>，变动只能靠「登记库存变动」产生，点行首箭头看日期与明细。
+          选择月份后显示月初、四类变动与月末结存，可直接导出月度清单；“出货”流水可打印送货单。
           客户和生产单号均为选填，无法确认来源时可以留空。
           本页是<b>独立台账</b>，不进订单跟踪台账、也不进成品库存。
-          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 入库数 − 出库数，后两个数只能靠「登记出入库」产生，点行首箭头看流水。建档日期只记录档案建立日期；顶部「出/入库日期」范围只按本页出入库流水的日期统计。客户和生产单号均为选填，无法确认来源时可以留空。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
+          <template #content>已完结订单剩下的成品，一条记录 = 一批货。结存数 = 期初数 + 客退 + 生产入库 − 生产领料 − 出货，所有变动逐笔留日期。选择月份后显示月初、四类变动与月末结存并可导出；“出货”流水可打印送货单。客户和生产单号均为选填，但打印送货单前必须补充客户。本页是独立台账，不进订单跟踪台账、也不进成品库存。</template>
         </hint-tip>
       </div>
 
@@ -81,8 +85,8 @@
               <table v-if="(flows[row.id] ?? []).length" class="expand-grid">
                 <thead>
                   <tr>
-                    <th>出/入库日期</th><th>方向</th><th>数量</th><th>变动后结存</th>
-                    <th>原因</th><th>备注</th><th>操作人</th><th>操作</th>
+                    <th>发生日期</th><th>业务类型</th><th>数量</th><th>变动后结存</th>
+                    <th>说明</th><th>备注</th><th>操作人</th><th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,7 +94,7 @@
                     <td class="c">{{ f.flowDate }}</td>
                     <td class="c">
                       <el-tag size="small" :type="f.direction === STOCK_DIRECTION.IN ? 'success' : 'danger'">
-                        {{ f.direction === STOCK_DIRECTION.IN ? '入库' : '出库' }}
+                        {{ dullStockFlowTypeLabel(f.flowType) }}
                       </el-tag>
                     </td>
                     <td class="c">
@@ -99,13 +103,18 @@
                       </span>
                     </td>
                     <td class="c">{{ f.balanceAfter }}</td>
-                    <td>{{ f.reason }}</td>
+                    <td>{{ f.reason || '—' }}</td>
                     <td>{{ f.remark || '—' }}</td>
                     <td class="c">
                       <color-tag v-if="f.creatorName" :seed="f.creatorName">{{ f.creatorName }}</color-tag>
                       <span v-else>—</span>
                     </td>
                     <td class="c">
+                      <el-button
+                        v-if="f.flowType === DULL_STOCK_FLOW_TYPE.SHIPMENT"
+                        size="small" v-permission.disable="'dull-stock:print'" link type="primary"
+                        :icon="Printer" @click="openDeliveryNote(f)"
+                      >送货单</el-button>
                       <el-button
                         size="small" v-permission.disable="'dull-stock:stock'" link type="danger"
                         :icon="Delete" @click="onDeleteFlow(row, f)"
@@ -114,7 +123,7 @@
                   </tr>
                 </tbody>
               </table>
-              <el-empty v-else description="暂无出入库流水" :image-size="48" />
+              <el-empty v-else description="暂无库存变动流水" :image-size="48" />
             </div>
           </template>
         </el-table-column>
@@ -139,6 +148,9 @@
         <el-table-column label="规格" width="75" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
+        <el-table-column label="料厚" width="80" align="center">
+          <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
+        </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
@@ -160,50 +172,41 @@
         <el-table-column label="单位" width="64" align="center">
           <template #default="{ row }">{{ labelOf(UNIT_OPTIONS, row.unit) }}</template>
         </el-table-column>
-        <el-table-column label="期初数" width="80" align="center">
+        <el-table-column v-if="!hasFlowDateRange" label="期初数" width="80" align="center">
           <template #default="{ row }">{{ row.openingQty }}</template>
         </el-table-column>
-        <el-table-column label="入库数" width="80" align="center">
+        <el-table-column v-if="!hasFlowDateRange" label="入库数" width="80" align="center">
           <template #default="{ row }">
             <span :class="row.inboundQty > 0 ? 'delta-in' : ''">{{ row.inboundQty }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="出库数" width="80" align="center">
+        <el-table-column v-if="!hasFlowDateRange" label="出库数" width="80" align="center">
           <template #default="{ row }">
             <span :class="row.outboundQty > 0 ? 'delta-out' : ''">{{ row.outboundQty }}</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="期间入库数" width="100" align="center">
-          <template #header>
-            <el-tooltip :content="`${query.flowDateFrom} 至 ${query.flowDateTo} 入库流水合计`" placement="top">
-              <span>期间入库数</span>
-            </el-tooltip>
-          </template>
-          <template #default="{ row }">
-            <span :class="(row.periodInboundQty || 0) > 0 ? 'delta-in' : ''">
-              {{ row.periodInboundQty || 0 }}
-            </span>
-          </template>
+        <el-table-column v-if="hasFlowDateRange" label="月初数" width="80" align="center">
+          <template #default="{ row }">{{ row.periodOpeningQty || 0 }}</template>
         </el-table-column>
-        <el-table-column v-if="hasFlowDateRange" label="期间出库数" width="100" align="center">
-          <template #header>
-            <el-tooltip :content="`${query.flowDateFrom} 至 ${query.flowDateTo} 出库流水合计`" placement="top">
-              <span>期间出库数</span>
-            </el-tooltip>
-          </template>
-          <template #default="{ row }">
-            <span :class="(row.periodOutboundQty || 0) > 0 ? 'delta-out' : ''">
-              {{ row.periodOutboundQty || 0 }}
-            </span>
-          </template>
+        <el-table-column v-if="hasFlowDateRange" label="客户退货" width="105" align="center">
+          <template #default="{ row }"><b class="delta-in">{{ row.periodCustomerReturnQty || 0 }}</b><small class="flow-dates">{{ row.periodCustomerReturnDates || '—' }}</small></template>
+        </el-table-column>
+        <el-table-column v-if="hasFlowDateRange" label="生产领料" width="105" align="center">
+          <template #default="{ row }"><b class="delta-out">{{ row.periodProductionIssueQty || 0 }}</b><small class="flow-dates">{{ row.periodProductionIssueDates || '—' }}</small></template>
+        </el-table-column>
+        <el-table-column v-if="hasFlowDateRange" label="生产入库" width="105" align="center">
+          <template #default="{ row }"><b class="delta-in">{{ row.periodProductionInboundQty || 0 }}</b><small class="flow-dates">{{ row.periodProductionInboundDates || '—' }}</small></template>
+        </el-table-column>
+        <el-table-column v-if="hasFlowDateRange" label="出货" width="105" align="center">
+          <template #default="{ row }"><b class="delta-out">{{ row.periodShipmentQty || 0 }}</b><small class="flow-dates">{{ row.periodShipmentDates || '—' }}</small></template>
         </el-table-column>
         <el-table-column label="备注" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="结存数" width="100" align="center" fixed="right">
+        <el-table-column :label="hasFlowDateRange ? '月末结存' : '结存数'" width="100" align="center" fixed="right">
           <template #default="{ row }">
-            <span :class="row.balanceQty > 0 ? 'num-ok' : 'num-zero'">
-              {{ row.balanceQty }}{{ unitLabel(row.unit) }}
+            <span :class="(hasFlowDateRange ? row.periodClosingQty : row.balanceQty) > 0 ? 'num-ok' : 'num-zero'">
+              {{ hasFlowDateRange ? (row.periodClosingQty || 0) : row.balanceQty }}{{ unitLabel(row.unit) }}
             </span>
           </template>
         </el-table-column>
@@ -213,7 +216,7 @@
               <el-button
                 size="small" v-permission.disable="'dull-stock:stock'" link type="primary" :icon="Sort"
                 @click="openFlow(row)"
-              >出入库</el-button>
+              >库存变动</el-button>
               <el-button
                 size="small" v-permission.disable="'dull-stock:update'" link type="primary" :icon="EditPen"
                 @click="openForm(row)"
@@ -234,7 +237,7 @@
       <el-alert
         v-if="editRow && hasFlow"
         type="info" :closable="false" show-icon class="mb12"
-        title="该记录已有出入库流水，单位不可再改（改了历史流水记的数含义就变了）；入库数/出库数只能靠登记出入库变动"
+        title="该记录已有库存变动流水，单位不可再改（改了历史流水记的数含义就变了）；库存数只能靠逐笔登记变动"
       />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" size="small">
         <el-row :gutter="14">
@@ -284,6 +287,11 @@
           <el-col :span="12">
             <el-form-item label="规格(mm)">
               <el-input-number v-model="form.dimensionMm" :min="0" :precision="0" :controls="false" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="料厚">
+              <el-input v-model="form.materialThickness" maxlength="32" placeholder="如 2.00、1.2×1.0×1.2" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -356,21 +364,23 @@
       </template>
     </el-dialog>
 
-    <!-- 登记出入库 -->
-    <el-dialog v-model="flowVisible" title="登记出入库" width="560px">
+    <!-- 登记库存变动 -->
+    <el-dialog v-model="flowVisible" title="登记库存变动" width="560px">
       <el-alert
         v-if="flowRow"
         type="info" :closable="false" show-icon class="mb12"
         :title="`${flowRow.itemNo}${flowRow.productModel ? ' / ' + flowRow.productModel : ''} — 当前结存 ${flowRow.balanceQty} ${unitLabel(flowRow.unit)}`"
       />
       <el-form ref="flowFormRef" :model="flowForm" :rules="flowRules" label-width="100px" size="small">
-        <el-form-item label="方向" prop="direction">
-          <el-radio-group v-model="flowForm.direction">
-            <el-radio-button :value="STOCK_DIRECTION.IN">入库</el-radio-button>
-            <el-radio-button :value="STOCK_DIRECTION.OUT">出库</el-radio-button>
-          </el-radio-group>
+        <el-form-item label="业务类型" prop="flowType">
+          <el-select v-model="flowForm.flowType" style="width: 100%">
+            <el-option
+              v-for="o in DULL_STOCK_FLOW_TYPE_OPTIONS"
+              :key="o.value" :label="o.label" :value="o.value"
+            />
+          </el-select>
         </el-form-item>
-        <el-form-item label="出/入库日期" prop="flowDate">
+        <el-form-item label="发生日期" prop="flowDate">
           <el-date-picker v-model="flowForm.flowDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="数量" prop="quantity">
@@ -379,15 +389,8 @@
             <template #suffix>{{ flowRow ? unitLabel(flowRow.unit) : '' }}</template>
           </el-input-number>
         </el-form-item>
-        <el-form-item label="原因" prop="reason">
-          <!-- 选项随「方向」切换只列本向预设（key 强制重建，避免残留对向高亮）；仍可手输 -->
-          <el-select
-            :key="flowForm.direction"
-            v-model="flowForm.reason" filterable allow-create default-first-option
-            placeholder="可选择或直接输入" style="width: 100%"
-          >
-            <el-option v-for="r in flowReasonOptions" :key="r" :label="r" :value="r" />
-          </el-select>
+        <el-form-item label="说明">
+          <el-input v-model="flowForm.reason" maxlength="255" placeholder="选填，如领料车间、退货原因等" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="flowForm.remark" maxlength="255" show-word-limit />
@@ -422,9 +425,10 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onActivated, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import {
-  Search, Plus, EditPen, Delete, Sort, InfoFilled, Upload, Download,
+  Search, Plus, EditPen, Delete, Sort, InfoFilled, Upload, Download, Printer,
 } from '@element-plus/icons-vue';
 import {
   getDullStockList,
@@ -467,6 +471,12 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
+import {
+  DULL_STOCK_FLOW_TYPE,
+  DULL_STOCK_FLOW_TYPE_OPTIONS,
+  dullStockFlowDirection,
+  dullStockFlowTypeLabel,
+} from '@hb-oms/shared';
 
 /**
  * 呆滞品**自己的**颜色开关（系统配置 → 业务字段 → 呆滞品颜色）。
@@ -476,27 +486,27 @@ import ColorTag from '@/components/ColorTag.vue';
  * 是给「订单/外发口径用不到颜色」的厂关的。两者各管各的，**不要相与**。
  */
 const { dullStockColorEnabled: colorEnabled } = useFeatureFlags();
+const router = useRouter();
 
 const today = () => formatBusinessDate(new Date());
 const unitLabel = (unit: string) => labelOf(UNIT_OPTIONS, unit);
-
-/**
- * 出入库原因预设，**按方向分列**（2026-08-13）：入库单只该选入向原因，
- * 混在一张列表里迟早有人给出库单选上「退货入库」。仅前端引导，
- * 服务端不做枚举校验（「原因」本质是自由文本），仍可手输。
- * （flowReasonOptions 依赖 flowForm，定义在下方 flowForm 之后。）
- */
-const FLOW_REASON_PRESETS: Record<number, string[]> = {
-  [STOCK_DIRECTION.IN]: ['退货入库', '盘盈入库'],
-  [STOCK_DIRECTION.OUT]: ['销售出库', '清库处理', '降价销售', '内部领用', '盘亏出库'],
-};
 
 const loading = ref(false);
 const saving = ref(false);
 const list = ref<DullStockRow[]>([]);
 const total = ref(0);
-const summary = ref({ rows: 0, totalBalancePcs: 0, periodInboundPcs: 0, periodOutboundPcs: 0 });
-const flowDateRange = ref<[string, string] | null>(null);
+const summary = ref({
+  rows: 0,
+  totalBalancePcs: 0,
+  periodInboundPcs: 0,
+  periodOutboundPcs: 0,
+  periodOpeningPcs: 0,
+  periodCustomerReturnPcs: 0,
+  periodProductionIssuePcs: 0,
+  periodProductionInboundPcs: 0,
+  periodShipmentPcs: 0,
+});
+const flowMonth = ref('');
 const query = reactive({
   page: 1,
   pageSize: 20,
@@ -541,11 +551,18 @@ function reload() {
   query.page = 1;
   load();
 }
-function onFlowDateRangeChange(value: [string, string] | null) {
-  query.flowDateFrom = value?.[0] || undefined;
-  query.flowDateTo = value?.[1] || undefined;
-  // 期间流量应包含区间内已经清空的档案；用户仍可随后重新勾选，与“有结存”条件叠加。
-  if (value?.length === 2) query.onlyInStock = false;
+function onFlowMonthChange(value: string | null) {
+  if (value) {
+    const [year, month] = value.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    query.flowDateFrom = `${value}-01`;
+    query.flowDateTo = `${value}-${String(lastDay).padStart(2, '0')}`;
+    query.onlyInStock = false;
+  } else {
+    query.flowDateFrom = undefined;
+    query.flowDateTo = undefined;
+  }
+  dropFlowCache();
   runKeywordSearch();
 }
 const {
@@ -557,7 +574,7 @@ const {
 /** 清空查询条件，恢复全量档案并返回第一页。 */
 function resetFilters() {
   cancelKeywordSearch();
-  flowDateRange.value = null;
+  flowMonth.value = '';
   Object.assign(query, {
     page: 1,
     keyword: '',
@@ -567,6 +584,7 @@ function resetFilters() {
     flowDateTo: undefined,
     onlyInStock: false,
   });
+  dropFlowCache();
   load();
 }
 load();
@@ -583,7 +601,7 @@ const onExport = () => exportWithConfirm({
   run: () => downloadDullStockExport({ ...query }),
 });
 
-/* ===== 展开行：出入库流水（按需加载） ===== */
+/* ===== 展开行：库存变动流水（按需加载） ===== */
 const flows = reactive<Record<number, DullStockFlowRow[]>>({});
 const flowLoadingId = ref<number | null>(null);
 
@@ -598,7 +616,12 @@ async function onExpand(row: DullStockRow, expandedRows: DullStockRow[]) {
 async function loadFlows(id: number) {
   flowLoadingId.value = id;
   try {
-    const res = await getDullStockFlows({ dullId: id, pageSize: 100 });
+    const res = await getDullStockFlows({
+      dullId: id,
+      pageSize: 100,
+      flowDateFrom: query.flowDateFrom,
+      flowDateTo: query.flowDateTo,
+    });
     flows[id] = res.list;
   } finally {
     flowLoadingId.value = null;
@@ -612,16 +635,20 @@ function dropFlowCache(id?: number) {
 }
 
 async function onDeleteFlow(row: DullStockRow, flow: DullStockFlowRow) {
-  const dir = flow.direction === STOCK_DIRECTION.IN ? '入库' : '出库';
   await ElMessageBox.confirm(
-    `确定删除这笔 ${flow.flowDate} 的${dir} ${flow.quantity} ${unitLabel(row.unit)} 吗？删除后结存会跟着回滚。`,
-    '删除出入库流水',
+    `确定删除这笔 ${flow.flowDate} 的${dullStockFlowTypeLabel(flow.flowType)} ${flow.quantity} ${unitLabel(row.unit)} 吗？删除后结存会跟着回滚。`,
+    '删除库存变动流水',
     { type: 'warning' },
   );
   const res = await deleteDullStockFlow(flow.id);
   ElMessage.success(`已删除，当前结存 ${res.balanceQty} ${unitLabel(row.unit)}`);
   await loadFlows(row.id);
   load();
+}
+
+function openDeliveryNote(flow: DullStockFlowRow) {
+  const { href } = router.resolve({ path: '/dull-stock/delivery-note', query: { id: flow.id } });
+  window.open(href, '_blank', 'noopener');
 }
 
 /* ===== 建档 / 编辑 ===== */
@@ -636,6 +663,7 @@ const form = reactive({
   productTypes: [] as string[],
   railSection: '' as string | undefined,
   dimensionMm: 0,
+  materialThickness: '',
   surfaceType: 'electrophoresis',
   color: '黑色',
   side: '' as string | undefined,
@@ -700,6 +728,7 @@ function openForm(row?: DullStockRow) {
   form.productTypes = parseProductTypes(row?.productType ?? '');
   form.railSection = row?.railSection ?? '';
   form.dimensionMm = row?.dimensionMm ?? 0;
+  form.materialThickness = row?.materialThickness ?? '';
   // 新增默认「电泳 / 黑色」——厂里呆滞品绝大多数是这个搭配
   form.surfaceType = row?.surfaceType ?? 'electrophoresis';
   form.color = row ? row.color : '黑色';
@@ -728,6 +757,7 @@ async function onSubmitForm() {
       productType: normalizeProductTypes(form.productTypes),
       railSection: form.railSection || undefined,
       dimensionMm: form.dimensionMm || undefined,
+      materialThickness: form.materialThickness.trim() || undefined,
       surfaceType: form.surfaceType || undefined,
       color: form.color || undefined,
       side: sideEnabled.value ? (form.side || '') : '',
@@ -760,49 +790,33 @@ async function onDelete(row: DullStockRow) {
   load();
 }
 
-/* ===== 登记出入库 ===== */
+/* ===== 登记库存变动 ===== */
 const flowVisible = ref(false);
 const flowRow = ref<DullStockRow | null>(null);
 const flowFormRef = ref<FormInstance>();
 const flowForm = reactive({
-  direction: STOCK_DIRECTION.IN as number,
+  flowType: DULL_STOCK_FLOW_TYPE.CUSTOMER_RETURN as string,
   quantity: 1,
   flowDate: today(),
   reason: '',
   remark: '',
 });
 
-/** 当前方向的原因预设（入向/出向各一列，见 FLOW_REASON_PRESETS） */
-const flowReasonOptions = computed(() => FLOW_REASON_PRESETS[flowForm.direction] ?? []);
-
-// 切方向时，已选的若是**对向预设**就清空（选着「退货入库」切到出库，留着必错）；
-// 手输的自由文本不动——那是用户自己的措辞，方向切换不该吞掉
-watch(() => flowForm.direction, () => {
-  const allPresets = Object.values(FLOW_REASON_PRESETS).flat();
-  if (
-    flowForm.reason
-    && allPresets.includes(flowForm.reason)
-    && !flowReasonOptions.value.includes(flowForm.reason)
-  ) {
-    flowForm.reason = '';
-  }
-});
-
 const flowRules: FormRules = {
-  direction: [{ required: true, message: '请选择方向', trigger: 'change' }],
+  flowType: [{ required: true, message: '请选择业务类型', trigger: 'change' }],
   quantity: [{ required: true, message: '请填写数量', trigger: 'blur' }],
-  flowDate: [{ required: true, message: '请选择出/入库日期', trigger: 'change' }],
-  reason: [{ required: true, message: '请填写原因', trigger: 'change' }],
+  flowDate: [{ required: true, message: '请选择发生日期', trigger: 'change' }],
 };
 
 const previewFlowBalance = computed(() => {
   if (!flowRow.value) return 0;
-  return flowRow.value.balanceQty + flowForm.direction * (flowForm.quantity || 0);
+  return flowRow.value.balanceQty
+    + dullStockFlowDirection(flowForm.flowType) * (flowForm.quantity || 0);
 });
 
 function openFlow(row: DullStockRow) {
   flowRow.value = row;
-  flowForm.direction = STOCK_DIRECTION.IN;
+  flowForm.flowType = DULL_STOCK_FLOW_TYPE.CUSTOMER_RETURN;
   flowForm.quantity = 1;
   flowForm.flowDate = today();
   flowForm.reason = '';
@@ -816,10 +830,10 @@ async function onSubmitFlow() {
   saving.value = true;
   try {
     const res = await createDullStockFlow(flowRow.value.id, {
-      direction: flowForm.direction,
+      flowType: flowForm.flowType,
       quantity: flowForm.quantity,
       flowDate: flowForm.flowDate,
-      reason: flowForm.reason.trim(),
+      reason: flowForm.reason.trim() || undefined,
       remark: flowForm.remark || undefined,
     });
     ElMessage.success(`已登记，当前结存 ${res.balanceQty} ${unitLabel(flowRow.value.unit)}`);
@@ -861,6 +875,14 @@ export default { name: 'DullStock' };
   margin-left: auto; text-align: right; white-space: nowrap;
   font-size: 12px; color: var(--el-text-color-secondary);
   b { color: var(--el-color-primary); font-size: 14px; }
+}
+.flow-dates {
+  display: block;
+  margin-top: 2px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  font-weight: normal;
+  line-height: 1.25;
 }
 .pager { margin-top: 12px; }
 .mb12 { margin-bottom: 12px; }
