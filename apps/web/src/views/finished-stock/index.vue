@@ -248,7 +248,7 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { recentSixNaturalMonthRange } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -282,6 +282,7 @@ function surfaceLabel(v: string | null): string {
 
 /** 「颜色」是可停用的业务字段（§5.7），停用时整列不显示 */
 const { colorEnabled } = useFeatureFlags();
+const { defaultRecentDateRange } = useDefaultDateRange();
 
 const router = useRouter();
 const loading = ref(false);
@@ -295,7 +296,7 @@ const query = reactive({
   bizType: undefined as string | undefined,
   status: undefined as number | undefined,
 });
-const dateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const dateRange = ref<[string, string] | null>(defaultRecentDateRange());
 
 async function load() {
   loading.value = true;
@@ -347,7 +348,7 @@ function resetFilters() {
     bizType: undefined,
     status: undefined,
   });
-  dateRange.value = recentSixNaturalMonthRange();
+  dateRange.value = defaultRecentDateRange();
   runKeywordSearch();
 }
 load();

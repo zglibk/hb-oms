@@ -357,7 +357,8 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
+import { businessToday } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,
@@ -493,7 +494,8 @@ function onDetailEditorKeyup(event: KeyboardEvent) {
 
 /* ===== 部件组选择器 ===== */
 const pickerVisible = ref(false);
-const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const { defaultDeliveryDateRange } = useDefaultDateRange();
+const pickerDeliveryRange = ref<[string, string] | null>(defaultDeliveryDateRange());
 interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
@@ -705,7 +707,7 @@ function resetPickerQuery() {
   });
   suppressPickerAutoSearch = false;
   showReturned.value = false;
-  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  pickerDeliveryRange.value = defaultDeliveryDateRange();
   void initializePicker();
 }
 function onPickChange(rows: PartGroupOption[]) {

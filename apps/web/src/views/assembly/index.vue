@@ -130,7 +130,9 @@ import AppTable from '@/components/AppTable.vue';
 import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { recentSixNaturalMonthRange } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
+
+const { defaultDeliveryDateRange } = useDefaultDateRange();
 
 const loading = ref(false);
 const list = ref<AssemblyGroupRow[]>([]);
@@ -143,7 +145,7 @@ const query = reactive({
   onlyUnfinished: false,
   onlyOverdue: false,
 });
-const deliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const deliveryRange = ref<[string, string] | null>(defaultDeliveryDateRange());
 
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
@@ -177,7 +179,7 @@ function resetFilters() {
     onlyUnfinished: false,
     onlyOverdue: false,
   });
-  deliveryRange.value = recentSixNaturalMonthRange();
+  deliveryRange.value = defaultDeliveryDateRange();
   runKeywordSearch();
 }
 load();

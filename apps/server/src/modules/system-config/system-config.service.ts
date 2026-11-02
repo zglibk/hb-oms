@@ -48,6 +48,7 @@ export class SystemConfigService {
         customerDrawingNoEnabled: 1,
         dullStockColorEnabled: 1,
         productRequirementEnabled: 1,
+        defaultDateFilterEnabled: 0,
         homeOwedScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
         homeOutsourceScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
         screenOverdueScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
@@ -78,6 +79,7 @@ export class SystemConfigService {
     customerDrawingNoEnabled: boolean;
     dullStockColorEnabled: boolean;
     productRequirementEnabled: boolean;
+    defaultDateFilterEnabled: boolean;
     inchToMm: number;
     dimensionViewUnit: 'mm' | 'inch';
     deliveryTemplateDefault: string;
@@ -97,6 +99,7 @@ export class SystemConfigService {
       // 呆滞品颜色独立开关，不与 colorFieldEnabled 相与——两者各管各的（见实体注释）
       dullStockColorEnabled: Number(row.dullStockColorEnabled) === 1,
       productRequirementEnabled: Number(row.productRequirementEnabled) === 1,
+      defaultDateFilterEnabled: Number(row.defaultDateFilterEnabled) === 1,
       inchToMm: Number.isFinite(inchToMm) && inchToMm > 0 ? inchToMm : INCH_TO_MM,
       dimensionViewUnit: row.dimensionViewUnit === DIMENSION_UNIT.INCH ? 'inch' : 'mm',
       // 送货单默认模板：空/NULL 回落通用模板（版式在前端注册表，此处不校验值域）

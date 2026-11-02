@@ -426,10 +426,12 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday, ledgerDeliveryDateRange } from '@/utils/date';
+import { businessToday } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
+const { defaultDeliveryDateRange } = useDefaultDateRange();
 
 /**
  * 规格查看单位：初值取系统配置的「默认规格单位」，用户可临时切换（不改库）。
@@ -471,7 +473,7 @@ const query = reactive({
  */
 const routeProductId = Number(route.query.orderProductId);
 const hasFocusedProduct = Number.isInteger(routeProductId) && routeProductId > 0;
-const deliveryRange = ref<[string, string] | null>(hasFocusedProduct ? null : ledgerDeliveryDateRange());
+const deliveryRange = ref<[string, string] | null>(hasFocusedProduct ? null : defaultDeliveryDateRange());
 
 /** 查询条件「更多」折叠区：默认收起；收起时按钮上显示折叠区里生效的条件个数 */
 const showMoreFilters = ref(false);
@@ -558,7 +560,7 @@ async function resetFilters() {
     hasFinishedInbound: false,
     hasFinishedOutbound: false,
   });
-  deliveryRange.value = ledgerDeliveryDateRange();
+  deliveryRange.value = defaultDeliveryDateRange();
   showMoreFilters.value = false;
 
   // query 与表头箭头必须一起恢复默认排序；只改请求参数会让界面仍显示旧排序状态。

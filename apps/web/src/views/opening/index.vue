@@ -197,7 +197,8 @@ import {
   normalizeProductTypes,
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
+import { businessToday } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 const tab = ref('group');
 const saving = ref(false);
@@ -224,7 +225,8 @@ const groupTotal = computed(() => groupRows.value.reduce((s, r) => s + (r.quanti
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
 const pickerKeyword = ref('');
-const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const { defaultDeliveryDateRange } = useDefaultDateRange();
+const pickerDeliveryRange = ref<[string, string] | null>(defaultDeliveryDateRange());
 const pickerRows = ref<GroupRow[]>([]);
 const picked = ref<GroupRow[]>([]);
 const pickerRef = ref<any>();
@@ -265,7 +267,7 @@ async function loadOptions() {
 }
 function resetPickerFilters() {
   pickerKeyword.value = '';
-  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  pickerDeliveryRange.value = defaultDeliveryDateRange();
   void loadOptions();
 }
 function isSelectable(row: GroupRow) {

@@ -105,6 +105,19 @@ export class SystemConfig {
   productRequirementEnabled: number;
 
   /**
+   * 列表默认日期范围开关：1 启用、0 停用。
+   * 停用时首次进入与重置均不带日期条件；启用时由各页面按业务日期口径设置半年范围。
+   */
+  @Column({
+    name: 'default_date_filter_enabled',
+    type: 'tinyint',
+    default: 0,
+    comment:
+      '默认日期范围开关：1启用 0停用；停用时列表首次进入与重置均不带日期条件，启用时按页面口径加载半年范围',
+  })
+  defaultDateFilterEnabled: number;
+
+  /**
    * 英寸换算系数（1 英寸 = N mm）。**非布尔配置**，与上面几个开关不是一类。
    *
    * 抽自共享包写死的 `INCH_TO_MM`（我司口径 25，非国标 25.4）。改动只影响

@@ -288,6 +288,51 @@
           </div>
         </el-tab-pane>
 
+        <!-- 查询设置：统一控制列表首次进入与重置时是否自动带入日期范围 -->
+        <el-tab-pane label="查询设置" name="query">
+          <el-form
+            :model="form"
+            label-width="130px"
+            class="config-form"
+            v-loading="loading"
+          >
+            <el-card shadow="never" class="cfg-section">
+              <div class="section-title">默认查询范围</div>
+              <p class="section-desc">
+                控制多个业务页面首次进入及点击“重置”时是否自动带入日期条件，不会改写用户当前页面已经设置的筛选条件。
+              </p>
+
+              <el-form-item label="默认日期范围">
+                <el-switch
+                  :model-value="form.defaultDateFilterEnabled === 1"
+                  active-text="启用"
+                  inactive-text="停用"
+                  @update:model-value="(v: any) => (form.defaultDateFilterEnabled = v ? 1 : 0)"
+                />
+                <div class="switch-hint switch-hint--block">
+                  <strong>停用（默认）</strong>：订单、外发、装配、成品出入库、台账等页面按全量数据加载；
+                  <strong>启用</strong>：单据日期、下单日期等默认取近六个自然月，订单交期类查询默认取前后半年。
+                  “产品汇总 → 期间进销存”的统计期间必须明确，始终保留近六个自然月，不受此开关影响。
+                </div>
+              </el-form-item>
+            </el-card>
+
+            <el-form-item>
+              <el-button
+                size="small"
+                v-permission="'config:update'"
+                type="primary"
+                :loading="saving"
+                @click="onSave"
+              >保存</el-button>
+            </el-form-item>
+          </el-form>
+
+          <div class="config-audit">
+            保存后，本人下一次进入相关页面或点击“重置”时生效；不会中断当前查询。
+          </div>
+        </el-tab-pane>
+
         <!-- 自动滚动：每张列表独立设置，默认统一沿用数据大屏原速度 22px/s -->
         <el-tab-pane label="滚动速度" name="scroll">
           <el-form :model="form" label-width="150px" class="config-form" v-loading="loading">
@@ -539,7 +584,7 @@ const loading = ref(false);
 const saving = ref(false);
 const route = useRoute();
 const router = useRouter();
-const validTabs = ['company', 'loginBg', 'fields', 'scroll', 'dataPerm', 'screen', 'danger'] as const;
+const validTabs = ['company', 'loginBg', 'fields', 'query', 'scroll', 'dataPerm', 'screen', 'danger'] as const;
 type TabName = (typeof validTabs)[number];
 const initialTab = validTabs.includes(route.query.tab as TabName)
   ? (route.query.tab as TabName)
@@ -616,6 +661,8 @@ const form = reactive<SystemConfig>({
   customerDrawingNoEnabled: 1,
   dullStockColorEnabled: 1,
   productRequirementEnabled: 1,
+  // 默认恢复全量加载；需要控制数据量时可在“查询设置”中重新启用
+  defaultDateFilterEnabled: 0,
   // 单位换算：缺省同共享包的我司口径（1 英寸 = 25mm）与内部存储口径（mm）
   inchToMm: 25,
   dimensionViewUnit: 'mm',

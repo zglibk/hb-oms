@@ -16,6 +16,7 @@ export function useFeatureFlags(): {
   customerDrawingNoEnabled: ComputedRef<boolean>;
   dullStockColorEnabled: ComputedRef<boolean>;
   productRequirementEnabled: ComputedRef<boolean>;
+  defaultDateFilterEnabled: ComputedRef<boolean>;
   inchToMm: ComputedRef<number>;
   dimensionViewUnit: ComputedRef<'mm' | 'inch'>;
   deliveryTemplateDefault: ComputedRef<string>;
@@ -38,6 +39,8 @@ export function useFeatureFlags(): {
     dullStockColorEnabled: computed(() => store.dullStockColorEnabled),
     /** 「产品要求描述」是否启用（订单产品级的特殊要求文本） */
     productRequirementEnabled: computed(() => store.productRequirementEnabled),
+    /** 列表首次进入与重置时是否自动带入页面约定的半年日期范围 */
+    defaultDateFilterEnabled: computed(() => store.defaultDateFilterEnabled),
     /**
      * 英寸换算系数（1 英寸 = N mm，缺省 25）。
      * 展示换算与录入折算都传它，**不要再直接用共享包的 INCH_TO_MM 常量**。

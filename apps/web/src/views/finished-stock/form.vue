@@ -328,10 +328,12 @@ import {
   pickerTextIncludes,
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
-import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
+import { businessToday } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 const route = useRoute();
 const router = useRouter();
+const { defaultDeliveryDateRange } = useDefaultDateRange();
 const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null);
 const docNo = ref('');
 const pageLoading = ref(false);
@@ -507,7 +509,7 @@ async function refreshLimits() {
 /* ===== 选择器 ===== */
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
-const pickerDeliveryRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const pickerDeliveryRange = ref<[string, string] | null>(defaultDeliveryDateRange());
 interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
@@ -756,7 +758,7 @@ function resetPickerQuery() {
     keyword: '',
   });
   suppressPickerAutoSearch = false;
-  pickerDeliveryRange.value = recentSixNaturalMonthRange();
+  pickerDeliveryRange.value = defaultDeliveryDateRange();
   void initializePicker();
 }
 /** 已在明细中的 (产品行,边别) 不可重复选；销售出库一张单只能服务同一客户。 */

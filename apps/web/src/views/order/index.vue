@@ -288,10 +288,12 @@ import AppPagination from '@/components/AppPagination.vue';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
-import { businessToday, recentSixNaturalMonthRange } from '@/utils/date';
+import { businessToday } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { customerDrawingNoEnabled, productRequirementEnabled } = useFeatureFlags();
+const { defaultRecentDateRange } = useDefaultDateRange();
 
 const router = useRouter();
 /** 不是自己建的订单：只有订单创建人与订单修改主管角色能改 / 删（服务端另有硬校验） */
@@ -360,7 +362,7 @@ const salesmanOptions = computed(() => [...new Set([...ORDER_SALESMAN_OPTIONS, .
 const merchandiserOptions = computed(() => [
   ...new Set([...ORDER_MERCHANDISER_OPTIONS, ...staffFromOrders.value.merchandisers]),
 ]);
-const dateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const dateRange = ref<[string, string] | null>(defaultRecentDateRange());
 
 // assembly_workshop 字典不再需要——订单环节已不安排装配车间
 const surfaceDict = ref<Array<{ label: string; value: string }>>([]);
@@ -396,7 +398,7 @@ function resetFilters() {
     railSection: undefined,
     surfaceType: undefined,
   });
-  dateRange.value = recentSixNaturalMonthRange();
+  dateRange.value = defaultRecentDateRange();
   deliveryRange.value = null;
   showMoreFilters.value = false;
   runKeywordSearch();

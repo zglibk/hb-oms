@@ -446,9 +446,11 @@ import AppStatCard from '@/components/AppStatCard.vue';
 import FilterMoreToggle from '@/components/FilterMoreToggle.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import { recentSixNaturalMonthRange } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 /** 「颜色」字段全局开关（展示开关；聚合键恒含颜色，与开关无关） */
 const { colorEnabled } = useFeatureFlags();
+const { defaultRecentDateRange } = useDefaultDateRange();
 /** 规格查看单位：初值取系统配置，与首页/台账/订单页同一 composable */
 const { viewUnit: dimViewUnit, colLabel: dimColLabel, text: dimText } = useDimensionView();
 
@@ -497,7 +499,7 @@ const sQuery = reactive({
   onlyOwed: false,
   onlyStocked: false,
 });
-const orderDateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const orderDateRange = ref<[string, string] | null>(defaultRecentDateRange());
 /** 查询条件「更多」：收起时按钮上显示折叠区里生效的条件个数 */
 const showSummaryMore = ref(false);
 const summaryMoreCount = computed(
@@ -550,7 +552,7 @@ function resetSummaryFilters() {
     onlyOwed: false,
     onlyStocked: false,
   });
-  orderDateRange.value = recentSixNaturalMonthRange();
+  orderDateRange.value = defaultRecentDateRange();
   resetCustomerFilter();
   runSummarySearch();
 }
@@ -570,7 +572,7 @@ const pQuery = reactive({
 });
 const showPeriodMore = ref(false);
 const periodMoreCount = computed(() => (pQuery.surfaceType ? 1 : 0));
-/** 单据日期区间与其它流水列表一致，默认最近六个自然月。 */
+/** 期间进销存必须明确统计期间，始终默认最近六个自然月，不受全局日期范围开关影响。 */
 const periodRange = ref<[string, string]>(recentSixNaturalMonthRange());
 
 function periodFilters() {

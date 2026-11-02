@@ -39,6 +39,11 @@ export class UpdateSystemConfigDto {
   /** 「产品要求描述」字段启用开关：1启用 0停用 */
   @IsOptional() @IsIn([0, 1], { message: '产品要求描述字段开关只能是 0 或 1' }) productRequirementEnabled?: number;
 
+  /** 列表首次进入与重置时是否自动带入默认日期范围 */
+  @IsOptional()
+  @IsIn([0, 1], { message: '默认日期范围开关只能是 0 或 1' })
+  defaultDateFilterEnabled?: number;
+
   /**
    * 英寸换算系数（1 英寸 = N mm）。上限 999 是防手滑（把 25 输成 2500 会让全厂规格失真），
    * 下限 0.001 只挡 0 与负数——不同行业口径差异大，不该在这里替客户定死取值。

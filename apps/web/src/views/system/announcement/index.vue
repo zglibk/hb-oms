@@ -115,9 +115,11 @@ import {
   formatBusinessDateTimeInput,
   formatDateTime,
   parseBusinessDateTime,
-  recentSixNaturalMonthRange,
 } from '@/utils/date';
+import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
+
+const { defaultRecentDateRange } = useDefaultDateRange();
 
 const router = useRouter();
 const loading = ref(false);
@@ -130,7 +132,7 @@ const query = reactive<{
   page: number;
   pageSize: number;
 }>({ keyword: '', status: '', level: '', page: 1, pageSize: 20 });
-const publishDateRange = ref<[string, string] | null>(recentSixNaturalMonthRange());
+const publishDateRange = ref<[string, string] | null>(defaultRecentDateRange());
 const formVisible = ref(false);
 const editId = ref<number | null>(null);
 const formRef = ref<FormInstance>();
@@ -175,7 +177,7 @@ async function load() {
 function search() { query.page = 1; void load(); }
 function resetQuery() {
   Object.assign(query, { keyword: '', status: '', level: '', page: 1 });
-  publishDateRange.value = recentSixNaturalMonthRange();
+  publishDateRange.value = defaultRecentDateRange();
   void load();
 }
 function openCreate() { editId.value = null; resetForm(); formVisible.value = true; }

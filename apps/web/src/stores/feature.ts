@@ -30,6 +30,8 @@ const DEFAULTS: FeatureFlags = {
   // 呆滞品颜色**独立开关**，与 colorFieldEnabled 互不影响
   dullStockColorEnabled: true,
   productRequirementEnabled: true,
+  // 默认恢复全量查询；管理员可在系统配置中重新启用半年日期范围
+  defaultDateFilterEnabled: false,
   // 换算系数缺省 25（我司口径，非国标 25.4）；默认查看单位缺省 mm（内部存储口径）
   inchToMm: 25,
   dimensionViewUnit: 'mm',
