@@ -135,6 +135,8 @@ const MIGRATIONS: string[] = [
   'migration-default-date-filter.sql',
   // 呆滞品补料厚、四类业务流水、月度台账及出货送货单权限
   'migration-dull-stock-monthly-ledger.sql',
+  // 更新日志 v1.3.0“业务台账与打印功能优化”（仅数据，同版本同标题已存在即跳过）
+  'migration-changelog-v1.3.0.sql',
 ];
 
 /**

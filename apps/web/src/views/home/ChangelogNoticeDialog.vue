@@ -190,6 +190,14 @@ onBeforeUnmount(() => {
   max-height: 320px;
   overflow-y: auto;
   padding-right: 4px;
+  /* 保留滚轮、触控和脚本滚动，只隐藏会挤占正文宽度的原生滚动条。 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
 .changelog-notice__group + .changelog-notice__group {
   margin-top: 16px;

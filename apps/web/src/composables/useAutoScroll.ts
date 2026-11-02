@@ -44,6 +44,12 @@ export function useAutoScroll(
   let atEnd = false;
   let pos = 0;
   let needSync = false;
+  /**
+   * scrollTop / scrollHeight 在缩放、不同 DPR 下可能是小数，浏览器实际滚动位置又可能
+   * 被取整。到底判断留 1px 容差，并同时参考真实 scrollTop，避免内部 pos 已贴近底部、
+   * 却因小数误差一直进不了“到底停顿 → 回顶”分支。
+   */
+  const END_EPSILON = 1;
 
   function tick(ts: number) {
     raf = requestAnimationFrame(tick);
@@ -76,7 +82,9 @@ export function useAutoScroll(
     pos = Math.min(max, pos + speedOf() * Math.min(dt, 0.1));
     el.scrollTop = pos;
 
-    if (pos >= max) {
+    if (max - Math.max(pos, el.scrollTop) <= END_EPSILON) {
+      pos = max;
+      el.scrollTop = max;
       atEnd = true;
       holdUntil = ts + holdMs;
     }
