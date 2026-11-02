@@ -127,96 +127,104 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="生产单号" width="120" show-overflow-tooltip>
+        <el-table-column label="生产单号" width="105" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.productionNo || '—' }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <el-table-column label="客户" width="110" show-overflow-tooltip>
+        <el-table-column label="客户" width="100" show-overflow-tooltip>
           <template #default="{ row }">{{ row.customerName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
+        <el-table-column label="产品型号" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productModel || '—' }}</template>
         </el-table-column>
-        <el-table-column label="规格" width="75" align="center">
+        <el-table-column label="规格" width="68" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
-        <el-table-column label="表面处理" width="100" align="center">
+        <el-table-column label="表面处理" width="90" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="边别" width="52" align="center">
+        <el-table-column label="边别" width="50" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="单位套/支" width="76" align="center">
+        <el-table-column label="单位套/支" width="70" align="center">
           <template #default="{ row }">{{ labelOf(UNIT_OPTIONS, row.unit) }}</template>
         </el-table-column>
-        <el-table-column label="材料厚度" width="90" align="center">
+        <el-table-column label="材料厚度" width="82" align="center">
           <template #default="{ row }">{{ row.materialThickness || '—' }}</template>
         </el-table-column>
-        <el-table-column :label="hasFlowDateRange ? '月初数' : '期初数'" width="80" align="center">
+        <el-table-column :label="hasFlowDateRange ? '月初数' : '期初数'" width="72" align="center">
           <template #default="{ row }">{{ row.periodOpeningQty || 0 }}</template>
         </el-table-column>
         <el-table-column label="客户退货" align="center">
-          <el-table-column label="数量" width="72" align="center">
+          <el-table-column label="数量" width="64" align="center">
             <template #default="{ row }"><b class="delta-in">{{ row.periodCustomerReturnQty || 0 }}</b></template>
           </el-table-column>
-          <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+          <el-table-column label="时间" width="92" align="center" show-overflow-tooltip>
             <template #default="{ row }"><span class="flow-dates">{{ row.periodCustomerReturnDates || '—' }}</span></template>
           </el-table-column>
         </el-table-column>
         <el-table-column label="生产车间" align="center">
           <el-table-column label="领料" align="center">
-            <el-table-column label="数量" width="72" align="center">
+            <el-table-column label="数量" width="64" align="center">
               <template #default="{ row }"><b class="delta-out">{{ row.periodProductionIssueQty || 0 }}</b></template>
             </el-table-column>
-            <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+            <el-table-column label="时间" width="92" align="center" show-overflow-tooltip>
               <template #default="{ row }"><span class="flow-dates">{{ row.periodProductionIssueDates || '—' }}</span></template>
             </el-table-column>
           </el-table-column>
           <el-table-column label="入库" align="center">
-            <el-table-column label="数量" width="72" align="center">
+            <el-table-column label="数量" width="64" align="center">
               <template #default="{ row }"><b class="delta-in">{{ row.periodProductionInboundQty || 0 }}</b></template>
             </el-table-column>
-            <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+            <el-table-column label="时间" width="92" align="center" show-overflow-tooltip>
               <template #default="{ row }"><span class="flow-dates">{{ row.periodProductionInboundDates || '—' }}</span></template>
             </el-table-column>
           </el-table-column>
         </el-table-column>
         <el-table-column label="出货" align="center">
-          <el-table-column label="数量" width="72" align="center">
+          <el-table-column label="数量" width="64" align="center">
             <template #default="{ row }"><b class="delta-out">{{ row.periodShipmentQty || 0 }}</b></template>
           </el-table-column>
-          <el-table-column label="时间" width="116" align="center" show-overflow-tooltip>
+          <el-table-column label="时间" width="92" align="center" show-overflow-tooltip>
             <template #default="{ row }"><span class="flow-dates">{{ row.periodShipmentDates || '—' }}</span></template>
           </el-table-column>
         </el-table-column>
-        <el-table-column :label="hasFlowDateRange ? '月末结存' : '结存数'" width="100" align="center">
+        <el-table-column :label="hasFlowDateRange ? '月末结存' : '结存数'" width="90" align="center">
           <template #default="{ row }">
             <span :class="(hasFlowDateRange ? row.periodClosingQty : row.balanceQty) > 0 ? 'num-ok' : 'num-zero'">
               {{ hasFlowDateRange ? (row.periodClosingQty || 0) : row.balanceQty }}{{ unitLabel(row.unit) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="备注" min-width="120" show-overflow-tooltip>
+        <el-table-column label="备注" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="250" align="center" fixed="right">
+        <el-table-column label="操作" width="185" align="center" fixed="right">
           <template #default="{ row }">
             <app-actions>
               <el-button
                 size="small" v-permission.disable="'dull-stock:stock'" link type="primary" :icon="Sort"
                 @click="openFlow(row)"
               >库存变动</el-button>
-              <el-button
-                size="small" v-permission.disable="'dull-stock:print'" link type="primary" :icon="Printer"
-                :disabled="(row.periodShipmentQty || 0) <= 0" @click="openShipmentNotes(row)"
-              >打印送货单</el-button>
+              <el-tooltip
+                :disabled="(row.periodShipmentQty || 0) > 0"
+                :content="hasFlowDateRange ? '所选月份暂无出货记录，无法打印送货单' : '暂无出货记录，登记出货后才可打印送货单'"
+                placement="top"
+              >
+                <span class="action-tooltip-wrap">
+                  <el-button
+                    size="small" v-permission.disable="'dull-stock:print'" link type="primary" :icon="Printer"
+                    :disabled="(row.periodShipmentQty || 0) <= 0" @click="openShipmentNotes(row)"
+                  >送货单</el-button>
+                </span>
+              </el-tooltip>
               <el-button
                 size="small" v-permission.disable="'dull-stock:update'" link type="primary" :icon="EditPen"
                 @click="openForm(row)"
@@ -933,6 +941,10 @@ export default { name: 'DullStock' };
 }
 .business-actions {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.action-tooltip-wrap {
+  display: inline-flex;
+  margin-left: clamp(5px, 0.375rem, 7px);
 }
 .filter-summary {
   margin-left: auto; text-align: right; white-space: nowrap;
