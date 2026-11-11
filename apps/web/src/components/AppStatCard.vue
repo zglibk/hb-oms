@@ -63,8 +63,9 @@ export default { name: 'AppStatCard' };
 .sum-card {
   --card-color: #64748b;
   --card-bg: rgba(100, 116, 139, 0.1);
-  --card-border: rgba(100, 116, 139, 0.25);
   --card-icon-bg: rgba(100, 116, 139, 0.16);
+  --card-shadow: 0 5px 16px rgba(100, 116, 139, 0.16), 0 1px 4px rgba(100, 116, 139, 0.1);
+  --card-shadow-hover: 0 9px 24px rgba(100, 116, 139, 0.22), 0 2px 6px rgba(100, 116, 139, 0.12);
 
   flex: 1 1 150px;
   min-width: 165px;
@@ -74,12 +75,13 @@ export default { name: 'AppStatCard' };
   padding: 20px 16px;
   border-radius: 10px;
   background: var(--card-bg);
-  border: 1px solid var(--card-border);
+  border: none;
+  box-shadow: var(--card-shadow);
   transition: transform 0.15s, box-shadow 0.15s;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow-hover);
   }
 
   /* 左侧图标区：正方形，固定尺寸不随容器拉伸 */
@@ -163,38 +165,44 @@ export default { name: 'AppStatCard' };
   &--slate {
     --card-color: #64748b;
     --card-bg: rgba(100, 116, 139, 0.1);
-    --card-border: rgba(100, 116, 139, 0.25);
     --card-icon-bg: rgba(100, 116, 139, 0.16);
+    --card-shadow: 0 5px 16px rgba(100, 116, 139, 0.16), 0 1px 4px rgba(100, 116, 139, 0.1);
+    --card-shadow-hover: 0 9px 24px rgba(100, 116, 139, 0.22), 0 2px 6px rgba(100, 116, 139, 0.12);
   }
   &--blue {
     --card-color: var(--el-color-primary);
     --card-bg: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
-    --card-border: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
     --card-icon-bg: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+    --card-shadow: 0 5px 16px color-mix(in srgb, var(--el-color-primary) 18%, transparent), 0 1px 4px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+    --card-shadow-hover: 0 9px 24px color-mix(in srgb, var(--el-color-primary) 24%, transparent), 0 2px 6px color-mix(in srgb, var(--el-color-primary) 15%, transparent);
   }
   &--green {
     --card-color: var(--el-color-success);
     --card-bg: rgba(103, 194, 58, 0.1);
-    --card-border: rgba(103, 194, 58, 0.25);
     --card-icon-bg: rgba(103, 194, 58, 0.16);
+    --card-shadow: 0 5px 16px rgba(103, 194, 58, 0.18), 0 1px 4px rgba(103, 194, 58, 0.11);
+    --card-shadow-hover: 0 9px 24px rgba(103, 194, 58, 0.24), 0 2px 6px rgba(103, 194, 58, 0.14);
   }
   &--teal {
     --card-color: #14b8a6;
     --card-bg: rgba(20, 184, 166, 0.1);
-    --card-border: rgba(20, 184, 166, 0.25);
     --card-icon-bg: rgba(20, 184, 166, 0.16);
+    --card-shadow: 0 5px 16px rgba(20, 184, 166, 0.18), 0 1px 4px rgba(20, 184, 166, 0.11);
+    --card-shadow-hover: 0 9px 24px rgba(20, 184, 166, 0.24), 0 2px 6px rgba(20, 184, 166, 0.14);
   }
   &--amber {
     --card-color: var(--el-color-warning);
     --card-bg: rgba(230, 162, 60, 0.1);
-    --card-border: rgba(230, 162, 60, 0.25);
     --card-icon-bg: rgba(230, 162, 60, 0.16);
+    --card-shadow: 0 5px 16px rgba(230, 162, 60, 0.18), 0 1px 4px rgba(230, 162, 60, 0.11);
+    --card-shadow-hover: 0 9px 24px rgba(230, 162, 60, 0.24), 0 2px 6px rgba(230, 162, 60, 0.14);
   }
   &--red {
     --card-color: var(--el-color-danger);
     --card-bg: rgba(245, 108, 108, 0.1);
-    --card-border: rgba(245, 108, 108, 0.25);
     --card-icon-bg: rgba(245, 108, 108, 0.16);
+    --card-shadow: 0 5px 16px rgba(245, 108, 108, 0.18), 0 1px 4px rgba(245, 108, 108, 0.11);
+    --card-shadow-hover: 0 9px 24px rgba(245, 108, 108, 0.24), 0 2px 6px rgba(245, 108, 108, 0.14);
   }
 }
 </style>
