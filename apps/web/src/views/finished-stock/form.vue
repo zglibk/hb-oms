@@ -169,14 +169,14 @@
         <el-form-item label="生产单号">
           <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadPickerData" />
         </el-form-item>
-        <el-form-item label="产品型号">
+        <el-form-item label="产品名称">
           <el-select-v2
-            v-model="pickerQuery.productModel"
+            v-model="pickerQuery.productName"
             clearable
             filterable
             :loading="pickerLoading"
-            :options="productModelSelectOptions"
-            popper-class="stock-picker-model-popper"
+            :options="productNameSelectOptions"
+            popper-class="stock-picker-name-popper"
             placeholder="全部"
           />
         </el-form-item>
@@ -257,8 +257,8 @@
         <el-table-column label="产品代码" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        <el-table-column label="产品名称" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
@@ -323,7 +323,6 @@ import {
   getStockGroupOptions,
   createFinishedDoc,
   updateFinishedDoc,
-  type StockGroupFilterOptions,
 } from '@/api/finished-stock';
 import {
   FINISHED_BIZ_TYPE,
@@ -383,6 +382,7 @@ interface ItemRow {
 }
 
 interface PickerRow extends ItemRow {
+  productName: string | null;
   productType: string | null;
   qtyPcs: number;
   searchText: string;
@@ -533,7 +533,7 @@ interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
   productionNo: string;
-  productModel: string | undefined;
+  productName: string | undefined;
   productType: string | undefined;
   surfaceType: string | undefined;
   color: string | undefined;
@@ -543,7 +543,7 @@ const pickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
-  productModel: '',
+  productName: '',
   productType: '',
   surfaceType: '',
   color: '',
@@ -554,7 +554,7 @@ const appliedPickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
-  productModel: '',
+  productName: '',
   productType: '',
   surfaceType: '',
   color: '',
@@ -562,15 +562,15 @@ const appliedPickerQuery = reactive<PickerQuery>({
 });
 /** 对话框本次打开时取得的完整候选快照；筛选期间不再请求服务端。 */
 const pickerSourceRows = ref<PickerRow[]>([]);
-const pickerFilterOptions = computed<StockGroupFilterOptions>(() => {
+const pickerFilterOptions = computed(() => {
   const all = pickerSourceRows.value;
   const customerRows = all.filter((row) =>
     pickerTextEquals(row.customerName, pickerQuery.customerName),
   );
-  const modelRows = customerRows.filter((row) =>
-    pickerTextEquals(row.productModel, pickerQuery.productModel),
+  const nameRows = customerRows.filter((row) =>
+    pickerTextEquals(row.productName, pickerQuery.productName),
   );
-  const productTypeRows = modelRows.filter((row) =>
+  const productTypeRows = nameRows.filter((row) =>
     pickerProductTypeIncludes(row.productType, pickerQuery.productType),
   );
   const surfaceRows = productTypeRows.filter((row) =>
@@ -578,8 +578,8 @@ const pickerFilterOptions = computed<StockGroupFilterOptions>(() => {
   );
   return {
     customerNames: distinctPickerValues(all, (row) => row.customerName),
-    productModels: distinctPickerValues(customerRows, (row) => row.productModel),
-    productTypes: distinctProductTypes(modelRows),
+    productNames: distinctPickerValues(customerRows, (row) => row.productName),
+    productTypes: distinctProductTypes(nameRows),
     surfaceTypes: distinctPickerValues(productTypeRows, (row) => row.surfaceType),
     colors: distinctPickerValues(surfaceRows, (row) => row.color),
   };
@@ -596,14 +596,14 @@ function distinctProductTypes(rows: PickerRow[]): string[] {
     return orderDiff || productTypeLabel(a).localeCompare(productTypeLabel(b), 'zh-CN');
   });
 }
-const productModelSelectOptions = computed(() =>
-  pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
+const productNameSelectOptions = computed(() =>
+  pickerFilterOptions.value.productNames.map((value) => ({ label: value, value })),
 );
 const pickerRows = computed(() => pickerSourceRows.value.filter((row) => (
   pickerTextIncludes(row.orderNo, appliedPickerQuery.orderNo)
   && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
   && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
-  && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerTextEquals(row.productName, appliedPickerQuery.productName)
   && pickerProductTypeIncludes(row.productType, appliedPickerQuery.productType)
   && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
   && (!colorEnabled.value || pickerTextEquals(row.color, appliedPickerQuery.color))
@@ -620,14 +620,14 @@ const pickerTableRef = ref<any>();
 let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 下拉条件按「客户 → 产品型号 → 产品类型 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
+// 下拉条件按「客户 → 产品名称 → 产品类型 → 表面处理 → 颜色」逐级收窄。上级选择或清空时同步清空
 // 下级，避免下级残留条件继续锁住结果集；抑制标记确保一次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
-    pickerQuery.productModel = '';
+    pickerQuery.productName = '';
     pickerQuery.productType = '';
     pickerQuery.surfaceType = '';
     pickerQuery.color = '';
@@ -637,7 +637,7 @@ watch(
   { flush: 'sync' },
 );
 watch(
-  () => pickerQuery.productModel,
+  () => pickerQuery.productName,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
@@ -689,7 +689,7 @@ function loadPickerData() {
     orderNo: pickerQuery.orderNo?.trim() ?? '',
     customerName: pickerQuery.customerName?.trim() ?? '',
     productionNo: pickerQuery.productionNo?.trim() ?? '',
-    productModel: pickerQuery.productModel?.trim() ?? '',
+    productName: pickerQuery.productName?.trim() ?? '',
     productType: pickerQuery.productType ?? '',
     surfaceType: pickerQuery.surfaceType ?? '',
     color: colorEnabled.value ? pickerQuery.color ?? '' : '',
@@ -733,6 +733,7 @@ async function initializePicker() {
         productionNo: o.productionNo,
         itemNo: o.itemNo,
         productModel: o.productModel,
+        productName: o.productName,
         productType: o.productType,
         dimensionText: o.dimensionText,
         surfaceType: o.surfaceType,
@@ -771,7 +772,7 @@ function resetPickerQuery() {
     orderNo: '',
     customerName: '',
     productionNo: '',
-    productModel: '',
+    productName: '',
     productType: '',
     surfaceType: '',
     color: '',
@@ -956,10 +957,10 @@ export default { name: 'FinishedStockForm' };
 }
 .picker-tip { margin-bottom: 8px; color: var(--el-text-color-secondary); font-size: 12px; }
 .picker-customer-tip { margin-left: 12px; color: var(--el-color-primary); font-weight: 600; }
-:global(.stock-picker-model-popper) { min-width: 280px !important; }
-:global(.stock-picker-model-popper .el-select-dropdown),
-:global(.stock-picker-model-popper .el-vl__wrapper),
-:global(.stock-picker-model-popper .el-vl__window) { width: 100% !important; }
+:global(.stock-picker-name-popper) { min-width: 280px !important; }
+:global(.stock-picker-name-popper .el-select-dropdown),
+:global(.stock-picker-name-popper .el-vl__wrapper),
+:global(.stock-picker-name-popper .el-vl__window) { width: 100% !important; }
 .picker-count {
   display: inline-flex;
   gap: 18px;
