@@ -360,6 +360,7 @@ import {
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday, disableFutureBusinessDate } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import {
   ENTRY_MODE_OPTIONS,
@@ -378,6 +379,7 @@ const router = useRouter();
 const formRef = ref<FormInstance>();
 const detailTableRef = ref<any>();
 const saving = ref(false);
+const createRequestId = newCreateRequestId();
 
 interface ItemRow {
   orderPartGroupId: number;
@@ -787,11 +789,14 @@ async function confirmQtyConsistent(): Promise<boolean> {
 
 /* ===== 保存 ===== */
 async function onSave() {
-  await formRef.value?.validate();
-  if (!form.items.length) {
-    ElMessage.warning('请至少添加一条回厂明细');
-    return;
-  }
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    await formRef.value?.validate();
+    if (!form.items.length) {
+      ElMessage.warning('请至少添加一条回厂明细');
+      return;
+    }
   const bad = form.items.findIndex((it) => !it.returnQty || it.returnQty <= 0);
   if (bad >= 0) {
     ElMessage.warning(
@@ -812,9 +817,8 @@ async function onSave() {
     })),
   );
   if (!overOk) return;
-  saving.value = true;
-  try {
     const res = await createOutsourceParts({
+      createRequestId,
       processorName: form.processorName.trim(),
       backDate: form.backDate,
       items: form.items.map((it) => ({

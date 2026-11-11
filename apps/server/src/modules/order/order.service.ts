@@ -264,11 +264,9 @@ export class OrderService {
   /* ==================== 创建 / 更新 ==================== */
 
   async create(dto: CreateOrderDto, user: CurrentUserPayload) {
-    const createRequestId = dto.createRequestId?.trim() || null;
-    if (createRequestId) {
-      const existing = await this.findIdempotentCreate(createRequestId, user);
-      if (existing) return existing;
-    }
+    const createRequestId = dto.createRequestId.trim();
+    const existing = await this.findIdempotentCreate(createRequestId, user);
+    if (existing) return existing;
     this.assertOrderDates(dto);
     this.assertProductRows(dto);
     try {
@@ -301,7 +299,7 @@ export class OrderService {
     } catch (error) {
       // 两个并发请求都可能在事务前查不到记录；唯一索引是最终防线。
       // 败方事务回滚（含 ORD 采番），再返回胜方已经创建的订单。
-      if (createRequestId && this.isCreateRequestDuplicate(error)) {
+      if (this.isCreateRequestDuplicate(error)) {
         const existing = await this.findIdempotentCreate(createRequestId, user);
         if (existing) return existing;
       }
@@ -337,16 +335,16 @@ export class OrderService {
    * 部件行没有下游引用，照旧按蓝图重新展开（追溯码/备注按「部件+边别」带回）。
    */
   async update(id: number, dto: UpdateOrderDto, user: CurrentUserPayload, ip?: string) {
-    const order = await this.orderRepo.findOne({ where: { id } });
-    if (!order) throw new NotFoundException('订单不存在');
-    if (order.status === ORDER_STATUS.CANCELLED) throw new BadRequestException('订单已作废，不能编辑');
-    await this.ownership.assertCanModify('order', order, user, '修改');
     this.assertOrderDates(dto);
     this.assertProductRows(dto);
 
     const result = await this.dataSource.transaction(async (mgr) => {
       // 锁订单头：两人同时保存同一张单时串行化，免得各按旧行 ID 比对、互删对方新增的行
-      await mgr.query('SELECT id FROM t_order WHERE id = ? FOR UPDATE', [id]);
+      const order = await this.lockOrder(mgr, id);
+      if (order.status === ORDER_STATUS.CANCELLED) {
+        throw new BadRequestException('订单已作废，不能编辑');
+      }
+      await this.ownership.assertCanModify('order', order, user, '修改');
       const refs = await this.loadRefs(mgr, id);
       const referenced = refTotal(refs.counts) > 0;
 
@@ -396,12 +394,12 @@ export class OrderService {
       );
 
       if (!referenced) {
-        return { id, corrected: false, changes, synced: null as RefCounts | null, finished: [] as string[], reopened: [] as string[] };
+        return { id, orderNo: order.orderNo, corrected: false, changes, synced: null as RefCounts | null, finished: [] as string[], reopened: [] as string[] };
       }
       await this.syncDownstreamSnapshots(mgr, id);
       // 改了订单数量会让发货欠数变化：该完结的完结、该重开的重开（与出入库确认同一口径）
       const finishSync = await syncOrderFinishState(mgr, [id], user);
-      return { id, corrected: true, changes, synced: refs.counts as RefCounts | null, ...finishSync };
+      return { id, orderNo: order.orderNo, corrected: true, changes, synced: refs.counts as RefCounts | null, ...finishSync };
     });
 
     // 请求级的「编辑订单」日志只截得下请求体前 1000 字，看不出改了什么；
@@ -409,7 +407,7 @@ export class OrderService {
     // （使用方反馈过「自己建的数据被改了」却查不到是谁改的）
     if (result.changes.length) {
       const action = result.corrected ? '更正已引用订单' : '订单改动明细';
-      const summary = `${action} ${order.orderNo}：${result.changes.join('；')}`;
+      const summary = `${action} ${result.orderNo}：${result.changes.join('；')}`;
       this.logWriter.write({
         userId: user.id,
         userName: auditDisplayName(user),
@@ -419,7 +417,7 @@ export class OrderService {
         method: 'PUT',
         url: `/api/order/${id}`,
         ip: ip || null,
-        params: JSON.stringify({ orderNo: order.orderNo, changes: result.changes, synced: result.synced }),
+        params: JSON.stringify({ orderNo: result.orderNo, changes: result.changes, synced: result.synced }),
         bizType: 'order',
         bizId: id,
         result: 1,
@@ -858,7 +856,7 @@ export class OrderService {
    * - 每个产品必须有订单交期；
    * - 订单交期不得早于下单日期（同日合法）。
    */
-  private assertOrderDates(dto: CreateOrderDto) {
+  private assertOrderDates(dto: CreateOrderDto | UpdateOrderDto) {
     const today = businessToday();
     assertNotBefore(
       dto.orderDate,
@@ -877,7 +875,7 @@ export class OrderService {
     });
   }
 
-  private assertProductRows(dto: CreateOrderDto) {
+  private assertProductRows(dto: CreateOrderDto | UpdateOrderDto) {
     dto.products.forEach((p, i) => {
       if (p.isExport && !p.exportCountry) {
         throw new BadRequestException(`第 ${i + 1} 行产品：出口订单需填写出口国家`);
@@ -889,17 +887,31 @@ export class OrderService {
 
   /** 完结（台账口径不锁单据，§3.1） */
   async finish(id: number, user: CurrentUserPayload) {
-    const order = await this.mustGet(id);
-    if (order.status !== ORDER_STATUS.ACTIVE) throw new BadRequestException('仅进行中的订单可完结');
-    await this.orderRepo.update(id, { status: ORDER_STATUS.FINISHED, ...auditOnUpdate(user) });
-    return { id };
+    return this.dataSource.transaction(async (mgr) => {
+      const order = await this.lockOrder(mgr, id);
+      if (order.status !== ORDER_STATUS.ACTIVE) {
+        throw new BadRequestException('仅进行中的订单可完结');
+      }
+      await mgr.getRepository(Order).update(id, {
+        status: ORDER_STATUS.FINISHED,
+        ...auditOnUpdate(user),
+      });
+      return { id };
+    });
   }
 
   async reopen(id: number, user: CurrentUserPayload) {
-    const order = await this.mustGet(id);
-    if (order.status !== ORDER_STATUS.FINISHED) throw new BadRequestException('仅已完结的订单可重开');
-    await this.orderRepo.update(id, { status: ORDER_STATUS.ACTIVE, ...auditOnUpdate(user) });
-    return { id };
+    return this.dataSource.transaction(async (mgr) => {
+      const order = await this.lockOrder(mgr, id);
+      if (order.status !== ORDER_STATUS.FINISHED) {
+        throw new BadRequestException('仅已完结的订单可重开');
+      }
+      await mgr.getRepository(Order).update(id, {
+        status: ORDER_STATUS.ACTIVE,
+        ...auditOnUpdate(user),
+      });
+      return { id };
+    });
   }
 
   /**
@@ -917,28 +929,33 @@ export class OrderService {
    * 删除与修改同权：只有订单创建人与订单修改主管角色（RecordOwnershipService）。
    */
   async remove(id: number, user: CurrentUserPayload) {
-    const order = await this.mustGet(id);
-    await this.ownership.assertCanModify('order', order, user, '删除');
-    const refs = await this.loadRefs(this.dataSource, id);
-    if (refTotal(refs.counts) > 0) {
-      throw new BadRequestException(
-        `订单已被${describeRefs(refs.counts)}引用，禁止删除；请先删除或冲销对应的下游记录`,
-      );
-    }
-
-    await this.dataSource.transaction(async (mgr) => {
+    const orderNo = await this.dataSource.transaction(async (mgr) => {
+      const order = await this.lockOrder(mgr, id);
+      await this.ownership.assertCanModify('order', order, user, '删除');
+      const refs = await this.loadRefs(mgr, id);
+      if (refTotal(refs.counts) > 0) {
+        throw new BadRequestException(
+          `订单已被${describeRefs(refs.counts)}引用，禁止删除；请先删除或冲销对应的下游记录`,
+        );
+      }
       // 自下而上删，避免中途失败留下悬挂子行
       await mgr.getRepository(OrderPart).delete({ orderId: id });
       await mgr.getRepository(OrderPartGroup).delete({ orderId: id });
       await mgr.getRepository(OrderProduct).delete({ orderId: id });
       await mgr.getRepository(Order).delete({ id });
+      return order.orderNo;
     });
     // 返回单号供界面提示与操作日志定位（订单行已不存在，事后查不到）
-    return { id, orderNo: order.orderNo };
+    return { id, orderNo };
   }
 
-  private async mustGet(id: number): Promise<Order> {
-    const order = await this.orderRepo.findOne({ where: { id } });
+  private async lockOrder(mgr: EntityManager, id: number): Promise<Order> {
+    const order = await mgr
+      .getRepository(Order)
+      .createQueryBuilder('o')
+      .setLock('pessimistic_write')
+      .where('o.id = :id', { id })
+      .getOne();
     if (!order) throw new NotFoundException('订单不存在');
     return order;
   }

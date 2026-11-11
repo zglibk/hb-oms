@@ -173,24 +173,25 @@
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:update'" link type="primary" :icon="Edit"
-                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
+                :disabled="actingId !== null || row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 @click="openEdit(row)"
               >编辑</el-button>
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:confirm'" link type="success" :icon="CircleCheck"
-                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
+                :disabled="actingId !== null || row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="actingId === row.id" @click="onConfirm(row)"
               >确认</el-button>
               <el-button
                 v-if="row.status === FINISHED_DOC_STATUS_VALUE.DRAFT"
                 size="small" v-permission.disable="'finished-stock:cancel'" link type="danger" :icon="Delete"
-                :disabled="row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
+                :disabled="actingId !== null || row.canModify === false" :title="row.canModify === false ? NOT_OWNER_TIP : undefined"
                 :loading="actingId === row.id" @click="onCancel(row)"
               >作废</el-button>
               <el-button
                 v-if="canReverse(row)"
                 size="small" v-permission.disable="'finished-stock:reverse'" link type="warning" :icon="RefreshLeft"
+                :disabled="actingId !== null"
                 :loading="actingId === row.id" @click="onReverse(row)"
               >红字冲销</el-button>
               <!-- 送货单：只有销售出库单才是对客户的发货动作（入库/期初/红字都不是），
@@ -254,6 +255,7 @@ import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
 import { businessToday } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 
 /** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
 /** 不是自己制的草稿：只有制单人与出入库主管角色能编辑 / 确认 / 作废 */
@@ -289,6 +291,7 @@ const loading = ref(false);
 const list = ref<FinishedDocRow[]>([]);
 const total = ref(0);
 const actingId = ref<number | null>(null);
+const reverseRequestIds = new Map<number, string>();
 const query = reactive({
   page: 1,
   pageSize: 20,
@@ -383,15 +386,16 @@ function canReverse(row: FinishedDocRow): boolean {
 }
 
 async function onConfirm(row: FinishedDocRow) {
-  await ElMessageBox.confirm(
-    row.direction === STOCK_DIRECTION_VALUE.IN
-      ? `确认入库单「${row.docNo}」？入库量将校验装配闸门，确认后不可修改，只能红字冲销。`
-      : `确认出库单「${row.docNo}」？将扣减库存结存，确认后不可修改，只能红字冲销。`,
-    '确认单据',
-    { type: 'warning' },
-  );
+  if (actingId.value !== null) return;
   actingId.value = row.id;
   try {
+    await ElMessageBox.confirm(
+      row.direction === STOCK_DIRECTION_VALUE.IN
+        ? `确认入库单「${row.docNo}」？入库量将校验装配闸门，确认后不可修改，只能红字冲销。`
+        : `确认出库单「${row.docNo}」？将扣减库存结存，确认后不可修改，只能红字冲销。`,
+      '确认单据',
+      { type: 'warning' },
+    );
     const res = await confirmFinishedDoc(row.id);
     ElMessage.success('已确认');
     notifyOrderSync(res);
@@ -415,11 +419,12 @@ function notifyOrderSync(res?: FinishSyncResult) {
 }
 
 async function onCancel(row: FinishedDocRow) {
-  await ElMessageBox.confirm(`确定作废单据「${row.docNo}」吗？仅草稿可作废。`, '作废单据', {
-    type: 'warning', confirmButtonText: '作废', confirmButtonClass: 'el-button--danger',
-  });
+  if (actingId.value !== null) return;
   actingId.value = row.id;
   try {
+    await ElMessageBox.confirm(`确定作废单据「${row.docNo}」吗？仅草稿可作废。`, '作废单据', {
+      type: 'warning', confirmButtonText: '作废', confirmButtonClass: 'el-button--danger',
+    });
     await cancelFinishedDoc(row.id);
     ElMessage.success('已作废');
     load();
@@ -429,21 +434,26 @@ async function onCancel(row: FinishedDocRow) {
 }
 
 async function onReverse(row: FinishedDocRow) {
-  const { value } = await ElMessageBox.prompt(
-    `将为「${row.docNo}」生成方向相反的红字冲销单并立即生效，原单保持不变。请填写冲销原因。`,
-    '红字冲销',
-    {
-      inputPlaceholder: '如：数量录错、客户退货',
-      inputValidator: (v: string) => (v && v.trim() ? true : '冲销原因必填'),
-      type: 'warning',
-    },
-  );
+  if (actingId.value !== null) return;
   actingId.value = row.id;
   try {
+    const { value } = await ElMessageBox.prompt(
+      `将为「${row.docNo}」生成方向相反的红字冲销单并立即生效，原单保持不变。请填写冲销原因。`,
+      '红字冲销',
+      {
+        inputPlaceholder: '如：数量录错、客户退货',
+        inputValidator: (v: string) => (v && v.trim() ? true : '冲销原因必填'),
+        type: 'warning',
+      },
+    );
+    const createRequestId = reverseRequestIds.get(row.id) ?? newCreateRequestId();
+    reverseRequestIds.set(row.id, createRequestId);
     const res = await reverseFinishedDoc(row.id, {
+      createRequestId,
       docDate: businessToday(),
       reason: String(value).trim(),
     });
+    reverseRequestIds.delete(row.id);
     ElMessage.success(`已生成红字单 ${res.docNo}`);
     notifyOrderSync(res);
     load();

@@ -25,6 +25,7 @@ import {
   ReverseFinishedDocDto,
   UpdateFinishedDocDto,
   PrintDocumentQueryDto,
+  ImportFinishedBalanceDto,
 } from './dto/finished-stock.dto';
 import {
   RequireAnyPermissions,
@@ -113,12 +114,15 @@ export class FinishedStockController {
   @UseInterceptors(FileInterceptor('file'))
   async balanceImport(
     @UploadedFile() file: Express.Multer.File,
-    @Body('docDate') docDate: string,
-    @Body('remark') remark: string,
+    @Body() dto: ImportFinishedBalanceDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
     if (!file?.buffer) throw new BadRequestException('请选择要导入的 Excel 文件');
-    return this.service.importBalanceFromExcel(file.buffer, { docDate, remark }, user);
+    return this.service.importBalanceFromExcel(
+      file.buffer,
+      dto,
+      user,
+    );
   }
 
   /**

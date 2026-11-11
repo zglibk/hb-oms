@@ -582,6 +582,7 @@ import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { preloadCountryFlags, preloadCountryFlagsWhenIdle } from '@/utils/flag-preload';
 import { businessToday, datePickerDay } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 
 /** 业务字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled, customerDrawingNoEnabled, productRequirementEnabled, inchToMm } =
@@ -629,21 +630,6 @@ const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null
  * 同一张新增表单始终复用同一个 UUID。即使首个响应丢失后再次保存，服务端也只会建一张订单。
  * randomUUID 在旧浏览器或非安全上下文不可用时，仍生成符合 UUID v4 格式的本地随机值。
  */
-function newCreateRequestId(): string {
-  const cryptoApi = globalThis.crypto;
-  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
-  const bytes = new Uint8Array(16);
-  if (cryptoApi?.getRandomValues) {
-    cryptoApi.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
-  }
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
 const createRequestId = newCreateRequestId();
 /** 列表「更多 → 详情」复用完整订单录入页，仅切换为不可交互的只读模式。 */
 const viewMode = computed(() => route.query.mode === 'view');
@@ -1477,7 +1463,6 @@ async function saveOrder() {
   // URL；不 flush 就提交，落库的 HTML 里全是刷新即失效的 blob 地址。
   await richEditorRef.value?.flushUploads();
   const payload: OrderPayload = {
-    createRequestId: editId.value ? undefined : createRequestId,
     // PO# 选填：清空后传 null，服务端也会把空白统一存为 NULL
     poNo: form.poNo?.trim() || null,
     // 生产单号必填（表单 rules 已拦），直接传值
@@ -1563,7 +1548,7 @@ async function saveOrder() {
       ElMessage.success('已保存');
     }
   } else {
-    const res = await createOrder(payload);
+    const res = await createOrder({ ...payload, createRequestId });
     ElMessage.success(
       res.deduplicated
         ? `订单 ${res.orderNo} 已创建，本次重复提交未再次建单`

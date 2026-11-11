@@ -69,6 +69,8 @@ import {
   loadFirstSheet,
   styleSheet,
 } from '../../common/utils/excel.util';
+import { IdempotencyService } from '../../common/services/idempotency.service';
+import { OrderReferenceLockService } from '../../common/services/order-reference-lock.service';
 
 /** 单据类型 → 采番前缀（设计文档 §4.7：期初走 FGO 序列） */
 function prefixOf(bizType: string): string {
@@ -105,6 +107,8 @@ export class FinishedStockService {
     // 前端的列显隐管不到，故这里也要读一次开关
     private readonly systemConfig: SystemConfigService,
     private readonly ownership: RecordOwnershipService,
+    private readonly idempotency: IdempotencyService,
+    private readonly orderReferenceLock: OrderReferenceLockService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -1052,7 +1056,7 @@ export class FinishedStockService {
    */
   async importBalanceFromExcel(
     buffer: Buffer,
-    opts: { docDate?: string; remark?: string },
+    opts: { docDate?: string; remark?: string; createRequestId: string },
     user: CurrentUserPayload,
   ) {
     const ws = await loadFirstSheet(buffer);
@@ -1189,6 +1193,7 @@ export class FinishedStockService {
     // 汇成一张期初单：整批一个事务，全有全无（部分成功后用户改完重提会重复加库存）
     const res = await this.createOpeningBalance(
       {
+        createRequestId: opts.createRequestId,
         docDate: opts.docDate || businessToday(),
         remark: opts.remark || '成品库存批量导入',
         items,
@@ -1205,7 +1210,18 @@ export class FinishedStockService {
     if (dto.bizType !== FINISHED_BIZ_TYPE.OPENING_BALANCE) {
       assertBusinessDateNotFuture(dto.docDate, '单据日期');
     }
-    return this.dataSource.transaction(async (mgr) => {
+    const { createRequestId, ...payload } = dto;
+    return this.idempotency.execute({
+      scope: 'finished-stock:create',
+      requestId: createRequestId,
+      user,
+      payload,
+      isolation: 'READ COMMITTED',
+      work: async (mgr) => {
+      await this.orderReferenceLock.lockByProductIds(
+        mgr,
+        dto.items.map((item) => item.orderProductId),
+      );
       const docNo = await this.numberGenerator.generate(prefixOf(dto.bizType), mgr);
       const doc = await mgr.getRepository(FinishedDoc).save(
         mgr.getRepository(FinishedDoc).create({
@@ -1224,6 +1240,7 @@ export class FinishedStockService {
       );
       await this.writeItems(mgr, doc.id, dto.items, dto.bizType);
       return { id: doc.id, docNo };
+      },
     });
   }
 
@@ -1243,7 +1260,18 @@ export class FinishedStockService {
   async createOpeningBalance(dto: OpeningFinishedDto, user: CurrentUserPayload) {
     if (!dto.items?.length) throw new BadRequestException('至少需要一条期初明细');
     assertBusinessDateNotFuture(dto.docDate, '期初日期');
-    return this.dataSource.transaction(async (mgr) => {
+    const { createRequestId, ...payload } = dto;
+    return this.idempotency.execute({
+      scope: 'opening:finished',
+      requestId: createRequestId,
+      user,
+      payload,
+      isolation: 'READ COMMITTED',
+      work: async (mgr) => {
+      await this.orderReferenceLock.lockByProductIds(
+        mgr,
+        dto.items.map((item) => item.orderProductId),
+      );
       const docNo = await this.numberGenerator.generate(
         prefixOf(FINISHED_BIZ_TYPE.OPENING_BALANCE),
         mgr,
@@ -1271,6 +1299,7 @@ export class FinishedStockService {
       // 期初会抬高完成数，若某订单因此交清则自动完结（§3.1）
       const sync = await syncOrderFinishState(mgr, this.orderIdsOf(saved), user);
       return { id: doc.id, docNo, itemCount: saved.length, ...sync };
+      },
     });
   }
 
@@ -1351,16 +1380,16 @@ export class FinishedStockService {
 
   /** 编辑：仅草稿可改（已确认单禁改禁删，只能红字冲销，§7.1）；明细整体重建 */
   async update(id: number, dto: UpdateFinishedDocDto, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    this.assertDraft(doc, '编辑');
-    await this.ownership.assertCanModify('finished', doc, user, '编辑');
-    if (doc.bizType !== dto.bizType) {
-      throw new BadRequestException('单据业务类型不可更改；如需更换请作废后重新建单');
-    }
-    if (doc.bizType !== FINISHED_BIZ_TYPE.OPENING_BALANCE) {
-      assertBusinessDateNotFuture(dto.docDate, '单据日期');
-    }
     return this.dataSource.transaction(async (mgr) => {
+      const doc = await this.lockDoc(mgr, id);
+      this.assertDraft(doc, '编辑');
+      await this.ownership.assertCanModify('finished', doc, user, '编辑');
+      if (doc.bizType !== dto.bizType) {
+        throw new BadRequestException('单据业务类型不可更改；如需更换请作废后重新建单');
+      }
+      if (doc.bizType !== FINISHED_BIZ_TYPE.OPENING_BALANCE) {
+        assertBusinessDateNotFuture(dto.docDate, '单据日期');
+      }
       await mgr.getRepository(FinishedDoc).update(id, {
         docDate: dto.docDate,
         workTeam: dto.workTeam ?? null,
@@ -1376,17 +1405,19 @@ export class FinishedStockService {
 
   /** 作废：仅草稿（已确认单只能红字冲销，§3.3） */
   async cancel(id: number, user: CurrentUserPayload) {
-    const doc = await this.mustGet(id);
-    if (doc.status === FINISHED_DOC_STATUS.CANCELLED) {
-      throw new BadRequestException('单据已作废');
-    }
-    this.assertDraft(doc, '作废');
-    await this.ownership.assertCanModify('finished', doc, user, '作废');
-    await this.docRepo.update(id, {
-      status: FINISHED_DOC_STATUS.CANCELLED,
-      ...auditOnUpdate(user),
+    return this.dataSource.transaction(async (mgr) => {
+      const doc = await this.lockDoc(mgr, id);
+      if (doc.status === FINISHED_DOC_STATUS.CANCELLED) {
+        throw new BadRequestException('单据已作废');
+      }
+      this.assertDraft(doc, '作废');
+      await this.ownership.assertCanModify('finished', doc, user, '作废');
+      await mgr.getRepository(FinishedDoc).update(id, {
+        status: FINISHED_DOC_STATUS.CANCELLED,
+        ...auditOnUpdate(user),
+      });
+      return { id, status: FINISHED_DOC_STATUS.CANCELLED };
     });
-    return { id, status: FINISHED_DOC_STATUS.CANCELLED };
   }
 
   /* ==================== 确认（闸门 + 结存） ==================== */
@@ -1402,9 +1433,8 @@ export class FinishedStockService {
    * 3. **结存不得为负**：出库与「红字冲销入库单」都会减库存，减到负数一律拒绝（§7.2）。
    */
   async confirm(id: number, user: CurrentUserPayload) {
-    return this.dataSource.transaction(async (mgr) => {
-      const doc = await mgr.getRepository(FinishedDoc).findOne({ where: { id } });
-      if (!doc) throw new NotFoundException('单据不存在');
+    return this.dataSource.transaction('READ COMMITTED', async (mgr) => {
+      const doc = await this.lockDoc(mgr, id);
       this.assertDraft(doc, '确认');
       await this.ownership.assertCanModify('finished', doc, user, '确认');
 
@@ -1431,9 +1461,15 @@ export class FinishedStockService {
    */
   async reverse(id: number, dto: ReverseFinishedDocDto, user: CurrentUserPayload) {
     assertBusinessToday(dto.docDate, '冲销单日期');
-    return this.dataSource.transaction(async (mgr) => {
-      const origin = await mgr.getRepository(FinishedDoc).findOne({ where: { id } });
-      if (!origin) throw new NotFoundException('单据不存在');
+    const { createRequestId, ...reversePayload } = dto;
+    return this.idempotency.execute({
+      scope: 'finished-stock:reverse',
+      requestId: createRequestId,
+      user,
+      payload: { originDocId: id, ...reversePayload },
+      isolation: 'READ COMMITTED',
+      work: async (mgr) => {
+      const origin = await this.lockDoc(mgr, id);
       if (origin.status !== FINISHED_DOC_STATUS.CONFIRMED) {
         throw new BadRequestException('仅「已确认」的单据可以红字冲销');
       }
@@ -1507,6 +1543,7 @@ export class FinishedStockService {
       // 冲销出库单会让发货欠数回正 → 已完结订单需自动重开（§3.1）
       const sync = await syncOrderFinishState(mgr, this.orderIdsOf(saved), user);
       return { id: redDoc.id, docNo, originDocId: origin.id, ...sync };
+      },
     });
   }
 
@@ -1575,7 +1612,9 @@ export class FinishedStockService {
     }
 
     // 2) 锁余额行 → 3) 增减 → 负数拦截
-    for (const { item, qty } of merged.values()) {
+    // 多行单据统一按余额键加锁，避免两张单按相反明细顺序确认时形成交叉等待。
+    const balanceRows = [...merged.entries()].sort(([a], [b]) => a.localeCompare(b));
+    for (const [, { item, qty }] of balanceRows) {
       const delta = doc.direction * qty;
       const balance = await this.lockOrCreateBalance(mgr, item);
       const next = (balance.quantity || 0) + delta;
@@ -1838,6 +1877,17 @@ export class FinishedStockService {
 
   private async mustGet(id: number): Promise<FinishedDoc> {
     const doc = await this.docRepo.findOne({ where: { id } });
+    if (!doc) throw new NotFoundException('单据不存在');
+    return doc;
+  }
+
+  private async lockDoc(mgr: EntityManager, id: number): Promise<FinishedDoc> {
+    const doc = await mgr
+      .getRepository(FinishedDoc)
+      .createQueryBuilder('doc')
+      .setLock('pessimistic_write')
+      .where('doc.id = :id', { id })
+      .getOne();
     if (!doc) throw new NotFoundException('单据不存在');
     return doc;
   }

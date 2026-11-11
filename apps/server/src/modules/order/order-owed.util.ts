@@ -127,7 +127,18 @@ export async function syncOrderFinishState(
   user: CurrentUserPayload,
 ): Promise<FinishSyncResult> {
   const result: FinishSyncResult = { finished: [], reopened: [] };
-  const summaries = await loadOrderOwedSummary(mgr, orderIds);
+  const ids = [...new Set(orderIds.filter((id) => Number.isInteger(id) && id > 0))]
+    .sort((a, b) => a - b);
+  if (!ids.length) return result;
+  // 所有会改变自动完结状态的事务都按订单 ID 顺序串行，避免两个确认/冲销互相覆盖判断结果。
+  await mgr.query(
+    `SELECT id FROM t_order
+      WHERE id IN (${ids.map(() => '?').join(',')})
+      ORDER BY id
+      FOR UPDATE`,
+    ids,
+  );
+  const summaries = await loadOrderOwedSummary(mgr, ids);
   if (!summaries.size) return result;
 
   const audit = auditOnUpdate(user);
@@ -142,11 +153,11 @@ export async function syncOrderFinishState(
     const allDelivered = s.productCount > 0 && s.owedProductCount === 0;
 
     if (s.status === ORDER_STATUS.ACTIVE && allDelivered) {
-      await move(s.orderId, ORDER_STATUS.ACTIVE, ORDER_STATUS.FINISHED);
-      result.finished.push(s.orderNo);
+      const updated: any = await move(s.orderId, ORDER_STATUS.ACTIVE, ORDER_STATUS.FINISHED);
+      if (Number(updated?.affectedRows ?? 0) > 0) result.finished.push(s.orderNo);
     } else if (s.status === ORDER_STATUS.FINISHED && !allDelivered) {
-      await move(s.orderId, ORDER_STATUS.FINISHED, ORDER_STATUS.ACTIVE);
-      result.reopened.push(s.orderNo);
+      const updated: any = await move(s.orderId, ORDER_STATUS.FINISHED, ORDER_STATUS.ACTIVE);
+      if (Number(updated?.affectedRows ?? 0) > 0) result.reopened.push(s.orderNo);
     }
   }
   return result;

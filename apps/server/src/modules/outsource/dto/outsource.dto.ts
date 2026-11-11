@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateNested,
@@ -62,6 +63,9 @@ export class CreateOutsourcePartItemDto {
 }
 
 export class CreateOutsourcePartDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   @IsString({ message: '加工商必填' })
   @MaxLength(128)
   processorName: string;

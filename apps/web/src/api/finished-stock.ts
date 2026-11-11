@@ -169,7 +169,10 @@ export interface FinishedDocPayload {
   items: FinishedItemPayload[];
 }
 
+export type CreateFinishedDocPayload = FinishedDocPayload & { createRequestId: string };
+
 export interface ReversePayload {
+  createRequestId: string;
   docDate: string;
   reason: string;
   /** 不传 = 整单按剩余可冲量全额冲销 */
@@ -221,10 +224,16 @@ export const downloadStockBalanceTemplate = () =>
  * （§5.6：确认是唯一驱动余额的入口）。整批全有全无：任一行有问题会整批回滚，
  * 逐行原因经 err.errors 回传，err.failedCount / err.totalCount 给出计数。
  */
-export const importStockBalance = (file: File, docDate: string, remark?: string) => {
+export const importStockBalance = (
+  file: File,
+  docDate: string,
+  createRequestId: string,
+  remark?: string,
+) => {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('docDate', docDate);
+  fd.append('createRequestId', createRequestId);
   if (remark) fd.append('remark', remark);
   return request.post<any, { total: number; docNo: string; itemCount: number } & FinishSyncResult>(
     '/api/finished-stock/balance/import',
@@ -270,7 +279,7 @@ export const getStockGroupFilterOptions = (params: {
 } = {}) =>
   request.get<any, StockGroupFilterOptions>('/api/finished-stock/group-filter-options', { params });
 
-export const createFinishedDoc = (data: FinishedDocPayload) =>
+export const createFinishedDoc = (data: CreateFinishedDocPayload) =>
   request.post<any, { id: number; docNo: string }>('/api/finished-stock', data);
 
 export const updateFinishedDoc = (id: number, data: FinishedDocPayload) =>

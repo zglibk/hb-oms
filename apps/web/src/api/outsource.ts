@@ -110,6 +110,7 @@ export interface OutsourcePartItemPayload {
 }
 
 export interface OutsourcePartPayload {
+  createRequestId: string;
   processorName: string;
   backDate: string;
   items: OutsourcePartItemPayload[];
@@ -183,7 +184,7 @@ export const getReturnProgress = (rows: Array<{ orderPartGroupId: number; side: 
   });
 
 export const createOutsourceParts = (data: OutsourcePartPayload) =>
-  request.post<any, { count: number; ids: number[] }>('/api/outsource', data);
+  request.post<any, { count: number; ids: number[]; deduplicated?: boolean }>('/api/outsource', data);
 
 export const updateOutsourcePart = (id: number, data: OutsourcePartUpdatePayload) =>
   request.put(`/api/outsource/${id}`, data);

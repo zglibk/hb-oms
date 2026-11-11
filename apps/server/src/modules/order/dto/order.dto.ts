@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { OmitType } from '@nestjs/mapped-types';
 import { ITEM_CODE_MESSAGE, ITEM_CODE_PATTERN } from '@hb-oms/shared';
 
 /** 部件行微调（部件行由服务端按蓝图展开，客户端仅可微调追溯码/备注） */
@@ -156,11 +157,10 @@ export class CreateOrderProductDto {
 export class CreateOrderDto {
   /**
    * 新增订单请求幂等键。新前端每张新增表单生成一次并在重试时复用；
-   * 选填是为了兼容迁移期间尚未刷新的旧前端。
+   * 服务端强制要求该键，防止旧页面绕过幂等防线；旧页面提交时会提示刷新。
    */
-  @IsOptional()
-  @IsUUID('4', { message: '创建订单请求标识格式不正确' })
-  createRequestId?: string;
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
 
   /*
    * 生产单号 2026-08-14 起**必填**（业务部门要求）：它是车间与台账认的「订单编号」，
@@ -231,7 +231,7 @@ export class CreateOrderDto {
 }
 
 /** 更新 = 按产品行/部件组 ID 原地更新（被下游引用的订单只许更正、不许动结构，见 service） */
-export class UpdateOrderDto extends CreateOrderDto {}
+export class UpdateOrderDto extends OmitType(CreateOrderDto, ['createRequestId'] as const) {}
 
 export class QueryOrderDto {
   @IsOptional() @Type(() => Number) @IsInt() page?: number;

@@ -120,6 +120,7 @@ export interface AssemblyQuery {
 }
 
 export interface AssemblyBatchPayload {
+  createRequestId: string;
   orderProductId: number;
   side?: string;
   workshop: string;
@@ -131,7 +132,7 @@ export interface AssemblyBatchPayload {
 }
 
 /** 编辑不含锚点：产品行与边别不可改（改锚点等于换产品，应删除后重录） */
-export type AssemblyBatchUpdatePayload = Omit<AssemblyBatchPayload, 'orderProductId' | 'side'>;
+export type AssemblyBatchUpdatePayload = Omit<AssemblyBatchPayload, 'createRequestId' | 'orderProductId' | 'side'>;
 
 export const getAssemblyList = (params: AssemblyQuery) =>
   request.get<any, PageResult<AssemblyGroupRow>>('/api/assembly', { params });

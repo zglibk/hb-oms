@@ -339,6 +339,7 @@ import {
 } from '@/utils/local-picker';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday, disableFutureBusinessDate } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 const route = useRoute();
@@ -348,6 +349,7 @@ const editId = ref<number | null>(route.query.id ? Number(route.query.id) : null
 const docNo = ref('');
 const pageLoading = ref(false);
 const saving = ref(false);
+const createRequestId = newCreateRequestId();
 const formRef = ref<FormInstance>();
 
 interface ItemRow {
@@ -825,11 +827,14 @@ function confirmPick() {
 
 /* ===== 保存 ===== */
 async function onSave() {
-  if (notOwnerTip.value) {
-    ElMessage.warning(notOwnerTip.value);
-    return;
-  }
-  await formRef.value?.validate();
+  if (saving.value) return;
+  saving.value = true;
+  try {
+    if (notOwnerTip.value) {
+      ElMessage.warning(notOwnerTip.value);
+      return;
+    }
+    await formRef.value?.validate();
   if (!form.items.length) {
     ElMessage.warning('请至少添加一条明细');
     return;
@@ -855,13 +860,11 @@ async function onSave() {
       sort: i,
     })),
   };
-  saving.value = true;
-  try {
     if (editId.value) {
       await updateFinishedDoc(editId.value, payload);
       ElMessage.success('保存成功');
     } else {
-      const res = await createFinishedDoc(payload);
+      const res = await createFinishedDoc({ ...payload, createRequestId });
       ElMessage.success(`单据 ${res.docNo} 已保存为草稿，请在列表中确认`);
     }
     goBack();

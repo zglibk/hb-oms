@@ -136,6 +136,7 @@ import AppPagination from '@/components/AppPagination.vue';
 import ImportDialog from '@/components/ImportDialog.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 
 /** 「颜色」字段全局开关（系统配置 → 业务字段） */
 const { colorEnabled } = useFeatureFlags();
@@ -191,9 +192,18 @@ const onExport = () => exportWithConfirm({
 const importVisible = ref(false);
 const importDocDate = ref(businessToday());
 const importRemark = ref('');
+let importCreateRequestId = newCreateRequestId();
 
-const doImport = (file: File) =>
-  importStockBalance(file, importDocDate.value, importRemark.value || undefined);
+const doImport = async (file: File) => {
+  const result = await importStockBalance(
+    file,
+    importDocDate.value,
+    importCreateRequestId,
+    importRemark.value || undefined,
+  );
+  importCreateRequestId = newCreateRequestId();
+  return result;
+};
 
 function summarizeImport(r: any): string {
   // 期初可能让某些订单交清而自动完结（§3.1），不提示的话用户会以为订单状态被人偷改了

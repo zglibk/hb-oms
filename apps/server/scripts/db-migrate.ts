@@ -139,8 +139,12 @@ const MIGRATIONS: string[] = [
   'migration-changelog-v1.3.0.sql',
   // 新增订单幂等键：重复/并发提交只创建一次
   'migration-order-create-idempotency.sql',
+  // 外发、装配、成品、期初等写入口共用的请求幂等表
+  'migration-request-idempotency.sql',
   // 更新日志 v1.3.1“订单录入与成品选品优化”（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.3.1.sql',
+  // 更新日志 v1.3.2“业务写入并发保护”（仅数据）
+  'migration-changelog-v1.3.2.sql',
 ];
 
 /**
@@ -192,6 +196,7 @@ const expectedColumns = [
   't_no_sequence.seq_key',
   // M2 订单四级结构
   't_order.order_no',
+  't_idempotency_request.request_id',
   't_order_product.qty_pcs',
   // t_order_product.assembly_workshop 已于 2026-08-07 删除，移入下方 forbiddenColumns
   't_order_part_group.group_type',

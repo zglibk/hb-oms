@@ -41,6 +41,8 @@ import {
   businessDateTime,
   businessToday,
 } from '../../common/utils/date-range.util';
+import { IdempotencyService } from '../../common/services/idempotency.service';
+import { OrderReferenceLockService } from '../../common/services/order-reference-lock.service';
 
 /** 装配管理列表行：按**订单产品行**一行，附该产品的装配进度聚合 */
 export interface AssemblyGroupRow {
@@ -105,6 +107,8 @@ export class AssemblyService {
     // 装配锚产品行，故读产品级快照（部件组级快照留给外发用）
     private readonly productSnapshot: ProductSnapshotService,
     private readonly ownership: RecordOwnershipService,
+    private readonly idempotency: IdempotencyService,
+    private readonly orderReferenceLock: OrderReferenceLockService,
   ) {}
 
   /* ==================== 查询 ==================== */
@@ -361,7 +365,15 @@ export class AssemblyService {
    * 装配车间由本批次指定且必填。新增只会抬高可入库量，无需闸门校验。
    */
   async createBatch(dto: CreateAssemblyBatchDto, user: CurrentUserPayload) {
-    return this.dataSource.transaction(async (mgr) => {
+    const { createRequestId, ...payload } = dto;
+    return this.idempotency.execute({
+      scope: 'assembly:create',
+      requestId: createRequestId,
+      user,
+      payload,
+      isolation: 'READ COMMITTED',
+      work: async (mgr) => {
+      await this.orderReferenceLock.lockByProductIds(mgr, [dto.orderProductId]);
       const snap = await this.productSnapshot.loadOne(mgr, dto.orderProductId);
       if (!snap) throw new BadRequestException('订单产品不存在，或所属订单已作废');
 
@@ -397,6 +409,7 @@ export class AssemblyService {
         }),
       );
       return { id: saved.id, orderProductId: snap.orderProductId, side };
+      },
     });
   }
 

@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 import { PART_ADJUST_SOURCE } from '@hb-oms/shared';
 import { OpeningFinishedDto, OpeningPartDto } from './dto/opening.dto';
 import { FinishedStockService } from '../finished-stock/finished-stock.service';
 import { PartStockService } from '../part-stock/part-stock.service';
 import { CurrentUserPayload } from '../../common/decorators/current-user.decorator';
+import { IdempotencyService } from '../../common/services/idempotency.service';
 
 /**
  * 期初录入（设计文档 §4.8）：系统上线时把手工账上的存量搬进系统，菜单常驻、可反复补录。
@@ -22,7 +22,7 @@ export class OpeningService {
   constructor(
     private readonly finishedStock: FinishedStockService,
     private readonly partStock: PartStockService,
-    private readonly dataSource: DataSource,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   /** 成品期初：支持「挂订单」与「纯属性（不挂订单）」两种行混录 */
@@ -40,7 +40,13 @@ export class OpeningService {
    */
   async openingPart(dto: OpeningPartDto, user: CurrentUserPayload) {
     const reason = dto.reason?.trim() || '期初录入';
-    return this.dataSource.transaction(async (mgr) => {
+    const { createRequestId, ...payload } = dto;
+    return this.idempotency.execute({
+      scope: 'opening:part',
+      requestId: createRequestId,
+      user,
+      payload,
+      work: async (mgr) => {
       const results: Array<{ index: number; itemNo: string; quantity: number }> = [];
       for (let i = 0; i < dto.items.length; i++) {
         const it = dto.items[i];
@@ -71,6 +77,7 @@ export class OpeningService {
         }
       }
       return { total: dto.items.length, items: results };
+      },
     });
   }
 }

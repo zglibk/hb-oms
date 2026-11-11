@@ -25,6 +25,8 @@ import { PartGroupSnapshotService } from '../../common/services/part-group-snaps
 import { RecordOwnershipService } from '../../common/services/record-ownership.service';
 import { dictLabeler, loadDictLabels } from '../../common/utils/dict-label.util';
 import { assertBusinessDateNotFuture } from '../../common/utils/date-range.util';
+import { IdempotencyService } from '../../common/services/idempotency.service';
+import { OrderReferenceLockService } from '../../common/services/order-reference-lock.service';
 
 /** 可外发部件组行（供录入表单的选择器） */
 export interface PartGroupOption {
@@ -87,6 +89,8 @@ export class OutsourceService {
     private readonly dataSource: DataSource,
     private readonly partGroupSnapshot: PartGroupSnapshotService,
     private readonly ownership: RecordOwnershipService,
+    private readonly idempotency: IdempotencyService,
+    private readonly orderReferenceLock: OrderReferenceLockService,
   ) {}
 
   private returnSideKey(orderPartGroupId: number, side: string) {
@@ -614,9 +618,18 @@ export class OutsourceService {
   }
 
   async create(dto: CreateOutsourcePartDto, user: CurrentUserPayload) {
+    const { createRequestId, ...payload } = dto;
+    return this.idempotency.execute({
+      scope: 'outsource:create',
+      requestId: createRequestId,
+      user,
+      payload,
+      isolation: 'READ COMMITTED',
+      work: async (mgr) => {
     assertBusinessDateNotFuture(dto.backDate, '回厂日期');
     const groupIds = dto.items.map((it) => it.orderPartGroupId);
-    const snapshots = await this.partGroupSnapshot.load(null, groupIds);
+    await this.orderReferenceLock.lockByPartGroupIds(mgr, groupIds);
+    const snapshots = await this.partGroupSnapshot.load(mgr, groupIds);
     const audit = auditOnCreate(user);
 
     const rows = dto.items.map((it, i) => {
@@ -643,7 +656,7 @@ export class OutsourceService {
           `第 ${i + 1} 行：部件组边别不符合产品结构，请重新选择回厂部件`,
         );
       }
-      return this.partRepo.create({
+      return mgr.getRepository(OutsourcePart).create({
         ...audit,
         orderId: snap.orderId,
         orderProductId: snap.orderProductId,
@@ -670,8 +683,10 @@ export class OutsourceService {
       });
     });
 
-    const saved = await this.partRepo.save(rows);
+    const saved = await mgr.getRepository(OutsourcePart).save(rows);
     return { count: saved.length, ids: saved.map((r) => r.id) };
+      },
+    });
   }
 
   /**

@@ -7,6 +7,8 @@ import { PartGroupSnapshotService } from './services/part-group-snapshot.service
 import { ProductSnapshotService } from './services/product-snapshot.service';
 import { PdfService } from './services/pdf.service';
 import { RecordOwnershipService } from './services/record-ownership.service';
+import { IdempotencyService } from './services/idempotency.service';
+import { OrderReferenceLockService } from './services/order-reference-lock.service';
 import { Department } from '../modules/system/entities/department.entity';
 import { OperationLog } from '../modules/system/entities/operation-log.entity';
 import { SystemConfigModule } from '../modules/system-config/system-config.module';
@@ -35,6 +37,8 @@ import { SystemConfigModule } from '../modules/system-config/system-config.modul
     ProductSnapshotService,
     PdfService,
     RecordOwnershipService,
+    IdempotencyService,
+    OrderReferenceLockService,
   ],
   exports: [
     DataScopeService,
@@ -44,6 +48,8 @@ import { SystemConfigModule } from '../modules/system-config/system-config.modul
     ProductSnapshotService,
     PdfService,
     RecordOwnershipService,
+    IdempotencyService,
+    OrderReferenceLockService,
   ],
 })
 export class CommonModule {}

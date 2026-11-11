@@ -15,6 +15,7 @@ export interface OpeningFinishedItemPayload {
 }
 
 export interface OpeningFinishedPayload {
+  createRequestId: string;
   docDate: string;
   remark?: string;
   items: OpeningFinishedItemPayload[];
@@ -33,6 +34,7 @@ export interface OpeningPartItemPayload {
 }
 
 export interface OpeningPartPayload {
+  createRequestId: string;
   reason?: string;
   items: OpeningPartItemPayload[];
 }

@@ -79,13 +79,17 @@ export async function loadInboundQuota(
   });
   if (!uniq.size) return result;
 
-  const productIds = [...new Set([...uniq.values()].map((k) => k.orderProductId))];
+  const productIds = [...new Set([...uniq.values()].map((k) => k.orderProductId))]
+    .sort((a, b) => a - b);
   const placeholders = productIds.map(() => '?').join(',');
 
   // 行锁：锁住这些产品行的全部装配批次行，后续聚合与业务写入在同一事务内串行化
   if (opts.lock) {
     await mgr.query(
-      `SELECT id FROM t_assembly_batch WHERE order_product_id IN (${placeholders}) FOR UPDATE`,
+      `SELECT id FROM t_assembly_batch
+        WHERE order_product_id IN (${placeholders})
+        ORDER BY id
+        FOR UPDATE`,
       productIds,
     );
   }

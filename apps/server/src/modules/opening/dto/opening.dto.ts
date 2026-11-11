@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateNested,
@@ -44,6 +45,9 @@ export class OpeningFinishedItemDto {
 }
 
 export class OpeningFinishedDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   @IsDateString({}, { message: '期初日期格式不正确' })
   docDate: string;
 
@@ -68,6 +72,9 @@ export class OpeningPartItemDto extends PartDimensionDto {
 }
 
 export class OpeningPartDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   /** 期初原因，缺省为「期初录入」；会写进部件台账变动流水 */
   @IsOptional() @IsString() @MaxLength(255, { message: '原因不能超过 255 个字符' }) reason?: string;
 

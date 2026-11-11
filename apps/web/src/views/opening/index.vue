@@ -198,10 +198,13 @@ import {
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 
 const tab = ref('group');
 const saving = ref(false);
+let finishedCreateRequestId = newCreateRequestId();
+let partCreateRequestId = newCreateRequestId();
 const today = businessToday;
 
 /* ===================== 挂订单期初 ===================== */
@@ -288,11 +291,13 @@ function confirmPick() {
 }
 
 async function submitGroup() {
+  if (saving.value) return;
   const bad = groupRows.value.findIndex((r) => !r.quantity || r.quantity <= 0);
   if (bad >= 0) return ElMessage.warning(`第 ${bad + 1} 行期初数量必须大于 0`);
   saving.value = true;
   try {
     const res = await openingFinished({
+      createRequestId: finishedCreateRequestId,
       docDate: docDate.value,
       remark: groupRemark.value || undefined,
       items: groupRows.value.map((r) => ({
@@ -306,6 +311,7 @@ async function submitGroup() {
     if (res.finished?.length) ElMessage.success(`订单 ${res.finished.join('、')} 已交清，自动完结`);
     groupRows.value = [];
     groupRemark.value = '';
+    finishedCreateRequestId = newCreateRequestId();
   } finally {
     saving.value = false;
   }
@@ -333,6 +339,7 @@ function addPartRow() {
   });
 }
 async function submitPart() {
+  if (saving.value) return;
   const noItem = partRows.value.findIndex((r) => !r.itemNo.trim());
   if (noItem >= 0) return ElMessage.warning(`第 ${noItem + 1} 行必须填产品代码`);
   const badQty = partRows.value.findIndex((r) => !r.quantity || r.quantity <= 0);
@@ -340,6 +347,7 @@ async function submitPart() {
   saving.value = true;
   try {
     const res = await openingPart({
+      createRequestId: partCreateRequestId,
       reason: partReason.value || undefined,
       items: partRows.value.map((r) => ({
         partType: r.partType,
@@ -354,6 +362,7 @@ async function submitPart() {
     });
     ElMessage.success(`部件期初已录入 ${res.total} 行`);
     partRows.value = [];
+    partCreateRequestId = newCreateRequestId();
   } finally {
     saving.value = false;
   }

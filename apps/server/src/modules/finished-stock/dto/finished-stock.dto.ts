@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateNested,
@@ -15,6 +16,7 @@ import {
 import { Transform, Type } from 'class-transformer';
 import { FINISHED_BIZ_TYPE } from '@hb-oms/shared';
 import { toBoolean } from '../../../common/utils/transform.util';
+import { OmitType } from '@nestjs/mapped-types';
 
 /** 建单可选的业务类型：红字冲销不走建单接口，只能由 reverse 生成 */
 const CREATABLE_BIZ_TYPES = [
@@ -56,6 +58,9 @@ export class CreateFinishedItemDto {
 }
 
 export class CreateFinishedDocDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   /** 业务类型：inbound 生产入库 / opening_balance 期初 / sale_outbound 销售出库 */
   @IsString({ message: '业务类型必填' })
   @IsIn(CREATABLE_BIZ_TYPES, { message: '业务类型只能是 生产入库 / 期初 / 销售出库；红字冲销请走冲销接口' })
@@ -82,10 +87,13 @@ export class CreateFinishedDocDto {
 }
 
 /** 更新 = 同结构整体重建（仅草稿可改，见 service） */
-export class UpdateFinishedDocDto extends CreateFinishedDocDto {}
+export class UpdateFinishedDocDto extends OmitType(CreateFinishedDocDto, ['createRequestId'] as const) {}
 
 /** 红字冲销：可整单冲销，也可只冲部分明细行（按数量部分冲销） */
 export class ReverseFinishedDocDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   @IsDateString({}, { message: '冲销单日期格式不正确' })
   docDate: string;
 
@@ -103,6 +111,20 @@ export class ReverseFinishedDocDto {
   @ValidateNested({ each: true })
   @Type(() => ReverseItemDto)
   items?: ReverseItemDto[];
+}
+
+export class ImportFinishedBalanceDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: '期初日期格式不正确' })
+  docDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  remark?: string;
 }
 
 /** 浏览器打印/PDF 共用的本次临时纸型与模板选择。 */

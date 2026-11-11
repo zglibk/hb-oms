@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   Min,
@@ -23,6 +24,9 @@ const SIDE_VALUES = ['', 'left', 'right'];
  * 客户端只传锚点 + 计划/实际完成时间 + 数量（§5.5 防伪造快照）。
  */
 export class CreateAssemblyBatchDto {
+  @IsUUID('4', { message: '页面版本已更新，请刷新页面后重试' })
+  createRequestId: string;
+
   /** 锚点：订单产品行ID（装配是产品级活动，2026-08-10 由部件组升级） */
   @Type(() => Number)
   @IsInt({ message: '请选择订单产品' })

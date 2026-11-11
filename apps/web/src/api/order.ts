@@ -189,8 +189,6 @@ export interface OrderProductPayload {
 }
 
 export interface OrderPayload {
-  /** 新增订单幂等键：同一张新增表单的重复请求必须复用同一个 UUID；编辑不传 */
-  createRequestId?: string;
   /** PO#（客户订单文件上的订单编号）——2026-09-25 起选填（口头 / 手写订单没有 PO 号），空传 null */
   poNo?: string | null;
   /** 生产单号（台账「订单编号」口径）——2026-08-14 起必填，服务端 DTO 同样硬校验 */
@@ -223,7 +221,7 @@ export const getOrderDetail = (id: number) =>
 export const exportTotalPlan = (params: Omit<OrderQuery, 'page' | 'pageSize'>) =>
   request.get<any, Blob>('/api/order/export/total-plan', { params, responseType: 'blob' });
 
-export const createOrder = (data: OrderPayload) =>
+export const createOrder = (data: OrderPayload & { createRequestId: string }) =>
   request.post<any, { id: number; orderNo: string; deduplicated?: boolean }>('/api/order', data);
 
 /** 编辑结果：被引用订单的更正会回写下游快照，并可能自动完结 / 重开订单 */

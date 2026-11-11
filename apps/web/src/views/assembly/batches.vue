@@ -231,6 +231,7 @@ import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday, disableFutureBusinessDate, formatDateTime } from '@/utils/date';
+import { newCreateRequestId } from '@/utils/idempotency';
 
 const route = useRoute();
 const router = useRouter();
@@ -241,6 +242,7 @@ const orderProductId = computed(() => (route.query.orderProductId ? Number(route
 
 const loading = ref(false);
 const submitting = ref(false);
+let createRequestId = newCreateRequestId();
 const removingId = ref<number | null>(null);
 const data = ref<AssemblyBatchesResult | null>(null);
 
@@ -372,6 +374,7 @@ function startEdit(row: AssemblyBatchRow) {
 }
 
 async function onSubmit() {
+  if (submitting.value) return;
   if (!orderProductId.value) return;
   if (socket.value && !draft.side) {
     ElMessage.warning('该产品含卡口，请选择左/右边别');
@@ -408,10 +411,12 @@ async function onSubmit() {
       ElMessage.success('批次已更新');
     } else {
       await createAssemblyBatch({
+        createRequestId,
         orderProductId: orderProductId.value,
         side: socket.value ? draft.side : '',
         ...body,
       });
+      createRequestId = newCreateRequestId();
       ElMessage.success('批次已录入');
     }
     await load();
