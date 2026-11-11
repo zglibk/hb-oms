@@ -2,7 +2,7 @@
   <el-drawer
     v-model="store.centerOpen"
     title="通知公告中心"
-    size="min(720px, 92vw)"
+    size="min(520px, 92vw)"
     append-to-body
     @open="loadHistory"
   >
