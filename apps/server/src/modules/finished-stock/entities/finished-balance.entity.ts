@@ -41,6 +41,9 @@ export class FinishedBalance {
   @Column({ name: 'item_no', type: 'varchar', length: 64, default: '', comment: '货号（属性快照）' })
   itemNo: string;
 
+  @Column({ name: 'product_name', type: 'varchar', length: 128, default: '', comment: '产品名称快照（自成品出入库明细）' })
+  productName: string;
+
   @Column({ name: 'product_model', type: 'varchar', length: 128, default: '', comment: '产品型号（展示快照）' })
   productModel: string;
 

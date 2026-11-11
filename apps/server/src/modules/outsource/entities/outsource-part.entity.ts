@@ -56,6 +56,12 @@ export class OutsourcePart {
   @Column({ name: 'production_no', type: 'varchar', length: 64, nullable: true, comment: '生产单号快照（自订单 t_order.production_no）' })
   productionNo: string | null;
 
+  @Column({ name: 'item_no', type: 'varchar', length: 64, nullable: true, comment: '产品代码快照（自订单产品行）' })
+  itemNo: string | null;
+
+  @Column({ name: 'product_name', type: 'varchar', length: 128, nullable: true, comment: '产品名称快照（自订单产品行）' })
+  productName: string | null;
+
   @Column({
     name: 'product_model',
     type: 'varchar',

@@ -37,6 +37,7 @@ export interface PartGroupOption {
   customerName: string | null;
   productionNo: string | null;
   itemNo: string | null;
+  productName: string | null;
   productModel: string | null;
   productType: string | null;
   dimensionText: string | null;
@@ -159,7 +160,7 @@ export class OutsourceService {
     if (query.keyword) {
       qb.andWhere(
         `(r.processorName LIKE :kw OR r.orderNo LIKE :kw OR r.productionNo LIKE :kw
-          OR r.productModel LIKE :kw OR r.drawingNo LIKE :kw)`,
+          OR r.itemNo LIKE :kw OR r.productName LIKE :kw OR r.productModel LIKE :kw OR r.drawingNo LIKE :kw)`,
         { kw: `%${query.keyword}%` },
       );
     }
@@ -406,6 +407,7 @@ export class OutsourceService {
               o.order_no           AS orderNo,
               o.customer_name      AS customerName,
               o.production_no      AS productionNo,
+              p.product_name       AS productName,
               g.product_model      AS productModel,
               g.drawing_no         AS drawingNo,
               g.material_thickness AS materialThickness,
@@ -487,6 +489,7 @@ export class OutsourceService {
           customerName: r.customerName ?? null,
           productionNo: r.productionNo ?? null,
           itemNo: r.itemNo ?? null,
+          productName: r.productName ?? null,
           productModel: r.productModel ?? null,
           productType: r.productType ?? null,
           dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
@@ -667,6 +670,8 @@ export class OutsourceService {
         orderNo: snap.orderNo,
         customerName: snap.customerName,
         productionNo: snap.productionNo,
+        itemNo: snap.itemNo,
+        productName: snap.productName,
         productModel: snap.productModel,
         dimensionText: snap.dimensionText,
         cycleCode: snap.cycleCode,

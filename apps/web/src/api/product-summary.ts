@@ -29,6 +29,8 @@ export interface SummaryOrderRow {
 /** 聚合行：一行 = 一种「相同产品」（型号/节数/规格/料厚/表面处理/颜色 六要素相同） */
 export interface ProductSummaryRow {
   key: string;
+  itemNo: string | null;
+  productName: string | null;
   productModel: string;
   railSection: string | null;
   dimensionMm: number | null;
@@ -109,6 +111,8 @@ export interface PeriodFlowRow {
 /** 聚合行：期末结存 = 期初结存 + 期间入库 − 期间出库（同一份流水推算，天然勾稽） */
 export interface PeriodSummaryRow {
   key: string;
+  itemNo: string | null;
+  productName: string | null;
   productModel: string;
   railSection: string | null;
   dimensionMm: number | null;

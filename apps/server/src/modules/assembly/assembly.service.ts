@@ -10,7 +10,6 @@ import {
   hasSocket,
   isValidSide,
   productLevelModel,
-  productModelWithoutItemCode,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -576,7 +575,6 @@ export class AssemblyService {
       { header: '订单编号' },
       { header: '客户' },
       { header: '产品代码' },
-      { header: '产品型号' },
       { header: '产品名称' },
       { header: '规格' },
       { header: '装配车间' },
@@ -598,7 +596,6 @@ export class AssemblyService {
         r.productionNo || r.orderNo || '',
         r.customerName || '',
         sanitizeItemCode(r.itemNo),
-        productModelWithoutItemCode(r.productModel, r.itemNo),
         r.productName || '',
         r.dimensionText || '',
         r.assemblyWorkshops.map((w) => labeler('assembly_workshop', w)).join('/'),
@@ -616,7 +613,7 @@ export class AssemblyService {
         r.overdue ? '是' : '',
       ]);
     }
-    styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] });
+    styleSheet(ws, { centerColumns: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] });
 
     /* ---------- Sheet2：装配批次明细（汇总表那些产品的逐批记录） ---------- */
     const productIds = all.list.map((r) => r.orderProductId);
@@ -634,7 +631,8 @@ export class AssemblyService {
     wsB.columns = [
       { header: '订单编号' },
       { header: '客户' },
-      { header: '产品型号' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: '规格' },
       { header: '边别' },
       { header: '装配车间' },
@@ -652,7 +650,8 @@ export class AssemblyService {
       wsB.addRow([
         p?.productionNo || p?.orderNo || '',
         p?.customerName || '',
-        p?.productModel || '',
+        sanitizeItemCode(p?.itemNo),
+        p?.productName || '',
         p?.dimensionText || '',
         sideLabel(b.side) || '',
         labeler('assembly_workshop', b.workshop),
@@ -667,7 +666,7 @@ export class AssemblyService {
         this.minuteText(b.updatedAt ?? b.createdAt),
       ]);
     }
-    styleSheet(wsB, { centerColumns: [4, 5, 6, 7, 8, 9, 10, 11, 14] });
+    styleSheet(wsB, { centerColumns: [5, 6, 7, 8, 9, 10, 11, 12, 15] });
 
     const buf = await wb.xlsx.writeBuffer();
     return Buffer.from(buf);

@@ -76,6 +76,9 @@ export interface SummaryOrderRow {
 export interface ProductSummaryRow {
   /** 聚合键拼串（前端 row-key；同页不重复） */
   key: string;
+  itemNo: string | null;
+  /** 订单产品行录入的产品名称原文；仅作展示，不改变既有六要素聚合口径 */
+  productName: string | null;
   productModel: string;
   railSection: string | null;
   dimensionMm: number | null;
@@ -119,6 +122,9 @@ export interface PeriodFlowRow {
 /** Tab2 聚合行：期初 → 期间入 → 期间出 → 期末 */
 export interface PeriodSummaryRow {
   key: string;
+  itemNo: string | null;
+  /** 订单产品行录入的产品名称原文；仅作展示，不改变既有六要素聚合口径 */
+  productName: string | null;
   productModel: string;
   railSection: string | null;
   dimensionMm: number | null;
@@ -184,6 +190,8 @@ export class ProductSummaryService {
       if (!row) {
         row = {
           key,
+          itemNo: r.itemNo ?? null,
+          productName: r.productName ?? null,
           productModel: r.productModel ?? '',
           railSection: r.railSection ?? null,
           dimensionMm: r.dimensionMm,
@@ -208,6 +216,8 @@ export class ProductSummaryService {
       row.inQty += r.inQty;
       row.outQty += r.outQty;
       row.stockQty += r.stockQty;
+      if (!row.itemNo && r.itemNo) row.itemNo = r.itemNo;
+      if (!row.productName && r.productName) row.productName = r.productName;
       if (!row.dimensionText && r.dimensionText) row.dimensionText = r.dimensionText;
       if (r.customerName && !row.customers.includes(r.customerName)) {
         row.customers.push(r.customerName);
@@ -362,15 +372,16 @@ export class ProductSummaryService {
       prodParams.push(query.surfaceType);
     }
     if (query.keyword) {
-      prodWhere.push(`(p.item_no LIKE ? OR o.production_no LIKE ? OR o.order_no LIKE ?
+      prodWhere.push(`(p.item_no LIKE ? OR p.product_name LIKE ? OR o.production_no LIKE ? OR o.order_no LIKE ?
                        OR o.customer_name LIKE ?
                        OR EXISTS (SELECT 1 FROM t_order_part_group g2
                                    WHERE g2.order_product_id = p.id AND g2.product_model LIKE ?))`);
       const kw = `%${query.keyword}%`;
-      prodParams.push(kw, kw, kw, kw, kw);
+      prodParams.push(kw, kw, kw, kw, kw, kw);
     }
     const prodRows: any[] = await this.dataSource.query(
-      `SELECT p.id AS pid, p.item_no AS itemNo, p.product_type AS productType,
+      `SELECT p.id AS pid, p.item_no AS itemNo, p.product_name AS productName,
+               p.product_type AS productType,
               p.rail_section AS railSection, p.is_split AS isSplit,
               p.dimension_mm AS dimensionMm, p.dimension_raw AS dimensionRaw,
               p.dimension_unit AS dimensionUnit,
@@ -448,6 +459,8 @@ export class ProductSummaryService {
       if (!row) {
         row = {
           key,
+          itemNo: p.itemNo ?? null,
+          productName: p.productName ?? null,
           productModel: model,
           railSection: p.railSection ?? null,
           dimensionMm,
@@ -468,6 +481,8 @@ export class ProductSummaryService {
       row.opening += flow.opening;
       row.periodIn += flow.periodIn;
       row.periodOut += flow.periodOut;
+      if (!row.itemNo && p.itemNo) row.itemNo = p.itemNo;
+      if (!row.productName && p.productName) row.productName = p.productName;
       if (p.customerName && !row.customers.includes(p.customerName)) {
         row.customers.push(p.customerName);
       }
@@ -571,13 +586,14 @@ export class ProductSummaryService {
     const columns: Array<{ header: string }> = [
       // 首列序号：车间手工表的习惯格式，打印出来逐行核对要念行号
       { header: '序号' },
-      { header: '产品型号' },
+      { header: '客户' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: dimHeader },
       { header: '节数' },
       { header: '料厚' },
       { header: '表面处理' },
       ...(colorEnabled ? [{ header: '颜色' }] : []),
-      { header: '客户' },
       { header: '订单数' },
       { header: '订单总数(支)' },
       { header: '累计入库' },
@@ -590,13 +606,14 @@ export class ProductSummaryService {
     list.forEach((r, i) => {
       ws.addRow([
         i + 1,
-        r.productModel,
+        r.customers.join('、'),
+        r.itemNo ?? '',
+        r.productName ?? '',
         dimCell(r),
         railSectionLabel(r.railSection),
         r.thickness,
         label('surface_type', r.surfaceType),
         ...(colorEnabled ? [r.color ?? ''] : []),
-        r.customers.join('、'),
         r.orderCount,
         r.qtyPcs,
         r.inQty,
@@ -623,7 +640,7 @@ export class ProductSummaryService {
     ws.addRow(cells).font = { bold: true };
     styleSheet(ws, {
       centerColumns: this.centerCols(columns, [
-        '序号', dimHeader, '节数', '料厚', '表面处理', '颜色', '订单数',
+        '序号', '产品代码', dimHeader, '节数', '料厚', '表面处理', '颜色', '订单数',
         '订单总数(支)', '累计入库', '成品欠数', '累计出库', '发货欠数', '库存数',
       ]),
     });
@@ -632,14 +649,15 @@ export class ProductSummaryService {
     const wsB = wb.addWorksheet('订单明细');
     const colsB: Array<{ header: string }> = [
       { header: '序号' },
-      { header: '产品型号' },
+      { header: '客户' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: dimHeader },
       { header: '料厚' },
       { header: '表面处理' },
       ...(colorEnabled ? [{ header: '颜色' }] : []),
       { header: '下单日期' },
       { header: '订单编号' },
-      { header: '客户' },
       { header: '订单数(支)' },
       { header: '累计入库' },
       { header: '累计出库' },
@@ -656,14 +674,15 @@ export class ProductSummaryService {
         seqB += 1;
         wsB.addRow([
           seqB,
-          r.productModel,
+          o.customerName ?? '',
+          r.itemNo ?? '',
+          r.productName ?? '',
           dimCell(r),
           r.thickness,
           label('surface_type', r.surfaceType),
           ...(colorEnabled ? [r.color ?? ''] : []),
           o.orderDate ?? '',
           o.productionNo || o.orderNo || '',
-          o.customerName ?? '',
           o.qtyPcs,
           o.inQty,
           o.outQty,
@@ -677,7 +696,7 @@ export class ProductSummaryService {
     });
     styleSheet(wsB, {
       centerColumns: this.centerCols(colsB, [
-        '序号', dimHeader, '料厚', '表面处理', '颜色', '下单日期', '订单数(支)',
+        '序号', '产品代码', dimHeader, '料厚', '表面处理', '颜色', '下单日期', '订单数(支)',
         '累计入库', '累计出库', '库存数', '成品欠数', '发货欠数', '交期', '状态',
       ]),
     });
@@ -711,13 +730,14 @@ export class ProductSummaryService {
     const ws = wb.addWorksheet('出入库汇总');
     const columns: Array<{ header: string }> = [
       { header: '序号' },
-      { header: '产品型号' },
+      { header: '客户' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: dimHeader },
       { header: '节数' },
       { header: '料厚' },
       { header: '表面处理' },
       ...(colorEnabled ? [{ header: '颜色' }] : []),
-      { header: '客户' },
       { header: '期初结存' },
       { header: '期间入库' },
       { header: '期间出库' },
@@ -727,13 +747,14 @@ export class ProductSummaryService {
     list.forEach((r, i) => {
       ws.addRow([
         i + 1,
-        r.productModel,
+        r.customers.join('、'),
+        r.itemNo ?? '',
+        r.productName ?? '',
         dimCell(r),
         railSectionLabel(r.railSection),
         r.thickness,
         label('surface_type', r.surfaceType),
         ...(colorEnabled ? [r.color ?? ''] : []),
-        r.customers.join('、'),
         r.opening,
         r.periodIn,
         r.periodOut,
@@ -754,7 +775,7 @@ export class ProductSummaryService {
     ws.addRow(cells).font = { bold: true };
     styleSheet(ws, {
       centerColumns: this.centerCols(columns, [
-        '序号', dimHeader, '节数', '料厚', '表面处理', '颜色',
+        '序号', '产品代码', dimHeader, '节数', '料厚', '表面处理', '颜色',
         '期初结存', '期间入库', '期间出库', '期末结存',
       ]),
     });
@@ -763,7 +784,9 @@ export class ProductSummaryService {
     const wsB = wb.addWorksheet('出入库明细');
     const colsB: Array<{ header: string }> = [
       { header: '序号' },
-      { header: '产品型号' },
+      { header: '客户' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: dimHeader },
       { header: '表面处理' },
       ...(colorEnabled ? [{ header: '颜色' }] : []),
@@ -773,7 +796,6 @@ export class ProductSummaryService {
       { header: '方向' },
       { header: '数量(支)' },
       { header: '边别' },
-      { header: '客户' },
       { header: '订单编号' },
       { header: '被冲原单' },
       { header: '登记人' },
@@ -785,7 +807,9 @@ export class ProductSummaryService {
         seqB += 1;
         wsB.addRow([
           seqB,
-          r.productModel,
+          f.customerName ?? '',
+          r.itemNo ?? '',
+          r.productName ?? '',
           dimCell(r),
           label('surface_type', f.surfaceType),
           ...(colorEnabled ? [f.color ?? ''] : []),
@@ -795,7 +819,6 @@ export class ProductSummaryService {
           f.direction > 0 ? '入' : '出',
           f.quantity,
           sideLabel(f.side),
-          f.customerName ?? '',
           f.productionNo ?? '',
           f.originDocNo ?? '',
           f.creatorName ?? '',
@@ -804,7 +827,7 @@ export class ProductSummaryService {
     });
     styleSheet(wsB, {
       centerColumns: this.centerCols(colsB, [
-        '序号', dimHeader, '表面处理', '颜色', '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
+        '序号', '产品代码', dimHeader, '表面处理', '颜色', '单据日期', '业务类型', '方向', '数量(支)', '边别', '登记人',
       ]),
     });
 

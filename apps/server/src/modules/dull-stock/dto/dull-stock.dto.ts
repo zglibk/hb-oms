@@ -38,6 +38,8 @@ export class DullStockAttrDto {
   @IsString({ message: '产品代码必填' })
   itemNo: string;
 
+  @IsOptional() @IsString() @MaxLength(128, { message: '产品名称不能超过 128 个字符' }) productName?: string;
+
   @IsOptional() @IsString() @MaxLength(128, { message: '客户名称不能超过 128 个字符' }) customerName?: string;
 
   @IsOptional() @IsString() @MaxLength(64, { message: '生产单号不能超过 64 个字符' }) productionNo?: string;
@@ -109,7 +111,7 @@ export class QueryDullStockDto {
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
 
-  /** 关键字：货号 / 产品型号 / 客户 / 生产单号 模糊 */
+  /** 关键字：产品代码 / 产品名称 / 技术型号 / 客户 / 生产单号 模糊 */
   @IsOptional() @IsString() keyword?: string;
 
   @IsOptional() @IsString() @MaxLength(32) surfaceType?: string;

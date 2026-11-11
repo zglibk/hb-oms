@@ -6,7 +6,7 @@
           <el-input
             v-model="query.keyword"
             clearable
-            placeholder="订单号/客户/生产单号/产品型号/产品代码"
+            placeholder="订单号/客户/生产单号/产品代码/产品名称"
             style="width: 260px"
             @input="scheduleKeywordSearch"
             @keyup.enter="runKeywordSearch"
@@ -60,8 +60,8 @@
         <el-table-column label="产品代码" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" min-width="150" class-name="col-left" show-overflow-tooltip>
-          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        <el-table-column label="产品名称" min-width="150" prop="productName" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
@@ -126,7 +126,7 @@ import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Search, Tools, InfoFilled, Download, RefreshLeft } from '@element-plus/icons-vue';
 import { getAssemblyList, downloadAssemblyExport, type AssemblyGroupRow } from '@/api/assembly';
-import { productModelWithoutItemCode, sanitizeItemCode } from '@/constants/dict';
+import { sanitizeItemCode } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useExcelExport } from '@/composables/useExcelExport';

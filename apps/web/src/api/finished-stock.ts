@@ -12,6 +12,7 @@ export interface FinishedItemRow {
   customerName: string | null;
   productionNo: string | null;
   itemNo: string | null;
+  productName: string | null;
   productModel: string | null;
   productType: string | null;
   /** 部件组类型：挂订单的成品是整套滑轨故恒为 null，仅纯属性期初行可能有值 */
@@ -71,6 +72,7 @@ export interface BalanceRow {
   customerName: string | null;
   productionNo: string | null;
   itemNo: string;
+  productName: string;
   productModel: string;
   productType: string;
   groupType: string;

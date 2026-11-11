@@ -5,7 +5,7 @@
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 250px"
-            placeholder="产品代码/型号/订单号/客户/生产单号"
+            placeholder="产品代码/名称/订单号/客户/生产单号"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -51,8 +51,8 @@
         <el-table-column label="产品代码" prop="itemNo" width="90" align="center">
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" min-width="160" class-name="col-left" show-overflow-tooltip>
-          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
@@ -128,7 +128,7 @@ import {
   importStockBalance,
   type BalanceRow,
 } from '@/api/finished-stock';
-import { SIDE_OPTIONS, productModelWithoutItemCode, sanitizeItemCode, sideLabel } from '@/constants/dict';
+import { SIDE_OPTIONS, sanitizeItemCode, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';

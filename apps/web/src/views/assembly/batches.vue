@@ -5,7 +5,9 @@
         <div class="form-title">
           <el-button size="small" :icon="Back" @click="goBack">返回列表</el-button>
           <span class="title-text">装配批次</span>
-          <span v-if="data?.product" class="title-sub">{{ data.product.productModel || '—' }}</span>
+          <span v-if="data?.product" class="title-sub">
+            {{ [data.product.itemNo, data.product.productName].filter(Boolean).join(' / ') || '—' }}
+          </span>
         </div>
         <div>
           <el-button size="small" @click="goBack">关闭</el-button>

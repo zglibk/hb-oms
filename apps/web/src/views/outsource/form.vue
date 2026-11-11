@@ -104,7 +104,10 @@
           <el-table-column label="产品代码" width="110" show-overflow-tooltip>
             <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号" min-width="140" show-overflow-tooltip>
+          <el-table-column label="产品名称" min-width="125" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.productName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="组型号" width="105" show-overflow-tooltip>
             <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
           </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="80" align="center" show-overflow-tooltip />
@@ -208,13 +211,13 @@
         <el-form-item label="生产单号">
           <el-input v-model="pickerQuery.productionNo" clearable placeholder="请输入生产单号" @keyup.enter="loadPickerData" />
         </el-form-item>
-        <el-form-item label="产品型号">
+        <el-form-item label="产品名称">
           <el-select-v2
-            v-model="pickerQuery.productModel"
+            v-model="pickerQuery.productName"
             clearable
             filterable
             :loading="optionsLoading"
-            :options="productModelSelectOptions"
+            :options="productNameSelectOptions"
             popper-class="picker-model-popper"
             placeholder="全部"
           />
@@ -297,7 +300,10 @@
         <el-table-column label="产品代码" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
+        <el-table-column label="产品名称" min-width="125" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="组型号" width="105" show-overflow-tooltip>
           <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
         </el-table-column>
         <el-table-column label="边别" width="72" align="center">
@@ -350,7 +356,6 @@ import { Back, Plus, Delete, Search } from '@element-plus/icons-vue';
 import {
   createOutsourceParts,
   getPartGroupOptions,
-  type PartGroupFilterOptions,
   type PartGroupOption,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
@@ -400,6 +405,7 @@ interface ItemRow {
   customerName: string | null;
   productionNo: string | null;
   itemNo: string | null;
+  productName: string | null;
   productModel: string | null;
   dimensionText: string | null;
   orderQty: number;
@@ -517,7 +523,7 @@ interface PickerQuery {
   orderNo: string;
   customerName: string | undefined;
   productionNo: string;
-  productModel: string | undefined;
+  productName: string | undefined;
   productType: string | undefined;
   surfaceType: string | undefined;
   keyword: string;
@@ -526,7 +532,7 @@ const pickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
-  productModel: '',
+  productName: '',
   productType: '',
   surfaceType: '',
   keyword: '',
@@ -536,7 +542,7 @@ const appliedPickerQuery = reactive<PickerQuery>({
   orderNo: '',
   customerName: '',
   productionNo: '',
-  productModel: '',
+  productName: '',
   productType: '',
   surfaceType: '',
   keyword: '',
@@ -556,21 +562,27 @@ function optionReturned(row: PartGroupOption): boolean {
 const visibleScope = computed(() => optionSource.value.filter((row) => (
   showReturned.value ? optionReturned(row) : !optionReturned(row)
 )));
-const pickerFilterOptions = computed<PartGroupFilterOptions>(() => {
+interface PickerFilterOptions {
+  customerNames: string[];
+  productNames: string[];
+  productTypes: string[];
+  surfaceTypes: string[];
+}
+const pickerFilterOptions = computed<PickerFilterOptions>(() => {
   const all = visibleScope.value;
   const customerRows = all.filter((row) =>
     pickerTextEquals(row.customerName, pickerQuery.customerName),
   );
-  const modelRows = customerRows.filter((row) =>
-    pickerTextEquals(row.productModel, pickerQuery.productModel),
+  const productNameRows = customerRows.filter((row) =>
+    pickerTextEquals(row.productName, pickerQuery.productName),
   );
-  const productTypeRows = modelRows.filter((row) =>
+  const productTypeRows = productNameRows.filter((row) =>
     pickerProductTypeIncludes(row.productType, pickerQuery.productType),
   );
   return {
     customerNames: distinctPickerValues(all, (row) => row.customerName),
-    productModels: distinctPickerValues(customerRows, (row) => row.productModel),
-    productTypes: distinctProductTypes(modelRows),
+    productNames: distinctPickerValues(customerRows, (row) => row.productName),
+    productTypes: distinctProductTypes(productNameRows),
     surfaceTypes: distinctPickerValues(productTypeRows, (row) => row.surfaceType),
   };
 });
@@ -586,14 +598,14 @@ function distinctProductTypes(rows: PartGroupOption[]): string[] {
     return orderDiff || productTypeLabel(a).localeCompare(productTypeLabel(b), 'zh-CN');
   });
 }
-const productModelSelectOptions = computed(() =>
-  pickerFilterOptions.value.productModels.map((value) => ({ label: value, value })),
+const productNameSelectOptions = computed(() =>
+  pickerFilterOptions.value.productNames.map((value) => ({ label: value, value })),
 );
 const options = computed(() => visibleScope.value.filter((row) => (
   pickerTextIncludes(row.orderNo, appliedPickerQuery.orderNo)
   && pickerTextEquals(row.customerName, appliedPickerQuery.customerName)
   && pickerTextIncludes(row.productionNo, appliedPickerQuery.productionNo)
-  && pickerTextEquals(row.productModel, appliedPickerQuery.productModel)
+  && pickerTextEquals(row.productName, appliedPickerQuery.productName)
   && pickerProductTypeIncludes(row.productType, appliedPickerQuery.productType)
   && pickerTextEquals(row.surfaceType, appliedPickerQuery.surfaceType)
   && pickerTextIncludes(row.searchText, appliedPickerQuery.keyword)
@@ -607,14 +619,14 @@ const optionPageRows = computed(() => {
 let pickerInitRequestId = 0;
 let suppressPickerAutoSearch = false;
 
-// 与成品出入库选择器保持一致，按「客户 → 产品型号 → 产品类型 → 表面处理」逐级收窄；上级变化时
+// 与成品出入库选择器保持一致，按「客户 → 产品名称 → 产品类型 → 表面处理」逐级收窄；上级变化时
 // 清空其下级条件，避免不可见的残留条件锁住结果集。每次操作只触发一次本地过滤。
 watch(
   () => pickerQuery.customerName,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
-    pickerQuery.productModel = '';
+    pickerQuery.productName = '';
     pickerQuery.productType = '';
     pickerQuery.surfaceType = '';
     suppressPickerAutoSearch = false;
@@ -623,7 +635,7 @@ watch(
   { flush: 'sync' },
 );
 watch(
-  () => pickerQuery.productModel,
+  () => pickerQuery.productName,
   () => {
     if (suppressPickerAutoSearch || !pickerVisible.value) return;
     suppressPickerAutoSearch = true;
@@ -661,7 +673,7 @@ function loadPickerData() {
     orderNo: pickerQuery.orderNo?.trim() ?? '',
     customerName: pickerQuery.customerName?.trim() ?? '',
     productionNo: pickerQuery.productionNo?.trim() ?? '',
-    productModel: pickerQuery.productModel?.trim() ?? '',
+    productName: pickerQuery.productName?.trim() ?? '',
     productType: pickerQuery.productType ?? '',
     surfaceType: pickerQuery.surfaceType ?? '',
     keyword: pickerQuery.keyword?.trim() ?? '',
@@ -695,6 +707,7 @@ async function initializePicker() {
         row.customerName,
         row.productionNo,
         row.itemNo,
+        row.productName,
         row.productModel,
         row.productType,
         row.dimensionText,
@@ -718,7 +731,7 @@ function resetPickerQuery() {
     orderNo: '',
     customerName: '',
     productionNo: '',
-    productModel: '',
+    productName: '',
     productType: '',
     surfaceType: '',
     keyword: '',
@@ -744,6 +757,7 @@ function confirmPick() {
       customerName: o.customerName,
       productionNo: o.productionNo,
       itemNo: o.itemNo,
+      productName: o.productName,
       productModel: o.productModel,
       dimensionText: o.dimensionText,
       orderQty: o.orderQty,

@@ -5,7 +5,7 @@
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 240px"
-            placeholder="产品代码 / 型号 / 客户 / 生产单号"
+            placeholder="产品代码 / 产品名称 / 客户 / 生产单号"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -135,8 +135,11 @@
         <el-table-column label="客户" width="100" show-overflow-tooltip>
           <template #default="{ row }">{{ row.customerName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.productModel || '—' }}</template>
+        <el-table-column label="产品代码" width="100" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.itemNo || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="产品名称" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
         <el-table-column label="规格" width="68" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
@@ -243,7 +246,7 @@
     <!-- 同一批货可能分多次出货：从主列表进入后先选择本次要打印的出货流水。 -->
     <el-dialog
       v-model="shipmentDialogVisible"
-      :title="`${shipmentRow?.productModel || shipmentRow?.itemNo || '呆滞品'}－选择出货送货单`"
+      :title="`${shipmentRow?.productName || shipmentRow?.itemNo || '呆滞品'}－选择出货送货单`"
       width="680px"
     >
       <el-table :data="shipmentFlows" v-loading="shipmentLoading" border stripe>
@@ -378,8 +381,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="产品型号">
-              <el-input v-model="form.productModel" placeholder="留空按 产品代码+类型 自动拼" />
+            <el-form-item label="产品名称">
+              <el-input v-model="form.productName" maxlength="128" placeholder="选填，填写实际品名" />
             </el-form-item>
           </el-col>
           <el-col :span="24">
@@ -405,7 +408,7 @@
       <el-alert
         v-if="flowRow"
         type="info" :closable="false" show-icon class="mb12"
-        :title="`${flowRow.itemNo}${flowRow.productModel ? ' / ' + flowRow.productModel : ''} — 当前结存 ${flowRow.balanceQty} ${unitLabel(flowRow.unit)}`"
+        :title="`${flowRow.itemNo}${flowRow.productName ? ' / ' + flowRow.productName : ''} — 当前结存 ${flowRow.balanceQty} ${unitLabel(flowRow.unit)}`"
       />
       <el-form ref="flowFormRef" :model="flowForm" :rules="flowRules" label-width="100px" size="small">
         <el-form-item label="业务类型" prop="flowType">
@@ -731,9 +734,9 @@ const editRow = ref<DullStockRow | null>(null);
 const formRef = ref<FormInstance>();
 const form = reactive({
   itemNo: '',
+  productName: '',
   customerName: '',
   productionNo: '',
-  productModel: '',
   productTypes: [] as string[],
   railSection: '' as string | undefined,
   dimensionMm: 0,
@@ -796,9 +799,9 @@ function onSurfaceChange(next: string) {
 function openForm(row?: DullStockRow) {
   editRow.value = row ?? null;
   form.itemNo = row?.itemNo ?? '';
+  form.productName = row?.productName ?? '';
   form.customerName = row?.customerName ?? '';
   form.productionNo = row?.productionNo ?? '';
-  form.productModel = row?.productModel ?? '';
   form.productTypes = parseProductTypes(row?.productType ?? '');
   form.railSection = row?.railSection ?? '';
   form.dimensionMm = row?.dimensionMm ?? 0;
@@ -824,9 +827,9 @@ async function onSubmitForm() {
   try {
     const payload = {
       itemNo: form.itemNo.trim(),
+      productName: form.productName?.trim() || undefined,
       customerName: form.customerName?.trim() || undefined,
       productionNo: form.productionNo?.trim() || undefined,
-      productModel: form.productModel?.trim() || undefined,
       // 组合串必须规范化后再传，否则「普通,自锁」与「自锁,普通」在筛选与型号上表现不一致
       productType: normalizeProductTypes(form.productTypes),
       railSection: form.railSection || undefined,
@@ -854,7 +857,7 @@ async function onSubmitForm() {
 
 async function onDelete(row: DullStockRow) {
   await ElMessageBox.confirm(
-    `确定删除呆滞品「${row.itemNo}${row.productModel ? ' / ' + row.productModel : ''}」吗？`,
+    `确定删除呆滞品「${row.itemNo}${row.productName ? ' / ' + row.productName : ''}」吗？`,
     '删除呆滞品',
     { type: 'warning' },
   );

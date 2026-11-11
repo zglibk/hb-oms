@@ -9,7 +9,7 @@
             <el-form-item label="关键字">
               <el-input
                 v-model="sQuery.keyword" clearable style="width: 220px"
-                placeholder="产品代码/型号/订单号/客户"
+                placeholder="产品代码/名称/订单号/客户"
                 @input="scheduleSummaryKeywordSearch" @keyup.enter="runSummarySearch"
               />
             </el-form-item>
@@ -97,7 +97,7 @@
             <div class="tip-bar__left">
               <el-icon><InfoFilled /></el-icon>
               <span>
-                <b>相同产品</b> = 型号、节数、规格、料厚、表面处理{{ colorEnabled ? '、颜色' : '' }}一致，
+                <b>相同产品</b> = 产品代码、产品类型、出货形态、节数、规格、料厚、表面处理{{ colorEnabled ? '、颜色' : '' }}一致，
                 <b>跨订单归并成一行</b>；数量一律按<b>支</b>计。呆滞品为独立台账（不挂订单），不计入本页。
               </span>
             </div>
@@ -151,7 +151,17 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
+            <el-table-column label="客户" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="产品代码" width="115" class-name="col-left" show-overflow-tooltip>
+              <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.productName || '—' }}</template>
+            </el-table-column>
             <el-table-column :label="dimColLabel" width="105" align="center">
               <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
             </el-table-column>
@@ -171,11 +181,6 @@
               <template #default="{ row }">
                 <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
                 <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="客户" min-width="170" show-overflow-tooltip>
-              <template #default="{ row }">
-                <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="订单数" width="78" align="center">
@@ -240,7 +245,7 @@
             <el-form-item label="关键字">
               <el-input
                 v-model="pQuery.keyword" clearable style="width: 200px"
-                placeholder="产品代码/型号/订单号/客户"
+                placeholder="产品代码/名称/订单号/客户"
                 @input="schedulePeriodKeywordSearch" @keyup.enter="runPeriodSearch"
               />
             </el-form-item>
@@ -351,7 +356,17 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="产品型号" prop="productModel" min-width="150" class-name="col-left" show-overflow-tooltip />
+            <el-table-column label="客户" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="产品代码" width="115" class-name="col-left" show-overflow-tooltip>
+              <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.productName || '—' }}</template>
+            </el-table-column>
             <el-table-column :label="dimColLabel" width="105" align="center">
               <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
             </el-table-column>
@@ -371,11 +386,6 @@
               <template #default="{ row }">
                 <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
                 <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="客户" min-width="170" show-overflow-tooltip>
-              <template #default="{ row }">
-                <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="期初结存" width="95" align="center" class-name="col-key">
@@ -435,6 +445,7 @@ import {
   DIMENSION_UNIT,
   sideLabel,
   railSectionLabel,
+  sanitizeItemCode,
   labelOf,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';

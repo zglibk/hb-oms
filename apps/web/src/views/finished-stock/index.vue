@@ -5,7 +5,7 @@
         <el-form-item label="关键字">
           <el-input
             v-model="query.keyword" clearable style="width: 230px"
-            placeholder="单号/订单号/客户/生产单号/型号"
+            placeholder="单号/订单号/客户/生产单号/产品代码/名称"
             @input="scheduleKeywordSearch" @keyup.enter="runKeywordSearch"
           />
         </el-form-item>
@@ -82,7 +82,7 @@
                 <thead>
                   <!-- 原生 table 里加可选列时，<th> 与 <td> 必须挂同一个条件，否则整表错位 -->
                   <tr>
-                    <th>订单号</th><th>生产单号</th><th>产品型号</th><th>规格</th>
+                    <th>订单号</th><th>生产单号</th><th>产品代码</th><th>产品名称</th><th>规格</th>
                     <th>表面处理</th><th v-if="colorEnabled">颜色</th>
                     <th>边别</th><th>数量(支)</th><th>已冲销</th><th>备注</th>
                   </tr>
@@ -91,7 +91,8 @@
                   <tr v-for="it in row.items" :key="it.id">
                     <td>{{ it.orderNo || '—' }}</td>
                     <td>{{ it.productionNo || '—' }}</td>
-                    <td>{{ it.productModel || '—' }}</td>
+                    <td>{{ sanitizeItemCode(it.itemNo) || '—' }}</td>
+                    <td>{{ it.productName || '—' }}</td>
                     <td class="c">{{ it.dimensionText || '—' }}</td>
                     <td class="c">{{ surfaceLabel(it.surfaceType) }}</td>
                     <td v-if="colorEnabled" class="c">{{ it.color || '—' }}</td>
@@ -243,6 +244,7 @@ import {
   STOCK_DIRECTION_VALUE,
   labelOf,
   tagTypeOf,
+  sanitizeItemCode,
   sideLabel,
 } from '@/constants/dict';
 import AppTable from '@/components/AppTable.vue';

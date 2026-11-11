@@ -15,7 +15,6 @@ import {
   hasSocket,
   isValidSide,
   productLevelModel,
-  productModelWithoutItemCode,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -129,7 +128,8 @@ export class FinishedStockService {
         `(d.docNo LIKE :kw
           OR d.id IN (SELECT i.doc_id FROM t_finished_item i
                        WHERE i.order_no LIKE :kw OR i.customer_name LIKE :kw
-                          OR i.production_no LIKE :kw OR i.product_model LIKE :kw))`,
+                          OR i.production_no LIKE :kw OR i.item_no LIKE :kw
+                          OR i.product_name LIKE :kw OR i.product_model LIKE :kw))`,
         { kw: `%${query.keyword}%` },
       );
     }
@@ -459,10 +459,10 @@ export class FinishedStockService {
       params.push(query.surfaceType);
     }
     if (query.keyword) {
-      where.push(`(b.item_no LIKE ? OR b.product_model LIKE ?
+      where.push(`(b.item_no LIKE ? OR b.product_name LIKE ? OR b.product_model LIKE ?
                    OR o.order_no LIKE ? OR o.customer_name LIKE ? OR o.production_no LIKE ?)`);
       const kw = `%${query.keyword}%`;
-      params.push(kw, kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw);
     }
 
     const fromSql = `
@@ -493,6 +493,7 @@ export class FinishedStockService {
         customerName: r.customerName ?? null,
         productionNo: r.productionNo ?? null,
         itemNo: r.item_no,
+        productName: r.product_name,
         productModel: r.product_model,
         productType: r.product_type,
         groupType: r.group_type,
@@ -867,7 +868,7 @@ export class FinishedStockService {
       { header: '客户', pick: (r) => r.item.customerName || '' },
       { header: '生产单号', pick: (r) => r.item.productionNo || '' },
       { header: '产品代码', pick: (r) => sanitizeItemCode(r.item.itemNo), center: true },
-      { header: '产品型号', pick: (r) => productModelWithoutItemCode(r.item.productModel, r.item.itemNo) },
+      { header: '产品名称', pick: (r) => r.item.productName || '' },
       // 规格跟随「系统配置 → 单位换算」的默认查看单位，与台账/总计划导出同口径
       { header: dimHeader, pick: (r) => formatDimensionView(r.item.dimensionMm, dimensionViewUnit, inchToMm), center: true },
       { header: '表面处理', pick: (r) => label('surface_type', r.item.surfaceType), center: true },
@@ -943,7 +944,7 @@ export class FinishedStockService {
     // 列序对齐页面，便于与屏幕上的表并排核对
     const columns: Array<{ header: string; pick: (r: Row) => string | number; center?: boolean }> = [
       { header: '产品代码', pick: (r) => sanitizeItemCode(r.itemNo), center: true },
-      { header: '产品型号', pick: (r) => productModelWithoutItemCode(r.productModel, r.itemNo) },
+      { header: '产品名称', pick: (r) => r.productName || '' },
       { header: '规格', pick: (r) => r.dimensionText || '', center: true },
       { header: '表面处理', pick: (r) => label('surface_type', r.surfaceType), center: true },
       // 「颜色」停用时整列不输出——页面也不显示，导出留一列空值只是噪音（§5.7）
@@ -1000,7 +1001,8 @@ export class FinishedStockService {
       { header: '订单号' },
       { header: '客户' },
       { header: '生产单号' },
-      { header: '产品型号' },
+      { header: '产品代码' },
+      { header: '产品名称' },
       { header: '规格' },
       { header: '边别' },
       { header: '订单数(支)' },
@@ -1016,7 +1018,8 @@ export class FinishedStockService {
           o.orderNo || '',
           o.customerName || '',
           o.productionNo || '',
-          o.productModel || '',
+          o.itemNo || '',
+          o.productName || '',
           o.dimensionText || '',
           sideLabel(s.side),
           o.qtyPcs || 0,
@@ -1026,7 +1029,7 @@ export class FinishedStockService {
         ]);
       });
     });
-    styleSheet(ws, { centerColumns: [1, 6, 7, 8, 9, 10] });
+    styleSheet(ws, { centerColumns: [1, 5, 7, 8, 9, 10, 11] });
 
     addTipsSheet(wb, [
       ['这张表是做什么的', '把**上线前手工账上的成品库存**批量搬进系统。表里已按「期初补录」订单预填好可录的产品行，你只需要在**期初数量**列填数——没有库存的行留空或删掉即可。'],
@@ -1074,11 +1077,21 @@ export class FinishedStockService {
       remark: string;
     }> = [];
     const errors: string[] = [];
+    // 兼容已下载的旧模板：旧版只有「产品型号」，新版拆成「产品代码 + 产品名称」。
+    const hasProductNameColumn = cellString(ws.getRow(1).getCell(6)).replace(/[*＊\s]/g, '') === '产品名称';
+    const sideColumn = hasProductNameColumn ? 8 : 7;
+    const qtyColumn = hasProductNameColumn ? 10 : 9;
+    const batchColumn = hasProductNameColumn ? 11 : 10;
+    const remarkColumn = hasProductNameColumn ? 12 : 11;
 
     ws.eachRow((row, idx) => {
       if (idx === 1) return; // 表头
-      const [idText, orderNoText, , , , , sideText, , qtyText, batchNo, remark] =
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((c) => cellString(row.getCell(c)));
+      const idText = cellString(row.getCell(1));
+      const orderNoText = cellString(row.getCell(2));
+      const sideText = cellString(row.getCell(sideColumn));
+      const qtyText = cellString(row.getCell(qtyColumn));
+      const batchNo = cellString(row.getCell(batchColumn));
+      const remark = cellString(row.getCell(remarkColumn));
 
       // 模板是预填的：没填数量的行就是「这行没库存」，跳过而不是报错
       if (!qtyText) return;
@@ -1355,6 +1368,7 @@ export class FinishedStockService {
         customerName: snap.customerName,
         productionNo: snap.productionNo,
         itemNo: snap.itemNo,
+        productName: snap.productName,
         productModel: snap.productModel,
         productType: snap.productType,
         // 挂订单的成品是整套滑轨，没有组的概念，故不落组类型
@@ -1662,6 +1676,7 @@ export class FinishedStockService {
         orderId: item.orderId,
         orderProductId: item.orderProductId,
         itemNo: item.itemNo ?? '',
+        productName: item.productName ?? '',
         productModel: item.productModel ?? '',
         productType: item.productType ?? '',
         groupType: item.groupType ?? '',
@@ -1810,6 +1825,7 @@ export class FinishedStockService {
         customerName: snap.customerName,
         productionNo: snap.productionNo,
         itemNo: snap.itemNo,
+        productName: snap.productName,
         productModel: snap.productModel,
         productType: snap.productType,
         // 挂订单的成品是整套滑轨，没有组的概念
@@ -1839,6 +1855,7 @@ export class FinishedStockService {
       customerName: src.customerName,
       productionNo: src.productionNo,
       itemNo: src.itemNo,
+      productName: src.productName,
       productModel: src.productModel,
       productType: src.productType,
       groupType: src.groupType,

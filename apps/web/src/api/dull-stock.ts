@@ -12,6 +12,7 @@ import type { PageResult } from './customer';
 export interface DullStockRow {
   id: number;
   itemNo: string;
+  productName: string;
   customerName: string;
   productionNo: string;
   productModel: string;
@@ -96,6 +97,7 @@ export interface DullStockSummary {
 /** 建档/编辑入参（属性 + 单位 + 建档日期 + 期初数；入库数/出库数不在此列） */
 export interface DullStockPayload {
   itemNo: string;
+  productName?: string;
   customerName?: string;
   productionNo?: string;
   productModel?: string;

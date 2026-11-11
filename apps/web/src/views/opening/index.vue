@@ -37,7 +37,12 @@
             <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
             <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
             <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
-            <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
+            <el-table-column label="产品代码" width="105" show-overflow-tooltip>
+              <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+            </el-table-column>
+            <el-table-column label="产品名称" prop="productName" min-width="130" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.productName || '—' }}</template>
+            </el-table-column>
             <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
             <el-table-column label="边别" width="70" align="center">
               <template #default="{ row }">
@@ -148,7 +153,7 @@
         />
         <el-input
           v-model="pickerKeyword" clearable size="small" style="width: 280px"
-          placeholder="订单号/客户/生产单号/型号/产品代码"
+          placeholder="订单号/客户/生产单号/产品代码/名称"
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
@@ -162,7 +167,12 @@
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
-        <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="105" show-overflow-tooltip>
+          <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="产品名称" prop="productName" min-width="130" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
+        </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <el-table-column label="边别" width="70" align="center">
           <template #default="{ row }">
@@ -195,6 +205,7 @@ import {
   sideLabel,
   expandSideQtyRows,
   normalizeProductTypes,
+  sanitizeItemCode,
 } from '@/constants/dict';
 import ColorTag from '@/components/ColorTag.vue';
 import { businessToday } from '@/utils/date';
@@ -214,7 +225,8 @@ interface GroupRow {
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
-  productModel: string | null;
+  itemNo: string | null;
+  productName: string | null;
   dimensionText: string | null;
   qtyPcs: number;
   quantity: number;
@@ -257,7 +269,8 @@ async function loadOptions() {
         orderNo: o.orderNo,
         customerName: o.customerName,
         productionNo: o.productionNo,
-        productModel: o.productModel,
+        itemNo: o.itemNo,
+        productName: o.productName,
         dimensionText: o.dimensionText,
         qtyPcs: o.qtyPcs,
         quantity: 0,

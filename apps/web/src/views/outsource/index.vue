@@ -6,7 +6,7 @@
           <el-input
             v-model="query.keyword"
             clearable
-            placeholder="加工商/订单号/生产单号/产品型号/图号"
+            placeholder="加工商/订单号/生产单号/产品代码/名称/图号"
             style="width: 260px"
             @input="scheduleKeywordSearch"
             @keyup.enter="runKeywordSearch"
@@ -55,9 +55,7 @@
             {{ dateText(row.backDate) }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <!-- 列宽按「表头与最长内容取大」在浏览器实测定（2026-09-26）：1600 宽屏幕下表格区约 1288px，
-             各列合计恰好放下不出横向滚动条。「产品型号」是唯一的弹性列（吃掉剩余宽度），
-             它与「生产图号」偶有 20+ 字的长值，靠悬浮提示看全。加列或放宽前先算总宽 -->
+        <!-- 产品身份固定拆成代码、名称；部件级技术描述单列为组型号，避免把组型号误当产品名称。 -->
         <el-table-column label="加工商" prop="processorName" width="72" show-overflow-tooltip>
           <template #default="{ row }">
             <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
@@ -67,7 +65,15 @@
         <el-table-column label="生产单号" width="94" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" prop="productModel" min-width="110" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="88" show-overflow-tooltip>
+          <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="产品名称" prop="productName" min-width="105" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.productName || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="组型号" width="90" show-overflow-tooltip>
+          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="边别" width="82" align="center">
           <template #default="{ row }">
             <color-tag :seed="row.side || 'whole'">
@@ -135,7 +141,9 @@
     <el-dialog v-model="editVisible" title="编辑回厂记录" width="560px">
       <el-descriptions v-if="editRow" :column="2" border size="small" class="ed-snap">
         <el-descriptions-item label="生产单号">{{ editRow.productionNo || editRow.orderNo || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="产品型号">{{ editRow.productModel || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="产品代码">{{ sanitizeItemCode(editRow.itemNo) || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="产品名称">{{ editRow.productName || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="组型号">{{ productModelWithoutItemCode(editRow.productModel, editRow.itemNo) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="边别">{{ editRow.legacyUnassigned ? '历史未分边' : sideText(editRow.side) }}</el-descriptions-item>
         <el-descriptions-item label="规格">{{ editRow.dimensionText || '—' }}</el-descriptions-item>
         <el-descriptions-item label="订单数量">{{ editRow.orderQty }} {{ unitLabel(editRow.unit) }}</el-descriptions-item>
@@ -228,7 +236,14 @@ import {
   type OutsourcePartRow,
 } from '@/api/outsource';
 import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
-import { SURFACE_NONE, UNIT_OPTIONS, qtyFromWeight, sideLabel } from '@/constants/dict';
+import {
+  SURFACE_NONE,
+  UNIT_OPTIONS,
+  productModelWithoutItemCode,
+  qtyFromWeight,
+  sanitizeItemCode,
+  sideLabel,
+} from '@/constants/dict';
 import {
   ENTRY_MODE_OPTIONS,
   mismatchedQty,

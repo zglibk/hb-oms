@@ -64,6 +64,9 @@ export class FinishedItem {
   @Column({ name: 'item_no', type: 'varchar', length: 64, nullable: true, comment: '货号快照（如 53#）' })
   itemNo: string | null;
 
+  @Column({ name: 'product_name', type: 'varchar', length: 128, nullable: true, comment: '产品名称快照（自订单产品行）' })
+  productName: string | null;
+
   @Column({
     name: 'product_model',
     type: 'varchar',

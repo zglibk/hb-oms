@@ -99,6 +99,8 @@ export interface AssemblyBatchesResult {
     orderNo: string | null;
     customerName: string | null;
     productionNo: string | null;
+    itemNo: string | null;
+    productName: string | null;
     productModel: string | null;
     dimensionText: string | null;
     qtyPcs: number;

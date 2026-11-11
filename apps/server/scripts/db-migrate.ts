@@ -145,6 +145,8 @@ const MIGRATIONS: string[] = [
   'migration-changelog-v1.3.1.sql',
   // 将重复订单清理时手工补写的运维日志归属到内置超级管理员
   'migration-operation-log-super-admin.sql',
+  // 产品代码 / 产品名称拆列：补齐外发、成品流水快照与呆滞品独立名称字段
+  'migration-product-name-snapshots.sql',
 ];
 
 /**
@@ -228,6 +230,8 @@ const expectedColumns = [
   't_outsource_part.return_qty',
   't_outsource_part.order_qty',
   't_outsource_part.drawing_no',
+  't_outsource_part.item_no',
+  't_outsource_part.product_name',
   // M3.5 装配批次
   't_assembly_batch.order_product_id',
   't_assembly_batch.side',
@@ -247,10 +251,12 @@ const expectedColumns = [
   't_finished_item.side',
   't_finished_item.quantity',
   't_finished_item.origin_item_id',
+  't_finished_item.product_name',
   't_finished_balance.order_product_id',
   't_finished_balance.side',
   't_finished_balance.attr_key',
   't_finished_balance.quantity',
+  't_finished_balance.product_name',
   // M5 部件台账
   't_part_balance.part_type',
   't_part_balance.material_thickness',
@@ -280,6 +286,7 @@ const expectedColumns = [
   't_dull_stock.balance_qty',
   't_dull_stock.customer_name',
   't_dull_stock.production_no',
+  't_dull_stock.product_name',
   't_dull_stock.material_thickness',
   't_dull_stock_flow.dull_id',
   't_dull_stock_flow.direction',

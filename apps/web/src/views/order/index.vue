@@ -114,7 +114,9 @@
                   <tr>
                     <!-- 客户图号/产品要求描述可在「系统配置 → 业务字段」全局停用，th 与 td 必须同条件 -->
                     <th v-if="customerDrawingNoEnabled">客户图号</th>
-                    <th>产品型号</th>
+                    <th>产品代码</th>
+                    <th>产品名称</th>
+                    <th>组型号</th>
                     <th v-if="productRequirementEnabled">产品要求描述</th>
                     <th>规格</th>
                     <th>数量</th>
@@ -130,8 +132,10 @@
                   <template v-for="p in row.products" :key="p.id">
                     <tr v-for="(g, gi) in p.partGroups" :key="g.id">
                       <td v-if="customerDrawingNoEnabled && gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ p.customerDrawingNo || '—' }}</td>
+                      <td v-if="gi === 0" :rowspan="p.partGroups.length" class="eg-center">{{ sanitizeItemCode(p.itemNo) || '—' }}</td>
+                      <td v-if="gi === 0" :rowspan="p.partGroups.length">{{ p.productName || '—' }}</td>
                       <td>
-                        {{ g.productModel || productLabel(p) }}
+                        {{ productModelWithoutItemCode(g.productModel, p.itemNo) || '—' }}
                         <!-- 分体出货：该行按部件组构成分体包装出货（不组装成整品），只在首组行标一次 -->
                         <el-tag v-if="p.isSplit && gi === 0" size="small" type="warning" disable-transitions>分体</el-tag>
                       </td>
@@ -268,7 +272,6 @@ import {
   ORDER_STATUS_VALUE,
   UNIT_OPTIONS,
   DIMENSION_UNIT,
-  formatProductModel,
   formatDimension,
   labelOf,
   tagTypeOf,
@@ -278,6 +281,8 @@ import {
   RAIL_SECTION_OPTIONS,
   partTypeLabel,
   sideLabel,
+  productModelWithoutItemCode,
+  sanitizeItemCode,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
@@ -469,9 +474,6 @@ function unitLabel(v: string): string {
 function dictLabel(opts: Array<{ label: string; value: string }>, v: string | null): string {
   if (!v) return '—';
   return opts.find((o) => o.value === v)?.label ?? v;
-}
-function productLabel(p: OrderProductItem): string {
-  return formatProductModel(p.itemNo ?? '', p.productType, 'whole');
 }
 function partSideText(group: { parts?: Array<{ partType: string; side: string; qty: number }> }): string {
   const rows = group.parts ?? [];

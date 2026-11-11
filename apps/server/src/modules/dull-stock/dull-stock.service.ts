@@ -116,7 +116,7 @@ export class DullStockService {
     if (query.side != null) qb.andWhere('d.side = :sd', { sd: query.side });
     if (query.keyword) {
       qb.andWhere(
-        `(d.itemNo LIKE :kw OR d.productModel LIKE :kw OR d.materialThickness LIKE :kw
+        `(d.itemNo LIKE :kw OR d.productName LIKE :kw OR d.productModel LIKE :kw OR d.materialThickness LIKE :kw
           OR d.customerName LIKE :kw OR d.productionNo LIKE :kw)`,
         { kw: `%${query.keyword}%` },
       );
@@ -359,7 +359,10 @@ export class DullStockService {
     const unit = row.unit || UNIT.PIECE;
     const unitText = unitLabel(unit);
     const stockSideLabel = sideLabel(row.side);
-    const productName = row.productModel || row.itemNo || '';
+    const productName = row.productName
+      || productModelWithoutItemCode(row.productModel, row.itemNo)
+      || row.itemNo
+      || '';
     const markedProductName = stockSideLabel ? `${productName}（${stockSideLabel}）` : productName;
     const docNo = `DSO${flow.flowDate.replaceAll('-', '')}-${String(flow.id).padStart(4, '0')}`;
 
@@ -502,10 +505,10 @@ export class DullStockService {
     const ws = wb.addWorksheet('呆滞品');
     ws.columns = [
       { header: '产品代码' },
+      { header: '产品名称' },
       { header: '客户' },
       { header: '生产单号' },
       { header: '建档日期' },
-      { header: '产品型号' },
       { header: '产品类型' },
       { header: '节数' },
       { header: '规格(mm)' },
@@ -529,10 +532,10 @@ export class DullStockService {
     for (const r of all.list as any[]) {
       ws.addRow([
         r.itemNo || '',
+        r.productName || '',
         r.customerName || '',
         r.productionNo || '',
         r.filingDate || '',
-        productModelWithoutItemCode(r.productModel, r.itemNo),
         formatProductTypes(r.productType || ''),
         labelOf(RAIL_SECTION_OPTIONS, r.railSection),
         r.dimensionMm || 0,
@@ -572,9 +575,9 @@ export class DullStockService {
     const ws = wb.addWorksheet('呆滞品导入');
     ws.columns = [
       { header: '产品代码*' },
+      { header: '产品名称' },
       { header: '客户' },
       { header: '生产单号' },
-      { header: '产品型号' },
       { header: '产品类型' },
       { header: '节数' },
       { header: '规格(mm)' },
@@ -588,7 +591,7 @@ export class DullStockService {
       { header: '备注' },
     ];
     ws.addRow([
-      '53#', '海尔', 'SC2508001', '', '普通,自锁', '三节轨', 450, '2.00',
+      '53#', '45#缓冲', '海尔', 'SC2508001', '普通,自锁', '三节轨', 450, '2.00',
       '电泳', '黑色', '', '支', businessToday(), 200, '示例行，导入前请删除',
     ]);
     styleSheet(ws, { centerColumns: [6, 7, 8, 9, 10, 11, 12, 13] });
@@ -597,8 +600,8 @@ export class DullStockService {
       ['一行 = 一批货', '呆滞品**刻意不设唯一键**：同产品代码同客户先后剩下的几批要各建各的档，所以导入的每一行都会**新建一条记录**，不会合并、不会覆盖。'],
       ['重复导入会怎样', '会**重复建档**。同一份文件不要导入两次；导入失败时整批回滚，可以放心改完重来。'],
       ['产品代码', '必填。'],
+      ['产品名称', '选填，填写实际品名；不要填写由产品代码和类型拼成的技术型号。'],
       ['客户 / 生产单号', '均为选填的来源信息。能确认客户 Logo 或原生产单号时如实填写；无法确认时可以留空，不要为了通过校验虚构内容。'],
-      ['产品型号', '留空会按「产品代码 + 产品类型」自动拼。'],
       ['产品类型', '可多选，用逗号分隔，如「普通,自锁」。'],
       ['节数', `可填 ${RAIL_SECTION_OPTIONS.map((o) => o.label).join(' / ')}，留空表示不区分。`],
       ['料厚', '选填，如 2.00、1.2×1.0×1.2；用于清单辨货和送货单打印。'],
@@ -623,6 +626,9 @@ export class DullStockService {
    */
   async importFromExcel(buffer: Buffer, user: CurrentUserPayload) {
     const ws = await loadFirstSheet(buffer);
+    // 兼容已下载的旧模板：旧版第 2～4 列是「客户 / 生产单号 / 产品型号」，
+    // 新版改为「产品名称 / 客户 / 生产单号」，总列数保持不变。
+    const hasProductNameColumn = cellString(ws.getRow(1).getCell(2)).replace(/[*＊\s]/g, '') === '产品名称';
     const hasThicknessColumn = cellString(ws.getRow(1).getCell(8)).replace(/[*＊\s]/g, '') === '料厚';
     const filingColumn = hasThicknessColumn ? 13 : 12;
     const filingHeader = cellString(ws.getRow(1).getCell(filingColumn)).replace(/[*＊\s]/g, '');
@@ -639,8 +645,12 @@ export class DullStockService {
 
     ws.eachRow((row, idx) => {
       if (idx === 1) return; // 表头
-      const [itemNo, customerName, productionNo, productModel, typeText, railLabel, dimension] =
-        [1, 2, 3, 4, 5, 6, 7].map((c) => cellString(row.getCell(c)));
+      const itemNo = cellString(row.getCell(1));
+      const productName = hasProductNameColumn ? cellString(row.getCell(2)) : '';
+      const customerName = cellString(row.getCell(hasProductNameColumn ? 3 : 2));
+      const productionNo = cellString(row.getCell(hasProductNameColumn ? 4 : 3));
+      const productModel = hasProductNameColumn ? '' : cellString(row.getCell(4));
+      const [typeText, railLabel, dimension] = [5, 6, 7].map((c) => cellString(row.getCell(c)));
       const materialThickness = hasThicknessColumn ? cellString(row.getCell(8)) : '';
       const offset = hasThicknessColumn ? 1 : 0;
       const [surfaceType, color, sideLabel, unitLabelText] =
@@ -648,7 +658,7 @@ export class DullStockService {
       const filingDate = this.excelDateString(row.getCell(12 + offset));
       const openingQty = cellString(row.getCell(13 + offset));
       const remark = cellString(row.getCell(14 + offset));
-      if (![itemNo, customerName, productionNo, typeText, unitLabelText, filingDate, openingQty].some(Boolean)) return;
+      if (![itemNo, productName, productModel, customerName, productionNo, typeText, unitLabelText, filingDate, openingQty].some(Boolean)) return;
 
       const at = `第 ${idx} 行`;
       const rowErrors: string[] = [];
@@ -709,6 +719,7 @@ export class DullStockService {
         rowNo: idx,
         dto: {
           itemNo,
+          productName: productName || undefined,
           customerName: customerName || undefined,
           productionNo: productionNo || undefined,
           productModel: productModel || undefined,
@@ -875,6 +886,7 @@ export class DullStockService {
 
     return {
       itemNo,
+      productName: (dto.productName ?? '').trim(),
       customerName,
       productionNo,
       productModel: (dto.productModel ?? '').trim() || formatProductModel(itemNo, productType),

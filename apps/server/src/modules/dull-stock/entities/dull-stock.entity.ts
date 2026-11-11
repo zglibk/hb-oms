@@ -32,6 +32,15 @@ export class DullStock {
   @Column({ name: 'item_no', type: 'varchar', length: 64, default: '', comment: '货号（如 53#）' })
   itemNo: string;
 
+  @Column({
+    name: 'product_name',
+    type: 'varchar',
+    length: 128,
+    default: '',
+    comment: '产品名称（独立档案字段；不明确可为空）',
+  })
+  productName: string;
+
   @Index('idx_customer')
   @Column({
     name: 'customer_name',
