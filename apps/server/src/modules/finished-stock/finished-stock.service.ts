@@ -15,6 +15,7 @@ import {
   hasSocket,
   isValidSide,
   productLevelModel,
+  productModelWithoutItemCode,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -866,7 +867,7 @@ export class FinishedStockService {
       { header: '客户', pick: (r) => r.item.customerName || '' },
       { header: '生产单号', pick: (r) => r.item.productionNo || '' },
       { header: '产品代码', pick: (r) => sanitizeItemCode(r.item.itemNo), center: true },
-      { header: '产品型号', pick: (r) => r.item.productModel || '' },
+      { header: '产品型号', pick: (r) => productModelWithoutItemCode(r.item.productModel, r.item.itemNo) },
       // 规格跟随「系统配置 → 单位换算」的默认查看单位，与台账/总计划导出同口径
       { header: dimHeader, pick: (r) => formatDimensionView(r.item.dimensionMm, dimensionViewUnit, inchToMm), center: true },
       { header: '表面处理', pick: (r) => label('surface_type', r.item.surfaceType), center: true },
@@ -942,7 +943,7 @@ export class FinishedStockService {
     // 列序对齐页面，便于与屏幕上的表并排核对
     const columns: Array<{ header: string; pick: (r: Row) => string | number; center?: boolean }> = [
       { header: '产品代码', pick: (r) => sanitizeItemCode(r.itemNo), center: true },
-      { header: '产品型号', pick: (r) => r.productModel || '' },
+      { header: '产品型号', pick: (r) => productModelWithoutItemCode(r.productModel, r.itemNo) },
       { header: '规格', pick: (r) => r.dimensionText || '', center: true },
       { header: '表面处理', pick: (r) => label('surface_type', r.surfaceType), center: true },
       // 「颜色」停用时整列不输出——页面也不显示，导出留一列空值只是噪音（§5.7）

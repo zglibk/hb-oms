@@ -10,6 +10,7 @@ import {
   hasSocket,
   isValidSide,
   productLevelModel,
+  productModelWithoutItemCode,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -597,7 +598,7 @@ export class AssemblyService {
         r.productionNo || r.orderNo || '',
         r.customerName || '',
         sanitizeItemCode(r.itemNo),
-        r.productModel || '',
+        productModelWithoutItemCode(r.productModel, r.itemNo),
         r.productName || '',
         r.dimensionText || '',
         r.assemblyWorkshops.map((w) => labeler('assembly_workshop', w)).join('/'),

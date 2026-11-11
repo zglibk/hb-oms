@@ -51,7 +51,9 @@
         <el-table-column label="产品代码" prop="itemNo" width="90" align="center">
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" prop="productModel" min-width="160" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品型号" min-width="160" class-name="col-left" show-overflow-tooltip>
+          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
@@ -126,7 +128,7 @@ import {
   importStockBalance,
   type BalanceRow,
 } from '@/api/finished-stock';
-import { SIDE_OPTIONS, sanitizeItemCode, sideLabel } from '@/constants/dict';
+import { SIDE_OPTIONS, productModelWithoutItemCode, sanitizeItemCode, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';

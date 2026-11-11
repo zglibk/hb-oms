@@ -68,7 +68,9 @@
           <el-table-column label="产品代码" width="110" show-overflow-tooltip>
             <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
+          <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+          </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
           <el-table-column label="表面处理" width="95" align="center">
             <template #default="{ row }">
@@ -255,7 +257,9 @@
         <el-table-column label="产品代码" width="110" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
+        <el-table-column label="产品型号" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
         <el-table-column label="表面处理" width="95" align="center">
@@ -328,6 +332,7 @@ import {
   tagTypeOf,
   sideLabel,
   parseProductTypes,
+  productModelWithoutItemCode,
   sanitizeItemCode,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';

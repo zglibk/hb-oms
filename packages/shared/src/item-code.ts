@@ -45,6 +45,31 @@ export function sanitizeItemCode(v: string | null | undefined): string {
 }
 
 /**
+ * 当「产品代码」与「产品型号」分列展示时，去掉型号开头重复的产品代码。
+ *
+ * 产品型号快照历史上按「产品代码 + 产品类型/形态」保存，不能为了页面展示而回写数据库；
+ * 新增独立的产品代码列后，仅在展示层调用本函数。先匹配原始代码，再匹配清洗后的代码，
+ * 兼容「45#无锁力普通滑轨」以及「45#普通滑轨」两类存量快照。
+ */
+export function productModelWithoutItemCode(
+  productModel: string | null | undefined,
+  itemNo: string | null | undefined,
+): string {
+  const model = (productModel ?? '').trim();
+  if (!model) return '';
+
+  const rawItemNo = (itemNo ?? '').trim();
+  const itemCodePrefixes = Array.from(
+    new Set([rawItemNo, sanitizeItemCode(rawItemNo)].filter(Boolean)),
+  ).sort((a, b) => b.length - a.length);
+
+  const matchedPrefix = itemCodePrefixes.find((prefix) => model.startsWith(prefix));
+  if (!matchedPrefix) return model;
+
+  return model.slice(matchedPrefix.length).replace(/^[\s\-_/]+/, '').trim();
+}
+
+/**
  * 录入过程中的逐字清除：只删非代码字符（中文、全角符号等），**不收拾「-」与空格**——
  * 用户正打到「45#-」时把尾部的「-」删掉会让人根本打不下去。收拾留给失焦时的 sanitizeItemCode。
  */

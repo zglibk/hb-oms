@@ -125,6 +125,7 @@ export {
   // 订单「产品代码」写法规则（宽度或代码式内容，不许中文说明）
   ITEM_CODE_MESSAGE,
   isValidItemCode,
+  productModelWithoutItemCode,
   sanitizeItemCode,
   stripItemCodeInput,
   ITEM_CODE_STRIP_MESSAGE,

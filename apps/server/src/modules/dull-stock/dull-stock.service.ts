@@ -13,6 +13,7 @@ import {
   formatProductModel,
   formatProductTypes,
   normalizeProductTypes,
+  productModelWithoutItemCode,
   sideLabel,
   toPieces,
 } from '@hb-oms/shared';
@@ -531,7 +532,7 @@ export class DullStockService {
         r.customerName || '',
         r.productionNo || '',
         r.filingDate || '',
-        r.productModel || '',
+        productModelWithoutItemCode(r.productModel, r.itemNo),
         formatProductTypes(r.productType || ''),
         labelOf(RAIL_SECTION_OPTIONS, r.railSection),
         r.dimensionMm || 0,
