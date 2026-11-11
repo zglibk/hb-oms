@@ -7,6 +7,7 @@ import { useUserStore } from '@/stores/user';
 import { tokenStore } from '@/utils/request';
 import { registerDynamicRoutes } from './dynamic';
 import { ElMessage } from 'element-plus';
+import { applyPageTitle } from '@/utils/document-meta';
 
 /** 静态路由（是否免登录/需功能权限由各自 meta 声明） */
 const constantRoutes: RouteRecordRaw[] = [
@@ -248,6 +249,7 @@ router.onError((error, to) => {
 // 导航成功即说明当前版本的 chunk 可用，清掉标记，
 // 使下一次真正的发版失效仍能触发硬跳转（否则同一目标一辈子只救一次）。
 router.afterEach((to) => {
+  applyPageTitle(to.meta.title);
   try {
     sessionStorage.removeItem(`${CHUNK_RELOAD_PREFIX}${to.fullPath}`);
   } catch {

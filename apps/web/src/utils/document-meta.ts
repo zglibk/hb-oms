@@ -28,6 +28,16 @@ const SYSTEM_NAME_CACHE_KEY = 'hb_oms_system_name';
 /** 默认系统名称（无缓存、接口未返回时的兜底） */
 const DEFAULT_SYSTEM_NAME = '海宝五金订单跟踪系统';
 
+/** 当前路由页面名称与系统名称，统一用于拼接浏览器标签标题。 */
+let currentPageTitle = '';
+let currentSystemName = DEFAULT_SYSTEM_NAME;
+
+function renderDocumentTitle() {
+  document.title = currentPageTitle
+    ? `${currentPageTitle} - ${currentSystemName}`
+    : currentSystemName;
+}
+
 /**
  * 应用启动时同步设置标题（无需等接口）
  * 读取上次缓存的系统名称立即写入 document.title，
@@ -37,10 +47,17 @@ const DEFAULT_SYSTEM_NAME = '海宝五金订单跟踪系统';
 export function applyCachedTitle() {
   try {
     const cached = localStorage.getItem(SYSTEM_NAME_CACHE_KEY);
-    document.title = cached?.trim() || DEFAULT_SYSTEM_NAME;
+    currentSystemName = cached?.trim() || DEFAULT_SYSTEM_NAME;
   } catch {
-    document.title = DEFAULT_SYSTEM_NAME;
+    currentSystemName = DEFAULT_SYSTEM_NAME;
   }
+  renderDocumentTitle();
+}
+
+/** 路由切换后更新页面名称；系统名称变更时会保留当前页面名称重新拼接。 */
+export function applyPageTitle(title: unknown) {
+  currentPageTitle = typeof title === 'string' ? title.trim() : '';
+  renderDocumentTitle();
 }
 
 /** 确保存在指定的 meta 标签并设置其 content */
@@ -64,8 +81,9 @@ export function applyDocumentMeta(opts: DocumentMetaOptions) {
   const company = opts.companyName?.trim() || '海宝五金';
   const description = `${company} PMC 生产计划管理平台 —— 以客户订单为驱动，贯通接单、排产、审核、外协全链路数字化管理。`;
 
-  // 浏览器标签标题：仅使用管理员配置的「系统名称」
-  document.title = system;
+  // 浏览器标签标题：当前页面名称在前，管理员配置的系统名称在后
+  currentSystemName = system;
+  renderDocumentTitle();
   // 缓存系统名称，下次启动同步应用，消除标签名闪烁
   try {
     localStorage.setItem(SYSTEM_NAME_CACHE_KEY, system);
