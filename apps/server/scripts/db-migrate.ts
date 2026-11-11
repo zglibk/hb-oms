@@ -143,8 +143,6 @@ const MIGRATIONS: string[] = [
   'migration-request-idempotency.sql',
   // 更新日志 v1.3.1“订单录入与成品选品优化”（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.3.1.sql',
-  // 更新日志 v1.3.2“业务写入并发保护”（仅数据）
-  'migration-changelog-v1.3.2.sql',
 ];
 
 /**
