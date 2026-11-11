@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS t_no_sequence (
 CREATE TABLE IF NOT EXISTS t_order (
   id             INT AUTO_INCREMENT PRIMARY KEY,
   order_no       VARCHAR(32)  NOT NULL COMMENT '系统单号，ORD 采番',
+  create_request_id VARCHAR(64) NULL COMMENT '创建订单请求幂等键；同一张新增表单重复提交只创建一次',
   po_no          VARCHAR(64)  NULL COMMENT 'PO#（客户订单文件上的订单编号，手工填写；与 production_no 一对一）',
   production_no  VARCHAR(64)  NULL COMMENT '生产单号（订单级，手工填写；与 po_no 一对一；对应手工台账「订单编号」如 GLI46212-A，台账默认展示此号）',
   customer_id    INT          NULL COMMENT '客户ID（t_customer，可空支持手输客户）',
@@ -248,6 +249,7 @@ CREATE TABLE IF NOT EXISTS t_order (
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_order_no (order_no),
+  UNIQUE KEY uk_order_create_request_id (create_request_id),
   KEY idx_customer (customer_id),
   KEY idx_status (status),
   KEY idx_production_no (production_no),

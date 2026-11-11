@@ -137,6 +137,10 @@ const MIGRATIONS: string[] = [
   'migration-dull-stock-monthly-ledger.sql',
   // 更新日志 v1.3.0“业务台账与打印功能优化”（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.3.0.sql',
+  // 新增订单幂等键：重复/并发提交只创建一次
+  'migration-order-create-idempotency.sql',
+  // 更新日志 v1.3.1“订单录入与成品选品优化”（仅数据，同版本同标题已存在即跳过）
+  'migration-changelog-v1.3.1.sql',
 ];
 
 /**
@@ -318,6 +322,8 @@ const expectedColumns = [
   't_permission.access_type',
   // 订单备注（图文混排）
   't_order.other_req',
+  // 新增订单请求幂等键
+  't_order.create_request_id',
   // 人事档案
   't_employee.emp_no',
   't_employee.emp_name',

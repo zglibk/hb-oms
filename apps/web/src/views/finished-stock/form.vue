@@ -65,6 +65,9 @@
           <el-table-column type="index" label="#" width="46" align="center" />
           <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
           <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
+          <el-table-column label="产品代码" width="110" show-overflow-tooltip>
+            <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+          </el-table-column>
           <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
           <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
           <el-table-column label="表面处理" width="95" align="center">
@@ -249,6 +252,9 @@
         <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
         <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
         <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="产品型号" prop="productModel" min-width="150" show-overflow-tooltip />
         <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
@@ -322,6 +328,7 @@ import {
   tagTypeOf,
   sideLabel,
   parseProductTypes,
+  sanitizeItemCode,
 } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
@@ -349,6 +356,7 @@ interface ItemRow {
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
+  itemNo: string | null;
   productModel: string | null;
   dimensionText: string | null;
   /** 表面处理（字典 surface_type）与颜色：同货号不同表面处理是两批货，选货与核对都要看 */
@@ -462,6 +470,7 @@ async function init() {
       orderNo: it.orderNo,
       customerName: it.customerName,
       productionNo: it.productionNo,
+      itemNo: it.itemNo,
       productModel: it.productModel,
       dimensionText: it.dimensionText,
       surfaceType: it.surfaceType,
@@ -715,6 +724,7 @@ async function initializePicker() {
         orderNo: o.orderNo,
         customerName: o.customerName,
         productionNo: o.productionNo,
+        itemNo: o.itemNo,
         productModel: o.productModel,
         productType: o.productType,
         dimensionText: o.dimensionText,
@@ -793,6 +803,7 @@ function confirmPick() {
       orderNo: o.orderNo,
       customerName: o.customerName,
       productionNo: o.productionNo,
+      itemNo: o.itemNo,
       productModel: o.productModel,
       dimensionText: o.dimensionText,
       surfaceType: o.surfaceType,

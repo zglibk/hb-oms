@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -11,12 +12,23 @@ import {
  * 无审核流，创建即生效；「完结」是台账口径不锁单据（§3.1）。
  */
 @Entity('t_order')
+@Index('uk_order_create_request_id', ['createRequestId'], { unique: true })
 export class Order {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'order_no', type: 'varchar', length: 32, unique: true, comment: '系统单号，ORD 采番' })
   orderNo: string;
+
+  @Column({
+    name: 'create_request_id',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    select: false,
+    comment: '创建订单请求幂等键；同一张新增表单重复提交只创建一次',
+  })
+  createRequestId: string | null;
 
   @Column({
     name: 'po_no',

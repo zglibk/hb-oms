@@ -8,6 +8,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   Min,
@@ -153,6 +154,14 @@ export class CreateOrderProductDto {
 }
 
 export class CreateOrderDto {
+  /**
+   * 新增订单请求幂等键。新前端每张新增表单生成一次并在重试时复用；
+   * 选填是为了兼容迁移期间尚未刷新的旧前端。
+   */
+  @IsOptional()
+  @IsUUID('4', { message: '创建订单请求标识格式不正确' })
+  createRequestId?: string;
+
   /*
    * 生产单号 2026-08-14 起**必填**（业务部门要求）：它是车间与台账认的「订单编号」，
    * 为空时下游单据那一栏就是空白。PO# 当时一并必填，2026-09-25 放开为**选填**——

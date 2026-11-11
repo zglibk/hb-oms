@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -263,33 +264,64 @@ export class OrderService {
   /* ==================== 创建 / 更新 ==================== */
 
   async create(dto: CreateOrderDto, user: CurrentUserPayload) {
+    const createRequestId = dto.createRequestId?.trim() || null;
+    if (createRequestId) {
+      const existing = await this.findIdempotentCreate(createRequestId, user);
+      if (existing) return existing;
+    }
     this.assertOrderDates(dto);
     this.assertProductRows(dto);
-    return this.dataSource.transaction(async (mgr) => {
-      const orderNo = await this.numberGenerator.generate('ORD', mgr);
-      const order = await mgr.getRepository(Order).save(
-        mgr.getRepository(Order).create({
-          orderNo,
-          // PO# 选填：空白统一存 NULL，避免 '' 与 NULL 两种「空」并存（按有无 PO# 筛选时会漏）
-          poNo: dto.poNo?.trim() || null,
-          productionNo: dto.productionNo ?? null,
-          customerId: dto.customerId ?? null,
-          customerName: dto.customerName,
-          orderDate: dto.orderDate,
-          salesman: dto.salesman ?? null,
-          merchandiser: dto.merchandiser ?? null,
-          orderSource: dto.orderSource ?? null,
-          attachmentIds: dto.attachmentIds ?? null,
-          isOpening: dto.isOpening ?? 0,
-          remark: dto.remark ?? null,
-          otherReq: dto.otherReq ?? null,
-          status: ORDER_STATUS.ACTIVE,
-          ...auditOnCreate(user),
-        }),
-      );
-      await this.writeChildren(mgr, order.id, dto.products, auditOnCreate(user));
-      return { id: order.id, orderNo };
-    });
+    try {
+      return await this.dataSource.transaction(async (mgr) => {
+        const orderNo = await this.numberGenerator.generate('ORD', mgr);
+        const order = await mgr.getRepository(Order).save(
+          mgr.getRepository(Order).create({
+            orderNo,
+            createRequestId,
+            // PO# 选填：空白统一存 NULL，避免 '' 与 NULL 两种「空」并存（按有无 PO# 筛选时会漏）
+            poNo: dto.poNo?.trim() || null,
+            productionNo: dto.productionNo ?? null,
+            customerId: dto.customerId ?? null,
+            customerName: dto.customerName,
+            orderDate: dto.orderDate,
+            salesman: dto.salesman ?? null,
+            merchandiser: dto.merchandiser ?? null,
+            orderSource: dto.orderSource ?? null,
+            attachmentIds: dto.attachmentIds ?? null,
+            isOpening: dto.isOpening ?? 0,
+            remark: dto.remark ?? null,
+            otherReq: dto.otherReq ?? null,
+            status: ORDER_STATUS.ACTIVE,
+            ...auditOnCreate(user),
+          }),
+        );
+        await this.writeChildren(mgr, order.id, dto.products, auditOnCreate(user));
+        return { id: order.id, orderNo, deduplicated: false };
+      });
+    } catch (error) {
+      // 两个并发请求都可能在事务前查不到记录；唯一索引是最终防线。
+      // 败方事务回滚（含 ORD 采番），再返回胜方已经创建的订单。
+      if (createRequestId && this.isCreateRequestDuplicate(error)) {
+        const existing = await this.findIdempotentCreate(createRequestId, user);
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  private async findIdempotentCreate(createRequestId: string, user: CurrentUserPayload) {
+    const existing = await this.orderRepo.findOne({ where: { createRequestId } });
+    if (!existing) return null;
+    if (existing.creatorId !== user.id) {
+      throw new ConflictException('创建订单请求标识已被占用，请刷新页面后重试');
+    }
+    return { id: existing.id, orderNo: existing.orderNo, deduplicated: true };
+  }
+
+  private isCreateRequestDuplicate(error: unknown): boolean {
+    const driverError = (error as { driverError?: { code?: string; message?: string } })?.driverError;
+    return driverError?.code === 'ER_DUP_ENTRY'
+      && (driverError.message ?? '').includes('uk_order_create_request_id');
   }
 
   /**
