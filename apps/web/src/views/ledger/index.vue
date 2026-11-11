@@ -728,8 +728,11 @@ export default { name: 'OrderLedger' };
 .time-header {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 2px;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
 
   &__help {
     display: inline-flex;

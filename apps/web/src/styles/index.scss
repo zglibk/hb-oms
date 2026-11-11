@@ -207,9 +207,25 @@ a {
     vertical-align: middle;
   }
 
-  /* 标题行：水平居中 */
+  /* 标题行：水平居中并允许按列宽自动换行。
+   * 数据行仍沿用下方单行省略规则，表头不再为了不换行反向撑宽整列。 */
   th.el-table__cell .cell {
     text-align: center;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.25;
+  }
+
+  /* 自定义表头常用 span / flex 容器包裹文字，历史页面可能在容器上另设 nowrap；
+   * 只覆盖表头直接内容，排序箭头和选择框维持 Element Plus 原生布局。 */
+  th.el-table__cell .cell > :not(.caret-wrapper):not(.el-checkbox) {
+    max-width: 100%;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* 记录行：默认水平居中（规则性内容） */
@@ -358,6 +374,15 @@ a {
   .el-table__body tr.current-row > td.el-table__cell {
     background-color: var(--el-table-current-row-bg-color) !important;
   }
+}
+
+/* 业务页面展开区等少量原生表格不经过 el-table，同样允许表头自动换行。
+ * !important 用于覆盖页面 scoped 样式中历史遗留的 th { white-space: nowrap }。 */
+.page table th {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.25;
 }
 
 /* 数据行上下内边距随视口小幅变化，兼顾密度与可读性。 */
