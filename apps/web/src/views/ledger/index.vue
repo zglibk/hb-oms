@@ -257,20 +257,20 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column sortable="custom" label="客户" prop="customerName" min-width="84" class-name="col-left" show-overflow-tooltip />
-        <el-table-column prop="productionNo" sortable="custom" label="生产单号" width="96" show-overflow-tooltip>
+        <el-table-column label="客户" prop="customerName" min-width="84" class-name="col-left" show-overflow-tooltip />
+        <el-table-column prop="productionNo" label="生产单号" width="96" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column sortable="custom" label="产品代码" prop="itemNo" width="86" show-overflow-tooltip>
+        <el-table-column label="产品代码" prop="itemNo" width="86" show-overflow-tooltip>
           <template #default="{ row }">{{ row.itemNo || row.materialCode || '—' }}</template>
         </el-table-column>
-        <el-table-column sortable="custom" label="产品名称" prop="productName" min-width="116" class-name="col-left" show-overflow-tooltip>
+        <el-table-column label="产品名称" prop="productName" min-width="116" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || row.productModel || '—' }}</template>
         </el-table-column>
         <el-table-column label="产品部件" width="90" show-overflow-tooltip>
           <template #default="{ row }">{{ groupTypesText(row) }}</template>
         </el-table-column>
-        <el-table-column prop="dimensionMm" sortable="custom" :label="dimColLabel" width="72" align="center">
+        <el-table-column prop="dimensionMm" :label="dimColLabel" width="72" align="center">
           <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="74" align="center">
@@ -279,7 +279,7 @@
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="orderQty" sortable="custom" label="订单数量" width="80" align="center">
+        <el-table-column prop="orderQty" label="订单数量" width="80" align="center">
           <template #default="{ row }">{{ row.orderQty }}{{ unitLabel(row.unit) }}</template>
         </el-table-column>
         <el-table-column prop="deliveryDate" sortable="custom" label="订单交期" width="96" align="center">
@@ -287,7 +287,7 @@
             <span :class="{ 'num-overdue': row.overdue }">{{ dateText(row.deliveryDate) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="returnedQty" sortable="custom" label="外发回厂数" width="86" align="center">
+        <el-table-column prop="returnedQty" label="外发回厂数" width="86" align="center">
           <template #default="{ row }">
             <span v-if="row.outsourceOwed == null" class="num-na">—</span>
             <span v-else :title="`外发欠数：${row.outsourceOwed}`">{{ row.returnedQty }}</span>
@@ -303,7 +303,7 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column prop="assembledQty" sortable="custom" label="完成数" width="72" align="center">
+          <el-table-column prop="assembledQty" label="完成数" width="72" align="center">
             <template #default="{ row }">
               <span
                 :class="{ 'num-ok': row.assemblyPendingQty <= 0 }"
@@ -324,23 +324,23 @@
           </el-table-column>
         </el-table-column>
 
-        <el-table-column prop="qtyPcs" sortable="custom" label="订单数(支)" width="76" align="center" class-name="col-key">
+        <el-table-column prop="qtyPcs" label="订单数(支)" width="76" align="center" class-name="col-key">
           <template #default="{ row }">{{ row.qtyPcs }}</template>
         </el-table-column>
 
         <el-table-column label="成品仓库进销存" align="center">
-          <el-table-column prop="inQty" sortable="custom" label="已入库数" width="76" align="center" class-name="col-key">
+          <el-table-column prop="inQty" label="已入库数" width="76" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
           </el-table-column>
           <el-table-column label="入库时间" width="90" align="center">
             <template #default="{ row }">{{ dateText(row.lastInboundDate) }}</template>
           </el-table-column>
-          <el-table-column prop="productionOwed" sortable="custom" label="未入库数" width="76" align="center" class-name="col-key">
+          <el-table-column prop="productionOwed" label="未入库数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="outQty" sortable="custom" label="已出货数" width="76" align="center" class-name="col-key">
+          <el-table-column prop="outQty" label="已出货数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">{{ row.outQty }}</template>
           </el-table-column>
           <el-table-column label="出货时间" width="90" align="center">
@@ -354,12 +354,12 @@
             </template>
             <template #default="{ row }">{{ dateText(row.lastOutboundDate) }}</template>
           </el-table-column>
-          <el-table-column prop="deliveryOwed" sortable="custom" label="未出货数" width="76" align="center" class-name="col-key">
+          <el-table-column prop="deliveryOwed" label="未出货数" width="76" align="center" class-name="col-key">
             <template #default="{ row }">
               <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="stockQty" sortable="custom" label="库存数量" width="76" align="center" class-name="col-key">
+          <el-table-column prop="stockQty" label="库存数量" width="76" align="center" class-name="col-key">
             <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
           </el-table-column>
         </el-table-column>
@@ -398,7 +398,7 @@ import {
   type LedgerRowDetail,
   type LedgerSummary,
 } from '@/api/ledger';
-import { LEDGER_SORT_FIELDS, type LedgerSortField, type LedgerSortOrder } from '@hb-oms/shared';
+import { type LedgerSortField, type LedgerSortOrder } from '@hb-oms/shared';
 import { useExcelExport } from '@/composables/useExcelExport';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import {
@@ -518,8 +518,8 @@ async function load() {
 }
 function onSortChange({ prop, order }: { prop?: string; order: 'ascending' | 'descending' | null }) {
   if (resettingSort.value) return;
-  query.sortBy = order && LEDGER_SORT_FIELDS.includes(prop as LedgerSortField)
-    ? prop as LedgerSortField : undefined;
+  const isDateSortField = prop === 'orderDate' || prop === 'deliveryDate';
+  query.sortBy = order && isDateSortField ? prop : undefined;
   query.sortOrder = order ? (order === 'ascending' ? 'asc' : 'desc') : undefined;
   reload();
 }
