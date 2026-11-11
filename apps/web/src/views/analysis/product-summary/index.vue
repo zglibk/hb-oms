@@ -111,6 +111,7 @@
           </div>
           <app-table
             :data="sList" v-loading="sLoading" border stripe
+            :serial-width="48"
             :page="sQuery.page" :page-size="sQuery.pageSize" row-key="key"
           >
             <!-- 行内展开：该产品的逐订单明细（按客户/产品反查的答案，随主行返回） -->
@@ -151,61 +152,61 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="客户" min-width="150" show-overflow-tooltip>
+            <el-table-column label="客户" width="112" align="left" header-align="center" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">
                 <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="产品代码" width="115" class-name="col-left" show-overflow-tooltip>
+            <el-table-column label="产品代码" width="104" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+            <el-table-column label="产品名称" width="108" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">{{ row.productName || '—' }}</template>
             </el-table-column>
-            <el-table-column :label="dimColLabel" width="105" align="center">
+            <el-table-column :label="dimColLabel" width="76" align="center">
               <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
             </el-table-column>
-            <el-table-column label="节数" width="80" align="center">
+            <el-table-column label="节数" width="66" align="center">
               <template #default="{ row }">{{ railSectionLabel(row.railSection) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="料厚" width="105" align="center">
+            <el-table-column label="料厚" width="82" align="center">
               <template #default="{ row }">{{ row.thickness || '—' }}</template>
             </el-table-column>
-            <el-table-column label="表面处理" width="90" align="center">
+            <el-table-column label="表面处理" width="78" align="center">
               <template #default="{ row }">
                 <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="colorEnabled" label="颜色" width="85" align="center">
+            <el-table-column v-if="colorEnabled" label="颜色" width="64" align="center">
               <template #default="{ row }">
                 <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="订单数" width="78" align="center">
+            <el-table-column label="订单数" width="64" align="center">
               <template #default="{ row }">{{ row.orderCount }}</template>
             </el-table-column>
-            <el-table-column label="订单总数(支)" width="105" align="center" class-name="col-key">
+            <el-table-column label="订单总数(支)" width="84" align="center" class-name="col-key">
               <template #default="{ row }">{{ row.qtyPcs }}</template>
             </el-table-column>
-            <el-table-column label="累计入库" width="90" align="center" class-name="col-key">
+            <el-table-column label="累计入库" width="76" align="center" class-name="col-key">
               <template #default="{ row }"><span class="num-ok">{{ row.inQty }}</span></template>
             </el-table-column>
-            <el-table-column label="成品欠数" width="90" align="center" class-name="col-key">
+            <el-table-column label="成品欠数" width="76" align="center" class-name="col-key">
               <template #default="{ row }">
                 <span :class="owedClass(row.productionOwed)">{{ row.productionOwed }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="累计出库" width="90" align="center" class-name="col-key">
+            <el-table-column label="累计出库" width="76" align="center" class-name="col-key">
               <template #default="{ row }">{{ row.outQty }}</template>
             </el-table-column>
-            <el-table-column label="发货欠数" width="90" align="center" class-name="col-key">
+            <el-table-column label="发货欠数" width="76" align="center" class-name="col-key">
               <template #default="{ row }">
                 <span :class="owedClass(row.deliveryOwed)">{{ row.deliveryOwed }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="库存数" width="85" align="center" class-name="col-key">
+            <el-table-column label="库存数" width="70" align="center" class-name="col-key">
               <template #default="{ row }"><span class="num-info">{{ row.stockQty }}</span></template>
             </el-table-column>
           </app-table>
@@ -305,6 +306,7 @@
           </div>
           <app-table
             :data="pList" v-loading="pLoading" border stripe
+            :serial-width="48"
             :page="pQuery.page" :page-size="pQuery.pageSize" row-key="key"
           >
             <!-- 行内展开：期间内逐笔已确认单据（随主行返回） -->
@@ -356,48 +358,48 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="客户" min-width="150" show-overflow-tooltip>
+            <el-table-column label="客户" width="112" align="left" header-align="center" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">
                 <span :title="row.customers.join('、')">{{ customersText(row.customers) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="产品代码" width="115" class-name="col-left" show-overflow-tooltip>
+            <el-table-column label="产品代码" width="104" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+            <el-table-column label="产品名称" width="108" class-name="col-left" show-overflow-tooltip>
               <template #default="{ row }">{{ row.productName || '—' }}</template>
             </el-table-column>
-            <el-table-column :label="dimColLabel" width="105" align="center">
+            <el-table-column :label="dimColLabel" width="76" align="center">
               <template #default="{ row }">{{ dimText(row.dimensionMm) }}</template>
             </el-table-column>
-            <el-table-column label="节数" width="80" align="center">
+            <el-table-column label="节数" width="66" align="center">
               <template #default="{ row }">{{ railSectionLabel(row.railSection) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="料厚" width="105" align="center">
+            <el-table-column label="料厚" width="82" align="center">
               <template #default="{ row }">{{ row.thickness || '—' }}</template>
             </el-table-column>
-            <el-table-column label="表面处理" width="90" align="center">
+            <el-table-column label="表面处理" width="78" align="center">
               <template #default="{ row }">
                 <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="colorEnabled" label="颜色" width="85" align="center">
+            <el-table-column v-if="colorEnabled" label="颜色" width="64" align="center">
               <template #default="{ row }">
                 <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="期初结存" width="95" align="center" class-name="col-key">
+            <el-table-column label="期初结存" width="78" align="center" class-name="col-key">
               <template #default="{ row }"><span :class="signClass(row.opening)">{{ row.opening }}</span></template>
             </el-table-column>
-            <el-table-column label="期间入库" width="95" align="center" class-name="col-key">
+            <el-table-column label="期间入库" width="78" align="center" class-name="col-key">
               <template #default="{ row }"><span :class="signClass(row.periodIn, 'num-ok')">{{ row.periodIn }}</span></template>
             </el-table-column>
-            <el-table-column label="期间出库" width="95" align="center" class-name="col-key">
+            <el-table-column label="期间出库" width="78" align="center" class-name="col-key">
               <template #default="{ row }"><span :class="signClass(row.periodOut)">{{ row.periodOut }}</span></template>
             </el-table-column>
-            <el-table-column label="期末结存" width="95" align="center" class-name="col-key">
+            <el-table-column label="期末结存" width="78" align="center" class-name="col-key">
               <template #default="{ row }"><span :class="signClass(row.periodEnd, 'num-info')">{{ row.periodEnd }}</span></template>
             </el-table-column>
           </app-table>
