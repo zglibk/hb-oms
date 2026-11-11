@@ -143,6 +143,8 @@ const MIGRATIONS: string[] = [
   'migration-request-idempotency.sql',
   // 更新日志 v1.3.1“订单录入与成品选品优化”（仅数据，同版本同标题已存在即跳过）
   'migration-changelog-v1.3.1.sql',
+  // 将重复订单清理时手工补写的运维日志归属到内置超级管理员
+  'migration-operation-log-super-admin.sql',
 ];
 
 /**
