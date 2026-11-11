@@ -51,6 +51,7 @@ export interface PartGroupOption {
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
+  itemNo: string | null;
   productModel: string | null;
   /** 订单产品类型组合串（如 standard,self_lock） */
   productType: string | null;

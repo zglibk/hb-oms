@@ -57,8 +57,11 @@
           </template>
         </el-table-column>
         <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="110" show-overflow-tooltip>
+          <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
+        </el-table-column>
         <el-table-column label="产品型号" min-width="150" class-name="col-left" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.productModel || '—' }}</template>
+          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
         </el-table-column>
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
@@ -123,6 +126,7 @@ import { onActivated, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Search, Tools, InfoFilled, Download, RefreshLeft } from '@element-plus/icons-vue';
 import { getAssemblyList, downloadAssemblyExport, type AssemblyGroupRow } from '@/api/assembly';
+import { productModelWithoutItemCode, sanitizeItemCode } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch';
 import { useExcelExport } from '@/composables/useExcelExport';

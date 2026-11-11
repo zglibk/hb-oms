@@ -36,6 +36,7 @@ export interface PartGroupOption {
   orderNo: string | null;
   customerName: string | null;
   productionNo: string | null;
+  itemNo: string | null;
   productModel: string | null;
   productType: string | null;
   dimensionText: string | null;
@@ -485,6 +486,7 @@ export class OutsourceService {
           orderNo: r.orderNo ?? null,
           customerName: r.customerName ?? null,
           productionNo: r.productionNo ?? null,
+          itemNo: r.itemNo ?? null,
           productModel: r.productModel ?? null,
           productType: r.productType ?? null,
           dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
