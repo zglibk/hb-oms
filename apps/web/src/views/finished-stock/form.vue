@@ -71,7 +71,7 @@
           <el-table-column label="产品名称" min-width="108" show-overflow-tooltip>
             <template #default="{ row }">{{ row.productName || '—' }}</template>
           </el-table-column>
-          <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+          <el-table-column label="组类型" width="110" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
           </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
@@ -264,7 +264,7 @@
         <el-table-column label="产品名称" min-width="108" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+        <el-table-column label="组类型" width="110" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
         </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
