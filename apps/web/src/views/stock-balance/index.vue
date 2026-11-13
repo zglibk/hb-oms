@@ -57,7 +57,7 @@
         <el-table-column label="规格" width="78" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
-        <el-table-column label="部件组" width="100" align="center" show-overflow-tooltip>
+        <el-table-column label="组类型" width="100" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="84" align="center">
