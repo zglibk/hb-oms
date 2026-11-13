@@ -63,7 +63,7 @@
           </div>
         </div>
 
-        <!-- ==================== 主表格（卡口产品按左右拆行） ==================== -->
+        <!-- ==================== 主表格（非分体产品按实际部件展开） ==================== -->
         <table class="task-table">
           <!-- 客户图号可在「系统配置 → 业务字段」全局停用：col / th / td / 总计行的
                colspan **四处必须同条件**，漏一处整张表的列宽与合并就会错位。
@@ -98,10 +98,14 @@
           </thead>
           <tbody>
             <tr v-for="(r, i) in taskRows" :key="i">
-              <!-- 相邻同货号行的同值列纵向合并（分体拆行的纸质单形态），span=0 表示被上方合并 -->
+              <!-- 同一订单产品展开后的同值列纵向合并，span=0 表示被上方合并 -->
               <td v-if="spans.itemNo[i]" :rowspan="spans.itemNo[i]" class="c">{{ r.itemNo || '—' }}</td>
-              <td class="c">{{ r.productName || '—' }}</td>
-              <td v-if="customerDrawingNoEnabled" class="c">{{ r.customerDrawingNo || '—' }}</td>
+              <td v-if="spans.productName[i]" :rowspan="spans.productName[i]" class="c">{{ r.productName || '—' }}</td>
+              <td
+                v-if="customerDrawingNoEnabled && spans.customerDrawingNo[i]"
+                :rowspan="spans.customerDrawingNo[i]"
+                class="c"
+              >{{ r.customerDrawingNo || '—' }}</td>
               <td v-if="spans.requirement[i]" :rowspan="spans.requirement[i]" class="pre">{{ r.requirement || '—' }}</td>
               <td v-if="spans.dimension[i]" :rowspan="spans.dimension[i]" class="c">{{ r.dimension || '—' }}</td>
               <td
@@ -113,11 +117,11 @@
               <td class="c">{{ r.side || '—' }}</td>
               <td v-if="spans.drawing[i]" :rowspan="spans.drawing[i]" class="c pre">{{ r.drawing || '—' }}</td>
               <td class="c">{{ r.category }}</td>
-              <td>{{ r.remark }}</td>
+              <td v-if="spans.remark[i]" :rowspan="spans.remark[i]">{{ r.remark }}</td>
             </tr>
             <tr class="total-row">
               <!-- 合并「数量」之前的所有列：停用客户图号时少一列，故 6 → 5 -->
-              <td :colspan="customerDrawingNoEnabled ? 6 : 5" class="c"><b>总计</b></td>
+              <td :colspan="customerDrawingNoEnabled ? 6 : 5" class="c"><b>产品订单数合计</b></td>
               <td class="c num"><b>{{ totalQty }}</b></td>
               <td colspan="4"></td>
             </tr>
@@ -168,6 +172,8 @@ import { useFeatureStore } from '@/stores/feature';
 import { COMPANY_FULL_NAME } from '@/constants/company';
 import {
   formatDimension,
+  expandPartRows,
+  partTypeLabel,
   splitParts,
   splitSuffix,
   sanitizeItemCode,
@@ -241,6 +247,7 @@ const surfaceLabel = (v: string | null) => {
 };
 
 interface TaskRow {
+  productId: number;
   itemNo: string;
   productName: string;
   customerDrawingNo: string;
@@ -254,25 +261,26 @@ interface TaskRow {
   remark: string;
 }
 
+function drawingText(
+  group: OrderProductItem['partGroups'][number],
+): string {
+  if (!group.drawingNo) return '';
+  return `${group.drawingNo}${group.drawingVersion ? `\n版本号:${group.drawingVersion}` : ''}`;
+}
+
 /**
  * 产品行 → 任务单行。
  *
- * 产品类型含「卡口」时，按订单产品自身边别展开；单边 SKU 只打印对应一行，
- * 未指定产品边别的组合才拆成左、右两行。这与部件蓝图刻意解耦：
- * 卡口中轨是左右通用结构、订单部件行不分边，但成品任务单仍须按安装侧打印左/右两行。
- * 奇数支沿用共享规则「左边多一支」，两行合计始终等于产品支数。
+ * - 非分体产品按部件蓝图展开：三节轨外/中/内轨，二节轨外/内轨；各行使用
+ *   所属部件组的图号、版本与组支数。卡口只拆外轨/内轨左右，中轨保持通用。
+ * - 分体产品保持订单产品行的出货形态口径，卡口按产品边别拆行。
+ *
+ * 展开后的部件行数量不能直接相加当成订单总数；页尾总计另按产品 qtyPcs 只计一次。
  */
 function toRows(p: OrderProductItem): TaskRow[] {
   const groupTypes = (p.partGroups ?? []).map((g) => g.groupType);
-  // 图号 = 组级生产图号(+版本)按组序去重并列；纸质单上版本号另起一行
-  const drawings = [...new Set(
-    (p.partGroups ?? [])
-      .map((g) => (g.drawingNo
-        ? `${g.drawingNo}${g.drawingVersion ? `\n版本号:${g.drawingVersion}` : ''}`
-        : ''))
-      .filter(Boolean),
-  )];
-  const base: Omit<TaskRow, 'qtyPcs' | 'side'> = {
+  const base: Omit<TaskRow, 'qtyPcs' | 'side' | 'drawing' | 'category'> = {
+    productId: p.id,
     // 只印订单产品代码；产品类型有独立业务含义，不得再拼进该列。
     itemNo: sanitizeItemCode(p.itemNo),
     productName: p.productName ?? '',
@@ -281,32 +289,57 @@ function toRows(p: OrderProductItem): TaskRow[] {
     dimension: formatDimension(p.dimensionRaw, p.dimensionUnit, p.dimensionMm) ?? '',
     // 与通用送货单共用唯一组合口径：表面处理/颜色；无颜色时只印表面处理。
     surfaceTreatment: formatSurfaceColorText(p.surfaceType, p.color, surfaceLabel),
-    drawing: drawings.join('\n'),
-    // 分类：分体行按组构成推导形态（外中轨/内轨…），整品行标「整品」
-    category: p.isSplit ? splitSuffix(splitParts(groupTypes, p.railSection)) : '整品',
     remark: p.remark ?? '',
   };
 
-  if (!hasSocket(p.productType)) {
-    return [{ ...base, qtyPcs: p.qtyPcs, side: '' }];
+  const socket = hasSocket(p.productType);
+
+  if (!p.isSplit) {
+    const partRows = (p.partGroups ?? []).flatMap((group) => {
+      const drawing = drawingText(group);
+      return expandPartRows(
+        group.groupType,
+        p.railSection,
+        socket,
+        group.qtyPcs,
+        p.productSide,
+      )
+        .filter((row) => row.qty > 0)
+        .map(({ partType, side, qty: qtyPcs }) => ({
+          ...base,
+          qtyPcs,
+          side: sideLabel(side),
+          drawing,
+          category: partTypeLabel(partType),
+        }));
+    });
+    if (partRows.length) return partRows;
   }
 
-  return productSideQtyRows(true, p.qtyPcs, p.productSide)
+  // 兼容分体产品及没有部件组的历史异常数据：仍按产品行数量与边别打印。
+  const drawings = [...new Set((p.partGroups ?? []).map(drawingText).filter(Boolean))];
+  const category = p.isSplit ? splitSuffix(splitParts(groupTypes, p.railSection)) : '整品';
+  return productSideQtyRows(socket, p.qtyPcs, p.productSide)
     .filter((row) => row.qty > 0)
     .map(({ side, qty: qtyPcs }) => ({
       ...base,
       qtyPcs,
       side: sideLabel(side),
+      drawing: drawings.join('\n'),
+      category,
     }));
 }
 
 const taskRows = computed<TaskRow[]>(() => (order.value?.products ?? []).flatMap(toRows));
 
-const totalQty = computed(() => taskRows.value.reduce((s, r) => s + (r.qtyPcs || 0), 0));
+/** 订单总数按产品行只计一次，不能把外/中/内轨互补部件相加成三倍。 */
+const totalQty = computed(() => (
+  order.value?.products ?? []
+).reduce((sum, product) => sum + (product.qtyPcs || 0), 0));
 
 /**
- * 逐列 rowspan：相邻**同货号**且该列同值的行合并成一格（分体拆行的两行共用
- * 产品代码/要求/尺寸/表面处理/图号，纸质单即此形态）。返回值 span[i]=N 表示第 i 行
+ * 逐列 rowspan：同一订单产品展开出的相邻行，且该列同值时合并成一格。
+ * 用 productId 而不是产品代码分组，避免相邻两个同代码产品被误合并。返回值 span[i]=N 表示第 i 行
  * 起跨 N 行，0 表示被上方合并（该 td 不渲染）。
  */
 function spanOf(rows: TaskRow[], pick: (r: TaskRow) => string): number[] {
@@ -314,7 +347,7 @@ function spanOf(rows: TaskRow[], pick: (r: TaskRow) => string): number[] {
   let anchor = 0;
   for (let i = 0; i <= rows.length; i++) {
     const same = i > 0 && i < rows.length
-      && rows[i].itemNo === rows[anchor].itemNo
+      && rows[i].productId === rows[anchor].productId
       && pick(rows[i]) === pick(rows[anchor]);
     if (i === rows.length || !same) {
       if (i > anchor) spans[anchor] = i - anchor;
@@ -326,10 +359,13 @@ function spanOf(rows: TaskRow[], pick: (r: TaskRow) => string): number[] {
 
 const spans = computed(() => ({
   itemNo: spanOf(taskRows.value, (r) => r.itemNo),
+  productName: spanOf(taskRows.value, (r) => r.productName),
+  customerDrawingNo: spanOf(taskRows.value, (r) => r.customerDrawingNo),
   requirement: spanOf(taskRows.value, (r) => r.requirement),
   dimension: spanOf(taskRows.value, (r) => r.dimension),
   surfaceTreatment: spanOf(taskRows.value, (r) => r.surfaceTreatment),
   drawing: spanOf(taskRows.value, (r) => r.drawing),
+  remark: spanOf(taskRows.value, (r) => r.remark),
 }));
 
 /** wangEditor 空正文是 <p><br></p> 之类，剥标签后为空就整块不渲染 */
