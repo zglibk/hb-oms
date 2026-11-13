@@ -107,8 +107,8 @@
           <el-table-column label="产品名称" min-width="125" show-overflow-tooltip>
             <template #default="{ row }">{{ row.productName || '—' }}</template>
           </el-table-column>
-          <el-table-column label="组型号" width="105" show-overflow-tooltip>
-            <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+          <el-table-column label="组类型" width="82" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ partGroupLabel(row.groupType) || '—' }}</template>
           </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="80" align="center" show-overflow-tooltip />
           <el-table-column label="订单数量" width="88" align="center">
@@ -303,8 +303,8 @@
         <el-table-column label="产品名称" min-width="125" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="组型号" width="105" show-overflow-tooltip>
-          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        <el-table-column label="组类型" width="82" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ partGroupLabel(row.groupType) || '—' }}</template>
         </el-table-column>
         <el-table-column label="边别" width="72" align="center">
           <template #default="{ row }">
@@ -363,7 +363,7 @@ import {
   SURFACE_NONE,
   UNIT_OPTIONS,
   parseProductTypes,
-  productModelWithoutItemCode,
+  partGroupLabel,
   qtyFromWeight,
   sanitizeItemCode,
   sideLabel,
@@ -407,6 +407,7 @@ interface ItemRow {
   itemNo: string | null;
   productName: string | null;
   productModel: string | null;
+  groupType: string | null;
   dimensionText: string | null;
   orderQty: number;
   unit: string | null;
@@ -759,6 +760,7 @@ function confirmPick() {
       itemNo: o.itemNo,
       productName: o.productName,
       productModel: o.productModel,
+      groupType: o.groupType,
       dimensionText: o.dimensionText,
       orderQty: o.orderQty,
       unit: o.unit,

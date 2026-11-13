@@ -55,7 +55,7 @@
             {{ dateText(row.backDate) }}<audit-info mode="inline" :row="row" />
           </template>
         </el-table-column>
-        <!-- 产品身份固定拆成代码、名称；部件级技术描述单列为组型号，避免把组型号误当产品名称。 -->
+        <!-- 产品身份固定拆成代码、名称；部件组只显示组类型，不再拼接产品类型。 -->
         <el-table-column label="加工商" prop="processorName" width="72" show-overflow-tooltip>
           <template #default="{ row }">
             <color-tag v-if="row.processorName" :seed="row.processorName">{{ row.processorName }}</color-tag>
@@ -71,8 +71,8 @@
         <el-table-column label="产品名称" prop="productName" min-width="105" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="组型号" width="90" show-overflow-tooltip>
-          <template #default="{ row }">{{ productModelWithoutItemCode(row.productModel, row.itemNo) || '—' }}</template>
+        <el-table-column label="组类型" width="80" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ partGroupLabel(row.groupType) || '—' }}</template>
         </el-table-column>
         <el-table-column label="边别" width="82" align="center">
           <template #default="{ row }">
@@ -143,7 +143,7 @@
         <el-descriptions-item label="生产单号">{{ editRow.productionNo || editRow.orderNo || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品代码">{{ sanitizeItemCode(editRow.itemNo) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="产品名称">{{ editRow.productName || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="组型号">{{ productModelWithoutItemCode(editRow.productModel, editRow.itemNo) || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="组类型">{{ partGroupLabel(editRow.groupType) || '—' }}</el-descriptions-item>
         <el-descriptions-item label="边别">{{ editRow.legacyUnassigned ? '历史未分边' : sideText(editRow.side) }}</el-descriptions-item>
         <el-descriptions-item label="规格">{{ editRow.dimensionText || '—' }}</el-descriptions-item>
         <el-descriptions-item label="订单数量">{{ editRow.orderQty }} {{ unitLabel(editRow.unit) }}</el-descriptions-item>
@@ -239,7 +239,7 @@ import { getSupplierOptions, type SupplierOption } from '@/api/supplier';
 import {
   SURFACE_NONE,
   UNIT_OPTIONS,
-  productModelWithoutItemCode,
+  partGroupLabel,
   qtyFromWeight,
   sanitizeItemCode,
   sideLabel,

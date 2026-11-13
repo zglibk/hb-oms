@@ -110,7 +110,7 @@
               <span :class="row.deliveryOwed > 0 ? 'lim-ok' : 'lim-zero'">{{ row.deliveryOwed }}</span>
             </template>
           </el-table-column>
-          <el-table-column :label="isSaleOutbound ? '本次发货(支)' : '数量(支)'" :width="isSaleOutbound ? 190 : 130" align="center">
+          <el-table-column :label="isSaleOutbound ? '本次发货(支)' : '数量(支)'" :width="isSaleOutbound ? 160 : 130" align="center">
             <template #default="{ row }">
               <div v-if="isSaleOutbound" class="shipment-qty">
                 <el-input-number v-model="row.quantity" :min="1" :precision="0" :step="1" :controls="false" style="width: 100%" />

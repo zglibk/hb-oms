@@ -41,6 +41,8 @@ export interface ProductSnapshot {
   productModel: string | null;
   /** 产品名称（订单表单可填、按图号带工艺带出；同货号多行的辅助区分） */
   productName: string | null;
+  /** 订单产品的部件组构成，按订单配置的 sort / id 顺序返回。 */
+  groupTypes: string[];
   /**
    * 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品）。
    * 分体行（含内轨等单部件行）同样要装配自身小零件——原「免装配」口径已于
@@ -149,6 +151,7 @@ export class ProductSnapshotService {
           r.rail_section ?? null,
         ),
         productName: r.product_name ?? null,
+        groupTypes,
         isSplit,
         dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),
         surfaceType: r.surface_type ?? null,

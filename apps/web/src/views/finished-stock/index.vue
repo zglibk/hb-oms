@@ -82,7 +82,7 @@
                 <thead>
                   <!-- 原生 table 里加可选列时，<th> 与 <td> 必须挂同一个条件，否则整表错位 -->
                   <tr>
-                    <th>订单号</th><th>生产单号</th><th>产品代码</th><th>产品名称</th><th>规格</th>
+                    <th>订单号</th><th>生产单号</th><th>产品代码</th><th>产品名称</th><th>规格</th><th>部件组</th>
                     <th>表面处理</th><th v-if="colorEnabled">颜色</th>
                     <th>边别</th><th>数量(支)</th><th>已冲销</th><th>备注</th>
                   </tr>
@@ -94,6 +94,7 @@
                     <td>{{ sanitizeItemCode(it.itemNo) || '—' }}</td>
                     <td>{{ it.productName || '—' }}</td>
                     <td class="c">{{ it.dimensionText || '—' }}</td>
+                    <td class="c">{{ partGroupText(it.groupTypes) }}</td>
                     <td class="c">{{ surfaceLabel(it.surfaceType) }}</td>
                     <td v-if="colorEnabled" class="c">{{ it.color || '—' }}</td>
                     <td class="c">{{ sideLabel(it.side) || '—' }}</td>
@@ -244,6 +245,7 @@ import {
   STOCK_DIRECTION_VALUE,
   labelOf,
   tagTypeOf,
+  partGroupLabel,
   sanitizeItemCode,
   sideLabel,
 } from '@/constants/dict';
@@ -258,6 +260,11 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
 import { businessToday } from '@/utils/date';
 import { newCreateRequestId } from '@/utils/idempotency';
+
+function partGroupText(groupTypes: string[] | null | undefined): string {
+  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
+  return labels.length ? labels.join(' / ') : '—';
+}
 
 /** 车间字典（assembly_workshop）；历史 workTeam 是自由文本班组名，查不到就回落原值 */
 /** 不是自己制的草稿：只有制单人与出入库主管角色能编辑 / 确认 / 作废 */

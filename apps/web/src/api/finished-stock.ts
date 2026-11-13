@@ -13,6 +13,8 @@ export interface FinishedItemRow {
   productionNo: string | null;
   itemNo: string | null;
   productName: string | null;
+  /** 订单产品的部件组构成，按配置顺序返回。 */
+  groupTypes: string[];
   productModel: string | null;
   productType: string | null;
   /** 部件组类型：挂订单的成品是整套滑轨故恒为 null，仅纯属性期初行可能有值 */
@@ -73,6 +75,8 @@ export interface BalanceRow {
   productionNo: string | null;
   itemNo: string;
   productName: string;
+  /** 订单产品的部件组构成，按配置顺序返回。 */
+  groupTypes: string[];
   productModel: string;
   productType: string;
   groupType: string;

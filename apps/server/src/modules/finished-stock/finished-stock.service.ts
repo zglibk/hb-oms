@@ -140,10 +140,17 @@ export class FinishedStockService {
     const items = docIds.length
       ? await this.itemRepo.find({ where: { docId: In(docIds) }, order: { sort: 'ASC', id: 'ASC' } })
       : [];
+    const itemSnapshots = await this.productSnapshot.load(
+      null,
+      items.map((it) => it.orderProductId),
+      { includeCancelledOrder: true },
+    );
     const byDoc = new Map<number, FinishedItem[]>();
     items.forEach((it) => {
       const arr = byDoc.get(it.docId) ?? [];
-      arr.push(it);
+      arr.push(Object.assign(it, {
+        groupTypes: itemSnapshots.get(it.orderProductId)?.groupTypes ?? [],
+      }));
       byDoc.set(it.docId, arr);
     });
 
@@ -169,6 +176,11 @@ export class FinishedStockService {
     const doc = await this.docRepo.findOne({ where: { id } });
     if (!doc) throw new NotFoundException('单据不存在');
     const items = await this.itemRepo.find({ where: { docId: id }, order: { sort: 'ASC', id: 'ASC' } });
+    const itemSnapshots = await this.productSnapshot.load(
+      null,
+      items.map((it) => it.orderProductId),
+      { includeCancelledOrder: true },
+    );
     // 已被红字冲销的数量（按原明细行聚合），供界面显示可再冲销余量
     const reversed = await this.loadReversedQty(items.map((it) => it.id));
     return Object.assign(doc, {
@@ -176,6 +188,7 @@ export class FinishedStockService {
       editors: await this.ownership.editorsText('finished', doc),
       items: items.map((it) =>
         Object.assign(it, {
+          groupTypes: itemSnapshots.get(it.orderProductId)?.groupTypes ?? [],
           reversedQty: reversed.get(it.id) ?? 0,
           reversibleQty: Math.max((it.quantity || 0) - (reversed.get(it.id) ?? 0), 0),
         }),
@@ -483,29 +496,39 @@ export class FinishedStockService {
        LIMIT ? OFFSET ?`,
       [...params, pageSize, (page - 1) * pageSize],
     );
+    const productSnapshots = await this.productSnapshot.load(
+      null,
+      rows.map((r) => Number(r.order_product_id)),
+      { includeCancelledOrder: true },
+    );
 
     return {
-      list: rows.map((r) => ({
-        id: Number(r.id),
-        orderId: Number(r.order_id),
-        orderProductId: Number(r.order_product_id),
-        orderNo: r.orderNo ?? null,
-        customerName: r.customerName ?? null,
-        productionNo: r.productionNo ?? null,
-        itemNo: r.item_no,
-        productName: r.product_name,
-        productModel: r.product_model,
-        productType: r.product_type,
-        groupType: r.group_type,
-        railSection: r.rail_section,
-        dimensionMm: Number(r.dimension_mm) || 0,
-        dimensionText: r.dimension_text,
-        surfaceType: r.surface_type,
-        color: r.color,
-        side: r.side,
-        batchNo: r.batch_no,
-        quantity: Number(r.quantity) || 0,
-      })),
+      list: rows.map((r) => {
+        const snapshot = productSnapshots.get(Number(r.order_product_id));
+        return {
+          id: Number(r.id),
+          orderId: Number(r.order_id),
+          orderProductId: Number(r.order_product_id),
+          orderNo: r.orderNo ?? null,
+          customerName: r.customerName ?? null,
+          productionNo: r.productionNo ?? null,
+          itemNo: r.item_no,
+          // 成品库存只展示订单产品名称原值；历史余额快照仅在订单产品已不存在时兜底。
+          productName: snapshot?.productName ?? r.product_name,
+          groupTypes: snapshot?.groupTypes ?? [],
+          productModel: r.product_model,
+          productType: r.product_type,
+          groupType: r.group_type,
+          railSection: r.rail_section,
+          dimensionMm: Number(r.dimension_mm) || 0,
+          dimensionText: r.dimension_text,
+          surfaceType: r.surface_type,
+          color: r.color,
+          side: r.side,
+          batchNo: r.batch_no,
+          quantity: Number(r.quantity) || 0,
+        };
+      }),
       total: Number(countRows?.[0]?.cnt ?? 0),
       page,
       pageSize,

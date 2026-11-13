@@ -39,6 +39,8 @@ export interface PartGroupOption {
   itemNo: string | null;
   productName: string | null;
   productModel: string | null;
+  /** 部件组类型原值（outer / middle / inner / outer_middle / whole）。 */
+  groupType: string | null;
   productType: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
@@ -126,21 +128,24 @@ export class OutsourceService {
     return result;
   }
 
-  /** 判断回厂流水所属组是否为需要区分左/右的卡口外轨、内轨。 */
-  private async loadSideCapableGroupIds(groupIds: number[]): Promise<Set<number>> {
+  /** 回厂流水所属部件组的类型与左右能力，列表展示与历史未分边判定共用。 */
+  private async loadGroupMeta(
+    groupIds: number[],
+  ): Promise<Map<number, { groupType: string | null; sideCapable: boolean }>> {
     const ids = [...new Set(groupIds.filter((id) => Number.isInteger(id) && id > 0))];
-    const result = new Set<number>();
+    const result = new Map<number, { groupType: string | null; sideCapable: boolean }>();
     if (!ids.length) return result;
-    const rows: any[] = await this.dataSource.query(
-      `SELECT g.id AS orderPartGroupId, g.group_type AS groupType, p.product_type AS productType
-         FROM t_order_part_group g
-         JOIN t_order_product p ON p.id = g.order_product_id
-        WHERE g.id IN (?)`,
-      [ids],
+    const snapshots = await this.partGroupSnapshot.load(
+      null,
+      ids,
+      { includeCancelledOrder: true },
     );
-    rows.forEach((row) => {
-      const sides = partGroupSideQtyRows(row.groupType, hasSocket(row.productType), 1);
-      if (sides.some((item) => item.side)) result.add(Number(row.orderPartGroupId));
+    snapshots.forEach((snapshot, orderPartGroupId) => {
+      const sides = partGroupSideQtyRows(snapshot.groupType, hasSocket(snapshot.productType), 1);
+      result.set(orderPartGroupId, {
+        groupType: snapshot.groupType,
+        sideCapable: sides.some((item) => item.side),
+      });
     });
     return result;
   }
@@ -189,18 +194,25 @@ export class OutsourceService {
     const [rows, total] = await qb.getManyAndCount();
     // 每行带 canModify：前端据此禁用编辑 / 删除（服务端 update / remove 另有硬校验）
     const modifiable = user ? await this.ownership.canModifyMany('outsource', rows, user) : rows.map(() => false);
-    const sideCapableGroupIds = await this.loadSideCapableGroupIds(rows.map((row) => row.orderPartGroupId));
-    const list = rows.map((r, i) => Object.assign(r, {
-      canModify: modifiable[i],
-      legacyUnassigned: r.side === '' && sideCapableGroupIds.has(r.orderPartGroupId),
-    }));
+    const groupMeta = await this.loadGroupMeta(rows.map((row) => row.orderPartGroupId));
+    const list = rows.map((r, i) => {
+      const meta = groupMeta.get(r.orderPartGroupId);
+      return Object.assign(r, {
+        canModify: modifiable[i],
+        groupType: meta?.groupType ?? null,
+        legacyUnassigned: r.side === '' && Boolean(meta?.sideCapable),
+      });
+    });
     return { list, total, page, pageSize };
   }
 
   async findOne(id: number) {
     const row = await this.partRepo.findOne({ where: { id } });
     if (!row) throw new NotFoundException('外发回厂记录不存在');
-    return row;
+    const groupMeta = await this.loadGroupMeta([row.orderPartGroupId]);
+    return Object.assign(row, {
+      groupType: groupMeta.get(row.orderPartGroupId)?.groupType ?? null,
+    });
   }
 
   /** 列表与下拉选项共用的基础范围，避免切换「只看已回齐」后两边口径不一致。 */
@@ -491,6 +503,7 @@ export class OutsourceService {
           itemNo: r.itemNo ?? null,
           productName: r.productName ?? null,
           productModel: r.productModel ?? null,
+          groupType: r.groupType ?? null,
           productType: r.productType ?? null,
           dimensionText: formatDimension(r.dimensionRaw, r.dimensionUnit, r.dimensionMm),
           cycleCode: r.cycleCode ?? null,

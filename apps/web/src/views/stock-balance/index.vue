@@ -57,6 +57,9 @@
         <el-table-column label="规格" width="110" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
+        <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+        </el-table-column>
         <el-table-column label="表面处理" width="100" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
@@ -128,7 +131,7 @@ import {
   importStockBalance,
   type BalanceRow,
 } from '@/api/finished-stock';
-import { SIDE_OPTIONS, sanitizeItemCode, sideLabel } from '@/constants/dict';
+import { SIDE_OPTIONS, partGroupLabel, sanitizeItemCode, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
@@ -161,6 +164,11 @@ loadDict('surface_type').then((rows: any[]) => {
 });
 
 const totalQty = computed(() => list.value.reduce((s, r) => s + (r.quantity || 0), 0));
+
+function partGroupText(groupTypes: string[] | null | undefined): string {
+  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
+  return labels.length ? labels.join(' / ') : '—';
+}
 
 async function load() {
   loading.value = true;

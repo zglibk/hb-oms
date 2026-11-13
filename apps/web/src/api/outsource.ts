@@ -21,6 +21,8 @@ export interface OutsourcePartRow {
   itemNo: string | null;
   productName: string | null;
   productModel: string | null;
+  /** 部件组类型原值。 */
+  groupType: string | null;
   dimensionText: string | null;
   cycleCode: string | null;
   orderQty: number;
@@ -56,6 +58,8 @@ export interface PartGroupOption {
   itemNo: string | null;
   productName: string | null;
   productModel: string | null;
+  /** 部件组类型原值。 */
+  groupType: string | null;
   /** 订单产品类型组合串（如 standard,self_lock） */
   productType: string | null;
   dimensionText: string | null;
