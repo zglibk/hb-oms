@@ -34,32 +34,35 @@
           </div>
           <el-table :data="groupRows" border stripe size="small" empty-text="请点击「添加产品」选择要录期初的产品">
             <el-table-column type="index" label="#" width="46" align="center" />
-            <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
-            <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
-            <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
-            <el-table-column label="产品代码" width="105" show-overflow-tooltip>
+            <el-table-column label="订单号" prop="orderNo" width="120" show-overflow-tooltip />
+            <el-table-column label="客户" prop="customerName" width="90" show-overflow-tooltip />
+            <el-table-column label="生产单号" prop="productionNo" width="105" show-overflow-tooltip />
+            <el-table-column label="产品代码" width="90" show-overflow-tooltip>
               <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="产品名称" prop="productName" min-width="130" show-overflow-tooltip>
+            <el-table-column label="产品名称" prop="productName" min-width="120" show-overflow-tooltip>
               <template #default="{ row }">{{ row.productName || '—' }}</template>
             </el-table-column>
-            <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
-            <el-table-column label="边别" width="70" align="center">
+            <el-table-column label="组类型" width="120" align="center" show-overflow-tooltip>
+              <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+            </el-table-column>
+            <el-table-column label="规格" prop="dimensionText" width="75" align="center" />
+            <el-table-column label="边别" width="62" align="center">
               <template #default="{ row }">
                 <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
-            <el-table-column label="期初数量(支)" width="130" align="center">
+            <el-table-column label="订单数" prop="qtyPcs" width="70" align="center" />
+            <el-table-column label="期初数量(支)" width="112" align="center">
               <template #default="{ row }">
                 <el-input-number v-model="row.quantity" :min="1" :precision="0" :controls="false" style="width: 100%" />
               </template>
             </el-table-column>
-            <el-table-column label="备注" min-width="110">
+            <el-table-column label="备注" min-width="90">
               <template #default="{ row }"><el-input v-model="row.remark" /></template>
             </el-table-column>
-            <el-table-column label="操作" width="70" align="center" fixed="right">
+            <el-table-column label="操作" width="64" align="center" fixed="right">
               <template #default="{ $index }">
                 <el-button size="small" link type="danger" :icon="Delete" @click="groupRows.splice($index, 1)">删除</el-button>
               </template>
@@ -152,8 +155,8 @@
           @change="loadOptions"
         />
         <el-input
-          v-model="pickerKeyword" clearable size="small" style="width: 280px"
-          placeholder="订单号/客户/生产单号/产品代码/名称"
+          v-model="pickerKeyword" clearable size="small" style="width: 300px"
+          placeholder="订单号/客户/生产单号/产品代码/名称/组类型"
           @clear="loadOptions" @keyup.enter="loadOptions"
         />
         <el-button size="small" type="primary" :icon="Search" @click="loadOptions">查询</el-button>
@@ -164,23 +167,26 @@
         empty-text="没有「期初补录」订单。请先到「订单管理」录入订单并打开「期初补录」开关"
         @selection-change="(v: any[]) => (picked = v)">
         <el-table-column type="selection" width="42" :selectable="isSelectable" />
-        <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
-        <el-table-column label="客户" prop="customerName" width="110" show-overflow-tooltip />
-        <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
-        <el-table-column label="产品代码" width="105" show-overflow-tooltip>
+        <el-table-column label="订单号" prop="orderNo" width="120" show-overflow-tooltip />
+        <el-table-column label="客户" prop="customerName" width="90" show-overflow-tooltip />
+        <el-table-column label="生产单号" prop="productionNo" width="105" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="90" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品名称" prop="productName" min-width="130" show-overflow-tooltip>
+        <el-table-column label="产品名称" prop="productName" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
-        <el-table-column label="边别" width="70" align="center">
+        <el-table-column label="组类型" width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+        </el-table-column>
+        <el-table-column label="规格" prop="dimensionText" width="75" align="center" />
+        <el-table-column label="边别" width="62" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="订单数" prop="qtyPcs" width="80" align="center" />
+        <el-table-column label="订单数" prop="qtyPcs" width="70" align="center" />
       </el-table>
       <template #footer>
         <span class="picker-count">已选 {{ picked.length }} 行</span>
@@ -203,6 +209,7 @@ import {
   RAIL_SECTION_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   sideLabel,
+  partGroupLabel,
   normalizeProductTypes,
   sanitizeItemCode,
 } from '@/constants/dict';
@@ -226,6 +233,7 @@ interface GroupRow {
   productionNo: string | null;
   itemNo: string | null;
   productName: string | null;
+  groupTypes: string[];
   dimensionText: string | null;
   qtyPcs: number;
   quantity: number;
@@ -235,6 +243,11 @@ const docDate = ref(today());
 const groupRemark = ref('');
 const groupRows = ref<GroupRow[]>([]);
 const groupTotal = computed(() => groupRows.value.reduce((s, r) => s + (r.quantity || 0), 0));
+
+function partGroupText(groupTypes: string[] | null | undefined): string {
+  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
+  return labels.length ? labels.join(' / ') : '—';
+}
 
 const pickerVisible = ref(false);
 const pickerLoading = ref(false);
@@ -270,6 +283,7 @@ async function loadOptions() {
         productionNo: o.productionNo,
         itemNo: o.itemNo,
         productName: o.productName,
+        groupTypes: o.groupTypes ?? [],
         dimensionText: o.dimensionText,
         // 选择器一行就是一个业务边别，订单数必须取该边额度；单边 SKU 保持产品全量。
         qtyPcs: s.orderedQty,
