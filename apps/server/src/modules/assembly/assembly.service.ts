@@ -57,6 +57,8 @@ export interface AssemblyGroupRow {
   productModel: string | null;
   /** 产品名称（同货号拆多行时的辅助区分） */
   productName: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对。 */
+  productSide: string;
   productType: string | null;
   railSection: string | null;
   /**
@@ -189,6 +191,7 @@ export class AssemblyService {
               p.item_no           AS item_no,
               p.material_code     AS material_code,
               p.product_name      AS product_name,
+              p.product_side      AS product_side,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
               p.is_split          AS is_split,
@@ -237,6 +240,7 @@ export class AssemblyService {
           r.rail_section ?? null,
         ),
         productName: r.product_name ?? null,
+        productSide: r.product_side ?? '',
         productType: r.product_type ?? null,
         railSection: r.rail_section ?? null,
         isSplit,
@@ -318,7 +322,7 @@ export class AssemblyService {
       includeCancelledOrder: true,
     });
     const socket = hasSocket(product?.productType);
-    const keys = assemblySides(socket).map((side) => ({
+    const keys = assemblySides(socket, product?.productSide).map((side) => ({
       orderProductId: query.orderProductId as number,
       side,
     }));
@@ -380,7 +384,12 @@ export class AssemblyService {
       // 分体行（含内轨等单部件行）同样要装配自身小零件，与整品行一样录批次
       // ——原「免装配禁建批次」限制已于 2026-08-13 按使用部门反馈取消
 
-      const side = this.assertSide(dto.side, snap.productType, snap.productModel);
+      const side = this.assertSide(
+        dto.side,
+        snap.productType,
+        snap.productSide,
+        snap.productModel,
+      );
       const planStartDate = this.normalizeDate(dto.planStartDate);
       const planDate = this.normalizeDate(dto.planDate);
       const actualDate = this.normalizeDate(dto.actualDate);
@@ -503,14 +512,17 @@ export class AssemblyService {
   private assertSide(
     side: string | undefined,
     productType: string | null,
+    productSide: string | null,
     productModel: string | null,
   ): string {
     const v = (side ?? '').trim();
     const socket = hasSocket(productType);
-    if (!isValidSide(v, socket)) {
+    if (!isValidSide(v, socket, productSide)) {
       throw new BadRequestException(
         socket
-          ? `产品「${productModel ?? ''}」含卡口，装配批次必须指定左/右边别`
+          ? productSide
+            ? `产品「${productModel ?? ''}」是${sideLabel(productSide)}边产品，装配批次只能登记${sideLabel(productSide)}边`
+            : `产品「${productModel ?? ''}」含卡口，装配批次必须指定左/右边别`
           : `产品「${productModel ?? ''}」不含卡口，装配批次不能指定边别`,
       );
     }

@@ -419,6 +419,7 @@ export class DashboardService {
               op.order_no AS orderNo, op.return_qty AS returnQty,
               p.dimension_mm AS dimensionMm, p.product_name AS productName,
               p.is_split AS isSplit, p.rail_section AS railSection, p.product_type AS productType,
+              p.product_side AS productSide,
               g.group_type AS groupType,
               (SELECT GROUP_CONCAT(g.group_type ORDER BY g.sort, g.id)
                  FROM t_order_part_group g WHERE g.order_product_id = p.id) AS groupTypes
@@ -434,7 +435,12 @@ export class DashboardService {
       orderProductId: r.orderProductId == null ? null : Number(r.orderProductId),
       side: r.side ?? '',
       legacyUnassigned:
-        !r.side && partGroupSideQtyRows(r.groupType, hasSocket(r.productType), 1).some((item) => item.side),
+        !r.side && partGroupSideQtyRows(
+          r.groupType,
+          hasSocket(r.productType),
+          1,
+          r.productSide,
+        ).some((item) => item.side),
       backDate: this.dateText(r.backDate),
       processorName: r.processorName ?? null,
       surfaceType: r.surfaceType ?? null,

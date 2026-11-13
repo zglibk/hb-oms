@@ -41,6 +41,8 @@ export interface ProductSnapshot {
   productModel: string | null;
   /** 产品名称（订单表单可填、按图号带工艺带出；同货号多行的辅助区分） */
   productName: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对或不指定。 */
+  productSide: string;
   /** 订单产品的部件组构成，按订单配置的 sort / id 顺序返回。 */
   groupTypes: string[];
   /**
@@ -108,6 +110,7 @@ export class ProductSnapshotService {
               p.item_no           AS item_no,
               p.material_code     AS material_code,
               p.product_name      AS product_name,
+              p.product_side      AS product_side,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
               p.is_split          AS is_split,
@@ -151,6 +154,7 @@ export class ProductSnapshotService {
           r.rail_section ?? null,
         ),
         productName: r.product_name ?? null,
+        productSide: r.product_side ?? '',
         groupTypes,
         isSplit,
         dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),

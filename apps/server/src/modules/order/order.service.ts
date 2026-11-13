@@ -16,9 +16,12 @@ import {
   formatProductTypes,
   hasSocket,
   needsOutsource,
+  normalizeProductSide,
   normalizeProductTypes,
   normalizeVersion,
   partGroupLabel,
+  productSideOfName,
+  sideLabel,
   splitParts,
   toPieces,
 } from '@hb-oms/shared';
@@ -447,6 +450,7 @@ export class OrderService {
       const p = products[i];
       const productType = normalizeProductTypes(p.productType ?? '');
       const socket = hasSocket(productType);
+      const productSide = this.resolveProductSide(p, i);
       const qtyPcs = toPieces(p.orderQty, p.unit);
       const isSplit = p.isSplit ?? 0;
 
@@ -460,6 +464,7 @@ export class OrderService {
         itemNo: p.itemNo ?? null,
         customerDrawingNo: p.customerDrawingNo ?? null,
         productName: p.productName ?? null,
+        productSide,
         productType: productType || null,
         railSection: p.railSection ?? null,
         productRequirement: p.productRequirement ?? null,
@@ -559,7 +564,13 @@ export class OrderService {
 
         // 部件行：蓝图展开（二节轨无中轨；卡口仅外轨/内轨分左右，中轨不分边），客户端仅微调追溯码/备注。
         // 客户端没传微调时沿用该组原有部件行的追溯码/备注——编辑页从不回传它们，重展开不能把周期码洗掉
-        const blueprint = expandPartRows(g.groupType, p.railSection, socket, groupQty);
+        const blueprint = expandPartRows(
+          g.groupType,
+          p.railSection,
+          socket,
+          groupQty,
+          productSide,
+        );
         if (!blueprint.length) {
           throw new BadRequestException(`第 ${i + 1} 行产品：部件组「${g.groupType}」在当前节数下无可展开部件`);
         }
@@ -687,6 +698,12 @@ export class OrderService {
           `${head}，不能${oldSocket ? '去掉' : '加上'}「卡口」——卡口决定装配与出入库按左右分边记账`,
         );
       }
+      const nextProductSide = this.resolveProductSide(cur, 0);
+      if ((old.productSide ?? '') !== nextProductSide) {
+        throw new BadRequestException(
+          `${head}，不能修改产品边别——边别决定装配、外发与出入库流水归属`,
+        );
+      }
       if (old.railSection && old.railSection !== (cur.railSection ?? null)) {
         throw new BadRequestException(`${head}，不能修改轨道节数——节数决定部件组构成`);
       }
@@ -709,6 +726,21 @@ export class OrderService {
 
   private productLabel(p: OrderProduct): string {
     return p.itemNo ? formatProductModel(p.itemNo, p.productType ?? '', 'whole') : p.productName || `#${p.id}`;
+  }
+
+  /** 产品自身边别只在订单保存时确定；下游统一读取 product_side，禁止再解析名称。 */
+  private resolveProductSide(p: CreateOrderProductDto, index: number): string {
+    const socket = hasSocket(normalizeProductTypes(p.productType ?? ''));
+    // 新版表单会显式传空串表示「左右成对」；只有旧客户端完全未传字段时才按名称兜底识别。
+    const requested = p.productSide == null
+      ? productSideOfName(p.productName)
+      : normalizeProductSide(p.productSide);
+    if (!socket && requested) {
+      throw new BadRequestException(
+        `第 ${index + 1} 行产品：只有含「卡口」的产品才能指定产品边别`,
+      );
+    }
+    return socket ? requested : '';
   }
 
   /** 逐项改动明细（写进更正日志，也随接口返回），只列真的变了的字段 */
@@ -745,6 +777,12 @@ export class OrderService {
       const c = (label: string, a: string, b: string) => cmp(`${tag} ${label}`, a, b);
       c('产品代码', s(old.itemNo), s(p.itemNo));
       c('产品名称', s(old.productName), s(p.productName));
+      const nextProductSide = this.resolveProductSide(p, i);
+      c(
+        '产品边别',
+        old.productSide ? sideLabel(old.productSide) : '左右成对',
+        nextProductSide ? sideLabel(nextProductSide) : '左右成对',
+      );
       c('客户图号', s(old.customerDrawingNo), s(p.customerDrawingNo));
       c('物料编码', s(old.materialCode), s(p.materialCode));
       c('产品类型', formatProductTypes(old.productType), formatProductTypes(p.productType ?? ''));

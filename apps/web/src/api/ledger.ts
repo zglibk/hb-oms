@@ -52,6 +52,7 @@ export interface LedgerRow {
   /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
+  productSide: string;
   railSection: string | null;
   /** 分体出货：0整品 1分体 */
   isSplit: number;

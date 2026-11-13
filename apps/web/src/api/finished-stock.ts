@@ -119,6 +119,8 @@ export interface StockGroupOption {
   productModel: string | null;
   /** 产品名称（同货号拆多行时的辅助区分） */
   productName: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对。 */
+  productSide: string;
   productType: string | null;
   /** 订单产品配置的部件组类型，顺序与订单表单一致。 */
   groupTypes: string[];

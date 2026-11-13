@@ -144,7 +144,12 @@ export class OutsourceService {
       { includeCancelledOrder: true },
     );
     snapshots.forEach((snapshot, orderPartGroupId) => {
-      const sides = partGroupSideQtyRows(snapshot.groupType, hasSocket(snapshot.productType), 1);
+      const sides = partGroupSideQtyRows(
+        snapshot.groupType,
+        hasSocket(snapshot.productType),
+        1,
+        snapshot.productSide,
+      );
       result.set(orderPartGroupId, {
         groupType: snapshot.groupType,
         // 列表始终展示订单 product_name 原值，不用组型号或产品型号补词。
@@ -429,6 +434,7 @@ export class OutsourceService {
               o.customer_name      AS customerName,
               o.production_no      AS productionNo,
               p.product_name       AS productName,
+              p.product_side       AS productSide,
               g.product_model      AS productModel,
               g.drawing_no         AS drawingNo,
               g.material_thickness AS materialThickness,
@@ -487,7 +493,12 @@ export class OutsourceService {
       const groupQtyPcs = Number(r.qtyPcs) || 0;
       const groupReturnedQty = Number(r.returnedQty) || 0;
       const legacyReturnedQty = returnedBySide.get(this.returnSideKey(orderPartGroupId, '')) ?? 0;
-      const sideRows = partGroupSideQtyRows(r.groupType, hasSocket(r.productType), groupQtyPcs);
+      const sideRows = partGroupSideQtyRows(
+        r.groupType,
+        hasSocket(r.productType),
+        groupQtyPcs,
+        r.productSide,
+      );
       const searchText = query.includeSearchText
         ? [
           r.searchText,
@@ -627,6 +638,7 @@ export class OutsourceService {
         snap.groupType,
         hasSocket(snap.productType),
         snap.qtyPcs,
+        snap.productSide,
       );
       const target = sideRows.find((row) => row.side === item.side);
       if (!target) return [];
@@ -677,6 +689,7 @@ export class OutsourceService {
         snap.groupType,
         hasSocket(snap.productType),
         snap.qtyPcs,
+        snap.productSide,
       );
       if (!allowedSides.some((row) => row.side === side)) {
         throw new BadRequestException(

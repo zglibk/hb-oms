@@ -15,6 +15,38 @@ export const SIDE_OPTIONS: Array<{ label: string; value: string }> = [
   { label: '右', value: 'right' },
 ];
 
+/**
+ * 订单产品自身边别：空串表示一条产品行同时包含左右两边；left/right 表示该 SKU
+ * 本身就是单边产品。它与下游流水的 side 使用同一组值，但语义不同：前者决定允许
+ * 展开的边，后者记录这笔业务实际落在哪一边。
+ */
+export type ProductSide = '' | 'left' | 'right';
+
+export const PRODUCT_SIDE_OPTIONS: Array<{ label: string; value: ProductSide }> = [
+  { label: '左右成对', value: '' },
+  { label: '左', value: 'left' },
+  { label: '右', value: 'right' },
+];
+
+/** 容错归一；数据库与接口只允许空串 / left / right。 */
+export function normalizeProductSide(value: string | null | undefined): ProductSide {
+  const side = String(value ?? '').trim();
+  return side === 'left' || side === 'right' ? side : '';
+}
+
+/**
+ * 从订单产品名称末尾识别明确边别，给历史数据迁移与新录入自动带出使用。
+ * 只认独立尾标（如「-左边」「（右）」「(左)」），不匹配名称正文里的自然“左右”字样。
+ * 识别结果最终会落 product_side，业务模块不得各自重复解析产品名称。
+ */
+export function productSideOfName(name: string | null | undefined): ProductSide {
+  const text = String(name ?? '').trim();
+  if (!text) return '';
+  if (/(?:^|[-（(]\s*)左(?:边)?\s*[）)]?$/.test(text)) return 'left';
+  if (/(?:^|[-（(]\s*)右(?:边)?\s*[）)]?$/.test(text)) return 'right';
+  return '';
+}
+
 /** 轨道节数（t_order_product.rail_section） */
 export const RAIL_SECTION_OPTIONS: Array<{ label: string; value: string }> = [
   { label: '二节轨', value: 'two_section' },
@@ -95,6 +127,24 @@ export function expandSideQtyRows(
 }
 
 /**
+ * 产品级边别数量：
+ * - 非卡口保持通用一行；
+ * - 明确单边的卡口 SKU 只生成对应一行，数量保持产品全量；
+ * - 未明确边别的卡口组合才沿用左右均分规则。
+ */
+export function productSideQtyRows(
+  socket: boolean,
+  qtyPcs: number,
+  productSide: string | null | undefined = '',
+): Array<{ side: string; qty: number }> {
+  if (!socket) return [{ side: '', qty: qtyPcs }];
+  const explicitSide = normalizeProductSide(productSide);
+  return explicitSide
+    ? [{ side: explicitSide, qty: qtyPcs }]
+    : expandSideQtyRows(true, qtyPcs);
+}
+
+/**
  * 部件组在外发等「按组登记」场景下的边别拆分口径：仅卡口外轨、内轨拆左/右；
  * 中轨及包含多个部件的组合组保持通用一行，避免把不同结构的部件混成一笔边别记录。
  */
@@ -102,10 +152,13 @@ export function partGroupSideQtyRows(
   groupType: string | null | undefined,
   socket: boolean,
   qtyPcs: number,
+  productSide: string | null | undefined = '',
 ): Array<{ side: string; qty: number }> {
   const parts = partGroupParts(groupType);
   const splitSides = socket && parts.length === 1 && (parts[0] === 'outer' || parts[0] === 'inner');
-  return expandSideQtyRows(splitSides, qtyPcs);
+  return splitSides
+    ? productSideQtyRows(true, qtyPcs, productSide)
+    : expandSideQtyRows(false, qtyPcs);
 }
 
 /**
@@ -119,12 +172,15 @@ export function expandPartRows(
   railSection: string | null | undefined,
   socket: boolean,
   groupQtyPcs: number,
+  productSide: string | null | undefined = '',
 ): Array<{ partType: string; side: string; qty: number }> {
   const base = partGroupParts(groupType).filter(
     (pt) => railSection !== 'two_section' || pt !== 'middle',
   );
   return base.flatMap((pt) =>
-    expandSideQtyRows(socket && pt !== 'middle', groupQtyPcs).map((row) => ({
+    (socket && pt !== 'middle'
+      ? productSideQtyRows(true, groupQtyPcs, productSide)
+      : expandSideQtyRows(false, groupQtyPcs)).map((row) => ({
       partType: pt,
       ...row,
     })),

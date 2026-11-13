@@ -334,7 +334,27 @@
                 :prop="`products.${pi}.productName`"
                 :rules="productNameRules(pi)"
               >
-                <el-input v-model="p.productName" :disabled="viewMode" />
+                <el-input
+                  v-model="p.productName"
+                  :disabled="viewMode"
+                  @change="syncProductSideFromName(p)"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col v-if="hasSocket(p._types)" :xs="24" :sm="12" :md="6">
+              <el-form-item label="产品边别" label-width="80px">
+                <el-select
+                  v-model="p.productSide"
+                  style="width: 100%"
+                  :disabled="viewMode || productLocked(p)"
+                >
+                  <el-option
+                    v-for="o in PRODUCT_SIDE_OPTIONS"
+                    :key="o.value || 'pair'"
+                    :label="o.label"
+                    :value="o.value"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <!-- 客户图号：客户来图上的图号；与部件组的「生产图号」（内部转化的技术图纸）是两回事。
@@ -358,7 +378,14 @@
             <el-col :xs="24" :sm="12" :md="6">
               <el-form-item label="产品类型" label-width="80px">
                 <!-- 被引用的产品行不能增减「卡口」：它决定装配与出入库按左右分边记账 -->
-                <el-select v-model="p._types" multiple placeholder="可多选（如 普通+自锁）" style="width: 100%" :disabled="viewMode">
+                <el-select
+                  v-model="p._types"
+                  multiple
+                  placeholder="可多选（如 普通+自锁）"
+                  style="width: 100%"
+                  :disabled="viewMode"
+                  @change="onProductTypesChange(p)"
+                >
                   <el-option
                     v-for="o in productTypeDict" :key="o.value" :label="o.label" :value="o.value"
                     :disabled="o.value === 'socket' && productLocked(p)"
@@ -549,9 +576,11 @@ import {
   ORDER_TYPE,
   RAIL_SECTION_OPTIONS,
   PART_GROUP_OPTIONS,
+  PRODUCT_SIDE_OPTIONS,
   UNIT_OPTIONS,
   DIMENSION_UNIT_OPTIONS,
   expandPartRows,
+  productSideOfName,
   partGroupParts,
   partGroupLabel,
   defaultGroupTypes,
@@ -740,6 +769,8 @@ interface ProductRow {
   /** 客户图号（客户来图图号，区别于部件组的生产图号） */
   customerDrawingNo: string;
   productName: string;
+  /** 产品自身边别：单边卡口 SKU 为 left/right，空串表示左右成对。 */
+  productSide: string;
   railSection: string;
   /** 产品要求描述（客户对该产品的特殊要求；随业务字段开关显隐） */
   productRequirement: string;
@@ -785,6 +816,7 @@ const emptyProduct = (): ProductRow => ({
   itemNo: '',
   customerDrawingNo: '',
   productName: '',
+  productSide: '',
   railSection: 'three_section',
   productRequirement: '',
   isSplit: 0,
@@ -998,6 +1030,7 @@ async function init() {
           itemNo: p.itemNo ?? '',
           customerDrawingNo: p.customerDrawingNo ?? '',
           productName: p.productName ?? '',
+          productSide: p.productSide ?? '',
           railSection: p.railSection ?? 'three_section',
           productRequirement: p.productRequirement ?? '',
           isSplit: p.isSplit ?? 0,
@@ -1309,6 +1342,18 @@ function pcsOf(p: ProductRow): number {
 function productTitle(p: ProductRow): string {
   return formatProductModel(p.itemNo, p._types, 'whole');
 }
+function syncProductSideFromName(p: ProductRow) {
+  if (!hasSocket(p._types)) return;
+  const detected = productSideOfName(p.productName);
+  if (detected) p.productSide = detected;
+}
+function onProductTypesChange(p: ProductRow) {
+  if (!hasSocket(p._types)) {
+    p.productSide = '';
+    return;
+  }
+  syncProductSideFromName(p);
+}
 function syncDimension(p: ProductRow) {
   // 英寸→mm 的系数取系统配置（管理员可改，缺省 25）；落库的 mm 是权威值，
   // 日后改系数不会回头重算这一行
@@ -1323,7 +1368,13 @@ function thicknessPlaceholder(groupType: string): string {
   return '外×中×内，如 2.0×2.0×2.0';
 }
 function partsPreview(p: ProductRow, g: GroupRow): string {
-  const rows = expandPartRows(g.groupType, p.railSection, hasSocket(p._types), g.qtyPcs ?? pcsOf(p));
+  const rows = expandPartRows(
+    g.groupType,
+    p.railSection,
+    hasSocket(p._types),
+    g.qtyPcs ?? pcsOf(p),
+    p.productSide,
+  );
   if (!rows.length) return '（当前节数下无部件）';
   return rows.map((r) => `${partTypeLabel(r.partType)}${r.side ? sideLabel(r.side) : ''}×${r.qty}`).join('　');
 }
@@ -1490,6 +1541,7 @@ async function saveOrder() {
       customerDrawingNo: p.customerDrawingNo || undefined,
       // 产品名称按用户输入原样保存，不自动追加「滑轨」或分体部件形态
       productName: p.productName,
+      productSide: hasSocket(p._types) ? p.productSide : '',
       productType: p._types.join(','),
       railSection: p.railSection,
       productRequirement: p.productRequirement || undefined,
@@ -1570,7 +1622,10 @@ async function onDrawingChange(p: ProductRow, g: GroupRow) {
     firstPart === 'inner' ? info.drawingVersionInner :
     firstPart === 'middle' ? info.drawingVersionMiddle : info.drawingVersionOuter;
   if (ver && !g.drawingVersion) g.drawingVersion = ver;
-  if (info.productName && !p.productName) p.productName = info.productName;
+  if (info.productName && !p.productName) {
+    p.productName = info.productName;
+    syncProductSideFromName(p);
+  }
   if (info.customerName && !form.customerName) {
     form.customerName = info.customerName;
     customerPick.value = info.customerName;

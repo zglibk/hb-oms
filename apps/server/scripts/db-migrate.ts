@@ -147,6 +147,8 @@ const MIGRATIONS: string[] = [
   'migration-operation-log-super-admin.sql',
   // 产品代码 / 产品名称拆列：补齐外发、成品流水快照与呆滞品独立名称字段
   'migration-product-name-snapshots.sql',
+  // 订单产品自身边别：单边卡口 SKU 不再重复展开左右，并归正存量流水边别
+  'migration-order-product-side.sql',
 ];
 
 /**
@@ -200,6 +202,7 @@ const expectedColumns = [
   't_order.order_no',
   't_idempotency_request.request_id',
   't_order_product.qty_pcs',
+  't_order_product.product_side',
   // t_order_product.assembly_workshop 已于 2026-08-07 删除，移入下方 forbiddenColumns
   't_order_part_group.group_type',
   't_order_part_group.drawing_no',

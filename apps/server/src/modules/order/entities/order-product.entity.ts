@@ -56,6 +56,15 @@ export class OrderProduct {
   productName: string | null;
 
   @Column({
+    name: 'product_side',
+    type: 'varchar',
+    length: 16,
+    default: '',
+    comment: '产品自身边别：left左 right右 空串=左右成对/不指定；决定卡口产品允许展开的边',
+  })
+  productSide: string;
+
+  @Column({
     name: 'product_type',
     type: 'varchar',
     length: 128,

@@ -130,6 +130,8 @@ export interface LedgerRow {
   /** 产品型号：整品行 = 货号 + 类型中文组合 + 「滑轨」；分体行后缀由组构成推导（外中轨/内轨…） */
   productModel: string | null;
   productType: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对。 */
+  productSide: string;
   railSection: string | null;
   /** 分体出货：0整品 1分体（该行按部件组构成分体包装出货，不组装成整品） */
   isSplit: number;
@@ -401,7 +403,8 @@ export class OrderLedgerService {
               o.salesman AS salesman, o.merchandiser AS merchandiser,
               o.production_no AS productionNo, p.material_code AS materialCode, p.item_no AS itemNo,
               p.product_name AS productName,
-              p.product_type AS productType, p.rail_section AS railSection, p.is_split AS isSplit,
+              p.product_type AS productType, p.product_side AS productSide,
+              p.rail_section AS railSection, p.is_split AS isSplit,
               p.dimension_raw AS dimensionRaw, p.dimension_unit AS dimensionUnit,
               p.dimension_mm AS dimensionMm, p.order_qty AS orderQty, p.unit AS unit,
               p.surface_type AS surfaceType, p.color AS color,
@@ -446,6 +449,7 @@ export class OrderLedgerService {
         // 分体行后缀由组构成推导，组数据在 attachPartGroups 里才有，先给整品拼法、随后覆盖
         productModel: formatProductModel(r.itemNo ?? '', r.productType ?? ''),
         productType: r.productType ?? null,
+        productSide: r.productSide ?? '',
         railSection: r.railSection ?? null,
         isSplit: Number(r.isSplit) || 0,
         dimensionMm: r.dimensionMm == null ? null : Number(r.dimensionMm),
@@ -586,7 +590,12 @@ export class OrderLedgerService {
         ...g,
         outsourceOwed: outsourced ? g.qtyPcs - g.returnedQty : null,
         sideProgress: (() => {
-          const targets = partGroupSideQtyRows(g.groupType, r.socket, g.qtyPcs);
+          const targets = partGroupSideQtyRows(
+            g.groupType,
+            r.socket,
+            g.qtyPcs,
+            r.productSide,
+          );
           const hasSides = targets.some((target) => target.side);
           const legacyReturnedQty = returnedBySide.get(`${g.orderPartGroupId}|`) ?? 0;
           const progress: LedgerPartSideProgress[] = targets.map((target) => {
@@ -661,7 +670,8 @@ export class OrderLedgerService {
                 op.surface_type AS surfaceType, op.color AS color,
                 op.return_weight AS returnWeight, op.unit_weight AS unitWeight,
                 op.return_qty AS returnQty, op.remark, op.creator_name AS creatorName,
-                g.group_type AS groupType, p.product_type AS productType
+                g.group_type AS groupType, p.product_type AS productType,
+                p.product_side AS productSide
            FROM t_outsource_part op
            JOIN t_order_part_group g ON g.id = op.order_part_group_id
            JOIN t_order_product p ON p.id = g.order_product_id
@@ -699,7 +709,12 @@ export class OrderLedgerService {
         groupType: r.groupType ?? null,
         side: r.side ?? '',
         legacyUnassigned:
-          !r.side && partGroupSideQtyRows(r.groupType, hasSocket(r.productType), 1).some((item) => item.side),
+          !r.side && partGroupSideQtyRows(
+            r.groupType,
+            hasSocket(r.productType),
+            1,
+            r.productSide,
+          ).some((item) => item.side),
         backDate: this.dateText(r.backDate),
         processorName: r.processorName ?? null,
         surfaceType: r.surfaceType ?? null,

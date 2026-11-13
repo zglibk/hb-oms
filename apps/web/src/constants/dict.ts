@@ -101,6 +101,7 @@ export {
   // 部件/边别/节数/部件组
   PART_TYPE_OPTIONS,
   SIDE_OPTIONS,
+  PRODUCT_SIDE_OPTIONS,
   RAIL_SECTION_OPTIONS,
   PART_GROUP_OPTIONS,
   partTypeLabel,
@@ -112,7 +113,10 @@ export {
   partGroupSideQtyRows,
   defaultGroupTypes,
   expandSideQtyRows,
+  productSideQtyRows,
   expandPartRows,
+  normalizeProductSide,
+  productSideOfName,
   // 分体出货（形态由部件组构成推导；仅三节轨可开。分体行同样走装配与闸门）
   splitParts,
   splitSuffix,

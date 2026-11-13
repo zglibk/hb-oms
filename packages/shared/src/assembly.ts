@@ -9,6 +9,7 @@
  */
 
 import { ASSEMBLY_STATUS } from './business-status';
+import { normalizeProductSide } from './rail';
 
 /**
  * 批次是否已完成：实际完成时间已填 = 已完成（设计文档 §3.4）。
@@ -49,15 +50,26 @@ export function calcInboundQuota(
  * 含卡口组合的产品必须落 left/right，非卡口一律空串 ''。
  * 闸门按 (部件组, side) 分别核算，左右不串量，故边别不允许留空或乱填。
  */
-export function isValidSide(side: string | null | undefined, socket: boolean): boolean {
+export function isValidSide(
+  side: string | null | undefined,
+  socket: boolean,
+  productSide: string | null | undefined = '',
+): boolean {
   const v = String(side ?? '').trim();
-  return socket ? v === 'left' || v === 'right' : v === '';
+  if (!socket) return v === '';
+  const explicitSide = normalizeProductSide(productSide);
+  return explicitSide ? v === explicitSide : v === 'left' || v === 'right';
 }
 
 /**
  * 一个部件组在装配维度上要跟踪的 side 列表：
  * 含卡口 → ['left','right']（左右各自独立卡量），其余 → ['']。
  */
-export function assemblySides(socket: boolean): string[] {
-  return socket ? ['left', 'right'] : [''];
+export function assemblySides(
+  socket: boolean,
+  productSide: string | null | undefined = '',
+): string[] {
+  if (!socket) return [''];
+  const explicitSide = normalizeProductSide(productSide);
+  return explicitSide ? [explicitSide] : ['left', 'right'];
 }

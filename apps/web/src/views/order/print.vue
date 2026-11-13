@@ -172,7 +172,7 @@ import {
   splitSuffix,
   sanitizeItemCode,
   hasSocket,
-  expandSideQtyRows,
+  productSideQtyRows,
   sideLabel,
   ORDER_STATUS_VALUE,
 } from '@/constants/dict';
@@ -257,7 +257,8 @@ interface TaskRow {
 /**
  * 产品行 → 任务单行。
  *
- * 产品类型含「卡口」时，按产品级边别口径拆成左、右两行；这与部件蓝图刻意解耦：
+ * 产品类型含「卡口」时，按订单产品自身边别展开；单边 SKU 只打印对应一行，
+ * 未指定产品边别的组合才拆成左、右两行。这与部件蓝图刻意解耦：
  * 卡口中轨是左右通用结构、订单部件行不分边，但成品任务单仍须按安装侧打印左/右两行。
  * 奇数支沿用共享规则「左边多一支」，两行合计始终等于产品支数。
  */
@@ -290,7 +291,7 @@ function toRows(p: OrderProductItem): TaskRow[] {
     return [{ ...base, qtyPcs: p.qtyPcs, side: '' }];
   }
 
-  return expandSideQtyRows(true, p.qtyPcs)
+  return productSideQtyRows(true, p.qtyPcs, p.productSide)
     .filter((row) => row.qty > 0)
     .map(({ side, qty: qtyPcs }) => ({
       ...base,

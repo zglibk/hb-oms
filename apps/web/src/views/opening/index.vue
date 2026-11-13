@@ -203,7 +203,6 @@ import {
   RAIL_SECTION_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
   sideLabel,
-  expandSideQtyRows,
   normalizeProductTypes,
   sanitizeItemCode,
 } from '@/constants/dict';
@@ -272,7 +271,8 @@ async function loadOptions() {
         itemNo: o.itemNo,
         productName: o.productName,
         dimensionText: o.dimensionText,
-        qtyPcs: o.qtyPcs,
+        // 选择器一行就是一个业务边别，订单数必须取该边额度；单边 SKU 保持产品全量。
+        qtyPcs: s.orderedQty,
         quantity: 0,
         remark: '',
       })),
@@ -294,9 +294,8 @@ function isSelectable(row: GroupRow) {
 function confirmPick() {
   picked.value.forEach((o) => {
     if (groupRows.value.some((r) => r.orderProductId === o.orderProductId && r.side === o.side)) return;
-    // 默认按产品级边别数量带出；部件级中轨是否分边不影响成品期初的左/右口径
-    const def = expandSideQtyRows(!!o.side, o.qtyPcs).find((row) => row.side === o.side)?.qty ?? o.qtyPcs;
-    groupRows.value.push({ ...o, quantity: def || 1, remark: '' });
+    // picker 行已按产品边别给出正确订单数，直接带入，避免单边 SKU 被再次均分。
+    groupRows.value.push({ ...o, quantity: o.qtyPcs || 1, remark: '' });
   });
   picked.value = [];
   pickerRef.value?.clearSelection?.();

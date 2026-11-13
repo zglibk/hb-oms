@@ -46,6 +46,7 @@ export interface AssemblyGroupRow {
   productModel: string | null;
   /** 产品名称（同货号拆多行时的辅助区分） */
   productName: string | null;
+  productSide: string;
   productType: string | null;
   railSection: string | null;
   /** 分体出货：0整品 1分体（形态已体现在 productModel 后缀，如 45#缓冲外中轨） */
@@ -101,6 +102,7 @@ export interface AssemblyBatchesResult {
     productionNo: string | null;
     itemNo: string | null;
     productName: string | null;
+    productSide: string;
     productModel: string | null;
     dimensionText: string | null;
     qtyPcs: number;

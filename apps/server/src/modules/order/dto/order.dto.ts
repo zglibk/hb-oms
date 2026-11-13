@@ -95,6 +95,12 @@ export class CreateOrderProductDto {
   @IsNotEmpty({ message: '产品名称必填' })
   productName: string;
 
+  /** 产品自身边别：卡口单边 SKU 填 left/right；空串表示左右成对或不指定。 */
+  @IsOptional()
+  @IsString()
+  @IsIn(['', 'left', 'right'], { message: '产品边别只能是左右成对、左或右' })
+  productSide?: string;
+
   /** 产品类型多选组合（数组或逗号串均可，服务端经共享包规范化） */
   @IsOptional() @IsString() @MaxLength(128) productType?: string;
 

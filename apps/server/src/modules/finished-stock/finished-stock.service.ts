@@ -10,11 +10,11 @@ import {
   ORDER_STATUS,
   SIDE_OPTIONS,
   STOCK_DIRECTION,
-  expandSideQtyRows,
   formatDimensionView,
   hasSocket,
   isValidSide,
   productLevelModel,
+  productSideQtyRows,
   sideLabel,
   sanitizeItemCode,
 } from '@hb-oms/shared';
@@ -557,9 +557,9 @@ export class FinishedStockService {
     const keys: Array<{ orderProductId: number; side: string }> = [];
     rows.forEach((r) => {
       const socket = hasSocket(r.productType);
-      (socket ? ['left', 'right'] : ['']).forEach((side) =>
-        keys.push({ orderProductId: Number(r.productId), side }),
-      );
+      const snap = snaps.get(Number(r.productId));
+      productSideQtyRows(socket, Number(r.qtyPcs) || 0, snap?.productSide)
+        .forEach(({ side }) => keys.push({ orderProductId: Number(r.productId), side }));
     });
     const [quota, balances, outbound] = await Promise.all([
       loadInboundQuota(this.dataSource.manager, keys),
@@ -577,11 +577,15 @@ export class FinishedStockService {
         .filter(Boolean);
       // 成品按产品行记录总支数；卡口产品的订单应发数按左右展开后，
       // 才能与出库明细的 (产品行, 边别) 锚点一一对应。
-      const orderedQtyBySide = new Map(
-        expandSideQtyRows(socket, snap?.qtyPcs ?? (Number(r.qtyPcs) || 0))
-          .map((row) => [row.side, row.qty] as [string, number]),
+      const sideQtyRows = productSideQtyRows(
+        socket,
+        snap?.qtyPcs ?? (Number(r.qtyPcs) || 0),
+        snap?.productSide,
       );
-      const sides = (socket ? ['left', 'right'] : ['']).map((side) => {
+      const orderedQtyBySide = new Map(
+        sideQtyRows.map((row) => [row.side, row.qty] as [string, number]),
+      );
+      const sides = sideQtyRows.map(({ side }) => {
         const q = quota.get(quotaKey(pid, side));
         const orderedQty = orderedQtyBySide.get(side) ?? 0;
         const outboundQty = outbound.get(quotaKey(pid, side)) ?? 0;
@@ -611,6 +615,7 @@ export class FinishedStockService {
         itemNo: r.itemNo ?? null,
         productModel: snap?.productModel ?? r.productModel ?? null,
         productName: snap?.productName ?? null,
+        productSide: snap?.productSide ?? '',
         productType: r.productType ?? null,
         groupTypes,
         dimensionText: snap?.dimensionText ?? null,
@@ -1194,10 +1199,12 @@ export class FinishedStockService {
         else side = hit;
       }
       const socket = hasSocket(snap.productType);
-      if (!rowErrors.length && !isValidSide(side, socket)) {
+      if (!rowErrors.length && !isValidSide(side, socket, snap.productSide)) {
         rowErrors.push(
           socket
-            ? `产品「${snap.productModel ?? ''}」含卡口，必须按 左 / 右 分行填写`
+            ? snap.productSide
+              ? `产品「${snap.productModel ?? ''}」是${sideLabel(snap.productSide)}边产品，只能填写${sideLabel(snap.productSide)}边`
+              : `产品「${snap.productModel ?? ''}」含卡口，必须按 左 / 右 分行填写`
             : `产品「${snap.productModel ?? ''}」不含卡口，边别必须留空`,
         );
       }
@@ -1900,10 +1907,12 @@ export class FinishedStockService {
   private assertSide(side: string | undefined, snap: ProductSnapshot, index: number): string {
     const v = (side ?? '').trim();
     const socket = hasSocket(snap.productType);
-    if (!isValidSide(v, socket)) {
+    if (!isValidSide(v, socket, snap.productSide)) {
       throw new BadRequestException(
         socket
-          ? `第 ${index + 1} 行明细：产品「${snap.productModel ?? ''}」含卡口，必须按左/右分行录入`
+          ? snap.productSide
+            ? `第 ${index + 1} 行明细：产品「${snap.productModel ?? ''}」是${sideLabel(snap.productSide)}边产品，只能录入${sideLabel(snap.productSide)}边`
+            : `第 ${index + 1} 行明细：产品「${snap.productModel ?? ''}」含卡口，必须按左/右分行录入`
           : `第 ${index + 1} 行明细：产品「${snap.productModel ?? ''}」不含卡口，不能指定边别`,
       );
     }

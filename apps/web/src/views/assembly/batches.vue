@@ -23,7 +23,11 @@
         <span class="bd-meta">订单数 <b>{{ data.product.qtyPcs }}</b> 支</span>
         <!-- disable-transitions：同产品间切换时 v-if 翻转可能发生在不可见状态，
              el-tag 的 zoom 过渡收不到 transitionend 会把节点留在 DOM 里（弹窗时代实测踩过） -->
-        <el-tag v-if="data.product.socket" size="small" type="warning" disable-transitions>含卡口 · 左右分开核算</el-tag>
+        <el-tag v-if="data.product.socket" size="small" type="warning" disable-transitions>
+          {{ data.product.productSide
+            ? `含卡口 · 仅${sideLabel(data.product.productSide)}边`
+            : '含卡口 · 左右分开核算' }}
+        </el-tag>
       </div>
 
       <!-- 分边别小计：已完成装配 / 已入库 / 可入库量 -->
@@ -156,7 +160,7 @@
         <el-form :inline="true" size="small" @submit.prevent>
           <el-form-item v-if="socket" label="边别" required>
             <el-select v-model="draft.side" :disabled="!!editingId" style="width: 90px" placeholder="选择">
-              <el-option v-for="o in SIDE_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
+              <el-option v-for="o in sideOptions" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
           <el-form-item label="装配车间" required>
@@ -228,7 +232,7 @@ import {
   type AssemblyBatchRow,
   type AssemblyBatchesResult,
 } from '@/api/assembly';
-import { ASSEMBLY_STATUS, SIDE_OPTIONS, expandSideQtyRows, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
+import { ASSEMBLY_STATUS, SIDE_OPTIONS, productSideQtyRows, labelOf, sideLabel, tagTypeOf } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import AppActions from '@/components/AppActions.vue';
 import ColorTag from '@/components/ColorTag.vue';
@@ -249,6 +253,10 @@ const removingId = ref<number | null>(null);
 const data = ref<AssemblyBatchesResult | null>(null);
 
 const socket = computed(() => !!data.value?.product?.socket);
+const sideOptions = computed(() => {
+  const allowed = new Set((data.value?.sides ?? []).map((row) => row.side));
+  return SIDE_OPTIONS.filter((option) => allowed.has(option.value));
+});
 
 const workshopDict = ref<Array<{ label: string; value: string }>>([]);
 loadDict('assembly_workshop').then((rows: any[]) => {
@@ -281,7 +289,7 @@ const editingIndex = ref(0);
 function resetDraft() {
   editingId.value = null;
   editingIndex.value = 0;
-  draft.side = socket.value ? 'left' : '';
+  draft.side = socket.value ? (data.value?.sides[0]?.side ?? '') : '';
   // 车间不再从订单继承（订单环节已不安排装配车间）；沿用该产品最近一条批次的车间做默认值，
   // 一个产品多批通常同车间，仍可逐批改；该产品还没有批次时留空由计划员选
   const batches = data.value?.list ?? [];
@@ -300,7 +308,8 @@ function resetDraft() {
 function sideTarget(side: string): number {
   const p = data.value?.product;
   if (!p) return 0;
-  return expandSideQtyRows(socket.value, p.qtyPcs).find((row) => row.side === side)?.qty ?? 0;
+  return productSideQtyRows(socket.value, p.qtyPcs, p.productSide)
+    .find((row) => row.side === side)?.qty ?? 0;
 }
 
 /** 默认数量 = 该边别未排产量（不足则 1），减少计划员手工输入 */
@@ -379,7 +388,7 @@ async function onSubmit() {
   if (submitting.value) return;
   if (!orderProductId.value) return;
   if (socket.value && !draft.side) {
-    ElMessage.warning('该产品含卡口，请选择左/右边别');
+    ElMessage.warning('该产品含卡口，请选择有效边别');
     return;
   }
   if (!draft.workshop) {

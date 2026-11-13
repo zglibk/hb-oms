@@ -67,6 +67,8 @@ export interface OrderProductItem {
   /** 客户图号（客户来图图号，区别于部件组的生产图号 drawingNo） */
   customerDrawingNo: string | null;
   productName: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对或不指定。 */
+  productSide: string;
   productType: string | null;
   railSection: string | null;
   /** 产品要求描述（客户对该产品的特殊要求；随业务字段开关显隐） */
@@ -168,6 +170,7 @@ export interface OrderProductPayload {
   itemNo?: string;
   customerDrawingNo?: string;
   productName: string;
+  productSide?: string;
   productType?: string;
   railSection?: string;
   productRequirement?: string;

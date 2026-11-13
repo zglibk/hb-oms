@@ -282,6 +282,7 @@ CREATE TABLE IF NOT EXISTS t_order_product (
   item_no          VARCHAR(64)  NULL COMMENT '货号快照（如 53#）',
   customer_drawing_no VARCHAR(128) NULL COMMENT '客户图号（产品级）：客户来图上的图号；区别于部件组的 drawing_no 生产图号（内部转化的技术图纸）',
   product_name     VARCHAR(128) NULL COMMENT '产品名称',
+  product_side     VARCHAR(16)  NOT NULL DEFAULT '' COMMENT '产品自身边别：left左 right右 空串=左右成对/不指定；决定卡口产品允许展开的边',
   product_type     VARCHAR(128) NULL COMMENT '产品类型多选组合（字典序逗号拼接，如 standard,self_lock；含 socket 触发卡口规则）',
   rail_section     VARCHAR(32)  NULL COMMENT '轨道节数：two_section二节轨 three_section三节轨',
   product_requirement VARCHAR(255) NULL COMMENT '产品要求描述（客户对该产品的特殊要求，如测试标准/包装要求；可由业务字段开关全局停用录入与展示）',

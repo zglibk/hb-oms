@@ -24,6 +24,8 @@ export interface PartGroupSnapshot {
   productModel: string | null;
   /** 订单产品名称；部件级页面与组型号并列展示，不能拿组型号冒充名称 */
   productName: string | null;
+  /** 产品自身边别：left/right 为单边 SKU，空串为左右成对或不指定。 */
+  productSide: string;
   /** 规格展示文本（如 350mm），由共享包 formatDimension 统一拼装 */
   dimensionText: string | null;
   /** 周期码：取该组下首个非空追溯码（外发单打印用） */
@@ -100,6 +102,7 @@ export class PartGroupSnapshotService {
               o.production_no     AS production_no,
               p.item_no           AS item_no,
               p.product_name      AS product_name,
+              p.product_side      AS product_side,
               p.material_code     AS material_code,
               p.product_type      AS product_type,
               p.rail_section      AS rail_section,
@@ -130,6 +133,7 @@ export class PartGroupSnapshotService {
         productionNo: r.production_no ?? null,
         productModel: r.product_model ?? null,
         productName: r.product_name ?? null,
+        productSide: r.product_side ?? '',
         dimensionText: formatDimension(r.dimension_raw, r.dimension_unit, r.dimension_mm),
         cycleCode: r.cycle_code ?? null,
         surfaceType: r.surface_type ?? null,
