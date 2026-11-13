@@ -63,35 +63,38 @@
 
         <el-table :data="form.items" border stripe size="small" empty-text="请点击「添加产品」选择要出入库的产品">
           <el-table-column type="index" label="#" width="46" align="center" />
-          <el-table-column label="订单号" prop="orderNo" width="130" show-overflow-tooltip />
-          <el-table-column label="生产单号" prop="productionNo" width="115" show-overflow-tooltip />
-          <el-table-column label="产品代码" width="110" show-overflow-tooltip>
+          <el-table-column label="订单号" prop="orderNo" width="116" show-overflow-tooltip />
+          <el-table-column label="生产单号" prop="productionNo" width="92" show-overflow-tooltip />
+          <el-table-column label="产品代码" width="90" show-overflow-tooltip>
             <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
           </el-table-column>
-          <el-table-column label="产品名称" min-width="150" show-overflow-tooltip>
+          <el-table-column label="产品名称" min-width="108" show-overflow-tooltip>
             <template #default="{ row }">{{ row.productName || '—' }}</template>
           </el-table-column>
-          <el-table-column label="规格" prop="dimensionText" width="95" align="center" />
-          <el-table-column label="表面处理" width="95" align="center">
+          <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+          </el-table-column>
+          <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
+          <el-table-column label="表面处理" width="76" align="center">
             <template #default="{ row }">
               <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ surfaceLabel(row.surfaceType) }}</color-tag>
               <span v-else>—</span>
             </template>
           </el-table-column>
           <!-- 「颜色」是可停用的业务字段（§5.7），停用时整列不显示 -->
-          <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+          <el-table-column v-if="colorEnabled" label="颜色" width="60" align="center">
             <template #default="{ row }">
               <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column label="边别" width="70" align="center">
+          <el-table-column label="边别" width="54" align="center">
             <template #default="{ row }">
               <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column :label="limitLabel" width="110" align="center">
+          <el-table-column :label="limitLabel" width="84" align="center">
             <template #default="{ row }">
               <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
             </template>
@@ -369,6 +372,7 @@ interface ItemRow {
   itemNo: string | null;
   productName: string | null;
   productModel: string | null;
+  groupTypes: string[];
   dimensionText: string | null;
   /** 表面处理（字典 surface_type）与颜色：同货号不同表面处理是两批货，选货与核对都要看 */
   surfaceType: string | null;
@@ -490,6 +494,7 @@ async function init() {
       itemNo: it.itemNo,
       productName: it.productName,
       productModel: it.productModel,
+      groupTypes: [],
       dimensionText: it.dimensionText,
       surfaceType: it.surfaceType,
       color: it.color,
@@ -512,6 +517,7 @@ async function refreshLimits() {
   if (!form.items.length) return;
   const opts = await getStockGroupOptions({ bizType: form.bizType });
   const map = new Map<string, {
+    groupTypes: string[];
     limit: number;
     orderedQty: number;
     outboundQty: number;
@@ -520,6 +526,7 @@ async function refreshLimits() {
   opts.forEach((o) => {
     o.sides.forEach((s) =>
       map.set(`${o.orderProductId}#${s.side}`, {
+        groupTypes: o.groupTypes,
         limit: isInbound.value ? s.quota : s.stockQty,
         orderedQty: s.orderedQty,
         outboundQty: s.outboundQty,
@@ -529,6 +536,7 @@ async function refreshLimits() {
   });
   form.items.forEach((it) => {
     const current = map.get(`${it.orderProductId}#${it.side}`);
+    it.groupTypes = current?.groupTypes ?? [];
     it.limit = current?.limit ?? 0;
     it.orderedQty = current?.orderedQty ?? 0;
     it.outboundQty = current?.outboundQty ?? 0;
@@ -827,6 +835,7 @@ function confirmPick() {
       itemNo: o.itemNo,
       productName: o.productName,
       productModel: o.productModel,
+      groupTypes: o.groupTypes,
       dimensionText: o.dimensionText,
       surfaceType: o.surfaceType,
       color: o.color,
