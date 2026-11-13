@@ -48,49 +48,49 @@
         <span class="total">当前筛选结存合计 <b>{{ totalQty }}</b> 支</span>
       </div>
       <app-table :data="list" v-loading="loading" border stripe :page="query.page" :page-size="query.pageSize" row-key="id">
-        <el-table-column label="产品代码" prop="itemNo" width="90" align="center">
+        <el-table-column label="产品代码" prop="itemNo" width="84" align="center">
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品名称" min-width="130" class-name="col-left" show-overflow-tooltip>
+        <el-table-column label="产品名称" min-width="120" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="规格" width="110" align="center">
+        <el-table-column label="规格" width="78" align="center">
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
-        <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+        <el-table-column label="部件组" width="100" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
         </el-table-column>
-        <el-table-column label="表面处理" width="100" align="center">
+        <el-table-column label="表面处理" width="84" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ dictLabel(surfaceDict, row.surfaceType) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="colorEnabled" label="颜色" width="80" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="64" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="边别" width="70" align="center">
+        <el-table-column label="边别" width="60" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="订单号" width="130" show-overflow-tooltip>
+        <el-table-column label="订单号" width="118" show-overflow-tooltip>
           <template #default="{ row }">{{ row.orderNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="生产单号" width="120" show-overflow-tooltip>
+        <el-table-column label="生产单号" width="100" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productionNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="客户" prop="customerName" min-width="120" class-name="col-left" show-overflow-tooltip>
+        <el-table-column label="客户" prop="customerName" min-width="96" class-name="col-left" show-overflow-tooltip>
           <template #default="{ row }">{{ row.customerName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="批次" width="90" align="center">
+        <el-table-column label="批次" width="72" align="center">
           <template #default="{ row }">{{ row.batchNo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="结存(支)" width="100" align="center" fixed="right">
+        <el-table-column label="结存(支)" width="84" align="center" fixed="right">
           <template #default="{ row }">
             <span :class="row.quantity > 0 ? 'num-ok' : 'num-zero'">{{ row.quantity }}</span>
           </template>

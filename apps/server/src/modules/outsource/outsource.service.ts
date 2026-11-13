@@ -131,9 +131,12 @@ export class OutsourceService {
   /** 回厂流水所属部件组的类型与左右能力，列表展示与历史未分边判定共用。 */
   private async loadGroupMeta(
     groupIds: number[],
-  ): Promise<Map<number, { groupType: string | null; sideCapable: boolean }>> {
+  ): Promise<Map<number, { groupType: string | null; productName: string | null; sideCapable: boolean }>> {
     const ids = [...new Set(groupIds.filter((id) => Number.isInteger(id) && id > 0))];
-    const result = new Map<number, { groupType: string | null; sideCapable: boolean }>();
+    const result = new Map<
+      number,
+      { groupType: string | null; productName: string | null; sideCapable: boolean }
+    >();
     if (!ids.length) return result;
     const snapshots = await this.partGroupSnapshot.load(
       null,
@@ -144,6 +147,8 @@ export class OutsourceService {
       const sides = partGroupSideQtyRows(snapshot.groupType, hasSocket(snapshot.productType), 1);
       result.set(orderPartGroupId, {
         groupType: snapshot.groupType,
+        // 列表始终展示订单 product_name 原值，不用组型号或产品型号补词。
+        productName: snapshot.productName,
         sideCapable: sides.some((item) => item.side),
       });
     });
@@ -165,7 +170,9 @@ export class OutsourceService {
     if (query.keyword) {
       qb.andWhere(
         `(r.processorName LIKE :kw OR r.orderNo LIKE :kw OR r.productionNo LIKE :kw
-          OR r.itemNo LIKE :kw OR r.productName LIKE :kw OR r.productModel LIKE :kw OR r.drawingNo LIKE :kw)`,
+          OR r.itemNo LIKE :kw OR r.productName LIKE :kw OR r.productModel LIKE :kw OR r.drawingNo LIKE :kw
+          OR EXISTS (SELECT 1 FROM t_order_product p
+                      WHERE p.id = r.order_product_id AND p.product_name LIKE :kw))`,
         { kw: `%${query.keyword}%` },
       );
     }
@@ -199,6 +206,7 @@ export class OutsourceService {
       const meta = groupMeta.get(r.orderPartGroupId);
       return Object.assign(r, {
         canModify: modifiable[i],
+        productName: meta?.productName ?? r.productName,
         groupType: meta?.groupType ?? null,
         legacyUnassigned: r.side === '' && Boolean(meta?.sideCapable),
       });
@@ -211,6 +219,7 @@ export class OutsourceService {
     if (!row) throw new NotFoundException('外发回厂记录不存在');
     const groupMeta = await this.loadGroupMeta([row.orderPartGroupId]);
     return Object.assign(row, {
+      productName: groupMeta.get(row.orderPartGroupId)?.productName ?? row.productName,
       groupType: groupMeta.get(row.orderPartGroupId)?.groupType ?? null,
     });
   }
