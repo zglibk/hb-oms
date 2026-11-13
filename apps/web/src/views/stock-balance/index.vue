@@ -58,7 +58,7 @@
           <template #default="{ row }">{{ row.dimensionText || '—' }}</template>
         </el-table-column>
         <el-table-column label="组类型" width="100" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+          <template #default="{ row }">{{ groupTypeText(row) }}</template>
         </el-table-column>
         <el-table-column label="表面处理" width="84" align="center">
           <template #default="{ row }">
@@ -131,7 +131,7 @@ import {
   importStockBalance,
   type BalanceRow,
 } from '@/api/finished-stock';
-import { SIDE_OPTIONS, partGroupLabel, sanitizeItemCode, sideLabel } from '@/constants/dict';
+import { SIDE_OPTIONS, productGroupTypeLabel, sanitizeItemCode, sideLabel } from '@/constants/dict';
 import { loadDict } from '@/composables/useDict';
 import { useFeatureFlags } from '@/composables/useFeatureFlags';
 import { useExcelExport } from '@/composables/useExcelExport';
@@ -165,9 +165,8 @@ loadDict('surface_type').then((rows: any[]) => {
 
 const totalQty = computed(() => list.value.reduce((s, r) => s + (r.quantity || 0), 0));
 
-function partGroupText(groupTypes: string[] | null | undefined): string {
-  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
-  return labels.length ? labels.join(' / ') : '—';
+function groupTypeText(row: Pick<BalanceRow, 'groupTypes' | 'railSection'>): string {
+  return productGroupTypeLabel(row.groupTypes, row.railSection) || '—';
 }
 
 async function load() {

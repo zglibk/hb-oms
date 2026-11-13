@@ -13,6 +13,7 @@ import {
   formatDimensionView,
   hasSocket,
   isValidSide,
+  productGroupTypeLabel,
   productLevelModel,
   productSideQtyRows,
   sideLabel,
@@ -575,6 +576,7 @@ export class FinishedStockService {
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean);
+      const railSection = snap?.railSection ?? r.railSection ?? null;
       // 成品按产品行记录总支数；卡口产品的订单应发数按左右展开后，
       // 才能与出库明细的 (产品行, 边别) 锚点一一对应。
       const sideQtyRows = productSideQtyRows(
@@ -618,6 +620,7 @@ export class FinishedStockService {
         productSide: snap?.productSide ?? '',
         productType: r.productType ?? null,
         groupTypes,
+        railSection,
         dimensionText: snap?.dimensionText ?? null,
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
@@ -626,7 +629,7 @@ export class FinishedStockService {
         sides,
         // 只给本地选择器使用，不参与建单 payload；产品级型号由快照服务补进索引。
         searchText: query.includeSearchText
-          ? `${r.keywordText ?? ''}|${snap?.productModel ?? r.productModel ?? ''}`
+          ? `${r.keywordText ?? ''}|${snap?.productModel ?? r.productModel ?? ''}|${productGroupTypeLabel(groupTypes, railSection)}`
           : undefined,
       };
     });
@@ -825,6 +828,10 @@ export class FinishedStockService {
           label('surface_type', row.surfaceType),
           ...String(row.productType ?? '').split(',').map((value) => label('product_type', value.trim())),
           label('rail_section', row.railSection),
+          productGroupTypeLabel(
+            String(row.groupTypes ?? '').split(',').filter(Boolean),
+            row.railSection ?? null,
+          ),
           ...String(row.groupTypes ?? '').split(',').map((value) => label('part_group_type', value.trim())),
           ...String(row.partTypes ?? '').split(',').map((value) => label('part_type', value.trim())),
         ].filter(Boolean).join('|')

@@ -264,6 +264,37 @@ export function splitSuffix(parts: string[]): string {
   return `${parts.map((p) => PART_CHAR[p] ?? '').join('')}轨`;
 }
 
+/**
+ * 产品级「组类型」展示名。
+ *
+ * 订单为满足外发逐部件跟踪，会把「整品 / 外中轨」拆成 outer / middle / inner
+ * 多条物理部件组；成品、期初等产品级列表若逐条翻译，就会误显示成
+ * 「外轨 / 中轨 / 内轨」或「外轨 / 中轨」。这里按部件并集还原产品形态：
+ *   - 覆盖当前节数全部部件 → 整品；
+ *   - 外轨 + 中轨 → 外中轨；
+ *   - 单部件 → 外轨 / 中轨 / 内轨。
+ * 其它非标准组合仍按实际部件顺序显示，避免隐藏异常配置。
+ */
+export function productGroupTypeLabel(
+  groupTypes: Array<string | null | undefined>,
+  railSection: string | null | undefined,
+): string {
+  const parts = splitParts(groupTypes, railSection);
+  if (!parts.length) return '';
+
+  const wholeParts = railSection === 'two_section'
+    ? ['outer', 'inner']
+    : ['outer', 'middle', 'inner'];
+  if (parts.length === wholeParts.length && wholeParts.every((part) => parts.includes(part))) {
+    return '整品';
+  }
+  if (parts.length === 2 && parts[0] === 'outer' && parts[1] === 'middle') {
+    return '外中轨';
+  }
+  if (parts.length === 1) return partGroupLabel(parts[0]);
+  return splitSuffix(parts);
+}
+
 // 「免装配」判定 needsAssemblyGate 已于 2026-08-13 整体下线（使用部门反馈：
 // 内轨等单部件分体行同样要装配自身小零件）——所有产品行一律走装配环节、受入库闸门约束。
 

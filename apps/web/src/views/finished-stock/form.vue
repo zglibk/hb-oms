@@ -72,7 +72,7 @@
             <template #default="{ row }">{{ row.productName || '—' }}</template>
           </el-table-column>
           <el-table-column label="组类型" width="110" align="center" show-overflow-tooltip>
-            <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+            <template #default="{ row }">{{ groupTypeText(row) }}</template>
           </el-table-column>
           <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
           <el-table-column label="表面处理" width="76" align="center">
@@ -265,7 +265,7 @@
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
         <el-table-column label="组类型" width="110" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+          <template #default="{ row }">{{ groupTypeText(row) }}</template>
         </el-table-column>
         <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
@@ -337,7 +337,7 @@ import {
   labelOf,
   tagTypeOf,
   sideLabel,
-  partGroupLabel,
+  productGroupTypeLabel,
   parseProductTypes,
   sanitizeItemCode,
 } from '@/constants/dict';
@@ -373,6 +373,7 @@ interface ItemRow {
   productName: string | null;
   productModel: string | null;
   groupTypes: string[];
+  railSection: string | null;
   dimensionText: string | null;
   /** 表面处理（字典 surface_type）与颜色：同货号不同表面处理是两批货，选货与核对都要看 */
   surfaceType: string | null;
@@ -427,9 +428,8 @@ function surfaceLabel(v: string | null | undefined): string {
   if (!v) return '—';
   return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
 }
-function partGroupText(groupTypes: string[] | null | undefined): string {
-  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
-  return labels.length ? labels.join(' / ') : '—';
+function groupTypeText(row: Pick<ItemRow, 'groupTypes' | 'railSection'>): string {
+  return productGroupTypeLabel(row.groupTypes, row.railSection) || '—';
 }
 
 /** 「颜色」是可停用的业务字段（§5.7） */
@@ -495,6 +495,7 @@ async function init() {
       productName: it.productName,
       productModel: it.productModel,
       groupTypes: [],
+      railSection: it.railSection,
       dimensionText: it.dimensionText,
       surfaceType: it.surfaceType,
       color: it.color,
@@ -518,6 +519,7 @@ async function refreshLimits() {
   const opts = await getStockGroupOptions({ bizType: form.bizType });
   const map = new Map<string, {
     groupTypes: string[];
+    railSection: string | null;
     limit: number;
     orderedQty: number;
     outboundQty: number;
@@ -527,6 +529,7 @@ async function refreshLimits() {
     o.sides.forEach((s) =>
       map.set(`${o.orderProductId}#${s.side}`, {
         groupTypes: o.groupTypes,
+        railSection: o.railSection,
         limit: isInbound.value ? s.quota : s.stockQty,
         orderedQty: s.orderedQty,
         outboundQty: s.outboundQty,
@@ -537,6 +540,7 @@ async function refreshLimits() {
   form.items.forEach((it) => {
     const current = map.get(`${it.orderProductId}#${it.side}`);
     it.groupTypes = current?.groupTypes ?? [];
+    it.railSection = current?.railSection ?? it.railSection;
     it.limit = current?.limit ?? 0;
     it.orderedQty = current?.orderedQty ?? 0;
     it.outboundQty = current?.outboundQty ?? 0;
@@ -755,6 +759,7 @@ async function initializePicker() {
         productName: o.productName,
         productType: o.productType,
         groupTypes: o.groupTypes,
+        railSection: o.railSection,
         dimensionText: o.dimensionText,
         surfaceType: o.surfaceType,
         color: o.color,
@@ -773,7 +778,7 @@ async function initializePicker() {
           o.productName,
           o.productModel,
           o.productType,
-          partGroupText(o.groupTypes),
+          productGroupTypeLabel(o.groupTypes, o.railSection),
           o.dimensionText,
           o.surfaceType,
           o.color,
@@ -836,6 +841,7 @@ function confirmPick() {
       productName: o.productName,
       productModel: o.productModel,
       groupTypes: o.groupTypes,
+      railSection: o.railSection,
       dimensionText: o.dimensionText,
       surfaceType: o.surfaceType,
       color: o.color,

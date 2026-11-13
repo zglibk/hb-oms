@@ -124,6 +124,8 @@ export interface StockGroupOption {
   productType: string | null;
   /** 订单产品配置的部件组类型，顺序与订单表单一致。 */
   groupTypes: string[];
+  /** 轨道节数；产品级组类型展示据此判断是否覆盖整品。 */
+  railSection: string | null;
   dimensionText: string | null;
   surfaceType: string | null;
   color: string | null;
