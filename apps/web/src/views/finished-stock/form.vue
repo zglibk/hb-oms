@@ -250,46 +250,49 @@
         element-loading-text="正在加载全部订单产品..." border stripe size="small"
         max-height="min(58vh, calc(100vh - 390px))"
         @selection-change="onPickChange">
-        <el-table-column type="selection" width="42" :selectable="isSelectable" reserve-selection />
-        <el-table-column type="index" label="序号" width="50" align="center" :index="pickerRowIndex" />
-        <el-table-column label="订单号" prop="orderNo" width="124" show-overflow-tooltip />
-        <el-table-column label="客户" prop="customerName" width="96" show-overflow-tooltip />
-        <el-table-column label="生产单号" prop="productionNo" width="100" show-overflow-tooltip />
-        <el-table-column label="产品代码" width="96" show-overflow-tooltip>
+        <el-table-column type="selection" width="40" :selectable="isSelectable" reserve-selection />
+        <el-table-column type="index" label="序号" width="46" align="center" :index="pickerRowIndex" />
+        <el-table-column label="订单号" prop="orderNo" width="116" show-overflow-tooltip />
+        <el-table-column label="客户" prop="customerName" width="88" show-overflow-tooltip />
+        <el-table-column label="生产单号" prop="productionNo" width="92" show-overflow-tooltip />
+        <el-table-column label="产品代码" width="90" show-overflow-tooltip>
           <template #default="{ row }">{{ sanitizeItemCode(row.itemNo) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="产品名称" min-width="120" show-overflow-tooltip>
+        <el-table-column label="产品名称" min-width="108" show-overflow-tooltip>
           <template #default="{ row }">{{ row.productName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="规格" prop="dimensionText" width="78" align="center" />
+        <el-table-column label="部件组" width="110" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ partGroupText(row.groupTypes) }}</template>
+        </el-table-column>
+        <el-table-column label="规格" prop="dimensionText" width="72" align="center" />
         <!-- 选货时也要看得到表面处理与颜色：同货号不同表面处理是两批货，选错了要冲销 -->
-        <el-table-column label="表面处理" width="82" align="center">
+        <el-table-column label="表面处理" width="76" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.surfaceType" :seed="row.surfaceType">{{ surfaceLabel(row.surfaceType) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="colorEnabled" label="颜色" width="66" align="center">
+        <el-table-column v-if="colorEnabled" label="颜色" width="60" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.color" :seed="row.color">{{ row.color }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column label="边别" width="60" align="center">
+        <el-table-column label="边别" width="54" align="center">
           <template #default="{ row }">
             <color-tag v-if="row.side" :seed="row.side">{{ sideLabel(row.side) }}</color-tag>
             <span v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="!isSaleOutbound" label="订单数" prop="qtyPcs" width="72" align="center" />
-        <el-table-column v-if="isSaleOutbound" label="订单应发(支)" prop="orderedQty" width="92" align="center" />
-        <el-table-column v-if="isSaleOutbound" label="累计出库(支)" prop="outboundQty" width="92" align="center" />
-        <el-table-column v-if="isSaleOutbound" label="发货欠数(支)" width="92" align="center">
+        <el-table-column v-if="!isSaleOutbound" label="订单数" prop="qtyPcs" width="66" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="订单应发(支)" prop="orderedQty" width="84" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="累计出库(支)" prop="outboundQty" width="84" align="center" />
+        <el-table-column v-if="isSaleOutbound" label="发货欠数(支)" width="84" align="center">
           <template #default="{ row }">
             <span :class="row.deliveryOwed > 0 ? 'lim-ok' : 'lim-zero'">{{ row.deliveryOwed }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="limitLabel" width="92" align="center">
+        <el-table-column :label="limitLabel" width="84" align="center">
           <template #default="{ row }">
             <span :class="row.limit > 0 ? 'lim-ok' : 'lim-zero'">{{ row.limit }}</span>
           </template>
@@ -331,6 +334,7 @@ import {
   labelOf,
   tagTypeOf,
   sideLabel,
+  partGroupLabel,
   parseProductTypes,
   sanitizeItemCode,
 } from '@/constants/dict';
@@ -385,6 +389,7 @@ interface ItemRow {
 interface PickerRow extends ItemRow {
   productName: string | null;
   productType: string | null;
+  groupTypes: string[];
   qtyPcs: number;
   searchText: string;
 }
@@ -417,6 +422,10 @@ function productTypeLabel(v: string | null | undefined): string {
 function surfaceLabel(v: string | null | undefined): string {
   if (!v) return '—';
   return surfaceDict.value.find((o) => o.value === v)?.label ?? v;
+}
+function partGroupText(groupTypes: string[] | null | undefined): string {
+  const labels = (groupTypes ?? []).map((value) => partGroupLabel(value)).filter(Boolean);
+  return labels.length ? labels.join(' / ') : '—';
 }
 
 /** 「颜色」是可停用的业务字段（§5.7） */
@@ -737,6 +746,7 @@ async function initializePicker() {
         productModel: o.productModel,
         productName: o.productName,
         productType: o.productType,
+        groupTypes: o.groupTypes,
         dimensionText: o.dimensionText,
         surfaceType: o.surfaceType,
         color: o.color,
@@ -755,6 +765,7 @@ async function initializePicker() {
           o.productName,
           o.productModel,
           o.productType,
+          partGroupText(o.groupTypes),
           o.dimensionText,
           o.surfaceType,
           o.color,

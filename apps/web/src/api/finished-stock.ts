@@ -116,6 +116,8 @@ export interface StockGroupOption {
   /** 产品名称（同货号拆多行时的辅助区分） */
   productName: string | null;
   productType: string | null;
+  /** 订单产品配置的部件组类型，顺序与订单表单一致。 */
+  groupTypes: string[];
   dimensionText: string | null;
   surfaceType: string | null;
   color: string | null;

@@ -548,6 +548,10 @@ export class FinishedStockService {
       const pid = Number(r.productId);
       const socket = hasSocket(r.productType);
       const snap = snaps.get(pid);
+      const groupTypes = String(r.groupTypes ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
       // 成品按产品行记录总支数；卡口产品的订单应发数按左右展开后，
       // 才能与出库明细的 (产品行, 边别) 锚点一一对应。
       const orderedQtyBySide = new Map(
@@ -585,6 +589,7 @@ export class FinishedStockService {
         productModel: snap?.productModel ?? r.productModel ?? null,
         productName: snap?.productName ?? null,
         productType: r.productType ?? null,
+        groupTypes,
         dimensionText: snap?.dimensionText ?? null,
         surfaceType: r.surfaceType ?? null,
         color: r.color ?? null,
