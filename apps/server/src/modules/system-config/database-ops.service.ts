@@ -39,6 +39,7 @@ const WATCHDOG_CREDENTIAL_PATH = '/etc/hb-oms/mysql-watchdog.cnf';
 const WATCHDOG_SERVICE_PATH = '/etc/systemd/system/hb-oms-mysql-watchdog.service';
 const WATCHDOG_TIMER_PATH = '/etc/systemd/system/hb-oms-mysql-watchdog.timer';
 const WATCHDOG_STATE_PATH = '/var/lib/hb-oms-ops/mysql-watchdog-state';
+const WATCHDOG_FAILURES_PATH = '/var/lib/hb-oms-ops/mysql-watchdog-failures';
 // 必须排在发行版自带 mysqld.cnf 之后，否则后者会把 bind-address 覆盖回公网监听。
 const MYSQL_LOCAL_BIND_PATH = '/etc/mysql/mysql.conf.d/zz-hb-oms-local-only.cnf';
 
@@ -117,6 +118,33 @@ export class DatabaseOpsService {
     return (await this.readText(path)).includes(OPS_MARKER);
   }
 
+  private async fileExists(path: string): Promise<boolean> {
+    try {
+      await stat(path);
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+
+  /**
+   * 停用动作只能删除本模块自己写入的固定文件。若同名文件由人工或其它系统创建，
+   * 宁可拒绝操作，也不能把未知配置当成 OMS 配置清掉。
+   */
+  private async managedExistingPaths(paths: string[], label: string): Promise<string[]> {
+    const existing: string[] = [];
+    for (const path of paths) {
+      if (!(await this.fileExists(path))) continue;
+      const content = await this.readText(path);
+      if (!content.includes(OPS_MARKER)) {
+        throw new ConflictException(`检测到同名的非 OMS 托管${label}，为避免误删已拒绝停用`);
+      }
+      existing.push(path);
+    }
+    return existing;
+  }
+
   private async run(command: string, args: string[], timeout = 15_000): Promise<string> {
     const { stdout } = await execFileAsync(command, args, {
       timeout,
@@ -154,7 +182,6 @@ export class DatabaseOpsService {
       `host=${this.mysqlOption(host)}`,
       `port=${port}`,
       'protocol=tcp',
-      'connect-timeout=5',
       '',
     ].join('\n');
   }
@@ -239,10 +266,11 @@ export class DatabaseOpsService {
       };
     }
 
-    const [updateApplied, guardApplied, scriptApplied, serviceApplied, timerApplied, bindApplied] =
+    const [updateApplied, guardApplied, credentialApplied, scriptApplied, serviceApplied, timerApplied, bindApplied] =
       await Promise.all([
         this.managedFileApplied(APT_POLICY_PATH),
         this.managedFileApplied(MYSQL_SYSTEMD_PATH),
+        this.managedFileApplied(WATCHDOG_CREDENTIAL_PATH),
         this.managedFileApplied(WATCHDOG_SCRIPT_PATH),
         this.managedFileApplied(WATCHDOG_SERVICE_PATH),
         this.managedFileApplied(WATCHDOG_TIMER_PATH),
@@ -265,6 +293,10 @@ export class DatabaseOpsService {
     } catch {
       // 老版本 MySQL 无该变量时仍以配置文件状态为准。
     }
+    const watchdogApplied = credentialApplied || scriptApplied || serviceApplied || timerApplied;
+    const watchdogHealthy = credentialApplied && scriptApplied && serviceApplied
+      && timerApplied && timerEnabled && timerActive;
+    const localBindHealthy = bindApplied && ['127.0.0.1', 'localhost', '::1'].includes(bindAddress);
 
     return {
       supported,
@@ -283,9 +315,11 @@ export class DatabaseOpsService {
         details: ['启动/停止最长 300 秒，失败后按受控频率重试，避免无限等待'],
       },
       watchdog: {
-        applied: scriptApplied && serviceApplied && timerApplied && timerEnabled,
-        healthy: scriptApplied && serviceApplied && timerApplied && timerEnabled && timerActive,
-        summary: timerActive ? '每分钟自愈巡检运行中' : '自愈巡检未运行',
+        applied: watchdogApplied,
+        healthy: watchdogHealthy,
+        summary: watchdogHealthy
+          ? '每分钟自愈巡检运行中'
+          : watchdogApplied ? '自愈巡检已配置但未完整运行' : '自愈巡检未启用',
         details: [
           '连续两次连接失败后自动重启 MySQL；apt/dpkg 工作期间让位给系统更新',
           watchdogState ? `最近状态：${watchdogState}` : '尚无巡检状态记录',
@@ -293,12 +327,14 @@ export class DatabaseOpsService {
       },
       readiness,
       localBind: {
-        applied: bindApplied && ['127.0.0.1', 'localhost', '::1'].includes(bindAddress),
-        healthy: bindApplied && ['127.0.0.1', 'localhost', '::1'].includes(bindAddress),
-        summary: bindApplied ? `当前监听地址：${bindAddress}` : `当前监听地址：${bindAddress}（尚未限制）`,
+        applied: bindApplied,
+        healthy: localBindHealthy,
+        summary: bindApplied
+          ? `OMS 生产服务器内部访问限制已配置；当前监听地址：${bindAddress}`
+          : `OMS 生产服务器内部访问限制未启用；当前监听地址：${bindAddress}`,
         details: [
           remoteConnections >= 0
-            ? `当前非本机数据库连接：${remoteConnections} 个`
+            ? `当前非生产服务器本机的数据库连接：${remoteConnections} 个`
             : '当前账号无法核验全部数据库连接，暂不允许执行本机监听限制',
           '该操作只修改主机监听；云安全组仍建议保持 3306/33060 不对公网开放',
         ],
@@ -308,23 +344,52 @@ export class DatabaseOpsService {
     };
   }
 
-  async apply(action: DatabaseOpsAction, confirm = ''): Promise<{ message: string; restartScheduled?: boolean }> {
+  async apply(
+    action: DatabaseOpsAction,
+    enabled = true,
+    confirm = '',
+  ): Promise<{ message: string; restartScheduled?: boolean }> {
     if (!this.canManageSystem()) {
       throw new BadRequestException('该操作需要 Linux/systemd 且服务进程具备系统管理权限');
     }
     switch (action) {
-      case 'update-policy':
-        await this.applyUpdatePolicy();
-        return { message: '已将 MySQL 排除出无人值守更新；其它系统安全更新不受影响' };
-      case 'restart-guard':
-        await this.applyRestartGuard();
-        return { message: '已配置 MySQL 300 秒启停超时及失败重启保护' };
-      case 'watchdog':
-        await this.applyWatchdog();
-        return { message: '已启用每分钟数据库自愈巡检' };
-      case 'local-bind':
-        await this.applyLocalBind(confirm);
-        return { message: '已限制 MySQL 仅监听本机地址，数据库服务将在数秒后受控重启', restartScheduled: true };
+      case 'update-policy': {
+        if (enabled) {
+          await this.applyUpdatePolicy();
+          return { message: '已将 MySQL 排除出无人值守更新；其它系统安全更新不受影响' };
+        }
+        const removed = await this.disableUpdatePolicy();
+        return { message: removed ? '已停用 MySQL 受控更新策略，恢复由系统更新策略接管' : '受控更新策略原本未启用' };
+      }
+      case 'restart-guard': {
+        if (enabled) {
+          await this.applyRestartGuard();
+          return { message: '已配置 MySQL 300 秒启停超时及失败重启保护' };
+        }
+        const removed = await this.disableRestartGuard();
+        return { message: removed ? '已停用 OMS 配置的启停与失败重启保护' : '启停与重启保护原本未启用' };
+      }
+      case 'watchdog': {
+        if (enabled) {
+          await this.applyWatchdog();
+          return { message: '已启用每分钟数据库自愈巡检' };
+        }
+        const removed = await this.disableWatchdog();
+        return { message: removed ? '已停用数据库自愈巡检并清理 OMS 巡检配置' : '数据库自愈巡检原本未启用' };
+      }
+      case 'local-bind': {
+        if (enabled) {
+          await this.applyLocalBind(confirm);
+          return { message: '已限制 MySQL 仅供生产服务器内部应用访问，数据库服务将在约 5 秒后重启', restartScheduled: true };
+        }
+        const removed = await this.disableLocalBind(confirm);
+        return {
+          message: removed
+            ? '已取消 OMS 配置的生产服务器内部访问限制，数据库服务将在约 5 秒后重启'
+            : 'OMS 生产服务器内部访问限制原本未启用',
+          ...(removed ? { restartScheduled: true } : {}),
+        };
+      }
       default:
         throw new BadRequestException('不支持的数据库运维动作');
     }
@@ -335,10 +400,26 @@ export class DatabaseOpsService {
     await this.writeManagedFile(APT_POLICY_PATH, content, 0o644);
   }
 
+  private async disableUpdatePolicy(): Promise<boolean> {
+    const paths = await this.managedExistingPaths([APT_POLICY_PATH], '更新策略文件');
+    if (!paths.length) return false;
+    await rm(APT_POLICY_PATH, { force: true });
+    return true;
+  }
+
   private async applyRestartGuard(): Promise<void> {
     const content = `${OPS_MARKER}\n[Unit]\nStartLimitIntervalSec=300\nStartLimitBurst=3\n\n[Service]\nTimeoutStartSec=300\nTimeoutStopSec=300\nRestart=on-failure\nRestartSec=10\n`;
     await this.writeManagedFile(MYSQL_SYSTEMD_PATH, content, 0o644);
     await this.run('systemctl', ['daemon-reload']);
+  }
+
+  private async disableRestartGuard(): Promise<boolean> {
+    const paths = await this.managedExistingPaths([MYSQL_SYSTEMD_PATH], 'systemd 配置');
+    if (!paths.length) return false;
+    await rm(MYSQL_SYSTEMD_PATH, { force: true });
+    await this.run('systemctl', ['daemon-reload']);
+    await this.run('systemctl', ['reset-failed', 'mysql.service']).catch(() => '');
+    return true;
   }
 
   private watchdogScript(): string {
@@ -409,6 +490,29 @@ fi
     await this.run('systemctl', ['enable', '--now', 'hb-oms-mysql-watchdog.timer']);
   }
 
+  private async disableWatchdog(): Promise<boolean> {
+    const managedPaths = [
+      WATCHDOG_CREDENTIAL_PATH,
+      WATCHDOG_SCRIPT_PATH,
+      WATCHDOG_SERVICE_PATH,
+      WATCHDOG_TIMER_PATH,
+    ];
+    const existing = await this.managedExistingPaths(managedPaths, '自愈巡检文件');
+    if (!existing.length) return false;
+
+    await this.run('systemctl', ['disable', '--now', 'hb-oms-mysql-watchdog.timer'], 30_000).catch(() => '');
+    await this.run('systemctl', ['stop', 'hb-oms-mysql-watchdog.service'], 30_000).catch(() => '');
+    await Promise.all(existing.map((path) => rm(path, { force: true })));
+    await Promise.all([
+      rm(WATCHDOG_STATE_PATH, { force: true }),
+      rm(WATCHDOG_FAILURES_PATH, { force: true }),
+    ]);
+    await this.run('systemctl', ['daemon-reload']);
+    await this.run('systemctl', ['reset-failed', 'hb-oms-mysql-watchdog.service']).catch(() => '');
+    await this.run('systemctl', ['reset-failed', 'hb-oms-mysql-watchdog.timer']).catch(() => '');
+    return true;
+  }
+
   private async applyLocalBind(confirm: string): Promise<void> {
     if (confirm !== '限制本机') {
       throw new BadRequestException('请输入正确的确认口令「限制本机」');
@@ -422,7 +526,8 @@ fi
       throw new BadRequestException(`检测到 ${remoteConnections} 个非本机数据库连接，请先确认并迁移这些客户端后再执行`);
     }
 
-    const previous = await this.readText(MYSQL_LOCAL_BIND_PATH);
+    const existing = await this.managedExistingPaths([MYSQL_LOCAL_BIND_PATH], 'MySQL 本机监听配置');
+    const previous = existing.length ? await this.readText(MYSQL_LOCAL_BIND_PATH) : '';
     const content = `${OPS_MARKER}\n[mysqld]\nbind-address=127.0.0.1\nmysqlx-bind-address=127.0.0.1\n`;
     await this.writeManagedFile(MYSQL_LOCAL_BIND_PATH, content, 0o644);
     try {
@@ -435,6 +540,29 @@ fi
 
     // 当前请求还要写操作日志，不能在请求内同步重启数据库。交给 systemd 数秒后执行，
     // 让响应与审计先完整落库；重启保护与 watchdog 会接管后续恢复。
+    await this.scheduleMysqlRestart();
+  }
+
+  private async disableLocalBind(confirm: string): Promise<boolean> {
+    if (confirm !== '取消限制') {
+      throw new BadRequestException('请输入正确的确认口令「取消限制」');
+    }
+    const existing = await this.managedExistingPaths([MYSQL_LOCAL_BIND_PATH], 'MySQL 本机监听配置');
+    if (!existing.length) return false;
+
+    const previous = await this.readText(MYSQL_LOCAL_BIND_PATH);
+    await rm(MYSQL_LOCAL_BIND_PATH, { force: true });
+    try {
+      await this.run('mysqld', ['--validate-config'], 30_000);
+    } catch (error: any) {
+      await this.writeManagedFile(MYSQL_LOCAL_BIND_PATH, previous, 0o644);
+      throw new BadRequestException(`取消限制后的 MySQL 配置校验未通过，已恢复原配置：${String(error?.stderr || error?.message || '未知错误').slice(0, 300)}`);
+    }
+    await this.scheduleMysqlRestart();
+    return true;
+  }
+
+  private async scheduleMysqlRestart(): Promise<void> {
     const unit = `hb-oms-mysql-restart-${Date.now()}`;
     await this.run('systemd-run', [
       `--unit=${unit}`,

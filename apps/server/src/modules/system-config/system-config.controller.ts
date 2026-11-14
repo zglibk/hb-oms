@@ -154,16 +154,16 @@ export class SystemConfigController {
     return this.databaseOps.getStatus();
   }
 
-  /** 应用固定白名单运维动作；不接受命令、脚本或服务器路径。 */
+  /** 启用/停用固定白名单运维动作；不接受命令、脚本或服务器路径。 */
   @Post('database-ops/apply')
   @RequirePermissions('system:danger')
-  @OperationLog('数据库运维', '应用数据库保护配置')
+  @OperationLog('数据库运维', '切换数据库保护配置')
   applyDatabaseOps(
     @Body() dto: ApplyDatabaseOpsDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
     this.assertSuperAdmin(user);
-    return this.databaseOps.apply(dto.action, dto.confirm);
+    return this.databaseOps.apply(dto.action, dto.enabled !== false, dto.confirm);
   }
 
   /** 完整逻辑备份（结构 + 数据）写入临时文件，校验成功后流式下载并立即清理。 */

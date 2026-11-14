@@ -413,10 +413,10 @@ export interface DatabaseOpsStatus {
 export const getDatabaseOpsStatus = () =>
   request.get<any, DatabaseOpsStatus>('/api/system/config/database-ops/status');
 
-export const applyDatabaseOps = (action: DatabaseOpsAction, confirm?: string) =>
+export const applyDatabaseOps = (action: DatabaseOpsAction, enabled: boolean, confirm?: string) =>
   request.post<any, { message: string; restartScheduled?: boolean }>(
     '/api/system/config/database-ops/apply',
-    { action, ...(confirm ? { confirm } : {}) },
+    { action, enabled, ...(confirm ? { confirm } : {}) },
   );
 
 function backupFilename(disposition: string | null): string {

@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export const DATABASE_OPS_ACTIONS = [
   'update-policy',
@@ -14,7 +14,12 @@ export class ApplyDatabaseOpsDto {
   @IsIn(DATABASE_OPS_ACTIONS)
   action: DatabaseOpsAction;
 
-  /** 仅“限制为本机访问”使用；其余动作忽略。 */
+  /** true=启用，false=停用；兼容旧客户端，省略时按启用处理。 */
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  /** 启用或停用“生产服务器内部访问限制”时使用；其余动作忽略。 */
   @IsOptional()
   @IsString()
   @MaxLength(16)
