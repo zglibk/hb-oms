@@ -1,5 +1,24 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Post, Put, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Put,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { diskStorage } from 'multer';
 import { SystemConfigService } from './system-config.service';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -12,7 +31,14 @@ import { Public } from '../../common/decorators/public.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 import { DatabaseOpsService } from './database-ops.service';
-import { ApplyDatabaseOpsDto } from './dto/database-ops.dto';
+import { ApplyDatabaseOpsDto, StartDatabaseRestoreDto, StartDatabaseUpgradeDto } from './dto/database-ops.dto';
+import { DatabaseRestoreService } from './database-restore.service';
+import { DatabaseUpgradeService } from './database-upgrade.service';
+import { DATABASE_UPGRADE_STATUS_HEADER } from './database-upgrade.constants';
+import {
+  DATABASE_RESTORE_MAX_UPLOAD_SIZE,
+  DATABASE_RESTORE_STATUS_HEADER,
+} from './database-restore.constants';
 
 /**
  * 系统配置接口
@@ -29,6 +55,8 @@ export class SystemConfigController {
   constructor(
     private readonly service: SystemConfigService,
     private readonly databaseOps: DatabaseOpsService,
+    private readonly databaseRestore: DatabaseRestoreService,
+    private readonly databaseUpgrade: DatabaseUpgradeService,
   ) {}
 
   private assertSuperAdmin(user: CurrentUserPayload): void {
@@ -146,12 +174,47 @@ export class SystemConfigController {
     };
   }
 
-  /** 数据库运维六项状态（权限与内置账号身份双重校验）。 */
+  /** 数据库运维状态与版本信息（权限与内置账号身份双重校验）。 */
   @Get('database-ops/status')
   @RequirePermissions('system:danger')
-  getDatabaseOpsStatus(@CurrentUser() user: CurrentUserPayload) {
+  async getDatabaseOpsStatus(@CurrentUser() user: CurrentUserPayload) {
     this.assertSuperAdmin(user);
-    return this.databaseOps.getStatus();
+    const [status, upgrade] = await Promise.all([
+      this.databaseOps.getStatus(),
+      this.databaseUpgrade.getVersionInfo(false),
+    ]);
+    return { ...status, upgrade };
+  }
+
+  /** 刷新服务器软件源元数据并重新计算可安全升级的候选版本。 */
+  @Post('database-ops/upgrade/check')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '检查数据库可用版本')
+  refreshDatabaseUpgrade(@CurrentUser() user: CurrentUserPayload) {
+    this.assertSuperAdmin(user);
+    return this.databaseUpgrade.refreshVersionInfo();
+  }
+
+  /** 二次确认后启动独立的同系列数据库补丁升级任务。 */
+  @Post('database-ops/upgrade/start')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '启动受控数据库升级', { redactBodyFields: ['confirm'] })
+  startDatabaseUpgrade(
+    @Body() dto: StartDatabaseUpgradeDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    this.assertSuperAdmin(user);
+    return this.databaseUpgrade.startUpgrade(dto.targetVersion, dto.confirm, user);
+  }
+
+  /** 升级期间无需数据库鉴权；使用一次性高熵请求头凭证读取固定任务状态。 */
+  @Public()
+  @Get('database-ops/upgrade/status/:jobId')
+  getDatabaseUpgradeStatus(
+    @Param('jobId') jobId: string,
+    @Headers(DATABASE_UPGRADE_STATUS_HEADER) upgradeToken: string,
+  ) {
+    return this.databaseUpgrade.getStatus(jobId, upgradeToken);
   }
 
   /** 启用/停用固定白名单运维动作；不接受命令、脚本或服务器路径。 */
@@ -177,5 +240,51 @@ export class SystemConfigController {
   ) {
     this.assertSuperAdmin(user);
     await this.databaseOps.sendBackup(response);
+  }
+
+  /** 上传灾备文件并在服务器端完成签名、摘要、目标库、SQL 与备份时间点预检。 */
+  @Post('database-ops/restore/inspect')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '预检数据库还原备份')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: tmpdir(),
+      filename: (_request, _file, callback) => callback(null, `hb-oms-restore-${randomUUID()}.upload`),
+    }),
+    limits: { files: 1, fileSize: DATABASE_RESTORE_MAX_UPLOAD_SIZE },
+  }))
+  async inspectDatabaseRestore(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    try {
+      this.assertSuperAdmin(user);
+    } catch (error) {
+      if (file?.path) await rm(file.path, { force: true }).catch(() => undefined);
+      throw error;
+    }
+    return this.databaseRestore.inspectUpload(file);
+  }
+
+  /** 二次确认后启动独立后台恢复任务；请求返回后由维护闸门阻止所有业务读写。 */
+  @Post('database-ops/restore/start')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '启动数据库灾备还原', { redactBodyFields: ['confirm'] })
+  startDatabaseRestore(
+    @Body() dto: StartDatabaseRestoreDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    this.assertSuperAdmin(user);
+    return this.databaseRestore.startRestore(dto.uploadId, dto.confirm, user);
+  }
+
+  /** 恢复期间无需数据库鉴权；使用一次性高熵请求头凭证读取固定任务状态。 */
+  @Public()
+  @Get('database-ops/restore/status/:jobId')
+  getDatabaseRestoreStatus(
+    @Param('jobId') jobId: string,
+    @Headers(DATABASE_RESTORE_STATUS_HEADER) restoreToken: string,
+  ) {
+    return this.databaseRestore.getStatus(jobId, restoreToken);
   }
 }

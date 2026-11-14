@@ -5,6 +5,8 @@ import { SystemConfigService } from './system-config.service';
 import { SystemConfigController } from './system-config.controller';
 import { DatabaseOpsService } from './database-ops.service';
 import { DatabaseHealthController } from './database-health.controller';
+import { DatabaseRestoreService } from './database-restore.service';
+import { DatabaseUpgradeService } from './database-upgrade.service';
 
 /**
  * 系统配置模块（移植自 hb-mes，按业务决策**不含审批管理**——OMS 无审核流，
@@ -13,7 +15,7 @@ import { DatabaseHealthController } from './database-health.controller';
 @Module({
   imports: [TypeOrmModule.forFeature([SystemConfig])],
   controllers: [SystemConfigController, DatabaseHealthController],
-  providers: [SystemConfigService, DatabaseOpsService],
+  providers: [SystemConfigService, DatabaseOpsService, DatabaseRestoreService, DatabaseUpgradeService],
   exports: [SystemConfigService],
 })
 export class SystemConfigModule {}

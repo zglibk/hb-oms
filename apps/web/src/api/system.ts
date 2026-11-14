@@ -408,10 +408,96 @@ export interface DatabaseOpsStatus {
   readiness: DatabaseOpsItemStatus;
   localBind: DatabaseOpsItemStatus & { remoteConnections: number };
   backup: DatabaseOpsItemStatus;
+  upgrade: DatabaseUpgradeInfo;
+}
+
+export interface DatabaseUpgradeInfo {
+  supported: boolean;
+  runtimeVersion: string;
+  packageName: string;
+  installedVersion: string;
+  candidateVersion: string;
+  currentSeries: string;
+  candidateSeries: string;
+  checkedAt: string;
+  repositoryUpdatedAt: string;
+  updateAvailable: boolean;
+  sameSeries: boolean;
+  canUpgrade: boolean;
+  reason: string;
+}
+
+export interface DatabaseUpgradeJobStart {
+  jobId: string;
+  upgradeToken: string;
+  fromVersion: string;
+  targetVersion: string;
+  packageName: string;
+}
+
+export interface DatabaseUpgradeJobStatus {
+  jobId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'critical';
+  stage: string;
+  message: string;
+  progress: number;
+  packageName: string;
+  fromVersion: string;
+  targetVersion: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  runtimeVersion?: string;
+  safetyBackupFilename?: string;
+}
+
+export interface DatabaseRestoreInspection {
+  uploadId: string;
+  filename: string;
+  fileSize: number;
+  databaseName: string;
+  backupTime: string;
+  dumpCompletedAt: string;
+  format: 'signed' | 'legacy';
+  signatureVerified: boolean;
+  expiresAt: string;
+  warnings: string[];
+}
+
+export interface DatabaseRestoreJobStart {
+  jobId: string;
+  restoreToken: string;
+  backupTime: string;
+  backupFormat: 'signed' | 'legacy';
+  originalFilename: string;
+}
+
+export interface DatabaseRestoreJobStatus {
+  jobId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'critical';
+  stage: string;
+  message: string;
+  progress: number;
+  backupTime: string;
+  backupFormat: 'signed' | 'legacy';
+  originalFilename: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  rollbackSucceeded?: boolean;
 }
 
 export const getDatabaseOpsStatus = () =>
   request.get<any, DatabaseOpsStatus>('/api/system/config/database-ops/status');
+
+export const refreshDatabaseUpgradeInfo = () =>
+  request.post<any, DatabaseUpgradeInfo>('/api/system/config/database-ops/upgrade/check');
+
+export const startDatabaseUpgrade = (targetVersion: string, confirm: string) =>
+  request.post<any, DatabaseUpgradeJobStart>('/api/system/config/database-ops/upgrade/start', {
+    targetVersion,
+    confirm,
+  });
 
 export const applyDatabaseOps = (action: DatabaseOpsAction, enabled: boolean, confirm?: string) =>
   request.post<any, { message: string; restartScheduled?: boolean }>(
@@ -424,7 +510,7 @@ function backupFilename(disposition: string | null): string {
   if (match?.[1]) {
     try { return decodeURIComponent(match[1]); } catch { /* 使用兜底名 */ }
   }
-  return `haibao_oms_full_${Date.now()}.sql.gz`;
+  return `haibao_oms_full_${Date.now()}.hbomsbak`;
 }
 
 /**
@@ -437,7 +523,7 @@ export async function downloadDatabaseBackup(fileHandle?: any): Promise<{ filena
     method: 'POST',
     headers: {
       Authorization: `Bearer ${tokenStore.get()}`,
-      Accept: 'application/gzip, application/json',
+        Accept: 'application/octet-stream, application/json',
     },
   });
   if (!response.ok) {
@@ -471,6 +557,65 @@ export async function downloadDatabaseBackup(fileHandle?: any): Promise<{ filena
   anchor.remove();
   URL.revokeObjectURL(objectUrl);
   return { filename, pickedPath: false };
+}
+
+function databaseOpsApiUrl(path: string): string {
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  return `${apiBase}${path}`;
+}
+
+async function readDatabaseOpsResponse<T>(response: Response, fallback: string): Promise<T> {
+  let body: any;
+  try { body = await response.json(); } catch { /* Nginx/网络中断可能返回非 JSON。 */ }
+  if (!response.ok) throw new Error(body?.message || `${fallback}（HTTP ${response.status}）`);
+  return (body?.data ?? body) as T;
+}
+
+export async function inspectDatabaseRestore(file: File): Promise<DatabaseRestoreInspection> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const response = await fetch(databaseOpsApiUrl('/api/system/config/database-ops/restore/inspect'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${tokenStore.get()}` },
+    body: form,
+  });
+  return readDatabaseOpsResponse(response, '备份文件预检失败');
+}
+
+export const startDatabaseRestore = (uploadId: string, confirm: string) =>
+  request.post<any, DatabaseRestoreJobStart>(
+    '/api/system/config/database-ops/restore/start',
+    { uploadId, confirm },
+  );
+
+export async function getDatabaseRestoreStatus(
+  jobId: string,
+  restoreToken: string,
+): Promise<DatabaseRestoreJobStatus> {
+  const response = await fetch(databaseOpsApiUrl(`/api/system/config/database-ops/restore/status/${jobId}`), {
+    method: 'GET',
+    headers: {
+      'X-Restore-Token': restoreToken,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+  return readDatabaseOpsResponse(response, '恢复进度暂时不可用');
+}
+
+export async function getDatabaseUpgradeStatus(
+  jobId: string,
+  upgradeToken: string,
+): Promise<DatabaseUpgradeJobStatus> {
+  const response = await fetch(databaseOpsApiUrl(`/api/system/config/database-ops/upgrade/status/${jobId}`), {
+    method: 'GET',
+    headers: {
+      'X-Upgrade-Token': upgradeToken,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+  return readDatabaseOpsResponse(response, '升级进度暂时不可用');
 }
 
 /* 数据大屏免登录访问码（库里只存摘要；明文只在生成当次返回） */

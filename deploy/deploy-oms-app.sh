@@ -29,6 +29,7 @@ DB_NAME=haibao_oms
 DB_POOL_MAX=10
 
 JWT_SECRET=$JWT_SECRET
+DB_BACKUP_SIGNING_KEY=$(openssl rand -hex 32)
 JWT_ACCESS_EXPIRES=2h
 JWT_REFRESH_EXPIRES=7d
 
@@ -55,6 +56,8 @@ ensure_env() {
 }
 # 《生产任务单》PDF：无头浏览器打开前端打印页的内网地址（Nginx 上的 SPA base）
 ensure_env PRINT_BASE_URL "http://127.0.0.1/oms/admin"
+# 灾备包 HMAC 签名密钥：必须跨备份/还原保持稳定；系统迁移时需与备份一起安全移交。
+ensure_env DB_BACKUP_SIGNING_KEY "$(openssl rand -hex 32)"
 
 # 《生产任务单》PDF 需要一个无头浏览器（puppeteer-core 不自带，用系统装的）。
 # 装 Google Chrome 官方 deb 而不是 apt 的 chromium：Ubuntu 22.04 的 chromium-browser
@@ -143,6 +146,20 @@ add_location "location = /oms/api/announcement/stream" "    # hb-oms 通知公�
         proxy_cache off;
         proxy_read_timeout 360s;
         proxy_send_timeout 360s;
+    }"
+
+add_location "location = /oms/api/system/config/database-ops/restore/inspect" "    # hb-oms 灾备文件上传预检（仅超级管理员；大文件流式转发）
+    location = /oms/api/system/config/database-ops/restore/inspect {
+        client_max_body_size 2100m;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_pass http://127.0.0.1:8100/api/system/config/database-ops/restore/inspect;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }"
 
 add_location "location /oms/api/" "    # hb-oms 后台 API（NestJS :8100）

@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Equals, IsBoolean, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export const DATABASE_OPS_ACTIONS = [
   'update-policy',
@@ -24,4 +24,26 @@ export class ApplyDatabaseOpsDto {
   @IsString()
   @MaxLength(16)
   confirm?: string;
+}
+
+/** 已通过服务端预检的上传编号 + 高风险操作固定确认口令。 */
+export class StartDatabaseRestoreDto {
+  @IsUUID()
+  uploadId: string;
+
+  @IsString()
+  @Equals('还原数据库')
+  confirm: string;
+}
+
+/** 页面已确认的软件源候选版本 + 高风险操作固定确认口令。 */
+export class StartDatabaseUpgradeDto {
+  @IsString()
+  @MaxLength(128)
+  @Matches(/^[A-Za-z0-9.+:~_-]+$/, { message: '目标版本格式无效' })
+  targetVersion: string;
+
+  @IsString()
+  @Equals('升级数据库')
+  confirm: string;
 }

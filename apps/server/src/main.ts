@@ -3,9 +3,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { networkInterfaces } from 'os';
+import { existsSync } from 'node:fs';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import {
+  DATABASE_RESTORE_MAINTENANCE_PATH,
+  DATABASE_RESTORE_STATUS_HEADER,
+} from './modules/system-config/database-restore.constants';
+import { DATABASE_UPGRADE_STATUS_HEADER } from './modules/system-config/database-upgrade.constants';
 
 // 所有未显式带时区的第三方库（ExcelJS / TypeORM / dayjs 历史调用）统一落到业务时区。
 // 业务日期仍优先走 date-range.util，不能把本行当成继续使用本地 Date getter 的理由。
@@ -50,6 +56,24 @@ async function bootstrap() {
   // 全局路由前缀 /api（与 Vite proxy、Nginx 同源化对齐）
   app.setGlobalPrefix('api');
 
+  // 数据库灾备还原或受控升级期间，在应用层统一挡住所有业务读写。任务只读状态接口与数据库
+  // 就绪探测保持可用，前者供当前浏览器持续展示进度，后者供独立任务进程确认服务已恢复。
+  app.use((req: any, res: any, next: () => void) => {
+    if (!existsSync(DATABASE_RESTORE_MAINTENANCE_PATH)) return next();
+    const path = String(req.originalUrl || req.url || '').split('?')[0];
+    if (
+      path.startsWith('/api/system/config/database-ops/restore/status/') ||
+      path.startsWith('/api/system/config/database-ops/upgrade/status/') ||
+      path === '/api/health/ready'
+    ) return next();
+    res.setHeader('Retry-After', '10');
+    res.status(503).json({
+      code: 503,
+      message: '系统正在执行数据库维护任务，期间已暂停业务访问，请稍候查看任务进度',
+      data: null,
+    });
+  });
+
   // CORS（文档 1.8.5）——前端走 Vite proxy 属同源；此处兜底供 Apifox/移动端/局域网直连
   // 开发环境放行 localhost 与私有网段(局域网) 来源；生产环境严格使用 CORS_ORIGIN
   const corsOrigin = config.get<string>('CORS_ORIGIN');
@@ -67,7 +91,7 @@ async function bootstrap() {
         }
       : corsOrigin || 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Screen-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Screen-Key', DATABASE_RESTORE_STATUS_HEADER, DATABASE_UPGRADE_STATUS_HEADER],
     credentials: true,
   });
 

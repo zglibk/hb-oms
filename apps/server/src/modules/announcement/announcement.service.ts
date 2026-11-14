@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import { existsSync } from 'node:fs';
+import { DATABASE_RESTORE_MAINTENANCE_PATH } from '../system-config/database-restore.constants';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
@@ -245,6 +247,8 @@ export class AnnouncementService {
   /** 激活到点的定时公告。单实例先用内存广播，多实例时由 Redis 接管事件通知。 */
   @Interval(5_000)
   async activateScheduled(): Promise<void> {
+    // 数据库还原或升级维护期间暂停后台写入，避免定时公告在数据库切换窗口内落库。
+    if (existsSync(DATABASE_RESTORE_MAINTENANCE_PATH)) return;
     const due = await this.announcementRepo
       .createQueryBuilder('a')
       .select('a.id', 'id')

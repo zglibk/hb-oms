@@ -27,6 +27,8 @@ import { promisify } from 'node:util';
 import type { Response } from 'express';
 import type { DatabaseOpsAction } from './dto/database-ops.dto';
 import { businessDateTime } from '../../common/utils/date-range.util';
+import { writeSignedBackupPackage } from './database-backup-format';
+import { DATABASE_RESTORE_MAINTENANCE_PATH } from './database-restore.constants';
 
 const execFileAsync = promisify(execFile);
 
@@ -85,12 +87,20 @@ export class DatabaseOpsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  private get databaseName(): string {
+  get databaseName(): string {
     const name = this.config.get<string>('DB_NAME')?.trim();
     if (!name || !/^[A-Za-z0-9_$-]+$/.test(name)) {
       throw new InternalServerErrorException('数据库名称配置无效，无法执行运维操作');
     }
     return name;
+  }
+
+  private get backupSigningKey(): string {
+    const key = this.config.get<string>('DB_BACKUP_SIGNING_KEY')?.trim();
+    if (!key || key.length < 32) {
+      throw new InternalServerErrorException('数据库备份签名密钥未配置或长度不足，无法生成可验证备份包');
+    }
+    return key;
   }
 
   private isLinux(): boolean {
@@ -112,6 +122,14 @@ export class DatabaseOpsService {
       if (error?.code === 'ENOENT') return '';
       throw error;
     }
+  }
+
+  private formatWatchdogState(value: string): string {
+    // 兼容既有巡检脚本写入的 ISO 8601 时间，页面统一按系统常用格式展示。
+    return value.replace(
+      /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?\+08:00(?=\s|$)/,
+      '$1 $2',
+    );
   }
 
   private async managedFileApplied(path: string): Promise<boolean> {
@@ -170,7 +188,7 @@ export class DatabaseOpsService {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   }
 
-  private mysqlCredentialContent(): string {
+  createMysqlCredentialContent(): string {
     const user = this.config.get<string>('DB_USER') || '';
     const password = this.config.get<string>('DB_PASSWORD') || '';
     const host = this.config.get<string>('DB_HOST') || '127.0.0.1';
@@ -244,12 +262,16 @@ export class DatabaseOpsService {
       };
     }
 
-    const backupAvailable = await this.commandAvailable('mysqldump');
+    const backupToolAvailable = await this.commandAvailable('mysqldump');
+    const backupSigningConfigured = (this.config.get<string>('DB_BACKUP_SIGNING_KEY')?.trim().length || 0) >= 32;
+    const backupAvailable = backupToolAvailable && backupSigningConfigured;
     const backup: DatabaseOpsItemStatus = {
       applied: backupAvailable,
       healthy: backupAvailable,
-      summary: backupAvailable ? '完整备份工具可用' : '未检测到 mysqldump',
-      details: ['备份包含表结构、表数据、触发器、事件与存储过程，并压缩为 .sql.gz'],
+      summary: backupAvailable
+        ? '完整备份工具与签名配置可用'
+        : !backupToolAvailable ? '未检测到 mysqldump' : '备份签名密钥未配置或长度不足',
+      details: ['备份包含表结构、表数据、触发器、事件与存储过程，并生成带时间点、SHA-256 摘要及签名的 .hbomsbak 灾备包'],
     };
 
     if (!supported) {
@@ -283,7 +305,9 @@ export class DatabaseOpsService {
       timerEnabled = (await this.run('systemctl', ['is-enabled', 'hb-oms-mysql-watchdog.timer']).catch(() => '')) === 'enabled';
       timerActive = (await this.run('systemctl', ['is-active', 'hb-oms-mysql-watchdog.timer']).catch(() => '')) === 'active';
     }
-    const watchdogState = (await this.readText(WATCHDOG_STATE_PATH)).trim();
+    const watchdogState = this.formatWatchdogState(
+      (await this.readText(WATCHDOG_STATE_PATH)).trim(),
+    );
     const remoteConnections = await this.remoteConnectionCount().catch(() => -1);
 
     let bindAddress = '未知';
@@ -306,7 +330,7 @@ export class DatabaseOpsService {
         applied: updateApplied,
         healthy: updateApplied,
         summary: updateApplied ? 'MySQL 已退出无人值守更新' : 'MySQL 仍可能被自动更新',
-        details: ['系统其它安全更新不受影响；MySQL 改为维护窗口内人工升级'],
+        details: ['系统其它安全更新不受影响；可在本页检查并启动同系列受控升级'],
       },
       restartGuard: {
         applied: guardApplied,
@@ -396,7 +420,7 @@ export class DatabaseOpsService {
   }
 
   private async applyUpdatePolicy(): Promise<void> {
-    const content = `${OPS_MARKER}\n// MySQL 由维护窗口人工升级，避免业务时段自动重启。\nUnattended-Upgrade::Package-Blacklist {\n  "^mysql-.*";\n  "^libmysqlclient.*";\n};\n`;
+    const content = `${OPS_MARKER}\n// MySQL 只由数据库运维页在确认维护窗口后执行受控升级，避免业务时段自动重启。\nUnattended-Upgrade::Package-Blacklist {\n  "^mysql-.*";\n  "^libmysqlclient.*";\n};\n`;
     await this.writeManagedFile(APT_POLICY_PATH, content, 0o644);
   }
 
@@ -433,7 +457,7 @@ CREDENTIALS="${WATCHDOG_CREDENTIAL_PATH}"
 mkdir -p "$STATE_DIR"
 exec 9>/run/hb-oms-mysql-watchdog.lock
 flock -n 9 || exit 0
-now="$(date --iso-8601=seconds)"
+now="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')"
 
 # 安装器正在持有数据库包时不争抢服务；第 2 项的超时保护负责终止无限等待。
 if systemctl is-active --quiet apt-daily-upgrade.service || pgrep -x dpkg >/dev/null 2>&1; then
@@ -473,7 +497,7 @@ fi
     if (!(await this.commandAvailable('mysql')) || !(await this.commandAvailable('mysqladmin'))) {
       throw new BadRequestException('服务器缺少 mysql/mysqladmin 客户端，无法启用自愈巡检');
     }
-    await this.writeManagedFile(WATCHDOG_CREDENTIAL_PATH, `${OPS_MARKER}\n${this.mysqlCredentialContent()}`, 0o600);
+    await this.writeManagedFile(WATCHDOG_CREDENTIAL_PATH, `${OPS_MARKER}\n${this.createMysqlCredentialContent()}`, 0o600);
     await this.writeManagedFile(WATCHDOG_SCRIPT_PATH, this.watchdogScript(), 0o750);
     await this.writeManagedFile(
       WATCHDOG_SERVICE_PATH,
@@ -578,18 +602,22 @@ fi
     if (!(await this.commandAvailable('mysqldump'))) {
       throw new BadRequestException('服务器未安装 mysqldump，无法执行完整备份');
     }
+    const signingKey = this.backupSigningKey;
     await this.readiness();
     const workDir = await mkdtemp(join(tmpdir(), 'hb-oms-backup-'));
     await chmod(workDir, 0o700);
     const credentialPath = join(workDir, 'client.cnf');
-    const stamp = businessDateTime(new Date()).replace(/[-: ]/g, '');
-    const filename = `${this.databaseName}_full_${stamp}.sql.gz`;
+    const backupStartedAt = businessDateTime(new Date());
+    const stamp = backupStartedAt.replace(/[-: ]/g, '');
+    const filename = `${this.databaseName}_full_${stamp}.hbomsbak`;
+    const dumpPartPath = join(workDir, 'database.sql.gz.part');
+    const dumpPath = join(workDir, 'database.sql.gz');
     const partPath = join(workDir, `${filename}.part`);
     const filePath = join(workDir, filename);
     const cleanup = () => rm(workDir, { recursive: true, force: true });
 
     try {
-      await writeFile(credentialPath, this.mysqlCredentialContent(), { encoding: 'utf8', mode: 0o600 });
+      await writeFile(credentialPath, this.createMysqlCredentialContent(), { encoding: 'utf8', mode: 0o600 });
       await chmod(credentialPath, 0o600);
       const args = [
         `--defaults-extra-file=${credentialPath}`,
@@ -618,7 +646,7 @@ fi
           else reject(new Error(stderr.trim() || `mysqldump 退出码 ${code}`));
         });
       });
-      const output = createWriteStream(partPath, { mode: 0o600 });
+      const output = createWriteStream(dumpPartPath, { mode: 0o600 });
       try {
         await Promise.all([
           pipeline(child.stdout!, createGzip({ level: 6 }), output),
@@ -628,8 +656,23 @@ fi
         child.kill('SIGTERM');
         throw error;
       }
-      await rename(partPath, filePath);
+      await rename(dumpPartPath, dumpPath);
       await rm(credentialPath, { force: true });
+      const backupCompletedAt = businessDateTime(new Date());
+      await writeSignedBackupPackage(
+        dumpPath,
+        partPath,
+        {
+          formatVersion: 1,
+          system: 'hb-oms',
+          databaseName: this.databaseName,
+          timezone: 'Asia/Shanghai',
+          backupStartedAt,
+          backupCompletedAt,
+        },
+        signingKey,
+      );
+      await rename(partPath, filePath);
       const info = await stat(filePath);
       if (info.size <= 0) throw new Error('备份文件为空');
       return { filename: basename(filename), filePath, size: info.size, cleanup };
@@ -640,6 +683,9 @@ fi
   }
 
   async sendBackup(response: Response): Promise<void> {
+    if (await this.fileExists(DATABASE_RESTORE_MAINTENANCE_PATH)) {
+      throw new ConflictException('已有数据库维护任务正在执行，暂不能另行生成备份');
+    }
     if (this.backupRunning) {
       throw new ConflictException('已有一项完整备份正在生成或下载，请稍后再试');
     }
@@ -658,7 +704,7 @@ fi
       this.backupRunning = false;
       await backup.cleanup().catch(() => undefined);
     };
-    response.setHeader('Content-Type', 'application/gzip');
+    response.setHeader('Content-Type', 'application/octet-stream');
     response.setHeader('Content-Length', String(backup.size));
     response.setHeader(
       'Content-Disposition',
