@@ -259,7 +259,7 @@ export const PERMISSIONS: PermSeed[] = [
   { perm_code: 'system:announcement', perm_name: '通知公告', perm_type: 1, parent_code: 'system', menu_path: '/system/announcement', component: 'system/announcement/index', icon: 'Bell', sort: 7 },
   { perm_code: 'announcement:create', perm_name: '新建通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 1 },
   { perm_code: 'announcement:update', perm_name: '修改通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 2 },
-  { perm_code: 'announcement:delete', perm_name: '删除通知公告草稿', perm_type: 2, parent_code: 'system:announcement', sort: 3 },
+  { perm_code: 'announcement:delete', perm_name: '删除通知公告', perm_type: 2, parent_code: 'system:announcement', sort: 3 },
   { perm_code: 'announcement:publish', perm_name: '发布通知公告', perm_type: 2, parent_code: 'system:announcement', sort: 4 },
   { perm_code: 'announcement:withdraw', perm_name: '撤回通知公告', perm_type: 2, parent_code: 'system:announcement', sort: 5 },
   { perm_code: 'announcement:export', perm_name: '导出通知公告回复', perm_type: 2, parent_code: 'system:announcement', sort: 6 },

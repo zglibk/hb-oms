@@ -59,7 +59,7 @@
               <el-button v-permission="'announcement:update'" link type="primary" :icon="Edit" :disabled="row.status !== 'draft'" @click="openEdit(row)">编辑</el-button>
               <el-button v-permission="'announcement:publish'" link type="success" :icon="Promotion" :disabled="row.status !== 'draft'" @click="onPublish(row)">发布</el-button>
               <el-button v-permission="'announcement:withdraw'" link type="warning" :disabled="row.status !== 'published'" @click="onWithdraw(row)">撤回</el-button>
-              <el-button v-permission="'announcement:delete'" link type="danger" :icon="Delete" :disabled="row.status !== 'draft'" @click="onDelete(row)">删除</el-button>
+              <el-button v-permission="'announcement:delete'" link type="danger" :icon="Delete" :disabled="!canDelete(row)" @click="onDelete(row)">删除</el-button>
             </app-actions>
           </template>
         </el-table-column>
@@ -100,10 +100,10 @@ import { onActivated, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Delete, Edit, Plus, Promotion, Refresh, Search, View } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ANNOUNCEMENT_LEVEL_OPTIONS } from '@hb-oms/shared';
+import { ANNOUNCEMENT_LEVEL_OPTIONS, isSuperAdminUsername } from '@hb-oms/shared';
 import {
   createAnnouncementDraft,
-  deleteAnnouncementDraft,
+  deleteAnnouncement,
   getAnnouncementAdminList,
   publishAnnouncement,
   updateAnnouncementDraft,
@@ -118,10 +118,12 @@ import {
 } from '@/utils/date';
 import { useDefaultDateRange } from '@/composables/useDefaultDateRange';
 import AnnouncementLevel from '@/components/announcement/AnnouncementLevel.vue';
+import { useUserStore } from '@/stores/user';
 
 const { defaultRecentDateRange } = useDefaultDateRange();
 
 const router = useRouter();
+const userStore = useUserStore();
 const loading = ref(false);
 const list = ref<AnnouncementItem[]>([]);
 const total = ref(0);
@@ -242,9 +244,20 @@ async function onWithdraw(row: AnnouncementItem) {
   await ElMessageBox.confirm(`撤回后普通用户将无法再查看或回复「${row.title}」，确认撤回？`, '确认撤回', { type: 'warning' });
   await withdrawAnnouncement(row.id); ElMessage.success('已撤回'); await load();
 }
+function canDelete(row: AnnouncementItem) {
+  return row.status === 'draft' || isSuperAdminUsername(userStore.userInfo?.username);
+}
 async function onDelete(row: AnnouncementItem) {
-  await ElMessageBox.confirm(`确认删除草稿「${row.title}」？`, '确认删除', { type: 'warning' });
-  await deleteAnnouncementDraft(row.id); ElMessage.success('已删除'); await load();
+  const message = row.status === 'draft'
+    ? `确认删除草稿「${row.title}」？`
+    : row.status === 'published'
+      ? `「${row.title}」仍在发布中。删除将立即撤回通告，并永久删除其查看记录和回复，无法恢复，确认继续？`
+      : `确认永久删除已撤回通告「${row.title}」及其查看记录和回复？删除后无法恢复。`;
+  await ElMessageBox.confirm(message, '确认删除', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+  });
+  await deleteAnnouncement(row.id); ElMessage.success('已删除'); await load();
 }
 function statusType(status?: string) {
   if (status === '发布中') return 'success';

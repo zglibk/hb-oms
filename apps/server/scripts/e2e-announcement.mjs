@@ -99,6 +99,21 @@ async function createDraft(suffix, extra = {}) {
   return row;
 }
 
+async function assertAnnouncementDeleted(id, message) {
+  const [rows] = await db.query(
+    `SELECT
+       (SELECT COUNT(*) FROM t_announcement WHERE id = ?) AS announcements,
+       (SELECT COUNT(*) FROM t_announcement_recipient WHERE announcement_id = ?) AS recipients,
+       (SELECT COUNT(*) FROM t_announcement_reply WHERE announcement_id = ?) AS replies`,
+    [id, id, id],
+  );
+  const counts = rows[0];
+  assert(
+    Number(counts.announcements) === 0 && Number(counts.recipients) === 0 && Number(counts.replies) === 0,
+    message,
+  );
+}
+
 try {
   const forbidden = await fetch(`${base}/announcement/admin`, {
     headers: { Authorization: `Bearer ${tokens.sales}` },
@@ -113,36 +128,57 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 100));
   const publishedNormal = await api(`/announcement/admin/${normal.id}/publish`, { method: 'POST', body: {} });
   await sseEvent;
-  const normalPending = await api('/announcement/pending');
+  const normalPending = await api('/announcement/pending', { token: tokens.sales });
   assert(
     normalPending.list.some((r) => r.id === normal.id),
     `立即发布后应进入未读（publishAt=${publishedNormal.publishAt}，now=${new Date().toISOString()}，activatedAt=${publishedNormal.activatedAt || 'NULL'}，pending=${normalPending.list.length}）`,
   );
+  // 超级管理员查看属于管理动作，不应出现在业务查看记录；普通用户查看仍须正常记录。
   await api(`/announcement/${normal.id}/view`, { method: 'POST' });
+  await api(`/announcement/${normal.id}/view`, { token: tokens.sales, method: 'POST' });
   // 模拟首次查看时姓名快照为空：后续再次打开也不得拿当前身份回填，快照必须保持“首次”语义。
   await db.query(
     'UPDATE t_announcement_recipient SET view_real_name = NULL WHERE announcement_id = ? AND user_id = ?',
-    [normal.id, idOf('admin')],
+    [normal.id, idOf('sales01')],
   );
-  await api(`/announcement/${normal.id}/view`, { method: 'POST' });
-  assert(!(await api('/announcement/pending')).list.some((r) => r.id === normal.id), '普通公告查看后应完成');
+  await api(`/announcement/${normal.id}/view`, { token: tokens.sales, method: 'POST' });
+  assert(!(await api('/announcement/pending', { token: tokens.sales })).list.some((r) => r.id === normal.id), '普通公告查看后应完成');
   const [normalRecipient] = await db.query(
     'SELECT view_real_name AS viewRealName FROM t_announcement_recipient WHERE announcement_id = ? AND user_id = ?',
-    [normal.id, idOf('admin')],
+    [normal.id, idOf('sales01')],
   );
   assert(normalRecipient[0]?.viewRealName === null, '重复查看不得补写或覆盖首次身份快照');
-  assert((await api(`/announcement/admin/${normal.id}/view-records`)).length === 1, '首次查看记录必须唯一');
+  const normalViewRecords = await api(`/announcement/admin/${normal.id}/view-records`);
+  assert(normalViewRecords.length === 1, '首次查看记录必须唯一');
+  assert(normalViewRecords[0].username === 'sales01', '查看记录应排除超级管理员');
 
   const acked = await createDraft('批量确认');
   await api(`/announcement/admin/${acked.id}/publish`, { method: 'POST', body: {} });
-  await api('/announcement/ack', { method: 'POST', body: { ids: [acked.id] } });
-  assert(!(await api('/announcement/pending')).list.some((r) => r.id === acked.id), '弹窗批量确认应完成无需回复公告');
-  assert((await api(`/announcement/admin/${acked.id}/view-records`)).length === 1, '批量确认应生成首次查看记录');
+  await api('/announcement/ack', { token: tokens.sales, method: 'POST', body: { ids: [acked.id] } });
+  assert(!(await api('/announcement/pending', { token: tokens.sales })).list.some((r) => r.id === acked.id), '弹窗批量确认应完成无需回复公告');
+  const ackedViewRecords = await api(`/announcement/admin/${acked.id}/view-records`);
+  assert(ackedViewRecords.length === 1 && ackedViewRecords[0].username === 'sales01', '批量确认应生成普通用户首次查看记录');
 
   const permanent = await createDraft('永久', { expireAt: null });
   assert(permanent.expireAt === null, '永久公告失效时间应为 NULL');
   await api(`/announcement/admin/${permanent.id}`, { method: 'DELETE' });
-  createdIds.splice(createdIds.indexOf(permanent.id), 1);
+  await assertAnnouncementDeleted(permanent.id, '草稿删除后不得残留通告数据');
+
+  const publishedDelete = await createDraft('超管删除发布中', { requiresReply: true });
+  await api(`/announcement/admin/${publishedDelete.id}/publish`, { method: 'POST', body: {} });
+  await api(`/announcement/${publishedDelete.id}/replies`, {
+    token: tokens.sales,
+    method: 'POST',
+    body: { scope: 'public', content: '待随通告清理的回复' },
+  });
+  await api(`/announcement/admin/${publishedDelete.id}`, { method: 'DELETE' });
+  await assertAnnouncementDeleted(publishedDelete.id, '超级管理员删除发布中通告时应清理接收及回复记录');
+
+  const withdrawnDelete = await createDraft('超管删除已撤回');
+  await api(`/announcement/admin/${withdrawnDelete.id}/publish`, { method: 'POST', body: {} });
+  await api(`/announcement/admin/${withdrawnDelete.id}/withdraw`, { method: 'POST' });
+  await api(`/announcement/admin/${withdrawnDelete.id}`, { method: 'DELETE' });
+  await assertAnnouncementDeleted(withdrawnDelete.id, '超级管理员应可删除已撤回通告');
 
   const scheduledAt = Date.now() + 5500;
   const scheduled = await createDraft('定时', {

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="重点待办事项"
+    :title="dialogTitle"
     width="680px"
     class="announcement-pending-dialog"
     append-to-body
@@ -31,18 +31,19 @@
       </button>
     </div>
     <template #footer>
-      <span class="pending-hint">要求回复的通告需提交首次回复后才会完成</span>
+      <span class="pending-hint">{{ footerHint }}</span>
       <el-button type="primary" @click="$emit('ack')">知道了</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { ArrowRight, BellFilled } from '@element-plus/icons-vue';
 import type { AnnouncementItem } from '@/api/announcement';
 import AnnouncementLevel from './AnnouncementLevel.vue';
 
-defineProps<{ modelValue: boolean; items: AnnouncementItem[] }>();
+const props = defineProps<{ modelValue: boolean; items: AnnouncementItem[] }>();
 defineEmits<{
   (event: 'update:modelValue', value: boolean): void;
   (event: 'snooze'): void;
@@ -50,6 +51,13 @@ defineEmits<{
   (event: 'ack'): void;
   (event: 'detail', id: number): void;
 }>();
+
+/** 混合弹窗只要含一条待回复通告，就按待办事项提示；普通通告不冒充待办。 */
+const hasReplyRequired = computed(() => props.items.some((item) => item.requiresReply));
+const dialogTitle = computed(() => hasReplyRequired.value ? '待办事项' : '通知公告');
+const footerHint = computed(() => hasReplyRequired.value
+  ? '要求回复的通告需提交首次回复后才会完成'
+  : '点击“知道了”后，当前通告将标记为已查看');
 </script>
 
 <style scoped lang="scss">

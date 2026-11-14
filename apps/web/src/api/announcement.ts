@@ -131,7 +131,7 @@ export function updateAnnouncementDraft(id: number, data: SaveAnnouncementPayloa
   return request.put<any, AnnouncementItem>(`/api/announcement/admin/${id}`, data);
 }
 
-export function deleteAnnouncementDraft(id: number) {
+export function deleteAnnouncement(id: number) {
   return request.delete<any, void>(`/api/announcement/admin/${id}`);
 }
 

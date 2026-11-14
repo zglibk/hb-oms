@@ -82,9 +82,9 @@ export class AnnouncementController {
 
   @Delete('admin/:id')
   @RequirePermissions('announcement:delete')
-  @OperationLog('通知公告', '删除草稿')
-  deleteDraft(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
-    return this.service.deleteDraft(id, user);
+  @OperationLog('通知公告', '删除通告')
+  deleteAnnouncement(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteAnnouncement(id, user);
   }
 
   @Post('admin/:id/publish')

@@ -122,11 +122,30 @@ export class AnnouncementService {
     return this.announcementRepo.findOneOrFail({ where: { id } });
   }
 
-  async deleteDraft(id: number, user: CurrentUserPayload): Promise<void> {
+  async deleteAnnouncement(id: number, user: CurrentUserPayload): Promise<void> {
     this.assertManager(user);
     const row = await this.requireAnnouncement(id);
-    if (row.status !== ANNOUNCEMENT_STATUS.DRAFT) throw new BadRequestException('仅草稿可以删除');
-    await this.announcementRepo.delete(id);
+    const isSuperAdmin = user.username === SUPER_ADMIN_USERNAME;
+    if (row.status !== ANNOUNCEMENT_STATUS.DRAFT && !isSuperAdmin) {
+      throw new ForbiddenException('仅超级管理员可以删除已发布或已撤回的通告');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const current = await manager.findOne(Announcement, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!current) throw new NotFoundException('通知公告不存在');
+      if (current.status !== ANNOUNCEMENT_STATUS.DRAFT && !isSuperAdmin) {
+        throw new ForbiddenException('仅超级管理员可以删除已发布或已撤回的通告');
+      }
+      await manager.delete(AnnouncementReply, { announcementId: id });
+      await manager.delete(AnnouncementRecipient, { announcementId: id });
+      await manager.delete(Announcement, { id });
+    });
+
+    // 发布中的通告被删除等同于立即撤回，通知在线用户清理未读、弹窗与历史列表。
+    if (row.status === ANNOUNCEMENT_STATUS.PUBLISHED) this.stream.broadcast('withdrawn');
   }
 
   async publish(
@@ -462,6 +481,18 @@ export class AnnouncementService {
     if (!content) throw new BadRequestException('回复内容不能为空');
     const snapshot = await this.identitySnapshot(user.id);
     const reply = await this.dataSource.transaction(async (manager) => {
+      // 与超级管理员删除通告共用公告行锁：删除先发生时拒绝新增回复，回复先发生时删除会等待并一并清理。
+      const activeAnnouncement = await manager.findOne(Announcement, {
+        where: { id },
+        lock: { mode: 'pessimistic_read' },
+      });
+      if (
+        !activeAnnouncement
+        || activeAnnouncement.status !== ANNOUNCEMENT_STATUS.PUBLISHED
+        || !activeAnnouncement.activatedAt
+      ) {
+        throw new NotFoundException('通知公告不存在或已撤回');
+      }
       const saved = await manager.save(AnnouncementReply, {
         announcementId: id,
         recipientId: recipient.id,
@@ -500,11 +531,19 @@ export class AnnouncementService {
   async findViewRecords(id: number, user: CurrentUserPayload) {
     this.assertManager(user);
     await this.requireAnnouncement(id);
-    const list = await this.recipientRepo.find({
-      where: { announcementId: id },
-      order: { viewedAt: 'ASC', id: 'ASC' },
-    });
-    return list.filter((r) => r.viewedAt).map((r, index) => ({
+    // 超级管理员负责系统维护与公告管理，其查看属于管理动作，不计入面向业务的查看记录。
+    // 按首次查看时固化的账号快照过滤，既不依赖用户当前状态，也不会丢失已停用用户的历史记录。
+    const list = await this.recipientRepo
+      .createQueryBuilder('recipient')
+      .where('recipient.announcement_id = :id', { id })
+      .andWhere('recipient.viewed_at IS NOT NULL')
+      .andWhere('(recipient.view_username IS NULL OR recipient.view_username <> :superAdminUsername)', {
+        superAdminUsername: SUPER_ADMIN_USERNAME,
+      })
+      .orderBy('recipient.viewed_at', 'ASC')
+      .addOrderBy('recipient.id', 'ASC')
+      .getMany();
+    return list.map((r, index) => ({
       index: index + 1,
       username: r.viewUsername,
       realName: r.viewRealName,
