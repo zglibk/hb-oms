@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SystemConfig } from './entities/system-config.entity';
 import { SystemConfigService } from './system-config.service';
 import { SystemConfigController } from './system-config.controller';
+import { DatabaseOpsService } from './database-ops.service';
+import { DatabaseHealthController } from './database-health.controller';
 
 /**
  * 系统配置模块（移植自 hb-mes，按业务决策**不含审批管理**——OMS 无审核流，
@@ -10,8 +12,8 @@ import { SystemConfigController } from './system-config.controller';
  */
 @Module({
   imports: [TypeOrmModule.forFeature([SystemConfig])],
-  controllers: [SystemConfigController],
-  providers: [SystemConfigService],
+  controllers: [SystemConfigController, DatabaseHealthController],
+  providers: [SystemConfigService, DatabaseOpsService],
   exports: [SystemConfigService],
 })
 export class SystemConfigModule {}

@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { tokenStore } from '@/utils/request';
 
 // ===== 用户 =====
 export const getUserList = (params: any) =>
@@ -387,6 +387,91 @@ export interface CleanupResult {
 }
 export const cleanupBusinessData = (confirm: string) =>
   request.post<any, CleanupResult>('/api/system/config/cleanup', { confirm });
+
+// ===== 数据库运维（仅内置超级管理员） =====
+export type DatabaseOpsAction = 'update-policy' | 'restart-guard' | 'watchdog' | 'local-bind';
+
+export interface DatabaseOpsItemStatus {
+  applied: boolean;
+  healthy: boolean;
+  summary: string;
+  details: string[];
+}
+
+export interface DatabaseOpsStatus {
+  supported: boolean;
+  platform: string;
+  databaseName: string;
+  updatePolicy: DatabaseOpsItemStatus;
+  restartGuard: DatabaseOpsItemStatus;
+  watchdog: DatabaseOpsItemStatus;
+  readiness: DatabaseOpsItemStatus;
+  localBind: DatabaseOpsItemStatus & { remoteConnections: number };
+  backup: DatabaseOpsItemStatus;
+}
+
+export const getDatabaseOpsStatus = () =>
+  request.get<any, DatabaseOpsStatus>('/api/system/config/database-ops/status');
+
+export const applyDatabaseOps = (action: DatabaseOpsAction, confirm?: string) =>
+  request.post<any, { message: string; restartScheduled?: boolean }>(
+    '/api/system/config/database-ops/apply',
+    { action, ...(confirm ? { confirm } : {}) },
+  );
+
+function backupFilename(disposition: string | null): string {
+  const match = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+  if (match?.[1]) {
+    try { return decodeURIComponent(match[1]); } catch { /* 使用兜底名 */ }
+  }
+  return `haibao_oms_full_${Date.now()}.sql.gz`;
+}
+
+/**
+ * 完整备份直接使用 fetch 流：安全上下文中可写入用户在系统保存框选定的位置，
+ * HTTP 环境没有 File System Access API 时回退到浏览器下载。
+ */
+export async function downloadDatabaseBackup(fileHandle?: any): Promise<{ filename: string; pickedPath: boolean }> {
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const response = await fetch(`${apiBase}/api/system/config/database-ops/backup`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tokenStore.get()}`,
+      Accept: 'application/gzip, application/json',
+    },
+  });
+  if (!response.ok) {
+    let message = `完整备份失败（HTTP ${response.status}）`;
+    try {
+      const body = await response.json();
+      message = body?.message || message;
+    } catch { /* 非 JSON 错误体 */ }
+    throw new Error(message);
+  }
+
+  const filename = backupFilename(response.headers.get('content-disposition'));
+  if (fileHandle && response.body) {
+    const writable = await fileHandle.createWritable();
+    try {
+      await response.body.pipeTo(writable);
+    } catch (error) {
+      await writable.abort?.().catch?.(() => undefined);
+      throw error;
+    }
+    return { filename, pickedPath: true };
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+  return { filename, pickedPath: false };
+}
 
 /* 数据大屏免登录访问码（库里只存摘要；明文只在生成当次返回） */
 export const getScreenKeyStatus = () =>

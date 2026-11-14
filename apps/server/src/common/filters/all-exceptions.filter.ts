@@ -46,7 +46,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         if (typeof (res as any).totalCount === 'number') totalCount = (res as any).totalCount;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
+      if (this.isDatabaseUnavailable(exception)) {
+        status = HttpStatus.SERVICE_UNAVAILABLE;
+        message = '数据库连接暂不可用，系统正在自动恢复，请稍后重试';
+      } else {
+        message = exception.message;
+      }
       this.logger.error(exception.message, exception.stack);
     }
 
@@ -59,5 +64,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
       ...(failedCount !== undefined ? { failedCount } : {}),
       ...(totalCount !== undefined ? { totalCount } : {}),
     });
+  }
+
+  /** 屏蔽 mysql2/Node 底层连接文案，避免把 ECONNREFUSED、端口等细节暴露给用户。 */
+  private isDatabaseUnavailable(exception: Error): boolean {
+    const connectionCodes = new Set([
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'EHOSTUNREACH',
+      'ETIMEDOUT',
+      'PROTOCOL_CONNECTION_LOST',
+      'ER_CON_COUNT_ERROR',
+      'ER_SERVER_SHUTDOWN',
+    ]);
+    const queue: any[] = [exception];
+    const visited = new Set<any>();
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+      if (connectionCodes.has(String(current.code || ''))) return true;
+      if (/connect\s+(ECONNREFUSED|ETIMEDOUT)|connection\s+(lost|refused)/i.test(String(current.message || ''))) return true;
+      queue.push(current.cause, current.driverError, current.originalError);
+    }
+    return false;
   }
 }

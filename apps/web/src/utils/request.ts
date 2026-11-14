@@ -145,6 +145,15 @@ service.interceptors.response.use(
         .then((m) => m.syncOnForbidden())
         .catch(() => undefined);
     }
+    // 数据库维护或后端随数据库重启期间，Nginx 可能返回 502，应用存活时则由
+    // AllExceptionsFilter 返回 503。两种情况都使用同一条可理解、可重试的提示，
+    // 不把 ECONNREFUSED、端口或反代错误页暴露给登录用户。
+    if (response?.status === 502 || response?.status === 503) {
+      const maintenanceMessage =
+        response?.data?.message || '系统正在恢复数据库连接，请稍后重试';
+      if (!silent) ElMessage.error(maintenanceMessage);
+      return Promise.reject(new Error(maintenanceMessage));
+    }
     // blob 请求出错时，错误响应体也是 Blob，需解析为文本再读 message
     if (
       response?.data instanceof Blob &&

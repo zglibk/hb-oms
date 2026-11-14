@@ -98,6 +98,7 @@ pnpm --filter server verify:ledger  # M4 台账口径核算（独立重算四数
  - `el-tooltip` 的 `content` 按「1. / 2、」数字序号自动换行（[utils/tooltip.ts](apps/web/src/utils/tooltip.ts) 的 `patchElTooltip`）；
  - `el-input` 默认 `clearable`（[utils/input.ts](apps/web/src/utils/input.ts) 的 `patchElInput`），textarea / 密码框 / 带 `#suffix` 插槽的输入框自动跳过。
  - 后两项的做法是**用同名组件覆盖全局注册**（`app.component('ElInput', 包装组件)`）而**不是** mutate `ElInput.props`：EP 内部的日期选择器/级联选择器等是直接 `import ElInput` 的，不走全局解析，覆盖注册才能只作用于模板里直写的标签、不波及它们自带的清除逻辑。包装组件必须 `inheritAttrs: false` + 用 Proxy 把实例成员 `expose` 出去，否则页面 `inputRef.focus()` 这类调用会失效。
+- **数据库运维页签**（2026-11-14）：位于「系统管理 → 系统配置 → 数据库运维」，复用 `system:danger` 且服务端必须再校验唯一内置 `admin` 账号与超级管理员角色。第 1～5 项只能执行服务端白名单固定动作（MySQL 退出无人值守更新、systemd 启停超时与失败重启、每分钟双探测自愈、就绪探测/503 友好降级、本机监听），**禁止接收命令、脚本或服务器路径**；限制本机监听前必须拒绝非本机活动连接、校验 MySQL 配置，并延迟重启让响应与审计先落库。第 6 项用临时 0600 凭据执行 `mysqldump`，完整导出当前 OMS 库的结构与数据（含触发器/事件/存储过程）为 `.sql.gz`，校验成功后才下载，完成或中断均清理服务器临时文件；不得把数据库密码写进命令行/日志。HTTPS 安全上下文可由 File System Access API 选择本地保存位置，HTTP 必须明确回退为浏览器下载路径，禁止宣称网页能绕过浏览器指定任意本地目录。
 - 主题：侧栏固定深色（底 `#1E293B`、logo 区 `#16202E`、子菜单 `#192433`、hover `#263349`、激活 `#1C3462` + 左侧 4.5px `#165DFF` 竖条），标题行下分隔线 `#334155`；「更换主题」只影响 Element 主色，不改侧栏配色。桌面端视口高度 ≤900px 时侧栏启用笔记本紧凑行高（一级 48px、二级 44px，折叠后的浮层菜单同步），字号不缩小；手机端与高屏桌面保持默认行高。
 
 ---

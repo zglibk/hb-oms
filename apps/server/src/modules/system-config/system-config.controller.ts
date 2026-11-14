@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Put, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Post, Put, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SystemConfigService } from './system-config.service';
 import { UpdateSystemConfigDto } from './dto/update-system-config.dto';
@@ -11,6 +11,8 @@ import {
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
+import { DatabaseOpsService } from './database-ops.service';
+import { ApplyDatabaseOpsDto } from './dto/database-ops.dto';
 
 /**
  * 系统配置接口
@@ -24,7 +26,19 @@ import { SUPER_ADMIN_ROLE_CODE, SUPER_ADMIN_USERNAME } from '@hb-oms/shared';
 @Controller('system/config')
 export class SystemConfigController {
   // 注：hb-mes 的审批管理（approval）按业务决策不移植——OMS 无审核流（设计文档决策 #2）
-  constructor(private readonly service: SystemConfigService) {}
+  constructor(
+    private readonly service: SystemConfigService,
+    private readonly databaseOps: DatabaseOpsService,
+  ) {}
+
+  private assertSuperAdmin(user: CurrentUserPayload): void {
+    if (
+      user.username !== SUPER_ADMIN_USERNAME ||
+      !user.roleCodes?.includes(SUPER_ADMIN_ROLE_CODE)
+    ) {
+      throw new ForbiddenException('仅超级管理员可执行此操作');
+    }
+  }
 
   /** 有权限的管理员或超级管理员读取完整配置 */
   @Get()
@@ -120,7 +134,7 @@ export class SystemConfigController {
       user.username !== SUPER_ADMIN_USERNAME ||
       !user.roleCodes?.includes(SUPER_ADMIN_ROLE_CODE)
     ) {
-      throw new (await import('@nestjs/common')).ForbiddenException('仅超级管理员可执行此操作');
+      throw new ForbiddenException('仅超级管理员可执行此操作');
     }
     const result = await this.service.cleanupBusinessData(
       { id: user.id, username: user.username, realName: user.realName },
@@ -130,5 +144,38 @@ export class SystemConfigController {
       ...result,
       message: `已清理 ${result.truncated.length} 张业务表，原订单数 ${result.orderCount}。系统配置与主数据已保留。`,
     };
+  }
+
+  /** 数据库运维六项状态（权限与内置账号身份双重校验）。 */
+  @Get('database-ops/status')
+  @RequirePermissions('system:danger')
+  getDatabaseOpsStatus(@CurrentUser() user: CurrentUserPayload) {
+    this.assertSuperAdmin(user);
+    return this.databaseOps.getStatus();
+  }
+
+  /** 应用固定白名单运维动作；不接受命令、脚本或服务器路径。 */
+  @Post('database-ops/apply')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '应用数据库保护配置')
+  applyDatabaseOps(
+    @Body() dto: ApplyDatabaseOpsDto,
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    this.assertSuperAdmin(user);
+    return this.databaseOps.apply(dto.action, dto.confirm);
+  }
+
+  /** 完整逻辑备份（结构 + 数据）写入临时文件，校验成功后流式下载并立即清理。 */
+  @Post('database-ops/backup')
+  @RequirePermissions('system:danger')
+  @OperationLog('数据库运维', '完整备份数据库')
+  @SkipTransform()
+  async backupDatabase(
+    @CurrentUser() user: CurrentUserPayload,
+    @Res() response: Response,
+  ) {
+    this.assertSuperAdmin(user);
+    await this.databaseOps.sendBackup(response);
   }
 }

@@ -664,6 +664,10 @@ LEFT JOIN (按 order_product_id 聚合 t_assembly_batch) asm ...
 - **权限**：permission-manifest.ts SSOT，启动自动 upsert；菜单驱动动态路由。
 - **前端**：`AppTable / AppPagination / AppActions` 等通用组件、`useDict / useClientPager` composable 从 hb-mes 拷贝起步；台账页为首页级入口。
 - **不搬的部分**：plan（排产）、production-report（报工）、subcontract（被新 outsource 取代）、approval-config（审批开关）、hb-mes 的大屏 screen（OMS 的数据大屏按自身口径另行实现，见 §5.2.1）、part-stock 的占用/释放逻辑（occupied_qty 不要）。
+
+### 8.1 数据库可视化运维
+
+「系统管理 → 系统配置 → 数据库运维」仅对唯一内置超级管理员开放，实施六项保护：MySQL 软件包退出无人值守更新、systemd 300 秒启停超时与失败重启、每分钟连接与 SQL 双探测自愈、公开数据库就绪探测与 502/503 友好提示、MySQL 3306/33060 仅监听本机、当前 OMS 数据库完整逻辑备份。第 1～5 项是服务端固定白名单动作，不接收命令、脚本或服务器路径；第 5 项在无非本机活动连接且配置校验通过后延迟重启。第 6 项通过临时受限凭据执行 `mysqldump`，导出表结构、数据、触发器、事件与存储过程并压缩为 `.sql.gz`，下载结束或中断即清理服务器临时文件。浏览器支持安全文件选择器时由超级管理员选择本地保存位置，否则回退到浏览器下载设置所指定的目录。
 - **部署**：同 hb-mes 阿里云 ECS（PM2 + Nginx + MySQL），新增独立 Nginx location 与 PM2 进程 `hb-oms-server`（端口避让 8000/3000，建议 8100）；前端本地构建只传 dist；**严禁影响既有 hb-mes 与 QMS 的 location**。
 
 ---

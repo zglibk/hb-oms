@@ -481,6 +481,15 @@
           <ScreenKeyTab v-if="activeTab === 'screen'" />
         </el-tab-pane>
 
+        <!-- 数据库运维：仅内置超级管理员可见，固定白名单动作，不开放命令输入。 -->
+        <el-tab-pane
+          v-permission.hide="'system:danger'"
+          label="数据库运维"
+          name="databaseOps"
+        >
+          <DatabaseOpsTab :active="activeTab === 'databaseOps'" />
+        </el-tab-pane>
+
         <!-- Tab4：危险操作（仅 admin 可见）。
              整个页签隐藏而非禁用：页签标题由 el-tabs 头部另行渲染，
              禁用面板 div 拦不住用户切到该页签。 -->
@@ -574,6 +583,7 @@ import { useFeatureStore } from '@/stores/feature';
 import { normalizeUploadUrl } from '@/utils/upload-url';
 import InlineImageCropper from '@/components/InlineImageCropper.vue';
 import ScreenKeyTab from './ScreenKeyTab.vue';
+import DatabaseOpsTab from './DatabaseOpsTab.vue';
 import {
   AUTO_SCROLL_SPEED_DEFAULT,
   AUTO_SCROLL_SPEED_MAX,
@@ -584,7 +594,7 @@ const loading = ref(false);
 const saving = ref(false);
 const route = useRoute();
 const router = useRouter();
-const validTabs = ['company', 'loginBg', 'fields', 'query', 'scroll', 'dataPerm', 'screen', 'danger'] as const;
+const validTabs = ['company', 'loginBg', 'fields', 'query', 'scroll', 'dataPerm', 'screen', 'databaseOps', 'danger'] as const;
 type TabName = (typeof validTabs)[number];
 const initialTab = validTabs.includes(route.query.tab as TabName)
   ? (route.query.tab as TabName)
